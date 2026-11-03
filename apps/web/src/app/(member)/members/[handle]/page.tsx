@@ -1,221 +1,301 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { Avatar, Chip, Icon, Panel, type IconName } from "@chartermission/ui";
-import type { FieldVisibility } from "@chartermission/contracts";
+import { Suspense, type ReactNode } from "react";
+import { PreviewAs, type MemberProfile, type Page, type PostView } from "@chartermission/contracts";
+import { Chip, Icon, Panel, buttonClasses, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
+import { getClientViewer } from "@/components/social/data";
+import { absoluteDate } from "@/components/social/format";
+import { MemberAvatar } from "@/components/social/post-parts";
+import { PostStream } from "@/components/social/post-stream";
 import { SectionRail } from "@/components/social/section-nav";
-import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
-import { memberHandles, members, type ContactField, type MemberProfile } from "@/lib/mock/members";
-import { viewer } from "@/lib/mock-data";
-import { ConnectButton, ProfileActions } from "./profile-actions";
-
-export function generateStaticParams() {
-  return memberHandles.map((handle) => ({ handle }));
-}
+import { EmptyState, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
+import { apiGet, apiGetOrNull } from "@/lib/api/server";
+import { ProfileActions } from "./profile-actions";
 
 export async function generateMetadata({ params }: PageProps<"/members/[handle]">): Promise<Metadata> {
   const { handle } = await params;
-  const member = members[handle];
-  return member ? { title: member.name, description: member.headline } : { title: "Member not found" };
+  return { title: handle };
 }
 
-const contactMeta: Record<ContactField["kind"], { label: string; icon: IconName }> = {
-  email: { label: "Email", icon: "mail" },
-  website: { label: "Website", icon: "link" },
-  phone: { label: "Phone", icon: "at" },
+type Props = Pick<PageProps<"/members/[handle]">, "params" | "searchParams">;
+
+const previewLabels: Record<PreviewAs, string> = {
+  public: "a visitor who isn’t signed in",
+  member: "a signed-in member",
+  connection: "one of your connections",
 };
 
-const visibilityMeta: Record<FieldVisibility, { label: string; icon: IconName }> = {
-  public: { label: "Public", icon: "globe" },
-  members: { label: "Visible to members", icon: "users" },
-  connections: { label: "Visible to connections", icon: "users" },
-  only_me: { label: "Only me", icon: "eye-off" },
-};
-
-function ProfileHeader({ member, isViewer }: { member: MemberProfile; isViewer: boolean }) {
-  const facts: { icon: IconName; text: string }[] = [
-    { icon: "map-pin", text: member.location },
-    ...(member.diasporaLink ? [{ icon: "globe" as const, text: `Diaspora link: ${member.diasporaLink}` }] : []),
-    { icon: "users", text: `${member.connections} connections` },
-  ];
-  return (
-    <Panel className="flex flex-col overflow-hidden">
-      <div className="h-[132px] w-full bg-gradient-to-r from-primary-dark via-primary-light via-65% to-accent" aria-hidden="true" />
-      <div className="flex flex-col gap-3 px-6 pb-6">
-        <div className="flex items-end justify-between gap-4">
-          <Avatar name={member.name} size={96} tone={member.tone} className="border-4 border-card" />
-          <ProfileActions name={member.name} isViewer={isViewer} />
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <h1 className="text-h2 text-ink">{member.name}</h1>
-          {member.verified && <Icon name="verified" size={20} className="text-primary-light" label="Verified" />}
-          {member.role && <Chip>{member.role}</Chip>}
-        </div>
-        <p className="text-md text-body">{member.headline}</p>
-        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {facts.map((fact) => (
-            <li key={fact.text} className="flex items-center gap-1.5 text-sm text-secondary">
-              <Icon name={fact.icon} size={16} />
-              {fact.text}
-            </li>
-          ))}
-        </ul>
-        <ul className="flex flex-wrap gap-2" aria-label="Interests">
-          {member.interests.map((interest) => (
-            <li key={interest}>
-              <Chip>{interest}</Chip>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Panel>
-  );
+async function loadProfile({ params, searchParams }: Props) {
+  const [{ handle }, sp, viewer] = await Promise.all([params, searchParams, getClientViewer()]);
+  const previewParam = PreviewAs.safeParse(Array.isArray(sp.preview) ? sp.preview[0] : sp.preview);
+  const isSelf = viewer?.handle === handle.toLowerCase();
+  const preview = isSelf && previewParam.success ? previewParam.data : null;
+  const member = preview
+    ? await apiGet<MemberProfile>("/me/profile/preview", { as: preview })
+    : await apiGetOrNull<MemberProfile>(`/members/${encodeURIComponent(handle.toLowerCase())}`).catch((e: unknown) => {
+        if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 401) return null;
+        throw e;
+      });
+  if (!member) notFound();
+  return { member, viewer, preview };
 }
 
-function ContactCard({ contact }: { contact: ContactField[] }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Panel className="flex flex-col gap-3 p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-h3 text-ink">Contact</h2>
-        <p className="text-xs text-secondary">You choose who sees each field</p>
-      </div>
-      <dl className="flex flex-col gap-3">
-        {contact.map((field) => {
-          const meta = contactMeta[field.kind];
-          const visibility = visibilityMeta[field.visibility];
-          return (
-            <div key={field.kind} className="flex items-center gap-2.5">
-              <dt className="flex flex-1 items-center gap-2.5 text-sm font-medium text-ink">
-                <Icon name={meta.icon} size={18} className="text-secondary" />
-                {meta.label}
-              </dt>
-              <dd className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-body">
-                <Icon name={visibility.icon} size={14} className="text-secondary" />
-                {field.value && field.visibility === "public" ? `${field.value} · ${visibility.label}` : visibility.label}
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
+      <h2 className="text-h3 text-ink">{title}</h2>
+      {children}
     </Panel>
   );
 }
 
-function RightRail({ member }: { member: MemberProfile }) {
-  const alsoViewed = member.alsoViewed.map((handle) => members[handle]).filter(Boolean);
+function ChipList({ label, items }: { label: string; items?: { id: string; name: string }[] }) {
+  if (!items?.length) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-label uppercase text-secondary">{label}</h3>
+      <ul className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <li key={item.id}>
+            <Chip>{item.name}</Chip>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function monthLabel(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(Date.UTC(year!, (month ?? 1) - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+async function ProfileMain(props: Props) {
+  const { member, viewer, preview } = await loadProfile(props);
+  const isSelf = member.relationship.self && !preview;
+  const location = [member.city, member.country?.name].filter(Boolean).join(", ");
+  const facts: { icon: IconName; content: ReactNode }[] = [];
+  if (location) facts.push({ icon: "map-pin", content: location });
+  if (member.organisation) facts.push({ icon: "building", content: member.organisation });
+  facts.push({ icon: "users", content: `${member.counts.connections.toLocaleString("en-US")} connections · ${member.counts.followers.toLocaleString("en-US")} followers` });
+  facts.push({ icon: "calendar", content: `Joined ${absoluteDate(member.joinedAt)}` });
+
+  const contact: { icon: IconName; label: string; value: ReactNode }[] = [];
+  if (member.email) contact.push({ icon: "mail", label: "Email", value: <a href={`mailto:${member.email}`} className="text-primary-light hover:underline">{member.email}</a> });
+  if (member.website)
+    contact.push({
+      icon: "globe",
+      label: "Website",
+      value: (
+        <a href={member.website} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-primary-light hover:underline">
+          {member.website.replace(/^https?:\/\//, "")}
+        </a>
+      ),
+    });
+  for (const link of member.links ?? []) {
+    contact.push({
+      icon: "link",
+      label: link.label,
+      value: (
+        <a href={link.url} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-primary-light hover:underline">
+          {link.url.replace(/^https?:\/\//, "")}
+        </a>
+      ),
+    });
+  }
+  const hasTags = !!(member.skills?.length || member.sectors?.length || member.interests?.length || member.languages?.length);
+
   return (
     <>
-      {member.initiatives.length > 0 && (
-        <Panel className="flex flex-col gap-3 p-5">
-          <h2 className="text-h3 text-ink">Initiatives</h2>
-          <ul className="flex flex-col gap-3">
-            {member.initiatives.map((item) => (
-              <li key={item.slug}>
-                <Link href={`/initiatives/${item.slug}`} className="group flex flex-col gap-1.5 rounded-[10px] bg-surface p-3 hover:bg-primary-tint-2">
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-ink group-hover:underline">{item.name}</span>
-                    <Chip tone={item.statusTone}>{item.status}</Chip>
-                  </span>
-                  <span className="text-xs text-secondary">{item.meta}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+      {preview && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-info/40 bg-info-light px-4 py-3 text-sm text-ink">
+          <span className="flex items-center gap-2">
+            <Icon name="eye" size={18} className="text-info" />
+            You’re seeing your profile as {previewLabels[preview]} would. Hidden fields are left out.
+          </span>
+          <Link href={`/members/${member.handle}`} className="font-medium text-primary-light hover:underline">
+            Exit preview
+          </Link>
+        </div>
       )}
-      {member.chapters.length > 0 && (
-        <Panel className="flex flex-col gap-3 p-5">
-          <h2 className="text-h3 text-ink">Chapters</h2>
-          <ul className="flex flex-col gap-3">
-            {member.chapters.map((chapter) => (
-              <li key={chapter.slug}>
-                <Link href={`/chapters/${chapter.slug}`} className="group flex items-center gap-2.5">
-                  <Icon name="globe" size={20} className="shrink-0 text-primary-light" />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm font-medium text-ink group-hover:underline">{chapter.name}</span>
-                    <span className="text-xs text-secondary">{chapter.meta}</span>
-                  </span>
-                </Link>
+      <Panel className="flex flex-col overflow-hidden">
+        <div className="h-[132px] w-full bg-gradient-to-r from-primary-dark via-primary-light via-65% to-accent max-sm:h-24" aria-hidden="true" />
+        <div className="flex flex-col gap-3 px-6 pb-6 max-sm:px-4">
+          <div className="-mt-12 flex flex-wrap items-end justify-between gap-4">
+            <span className="rounded-full border-4 border-card bg-card">
+              <MemberAvatar member={member} size={96} />
+            </span>
+            {viewer && !preview && <ProfileActions member={member} canPost={viewer.emailVerified} />}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h1 className="text-h2 text-ink">{member.name}</h1>
+            {member.verified && <Icon name="verified" size={20} className="text-primary-light" label="Verified member" />}
+            {member.staff && <Chip tone="info">Charter Mission team</Chip>}
+            {member.relationship.followsYou && !member.relationship.self && <Chip>Follows you</Chip>}
+          </div>
+          {member.headline && <p className="text-md text-body">{member.headline}</p>}
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {facts.map((fact, index) => (
+              <li key={index} className="flex items-center gap-1.5 text-sm text-secondary">
+                <Icon name={fact.icon} size={16} className="shrink-0" />
+                {fact.content}
               </li>
             ))}
           </ul>
-        </Panel>
+          {member.relationship.blocked && (
+            <p role="note" className="flex items-center gap-2 rounded-lg bg-error-light px-3 py-2 text-sm text-ink">
+              <Icon name="shield" size={16} className="text-error" />
+              You blocked {member.name}. They can’t see your posts or profile, or interact with you.
+            </p>
+          )}
+        </div>
+      </Panel>
+
+      {member.bio && (
+        <Section title="About">
+          <p className="whitespace-pre-line text-md text-body">{member.bio}</p>
+        </Section>
       )}
-      {alsoViewed.length > 0 && (
-        <Panel className="flex flex-col gap-3 p-5">
-          <h2 className="text-h3 text-ink">People also viewed</h2>
-          <ul className="flex flex-col gap-3">
-            {alsoViewed.map((person) => (
-              <li key={person.handle} className="flex items-center gap-2.5">
-                <Avatar name={person.name} size={32} tone={person.tone} />
-                <Link href={`/members/${person.handle}`} className="group flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm font-medium text-ink group-hover:underline">{person.name}</span>
-                  <span className="text-xs text-secondary">{person.shortHeadline}</span>
-                </Link>
-                <ConnectButton name={person.name} />
+
+      {member.experience && member.experience.length > 0 && (
+        <Section title="Experience">
+          <ul className="flex flex-col gap-4">
+            {member.experience.map((role, index) => (
+              <li key={role.id ?? index} className="flex items-start gap-3">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+                  <Icon name="building" size={20} />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-md font-medium text-ink">{role.title}</span>
+                  <span className="text-sm text-body">{role.organisation}</span>
+                  <span className="text-xs text-secondary">
+                    {monthLabel(role.startDate)} – {role.endDate ? monthLabel(role.endDate) : "Present"}
+                    {role.location ? ` · ${role.location}` : ""}
+                  </span>
+                  {role.description && <span className="mt-1 whitespace-pre-line text-sm text-body">{role.description}</span>}
+                </span>
               </li>
             ))}
           </ul>
-        </Panel>
+        </Section>
+      )}
+
+      {hasTags && (
+        <Section title="Skills and interests">
+          <ChipList label="Sectors" items={member.sectors} />
+          <ChipList label="Skills" items={member.skills} />
+          <ChipList label="Interests" items={member.interests} />
+          <ChipList label="Languages" items={member.languages} />
+        </Section>
+      )}
+
+      {contact.length > 0 && (
+        <Section title="Contact">
+          <dl className="flex flex-col gap-3">
+            {contact.map((item, index) => (
+              <div key={index} className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                <dt className="flex w-28 items-center gap-2.5 text-sm font-medium text-ink">
+                  <Icon name={item.icon} size={18} className="text-secondary" />
+                  {item.label}
+                </dt>
+                <dd className="min-w-0 text-sm">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+          {isSelf && <p className="text-xs text-secondary">You choose who sees each field in Settings → Privacy.</p>}
+        </Section>
+      )}
+
+      {isSelf && !member.bio && !hasTags && (
+        <EmptyState
+          icon="user"
+          title="Tell members about yourself"
+          actions={
+            <Link href="/settings/profile" className={buttonClasses({ size: "small" })}>
+              Complete your profile
+            </Link>
+          }
+        >
+          Add a bio, your sectors and skills so people with shared interests can find you.
+        </EmptyState>
+      )}
+
+      {viewer && !preview && !member.relationship.blocked && (
+        <section aria-labelledby="member-posts" className="flex flex-col gap-3">
+          <h2 id="member-posts" className="text-h3 text-ink">
+            Recent posts
+          </h2>
+          <MemberPosts memberId={member.id} name={member.name} viewer={viewer} acceptNew={isSelf} />
+        </section>
       )}
     </>
   );
 }
 
-async function ProfileMain({ params }: Pick<PageProps<"/members/[handle]">, "params">) {
-  const { handle } = await params;
-  const member = members[handle];
-  if (!member) notFound();
+const MEMBER_POSTS_PAGE = 10;
 
+/** GET /feed?author= — this member's posts, newest first, with "Load more". */
+async function MemberPosts({
+  memberId,
+  name,
+  viewer,
+  acceptNew,
+}: {
+  memberId: string;
+  name: string;
+  viewer: NonNullable<Awaited<ReturnType<typeof getClientViewer>>>;
+  acceptNew: boolean;
+}) {
+  const query = { author: memberId, limit: MEMBER_POSTS_PAGE };
+  const page = await apiGet<Page<PostView>>("/feed", query).catch(() => undefined);
   return (
-    <>
-      <ProfileHeader member={member} isViewer={member.handle === viewer.handle} />
-
-      <Panel className="flex flex-col gap-2.5 p-5">
-        <h2 className="text-h3 text-ink">About</h2>
-        <p className="text-md text-body">{member.about}</p>
-      </Panel>
-
-      <Panel className="flex flex-col gap-4 p-5">
-        <h2 className="text-h3 text-ink">Experience</h2>
-        <ul className="flex flex-col gap-4">
-          {member.experience.map((role) => (
-            <li key={`${role.title}-${role.organisation}`} className="flex items-start gap-3">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
-                <Icon name="building" size={20} />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-md font-medium text-ink">{role.title}</span>
-                <span className="text-sm text-body">{role.organisation}</span>
-                <span className="text-xs text-secondary">{role.meta}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </Panel>
-
-      <ContactCard contact={member.contact} />
-    </>
+    <PostStream
+      path="/feed"
+      query={query}
+      initial={page}
+      acceptNew={acceptNew}
+      viewer={viewer}
+      label={`Posts by ${name}`}
+      empty={
+        <EmptyState icon="message" title="No posts yet">
+          {acceptNew ? "Posts you share appear here." : `${name} hasn’t posted yet.`}
+        </EmptyState>
+      }
+    />
   );
 }
 
-async function ProfileRightRail({ params }: Pick<PageProps<"/members/[handle]">, "params">) {
-  const { handle } = await params;
-  const member = members[handle];
-  return member ? <RightRail member={member} /> : null;
+async function ProfileRightRail(props: Props) {
+  const { member } = await loadProfile(props).catch(() => ({ member: null }));
+  if (!member || member.chapters.length === 0) return null;
+  return (
+    <Panel className="flex flex-col gap-3 p-5">
+      <h2 className="text-h3 text-ink">Chapters</h2>
+      <ul className="flex flex-col gap-3">
+        {member.chapters.map((chapter) => (
+          <li key={chapter.id}>
+            <Link href={`/chapters/${chapter.slug}`} className="group flex items-center gap-2.5">
+              <Icon name="globe" size={20} className="shrink-0 text-primary-light" />
+              <span className="text-sm font-medium text-ink group-hover:underline">{chapter.name}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
 }
 
-/** Member profile — Figma "Web / Member profile" (node 9:860, body 9:913). */
-export default function MemberProfilePage({ params }: PageProps<"/members/[handle]">) {
+/** Member profile — Figma "Web / Member profile" (node 9:860, body 9:913). Only fields the API returns are shown. */
+export default function MemberProfilePage({ params, searchParams }: PageProps<"/members/[handle]">) {
   return (
     <PageColumns
       left={<SectionRail active="/network" />}
       right={
         <aside className="flex w-80 shrink-0 flex-col gap-4">
-          <Suspense fallback={<PanelSkeleton lines={4} />}>
-            <ProfileRightRail params={params} />
+          <Suspense fallback={<PanelSkeleton lines={3} />}>
+            <ProfileRightRail params={params} searchParams={searchParams} />
           </Suspense>
         </aside>
       }
@@ -224,12 +304,12 @@ export default function MemberProfilePage({ params }: PageProps<"/members/[handl
         fallback={
           <>
             <LoadingStatus label="Loading profile" />
-            <PanelSkeleton className="h-[420px]" lines={5} />
+            <PanelSkeleton className="h-[360px]" lines={5} />
             <PanelSkeleton lines={4} />
           </>
         }
       >
-        <ProfileMain params={params} />
+        <ProfileMain params={params} searchParams={searchParams} />
       </Suspense>
     </PageColumns>
   );

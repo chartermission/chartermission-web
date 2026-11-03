@@ -303,10 +303,16 @@ describe('Posts, comments, reactions, polls and bookmarks', () => {
       const p = await createPost(a, 'Post');
       const c = (await a.post(`/posts/${p.id}/comments`, { body: 'Comment' }).expect(201)).body;
       const res = await b.put('/reactions', { targetType: 'comment', targetId: c.id, kind: 'support' }).expect(200);
-      expect(res.body).toMatchObject({ reaction: 'support', reactions: 1, breakdown: null });
+      expect(res.body).toMatchObject({ reaction: 'support', reactions: 1, breakdown: { like: 0, insightful: 0, support: 1 } });
+      const changed = await a.put('/reactions', { targetType: 'comment', targetId: c.id, kind: 'insightful' }).expect(200);
+      expect(changed.body).toMatchObject({ reaction: 'insightful', reactions: 2, breakdown: { like: 0, insightful: 1, support: 1 } });
+      await b.put('/reactions', { targetType: 'comment', targetId: c.id, kind: 'like' }).expect(200);
       const list = (await b.get(`/posts/${p.id}/comments`).expect(200)).body.items;
-      expect(list[0].viewer.reaction).toBe('support');
-      expect(list[0].counts.reactions).toBe(1);
+      expect(list[0].viewer.reaction).toBe('like');
+      expect(list[0].counts.reactions).toBe(2);
+      expect(list[0].reactionBreakdown).toEqual({ like: 1, insightful: 1, support: 0 });
+      const removed = await b.delete('/reactions', { targetType: 'comment', targetId: c.id }).expect(200);
+      expect(removed.body).toMatchObject({ reaction: null, reactions: 1, breakdown: { like: 0, insightful: 1, support: 0 } });
     });
 
     it('batches reaction notifications: "X and 2 others reacted to your post"', async () => {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Response } from 'express';
-import { and, desc, eq, isNull, like, lt, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, like, lt, type SQL } from 'drizzle-orm';
 import type {
   AuditEntry,
   AuditExportQuery,
@@ -20,7 +20,7 @@ import { isUuid, likePrefix } from '../moderation/util.js';
 
 type AuditRow = Pick<
   typeof auditLog.$inferSelect,
-  'id' | 'actorId' | 'action' | 'targetType' | 'targetId' | 'createdAt'
+  'id' | 'actorId' | 'action' | 'targetType' | 'targetId' | 'ipHash' | 'createdAt'
 >;
 
 const short = (id: string) => (isUuid(id) ? id.slice(0, 8) : id);
@@ -32,6 +32,10 @@ function targetLabel(type: string | null, id: string | null, refs: Map<string, M
     case 'member': {
       const ref = refs.get(id);
       return ref ? `member @${ref.handle}` : `member ${short(id)}`;
+    }
+    case 'user': {
+      const ref = refs.get(id);
+      return ref ? `@${ref.handle}` : `account ${short(id)}`;
     }
     case 'hashtag':
       return `#${id}`;
@@ -49,13 +53,34 @@ const MEMBER_PAST: Record<string, string> = {
   suspend: 'Suspended',
 };
 
-/** Summary text derived from action and target only; before/after payloads are never shown here. */
+/** Area names for the generic fallback, e.g. "profile.updated" → "Profile: updated". */
+const AREA_LABELS: Record<string, string> = {
+  auth: 'Sign-in',
+  account: 'Account',
+  member: 'Member',
+  profile: 'Profile',
+  privacy: 'Privacy',
+  connection: 'Connection',
+  upload: 'Upload',
+  post: 'Post',
+  comment: 'Comment',
+  report: 'Report',
+  appeal: 'Appeal',
+  moderation: 'Moderation',
+  trending: 'Trending',
+  audit: 'Audit log',
+};
+
+/**
+ * Summary text derived from action, actor and target only; before/after payloads are never shown here.
+ * Self-service actions (actor is the target account) read without the target, e.g. "Signed in".
+ */
 export function auditSummary(
-  row: Pick<AuditRow, 'action' | 'targetType' | 'targetId'>,
+  row: Pick<AuditRow, 'action' | 'targetType' | 'targetId'> & { actorId?: string | null },
   refs: Map<string, MemberRef> = new Map(),
 ) {
   const target = targetLabel(row.targetType, row.targetId, refs);
-  const [area, verb] = [row.action.split('.')[0], row.action.split('.').slice(1).join('.')];
+  const [area, verb] = [row.action.split('.')[0]!, row.action.split('.').slice(1).join('.')];
   if (area === 'moderation' && verb in ACTION_PAST) {
     const past =
       row.targetType === 'member'
@@ -63,6 +88,9 @@ export function auditSummary(
         : ACTION_PAST[verb as ModerationActionKind];
     return `${past} ${target}`.trim();
   }
+  const self = !!row.actorId && row.targetType === 'user' && row.targetId === row.actorId;
+  /** "Did X" for self-service, "Did X for @handle" when someone else's account was the target. */
+  const forTarget = (text: string) => (self || !target ? text : `${text} for ${target}`);
   const known: Record<string, string> = {
     'report.created': `Reported ${target}`,
     'report.assigned': `Took the reports on ${target}`,
@@ -78,11 +106,61 @@ export function auditSummary(
     'trending.override.expired': `Trending override ${short(row.targetId ?? '')} expired`,
     'trending.rules.updated': 'Updated the trending rules',
     'audit.exported': 'Exported the audit log',
+    // Sign-in and account security
+    'auth.register': forTarget('Created an account'),
+    'auth.register.existing_email': `Sign-up attempted with the email of ${target || 'an existing account'}`,
+    'auth.email_verified': forTarget('Verified their email address'),
+    'auth.login.success': forTarget('Signed in'),
+    'auth.login.failure': target ? `Failed sign-in for ${target}` : 'Failed sign-in for an unknown email',
+    'auth.logout': 'Signed out',
+    'auth.password.reset': forTarget('Reset their password'),
+    'account.password_changed': forTarget('Changed their password'),
+    'auth.mfa.setup_started': forTarget('Started two-factor setup'),
+    'auth.mfa.enabled': forTarget('Turned on two-factor authentication'),
+    'auth.mfa.disabled': forTarget('Turned off two-factor authentication'),
+    'auth.mfa.verified': 'Verified a two-factor code',
+    'auth.mfa.failure': forTarget('Entered a wrong two-factor code'),
+    'account.policies_accepted': forTarget('Accepted the terms and privacy policy'),
+    'account.consent_updated': forTarget('Updated their consent choices'),
+    'account.session_revoked': 'Signed out another session',
+    'account.sessions_revoked': 'Signed out all other sessions',
+    'account.deactivated': forTarget('Deactivated their account'),
+    'account.reactivated': forTarget('Reactivated their account'),
+    'account.deletion_requested': 'Requested account deletion',
+    // Profile, privacy and connections
+    'profile.updated': forTarget('Updated their profile'),
+    'privacy.updated': forTarget('Changed their privacy settings'),
+    'account.privacy_updated': forTarget('Changed their privacy settings'),
+    'connection.requested': `Sent a connection request to ${target}`,
+    'connection.accepted': `Accepted a connection with ${target}`,
+    'connection.declined': `Declined a connection request from ${target}`,
+    'connection.removed': `Removed the connection with ${target}`,
+    'member.block': `Blocked ${target}`,
+    'member.unblock': `Unblocked ${target}`,
+    // Content and uploads
+    'post.announce': `Published an announcement (${target})`,
+    'post.delete': `Deleted ${target}`,
+    'comment.delete': `Deleted ${target}`,
+    'upload.infected': `Blocked an infected upload (${target})`,
+    'upload.rejected': `Rejected an upload (${target})`,
   };
-  return known[row.action] ?? `${row.action}${target ? ` · ${target}` : ''}`;
+  if (known[row.action]) return known[row.action]!;
+  const words = verb.replace(/[._]/g, ' ').trim();
+  const label = AREA_LABELS[area] ?? area.charAt(0).toUpperCase() + area.slice(1);
+  return `${label}${words ? `: ${words}` : ''}${target ? ` · ${target}` : ''}`;
 }
 
-const CSV_COLUMNS = ['id', 'created_at', 'actor_id', 'actor_handle', 'action', 'target_type', 'target_id', 'summary'];
+const CSV_COLUMNS = [
+  'id',
+  'created_at',
+  'actor_id',
+  'actor_handle',
+  'action',
+  'target_type',
+  'target_id',
+  'summary',
+  'ip_hash',
+];
 
 /** RFC 4180 quoting, plus a leading apostrophe on values a spreadsheet would run as a formula. */
 export function csvCell(value: string | number | null | undefined): string {
@@ -100,7 +178,10 @@ export class AdminAuditService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Filters: actor by id, @handle or "system"; action prefix (e.g. "moderation."); exact target type. */
+  /**
+   * Filters: actor by id, @handle or "system"; action prefix (e.g. "moderation."); exact target type;
+   * created_at in [from, to).
+   */
   private async filters(q: AuditExportQuery): Promise<SQL[] | null> {
     const conds: SQL[] = [];
     if (q.actor) {
@@ -116,6 +197,8 @@ export class AdminAuditService {
     }
     if (q.action) conds.push(like(auditLog.action, likePrefix(q.action.trim())));
     if (q.targetType) conds.push(eq(auditLog.targetType, q.targetType.trim()));
+    if (q.from) conds.push(gte(auditLog.createdAt, new Date(q.from)));
+    if (q.to) conds.push(lt(auditLog.createdAt, new Date(q.to)));
     return conds;
   }
 
@@ -127,6 +210,7 @@ export class AdminAuditService {
         action: auditLog.action,
         targetType: auditLog.targetType,
         targetId: auditLog.targetId,
+        ipHash: auditLog.ipHash,
         createdAt: auditLog.createdAt,
       })
       .from(auditLog)
@@ -139,7 +223,7 @@ export class AdminAuditService {
     const ids = new Set<string>();
     for (const r of rows) {
       if (r.actorId) ids.add(r.actorId);
-      if (r.targetType === 'member' && r.targetId && isUuid(r.targetId)) ids.add(r.targetId);
+      if ((r.targetType === 'member' || r.targetType === 'user') && r.targetId && isUuid(r.targetId)) ids.add(r.targetId);
     }
     return this.members.refs(ids);
   }
@@ -161,6 +245,7 @@ export class AdminAuditService {
         targetId: r.targetId,
         summary: auditSummary(r, refs),
         createdAt: r.createdAt.toISOString(),
+        ipHash: r.ipHash,
       })),
     };
   }
@@ -171,7 +256,15 @@ export class AdminAuditService {
       actorId: ctx.user.id,
       action: 'audit.exported',
       targetType: 'audit_log',
-      after: { filters: { actor: q.actor ?? null, action: q.action ?? null, targetType: q.targetType ?? null } },
+      after: {
+        filters: {
+          actor: q.actor ?? null,
+          action: q.action ?? null,
+          targetType: q.targetType ?? null,
+          from: q.from ?? null,
+          to: q.to ?? null,
+        },
+      },
       ip,
     });
     const conds = await this.filters(q);
@@ -199,6 +292,7 @@ export class AdminAuditService {
             r.targetType,
             r.targetId,
             auditSummary(r, refs),
+            r.ipHash,
           ]
             .map(csvCell)
             .join(','),

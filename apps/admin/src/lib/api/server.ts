@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { SessionUser } from "@chartermission/contracts";
 import { ApiError } from "./errors";
+import { signInUrl } from "@/lib/navigation";
 
 /** Where the Next server reaches the API (internal network address in production). */
 export const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000/api/v1";
@@ -66,13 +67,18 @@ export const getViewer = cache(async (): Promise<SessionUser | null> => {
 
 /**
  * The signed-in admin with MFA verified this session; otherwise redirects to sign in or to the
- * MFA step. Admin routes on the API return 403 until MFA is verified.
+ * MFA step. Admin routes on the API return 403 until MFA is verified. A session cookie that the
+ * API no longer accepts (30-minute idle timeout) shows "Your session expired" on the sign-in page.
  */
 export async function requireViewer(next?: string): Promise<SessionUser> {
   const viewer = await getViewer();
   const q = next ? `?next=${encodeURIComponent(next)}` : "";
-  if (!viewer) redirect(`/signin${q}`);
+  if (!viewer) {
+    const hadSession = (await cookies()).has("cm_admin_session");
+    redirect(signInUrl({ next, expired: hadSession }));
+  }
   if (!viewer.mfa.enabled) redirect(`/signin/mfa-setup${q}`);
   if (!viewer.mfa.verifiedThisSession) redirect(`/signin/mfa${q}`);
   return viewer;
 }
+

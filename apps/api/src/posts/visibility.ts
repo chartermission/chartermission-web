@@ -61,9 +61,10 @@ export function notBlockedSql(viewerId: string, col: SQL | typeof posts.authorId
 /**
  * SQL filter for any list of posts (feed tabs, topic pages, bookmarks).
  * `muteHashtags` drops posts carrying a hashtag the viewer muted (feeds only;
- * opening a muted topic page still shows it).
+ * opening a muted topic page still shows it). `muteMembers: false` keeps a muted
+ * member's posts, for when the viewer opens that member's profile.
  */
-export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?: boolean } = {}): SQL {
+export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?: boolean; muteMembers?: boolean } = {}): SQL {
   const conds: (SQL | undefined)[] = [isNull(posts.deletedAt), authorActiveSql()];
   if (!viewerId) {
     conds.push(sql`${posts.visibility} = 'public'`, sql`${posts.status} = 'published'`, sql`${posts.moderationState} = 'visible'`);
@@ -73,8 +74,12 @@ export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?:
     sql`(${posts.moderationState} = 'visible' or ${posts.authorId} = ${viewerId})`,
     sql`(${posts.status} = 'published' or ${posts.authorId} = ${viewerId})`,
     notBlockedSql(viewerId),
-    sql`not exists (select 1 from ${mutes} mm where mm.user_id = ${viewerId} and mm.target_type = 'member' and mm.target_id = ${posts.authorId}::text)`,
   );
+  if (opts.muteMembers !== false) {
+    conds.push(
+      sql`not exists (select 1 from ${mutes} mm where mm.user_id = ${viewerId} and mm.target_type = 'member' and mm.target_id = ${posts.authorId}::text)`,
+    );
+  }
   if (opts.muteHashtags) {
     conds.push(
       sql`(${posts.authorId} = ${viewerId} or not exists (select 1 from ${postHashtags} mph join ${hashtags} mh on mh.id = mph.hashtag_id join ${mutes} mt on mt.target_type = 'hashtag' and mt.target_id = mh.tag and mt.user_id = ${viewerId} where mph.post_id = ${posts.id}))`,

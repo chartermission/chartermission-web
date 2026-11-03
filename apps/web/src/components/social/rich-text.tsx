@@ -1,64 +1,100 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { topicHref } from "@/components/feed-list";
-import type { CommentSegment } from "@/lib/mock/posts";
+import type { MemberRef } from "@chartermission/contracts";
+import { cn } from "@chartermission/ui";
+import { memberHref, topicHref } from "./links";
 
-export type Mentionable = { name: string; handle: string };
+export type RichSegment =
+  | { kind: "text"; text: string }
+  | { kind: "tag"; text: string; tag: string }
+  | { kind: "mention"; text: string; handle: string }
+  | { kind: "link"; text: string; url: string };
 
-const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/**
- * Splits user-typed text into plain text, @mentions and #hashtags. Mentions
- * match known member names first ("@Amara Okafor"), then single words.
+/*
+ * Same token rules as the API (apps/api/src/posts/text-parse.ts): #Tag is 2–50 letters,
+ * digits or underscores; @handle is 3–30 letters, digits or hyphens; links are http(s) URLs.
  */
-export function parseRichText(text: string, people: readonly Mentionable[] = []): CommentSegment[] {
-  const names = [...people].sort((a, b) => b.name.length - a.name.length).map((person) => escape(person.name));
-  const pattern = new RegExp(`${names.length ? `@(${names.join("|")})|` : ""}@([\\p{L}\\p{N}_-]+)|#([\\p{L}\\p{N}_]+)`, "gu");
-  const segments: CommentSegment[] = [];
+const TOKENS =
+  /(https?:\/\/[^\s<>"'`]+)|(?<![\w&/#])#([A-Za-z0-9_]{2,50})(?![A-Za-z0-9_])|(?<![\w@./-])@([A-Za-z0-9][A-Za-z0-9-]{1,28}[A-Za-z0-9])(?![A-Za-z0-9-])/g;
+
+/** Splits text into plain runs, hashtags, @mentions and links. Concatenating `text` gives the input back. */
+export function tokenize(text: string): RichSegment[] {
+  const out: RichSegment[] = [];
   let last = 0;
-  for (const match of text.matchAll(pattern)) {
+  const push = (segment: RichSegment) => {
+    const prev = out[out.length - 1];
+    if (segment.kind === "text" && prev?.kind === "text") prev.text += segment.text;
+    else out.push(segment);
+  };
+  for (const match of text.matchAll(TOKENS)) {
     const index = match.index ?? 0;
-    if (index > last) segments.push({ text: text.slice(last, index) });
-    const known = names.length ? match[1] : undefined;
-    const word = names.length ? match[2] : match[1];
-    const tag = names.length ? match[3] : match[2];
-    if (tag) segments.push({ tag });
-    else {
-      const name = known ?? word ?? "";
-      segments.push({ mention: name, handle: people.find((person) => person.name === name)?.handle });
-    }
+    if (index > last) push({ kind: "text", text: text.slice(last, index) });
+    if (match[1]) {
+      const url = match[1].replace(/[.,;:!?)\]]+$/, "");
+      push({ kind: "link", text: url, url });
+      if (url.length < match[1].length) push({ kind: "text", text: match[1].slice(url.length) });
+    } else if (match[2]) push({ kind: "tag", text: match[0], tag: match[2] });
+    else if (match[3]) push({ kind: "mention", text: match[0], handle: match[3].toLowerCase() });
     last = index + match[0].length;
   }
-  if (last < text.length) segments.push({ text: text.slice(last) });
-  return segments;
+  if (last < text.length) push({ kind: "text", text: text.slice(last) });
+  return out;
 }
 
-/** Renders segments with linked, highlighted mentions and hashtags. */
-export function RichSegments({ segments }: { segments: readonly CommentSegment[] }) {
-  const highlight = "font-semibold text-primary-light hover:underline";
+const highlight = "font-medium text-primary-light hover:underline";
+
+/**
+ * User-written text with linked #hashtags, @mentions and URLs. Pass `mentions` (from a
+ * PostView) to show mentioned members by name and only link handles the API resolved;
+ * without it every @handle links to its profile.
+ */
+export function RichText({
+  text,
+  mentions,
+  className,
+}: {
+  text: string;
+  mentions?: readonly MemberRef[];
+  className?: string;
+}) {
+  const known = mentions ? new Map(mentions.map((member) => [member.handle.toLowerCase(), member])) : null;
   return (
-    <>
-      {segments.map((segment, index) => {
-        if ("tag" in segment) {
-          return (
-            <Link key={index} href={topicHref(segment.tag)} className={highlight}>
-              #{segment.tag}
-            </Link>
-          );
+    <div className={cn("whitespace-pre-wrap break-words", className)}>
+      {tokenize(text).map((segment, index) => {
+        switch (segment.kind) {
+          case "tag":
+            return (
+              <Link key={index} href={topicHref(segment.tag)} className={highlight}>
+                {segment.text}
+              </Link>
+            );
+          case "mention": {
+            if (known) {
+              const member = known.get(segment.handle);
+              return member ? (
+                <Link key={index} href={memberHref(member.handle)} className={highlight}>
+                  {member.name}
+                </Link>
+              ) : (
+                <Fragment key={index}>{segment.text}</Fragment>
+              );
+            }
+            return (
+              <Link key={index} href={memberHref(segment.handle)} className={highlight}>
+                {segment.text}
+              </Link>
+            );
+          }
+          case "link":
+            return (
+              <a key={index} href={segment.url} target="_blank" rel="noopener noreferrer nofollow ugc" className={cn(highlight, "break-all")}>
+                {segment.url.replace(/^https?:\/\//, "")}
+              </a>
+            );
+          default:
+            return <Fragment key={index}>{segment.text}</Fragment>;
         }
-        if ("mention" in segment) {
-          return segment.handle ? (
-            <Link key={index} href={`/members/${segment.handle}`} className={highlight}>
-              @{segment.mention}
-            </Link>
-          ) : (
-            <span key={index} className="font-semibold text-primary-light">
-              @{segment.mention}
-            </span>
-          );
-        }
-        return <Fragment key={index}>{segment.text}</Fragment>;
       })}
-    </>
+    </div>
   );
 }

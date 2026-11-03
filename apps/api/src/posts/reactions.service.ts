@@ -11,6 +11,7 @@ import { can } from '../core/policy.js';
 import { RelationsService } from '../core/relations.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { assertNotRestricted, PostsService } from './posts.service.js';
+import { commentReactionBreakdowns } from './comments.service.js';
 import { PostSerializer } from './post-serializer.js';
 import { listablePostsSql } from './visibility.js';
 
@@ -162,8 +163,17 @@ export class ReactionsService {
         breakdown: { like: p?.likeCount ?? 0, insightful: p?.insightfulCount ?? 0, support: p?.supportCount ?? 0 },
       };
     }
-    const [c] = await this.db.select({ n: comments.reactionCount }).from(comments).where(eq(comments.id, targetId));
-    return { targetType, targetId, reaction: (mine?.kind as ReactionKind) ?? null, reactions: c?.n ?? 0, breakdown: null };
+    const [[c], kinds] = await Promise.all([
+      this.db.select({ n: comments.reactionCount }).from(comments).where(eq(comments.id, targetId)),
+      commentReactionBreakdowns(this.db, [targetId]),
+    ]);
+    return {
+      targetType,
+      targetId,
+      reaction: (mine?.kind as ReactionKind) ?? null,
+      reactions: c?.n ?? 0,
+      breakdown: kinds.get(targetId) ?? { like: 0, insightful: 0, support: 0 },
+    };
   }
 }
 

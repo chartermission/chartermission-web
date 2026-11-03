@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import type { Relationship } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { blocks, connections, follows } from '../db/schema.js';
+import { blocks, connections, follows, mutes } from '../db/schema.js';
 
 const NONE: Omit<Relationship, 'self'> = {
   connection: 'none',
@@ -10,6 +10,7 @@ const NONE: Omit<Relationship, 'self'> = {
   following: false,
   followsYou: false,
   blocked: false,
+  muted: false,
 };
 
 /** Read-side relationship facts between a viewer and many members, in a few batched queries. */
@@ -23,7 +24,7 @@ export class RelationshipService {
     const others = targetIds.filter((id) => id !== viewerId);
     if (!viewerId || others.length === 0) return map;
 
-    const [conns, followRows, blockRows] = await Promise.all([
+    const [conns, followRows, blockRows, muteRows] = await Promise.all([
       this.db
         .select({ id: connections.id, requesterId: connections.requesterId, addresseeId: connections.addresseeId, status: connections.status })
         .from(connections)
@@ -52,6 +53,10 @@ export class RelationshipService {
         .select({ blockedId: blocks.blockedId })
         .from(blocks)
         .where(and(eq(blocks.blockerId, viewerId), inArray(blocks.blockedId, others))),
+      this.db
+        .select({ targetId: mutes.targetId })
+        .from(mutes)
+        .where(and(eq(mutes.userId, viewerId), eq(mutes.targetType, 'member'), inArray(mutes.targetId, others))),
     ]);
 
     for (const c of conns) {
@@ -74,6 +79,10 @@ export class RelationshipService {
     for (const b of blockRows) {
       const rel = map.get(b.blockedId);
       if (rel) rel.blocked = true;
+    }
+    for (const m of muteRows) {
+      const rel = map.get(m.targetId);
+      if (rel) rel.muted = true;
     }
     return map;
   }

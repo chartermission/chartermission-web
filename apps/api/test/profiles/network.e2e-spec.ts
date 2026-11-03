@@ -155,6 +155,11 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
       ['member', b.id],
     ]);
     expect(list.body.find((m: { targetType: string }) => m.targetType === 'member').member.id).toBe(b.id);
+    // The profile relationship carries the mute, for the viewer only.
+    expect((await a.get(`/members/${b.handle}`).expect(200)).body.relationship.muted).toBe(true);
+    expect((await b.get(`/members/${a.handle}`).expect(200)).body.relationship.muted).toBe(false);
+    await a.delete('/mutes', { targetType: 'member', targetId: b.id }).expect(200);
+    expect((await a.get(`/members/${b.handle}`).expect(200)).body.relationship.muted).toBe(false);
     await a.delete('/mutes', { targetType: 'hashtag', targetId: 'crypto' }).expect(200);
     expect(await count(t.db, s.mutes, and(eq(s.mutes.userId, a.id), eq(s.mutes.targetType, 'hashtag')))).toBe(0);
   });

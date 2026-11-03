@@ -119,6 +119,15 @@ describe('Appeals, trending controls, audit log and expiry', () => {
       expect(p!.moderationState).toBe('removed');
       const [note] = await notificationsFor(t, author.id, 'appeal_outcome');
       expect(textOf(note!)).toMatch(/decision stands/);
+
+      // status=decided lists upheld and overturned appeals only.
+      const decided = await modA.get('/admin/appeals?status=decided&limit=100').expect(200);
+      expect(decided.body.items.map((a: any) => a.id)).toContain(appeal.body.id);
+      expect(decided.body.items.every((a: any) => ['upheld', 'overturned'].includes(a.status))).toBe(true);
+      const row = decided.body.items.find((a: any) => a.id === appeal.body.id);
+      expect(row.action).toMatchObject({ targetType: 'post', targetId: post.id });
+      const open = await modA.get('/admin/appeals?status=open&limit=100').expect(200);
+      expect(open.body.items.map((a: any) => a.id)).not.toContain(appeal.body.id);
     });
 
     it('a suspended member can appeal, and overturning lifts the suspension', async () => {
@@ -285,16 +294,18 @@ describe('Appeals, trending controls, audit log and expiry', () => {
       expect(unsup.actorId).toBe(modA.id);
     });
 
-    it('updates trending rules (trending.manage) and audits them', async () => {
+    it('updates trending rules (settings.manage, not moderators) and audits them', async () => {
       const rules = { minDistinctAuthors: 30, maxPostsPerAuthorPerHour: 2, baselineDays: 14, recomputeMinutes: 5 };
-      const res = await modA.put('/admin/trending/rules', rules).expect(200);
+      await modA.put('/admin/trending/rules', rules).expect(403);
+      const pa = await createMember(t, { name: 'Rules Admin', roles: ['platform_admin'], admin: true });
+      const res = await pa.put('/admin/trending/rules', rules).expect(200);
       expect(res.body).toEqual(rules);
       const view = await modA.get('/admin/trending').expect(200);
       expect(view.body.rules).toEqual(rules);
       const [a] = await t.db.select().from(s.auditLog).where(eq(s.auditLog.action, 'trending.rules.updated'));
       expect(a!.before).toMatchObject({ minDistinctAuthors: 25 });
       expect(a!.after).toMatchObject({ minDistinctAuthors: 30 });
-      await modA.put('/admin/trending/rules', { ...rules, minDistinctAuthors: 0 }).expect(422);
+      await pa.put('/admin/trending/rules', { ...rules, minDistinctAuthors: 0 }).expect(422);
     });
   });
 
@@ -382,6 +393,58 @@ describe('Appeals, trending controls, audit log and expiry', () => {
       const p1 = await modA.get('/admin/audit?limit=2').expect(200);
       const p2 = await modA.get(`/admin/audit?limit=2&cursor=${p1.body.nextCursor}`).expect(200);
       expect(Number(p2.body.items[0].id)).toBeLessThan(Number(p1.body.items[1].id));
+      expect(all.body.items.every((e: any) => 'ipHash' in e)).toBe(true);
+    });
+
+    it('filters by date range: from is inclusive, to is exclusive', async () => {
+      const at = (iso: string, action: string) =>
+        t.db.insert(s.auditLog).values({ actorId: modA.id, action, targetType: 'setting', targetId: 'x', createdAt: new Date(iso) });
+      await at('2020-01-01T10:00:00.000Z', 'test.range.before');
+      await at('2020-01-02T00:00:00.000Z', 'test.range.start');
+      await at('2020-01-02T23:59:59.000Z', 'test.range.inside');
+      await at('2020-01-03T00:00:00.000Z', 'test.range.end');
+      const res = await modA
+        .get('/admin/audit?action=test.range.&from=2020-01-02T00:00:00.000Z&to=2020-01-03T00:00:00.000Z')
+        .expect(200);
+      expect(res.body.items.map((e: any) => e.action)).toEqual(['test.range.inside', 'test.range.start']);
+      const fromOnly = await modA.get('/admin/audit?action=test.range.&from=2020-01-02T12:00:00Z').expect(200);
+      expect(fromOnly.body.items.map((e: any) => e.action)).toEqual(['test.range.end', 'test.range.inside']);
+      await modA.get('/admin/audit?from=yesterday').expect(422);
+    });
+
+    it('writes readable summaries for sign-in and account actions, with a generic fallback', async () => {
+      const { auditSummary } = await import('../../src/admin/admin-audit.service.js');
+      const self = { actorId: 'u1', targetType: 'user', targetId: 'u1' };
+      expect(auditSummary({ ...self, action: 'auth.login.success' })).toBe('Signed in');
+      expect(auditSummary({ actorId: null, action: 'auth.login.failure', targetType: null, targetId: null })).toBe(
+        'Failed sign-in for an unknown email',
+      );
+      expect(auditSummary({ ...self, action: 'auth.mfa.enabled' })).toBe('Turned on two-factor authentication');
+      expect(auditSummary({ ...self, action: 'account.password_changed' })).toBe('Changed their password');
+      const refs = new Map([['u2', { id: 'u2', handle: 'leila-b' } as any]]);
+      expect(auditSummary({ actorId: 'u1', action: 'member.block', targetType: 'user', targetId: 'u2' }, refs)).toBe(
+        'Blocked @leila-b',
+      );
+      expect(auditSummary({ actorId: 'u1', action: 'auth.mfa.disabled', targetType: 'user', targetId: 'u2' }, refs)).toBe(
+        'Turned off two-factor authentication for @leila-b',
+      );
+      expect(auditSummary({ actorId: 'u1', action: 'widget.frobbed', targetType: null, targetId: null })).toBe(
+        'Widget: frobbed',
+      );
+      expect(auditSummary({ actorId: 'u1', action: 'profile.photo_changed', targetType: null, targetId: null })).toBe(
+        'Profile: photo changed',
+      );
+
+      // End to end through the viewer, with the stored IP hash.
+      await t.db.insert(s.auditLog).values({
+        actorId: modA.id,
+        action: 'auth.login.success',
+        targetType: 'user',
+        targetId: modA.id,
+        ipHash: 'abcdef0123456789abcdef0123456789',
+      });
+      const res = await modA.get(`/admin/audit?actor=@${modA.handle}&action=auth.login.success`).expect(200);
+      expect(res.body.items[0]).toMatchObject({ summary: 'Signed in', ipHash: 'abcdef0123456789abcdef0123456789' });
     });
 
     it('is append-only: UPDATE and DELETE on audit_log throw', async () => {
@@ -397,12 +460,16 @@ describe('Appeals, trending controls, audit log and expiry', () => {
       expect(res.headers['content-type']).toMatch(/text\/csv/);
       expect(res.headers['content-disposition']).toMatch(/attachment; filename="audit-log-/);
       const lines = res.text.trim().split('\r\n');
-      expect(lines[0]).toBe('id,created_at,actor_id,actor_handle,action,target_type,target_id,summary');
+      expect(lines[0]).toBe('id,created_at,actor_id,actor_handle,action,target_type,target_id,summary,ip_hash');
       expect(lines.length).toBeGreaterThan(1);
       expect(lines.slice(1).every((l) => l.includes(',moderation.'))).toBe(true);
       expect(res.text).not.toContain(REASON);
       const [exp] = await t.db.select().from(s.auditLog).where(eq(s.auditLog.action, 'audit.exported'));
       expect(exp!.actorId).toBe(pa.id);
+
+      const ranged = await pa.get('/admin/audit/export.csv?action=test.range.&from=2020-01-02T00:00:00Z&to=2020-01-03T00:00:00Z').expect(200);
+      const rangedLines = ranged.text.trim().split('\r\n').slice(1);
+      expect(rangedLines.map((l) => l.split(',')[4])).toEqual(['test.range.inside', 'test.range.start']);
     });
   });
 });

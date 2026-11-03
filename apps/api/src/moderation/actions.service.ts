@@ -20,9 +20,9 @@ import { AuditService } from '../infra/audit.service.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { QueueService } from '../infra/queue.service.js';
-import { TargetsService, type ResolvedTarget } from './targets.service.js';
+import { TargetsService, targetKey, type ResolvedTarget } from './targets.service.js';
 import { OPEN_STATUSES } from './reports.service.js';
-import { iso } from './util.js';
+import { iso, truncate } from './util.js';
 
 type ActionRow = typeof moderationActions.$inferSelect;
 type AppealStatus = AdminActionView['appealStatus'];
@@ -512,10 +512,11 @@ export class ModerationActionsService {
     }
   }
 
-  /** Serialise actions for the admin console (moderator, appeal status). */
+  /** Serialise actions for the admin console (moderator, appeal status, what the action was about). */
   async views(rows: ActionRow[]): Promise<AdminActionView[]> {
     if (rows.length === 0) return [];
     const refs = await this.members.refs(rows.map((r) => r.moderatorId));
+    const previews = await this.targets.previews(rows.map((r) => ({ type: r.targetType, id: r.targetId })));
     const appealRows = await this.db
       .select({ actionId: appeals.actionId, status: appeals.status })
       .from(appeals)
@@ -536,6 +537,9 @@ export class ModerationActionsService {
       expiresAt: iso(r.expiresAt),
       revokedAt: iso(r.revokedAt),
       appealStatus: appealOf.get(r.id) ?? null,
+      targetType: r.targetType as ReportTargetType,
+      targetId: r.targetId,
+      targetPreview: truncate(previews.get(targetKey(r.targetType, r.targetId))?.preview, 80) || null,
     }));
   }
 

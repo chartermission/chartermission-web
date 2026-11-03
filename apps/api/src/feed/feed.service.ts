@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, desc, eq, isNotNull, sql, type SQL } from 'drizzle-orm';
 import type { FeedQuery, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, follows, hashtags, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
+import { chapters, follows, hashtags, memberProfiles, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -40,12 +40,23 @@ export class FeedService {
   async feed(viewer: AuthUser, q: FeedQuery): Promise<Page<PostView>> {
     const filters = await this.filters(q);
     if (!filters) return { items: [], nextCursor: null };
+    const blocked = await this.relations.blockedSet(viewer.id);
+
+    // One member's posts (profile "Recent posts"): newest first, pinned posts in place, and the
+    // member's posts still show when the viewer muted them (like opening a muted topic page).
+    if (q.author) {
+      const visible = listablePostsSql(viewer.id, { muteHashtags: true, muteMembers: false });
+      const page = await this.newest(q, [visible, ...filters], q.limit);
+      return { items: await this.serializer.posts(page.ids, viewer, blocked), nextCursor: page.nextCursor };
+    }
+
     const visible = listablePostsSql(viewer.id, { muteHashtags: true });
     const notPinned = sql`not (${posts.kind} = 'announcement' and ${posts.pinnedAt} is not null)`;
     const base = [visible, notPinned, ...filters];
 
     // Pinned announcements lead the first page and count towards its size (CM-FED-07: 20 per page).
-    const pinned = q.cursor ? [] : await this.pinned(visible, Math.min(MAX_PINNED, q.limit - 1));
+    // They obey the same country, sector and chapter filters as the rest of the page.
+    const pinned = q.cursor ? [] : await this.pinned([visible, ...filters], Math.min(MAX_PINNED, q.limit - 1));
     const limit = q.limit - pinned.length;
     let page: { ids: string[]; nextCursor: string | null };
     if (q.tab === 'for_you') page = await this.forYou(viewer, q, base, limit);
@@ -54,16 +65,15 @@ export class FeedService {
       page = await this.newest(q, conds, limit);
     }
     const ids = [...pinned, ...page.ids.filter((id) => !pinned.includes(id))];
-    const blocked = await this.relations.blockedSet(viewer.id);
     return { items: await this.serializer.posts(ids, viewer, blocked), nextCursor: page.nextCursor };
   }
 
-  private async pinned(visible: SQL, max: number): Promise<string[]> {
+  private async pinned(conds: SQL[], max: number): Promise<string[]> {
     if (max < 1) return [];
     const rows = await this.db
       .select({ id: posts.id })
       .from(posts)
-      .where(and(visible, eq(posts.kind, 'announcement'), isNotNull(posts.pinnedAt)))
+      .where(and(...conds, eq(posts.kind, 'announcement'), isNotNull(posts.pinnedAt)))
       .orderBy(desc(posts.pinnedAt))
       .limit(max);
     return rows.map((r) => r.id);
@@ -128,9 +138,18 @@ export class FeedService {
                  where fph.post_id = ${posts.id}))`;
   }
 
-  /** Country, sector (author's sectors), chapter (slug or id) and announcements filters (CM-FED-04). Null = nothing can match. */
+  /** Author, country, sector (author's sectors), chapter (slug or id) and announcements filters (CM-FED-04). Null = nothing can match. */
   private async filters(q: FeedQuery): Promise<SQL[] | null> {
     const out: SQL[] = [];
+    if (q.author) {
+      const [member] = await this.db
+        .select({ userId: memberProfiles.userId })
+        .from(memberProfiles)
+        .where(isUuid(q.author) ? eq(memberProfiles.userId, q.author) : sql`lower(${memberProfiles.handle}) = ${q.author.toLowerCase()}`)
+        .limit(1);
+      if (!member) return null;
+      out.push(eq(posts.authorId, member.userId));
+    }
     if (q.country) out.push(sql`${posts.countryCode} = ${q.country.toUpperCase()}`);
     if (q.sector) {
       out.push(

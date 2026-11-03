@@ -14,7 +14,7 @@ export class MediaController {
 
   /** POST /uploads → a 15-minute signed URL to PUT the bytes to (CM-FED-02). */
   @Post('uploads')
-  @Access('verified')
+  @Access('member')
   create(@Auth() ctx: AuthContext, @ZBody(CreateUploadInput) input: CreateUploadInput): Promise<CreateUploadResponse> {
     return this.media.createUpload(ctx.user, input);
   }

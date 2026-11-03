@@ -152,6 +152,11 @@ export const FeedQuery = z.object({
   country: z.string().length(2).optional(),
   sector: z.string().optional(),
   chapter: z.string().optional(),
+  /**
+   * One member's posts (member id or handle), newest first, for profile "Recent posts".
+   * Ignores `tab`; pinned announcements are not lifted to the top. Unknown members give an empty page.
+   */
+  author: z.string().trim().min(1).max(60).optional(),
   /** Query-string boolean: "true"/"1" or "false"/"0" (z.coerce.boolean would read "false" as true). */
   announcements: z
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
@@ -179,6 +184,7 @@ export type CommentView = {
   editedAt: string | null;
   isPostAuthor: boolean;
   counts: { reactions: number; replies: number };
+  reactionBreakdown: z.infer<typeof ReactionCounts>;
   viewer: { reaction: ReactionKind | null; canEdit: boolean; canDelete: boolean; canReport: boolean };
   /** First replies for top-level comments; fetch more with GET /comments/{id}/replies. */
   replies: CommentView[];
@@ -196,6 +202,7 @@ export const CommentView: z.ZodType<CommentView> = z.lazy(() =>
     editedAt: z.string().nullable(),
     isPostAuthor: z.boolean(),
     counts: z.object({ reactions: z.number().int(), replies: z.number().int() }),
+    reactionBreakdown: ReactionCounts,
     viewer: z.object({
       reaction: ReactionKind.nullable(),
       canEdit: z.boolean(),
@@ -241,7 +248,7 @@ export const ReactionState = z.object({
   targetId: z.string().uuid(),
   reaction: ReactionKind.nullable(),
   reactions: z.number().int(),
-  /** Per-kind counts for posts; null for comments (only the total is cached). */
+  /** Per-kind counts for the post or comment. Kept nullable for older clients; always set. */
   breakdown: ReactionCounts.nullable(),
 });
 export type ReactionState = z.infer<typeof ReactionState>;

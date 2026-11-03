@@ -65,6 +65,8 @@ export class MediaService implements OnModuleInit {
   }
 
   async createUpload(user: AuthUser, input: CreateUploadInput): Promise<CreateUploadResponse> {
+    // Unverified members may add a profile photo during onboarding; post media needs a verified email.
+    if (input.purpose !== 'avatar' && !user.emailVerified) throw Errors.emailNotVerified();
     const limit = UPLOAD_LIMITS[input.purpose];
     const mime = input.mime.toLowerCase();
     if (!(limit.mimes as readonly string[]).includes(mime)) {

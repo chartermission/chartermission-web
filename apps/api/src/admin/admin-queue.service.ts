@@ -138,6 +138,7 @@ export class AdminQueueService {
         )})
           ${q.targetType ? sql`and r.target_type = ${q.targetType}` : sql``}
         group by r.target_type, r.target_id
+        ${q.reason ? sql`having bool_or(r.reason_code = ${q.reason})` : sql``}
       )
       select g.*, ${tsKey(sql`g.first_at`)} as first_key from g
       where true
@@ -160,7 +161,8 @@ export class AdminQueueService {
           id: r.target_id,
           preview: previews.get(targetKey(r.target_type, r.target_id))?.preview ?? 'Deleted content',
         },
-        reason: r.reason,
+        // When filtering by reason, show that reason rather than the group's most common one.
+        reason: q.reason ?? r.reason,
         reportCount: r.report_count,
         priority: RANK_PRIORITY[r.prio]!,
         status: unresolvedView ? (r.any_review ? 'in_review' : 'open') : r.last_status,
@@ -419,7 +421,14 @@ export class AdminQueueService {
   /** GET /admin/appeals — oldest first; canDecide is false for the moderator who took the action. */
   async appeals(ctx: AuthContext, q: AdminAppealsQuery): Promise<Page<AdminAppealRow>> {
     const cur = decodeCursor<{ t: string; id: string }>(q.cursor);
-    const statuses = q.status === 'all' ? undefined : q.status === 'open' ? ['open', 'in_review'] : [q.status];
+    const statuses =
+      q.status === 'all'
+        ? undefined
+        : q.status === 'open'
+          ? ['open', 'in_review']
+          : q.status === 'decided'
+            ? ['upheld', 'overturned']
+            : [q.status];
     const rows = await this.db
       .select({ appeal: appeals, action: moderationActions, key: tsKey(appeals.createdAt) })
       .from(appeals)

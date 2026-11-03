@@ -64,6 +64,8 @@ export const Relationship = z.object({
   following: z.boolean(),
   followsYou: z.boolean(),
   blocked: z.boolean(),
+  /** The viewer muted this member (their posts are left out of the viewer's feeds). */
+  muted: z.boolean(),
 });
 export type Relationship = z.infer<typeof Relationship>;
 

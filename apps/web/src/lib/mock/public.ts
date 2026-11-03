@@ -1,6 +1,6 @@
 /*
  * Placeholder content for the public (signed-out) pages, taken from the Figma
- * frames "Web / Public landing page" (12:1324) and "Web / Sign up" (17:1511).
+ * frames "Web / Public landing page" (12:1324).
  */
 import type { ChipTone, IconName } from "@chartermission/ui";
 import { trendingTopics } from "@/lib/mock-data";
@@ -120,35 +120,4 @@ export const footerColumns = [
       { label: "Cookies", href: "/cookies" },
     ],
   },
-];
-
-export const signUpHighlights = [
-  "Connect with professionals in 54 countries and the diaspora",
-  "Reviewed jobs, fellowships and grants — no stale listings",
-  "Start or join initiatives, events and local chapters",
-  "Control who sees every field on your profile",
-];
-
-const africanCountries = [
-  "Algeria", "Angola", "Benin", "Botswana", "Burkina Faso", "Burundi", "Cabo Verde", "Cameroon",
-  "Central African Republic", "Chad", "Comoros", "Congo", "Côte d’Ivoire", "Democratic Republic of the Congo",
-  "Djibouti", "Egypt", "Equatorial Guinea", "Eritrea", "Eswatini", "Ethiopia", "Gabon", "Gambia", "Ghana",
-  "Guinea", "Guinea-Bissau", "Kenya", "Lesotho", "Liberia", "Libya", "Madagascar", "Malawi", "Mali",
-  "Mauritania", "Mauritius", "Morocco", "Mozambique", "Namibia", "Niger", "Nigeria", "Rwanda",
-  "São Tomé and Príncipe", "Senegal", "Seychelles", "Sierra Leone", "Somalia", "South Africa", "South Sudan",
-  "Sudan", "Tanzania", "Togo", "Tunisia", "Uganda", "Zambia", "Zimbabwe",
-];
-
-const diasporaCountries = [
-  "Australia", "Belgium", "Brazil", "Canada", "China", "France", "Germany", "India", "Ireland", "Italy",
-  "Netherlands", "Portugal", "Qatar", "Saudi Arabia", "Spain", "Sweden", "Switzerland", "United Arab Emirates",
-  "United Kingdom", "United States",
-];
-
-const collator = new Intl.Collator("en");
-
-/** Country of residence options, grouped as in the spec (Africa, then diaspora hubs). */
-export const countryGroups = [
-  { label: "Africa", countries: [...africanCountries].sort(collator.compare) },
-  { label: "Rest of the world", countries: [...diasporaCountries].sort(collator.compare) },
 ];

@@ -1,24 +1,54 @@
 import Link from "next/link";
-import { Avatar, Button, Panel } from "@chartermission/ui";
-import { peopleToFollow, upcomingEvents } from "@/lib/mock-data";
+import { Suspense } from "react";
+import type { SuggestedMember, TrendingResponse } from "@chartermission/contracts";
+import { Panel } from "@chartermission/ui";
+import { apiGet, getViewer } from "@/lib/api/server";
+import { getTaxonomies } from "@/lib/taxonomies";
+import { upcomingEvents } from "@/lib/mock-data";
+import { SuggestionList } from "./network/suggestion-list";
+import { PanelSkeleton } from "./social/skeletons";
 import { TrendingTopics } from "./trending-topics";
 
-export function PeopleToFollow() {
+async function Trending() {
+  const [viewer, initial, taxonomies] = await Promise.all([
+    getViewer(),
+    apiGet<TrendingResponse>("/trending", { scope: "global", window: "24h", limit: 5 }).catch(() => null),
+    getTaxonomies().catch(() => null),
+  ]);
+  const code = viewer?.countryCode ?? null;
+  const name = code ? (taxonomies?.countries.find((c) => c.code === code)?.name ?? code) : null;
+  return <TrendingTopics initial={initial} country={code && name ? { code, name } : null} />;
+}
+
+/** "People you may know" — GET /members/suggestions, each labelled with its reason (CM-DSH-03). */
+async function PeopleYouMayKnow() {
+  const suggestions = await apiGet<SuggestedMember[]>("/members/suggestions").catch(() => null);
+  if (!suggestions) return null;
   return (
-    <Panel className="flex flex-col gap-3.5 p-5">
-      <h2 className="text-h3 text-ink">People to follow</h2>
-      {peopleToFollow.map((person) => (
-        <div key={person.handle} className="flex items-center gap-2.5">
-          <Avatar name={person.name} tone={person.tone} />
-          <Link href={`/members/${person.handle}`} className="flex min-w-0 flex-1 flex-col gap-px">
-            <span className="text-sm font-medium text-ink">{person.name}</span>
-            <span className="text-xs text-secondary">{person.headline}</span>
+    <Panel aria-labelledby="pymk-heading" className="flex flex-col gap-3.5 p-5">
+      <div className="flex items-center justify-between">
+        <h2 id="pymk-heading" className="text-h3 text-ink">
+          People you may know
+        </h2>
+        <Link href="/network?tab=suggestions" className="text-xs text-primary-light hover:underline">
+          See all
+        </Link>
+      </div>
+      {suggestions.length ? (
+        <SuggestionList members={suggestions.slice(0, 4)} />
+      ) : (
+        <p className="text-sm text-secondary">
+          No suggestions yet. Add your sectors and skills in{" "}
+          <Link href="/settings/profile" className="font-medium text-primary-light hover:underline">
+            your profile
+          </Link>{" "}
+          or{" "}
+          <Link href="/network?tab=directory" className="font-medium text-primary-light hover:underline">
+            browse the directory
           </Link>
-          <Button variant="secondary" size="small">
-            Follow
-          </Button>
-        </div>
-      ))}
+          .
+        </p>
+      )}
     </Panel>
   );
 }
@@ -32,6 +62,7 @@ export function DateBadge({ month, day }: { month: string; day: string }) {
   );
 }
 
+/** Events arrive in a later phase; this widget stays on placeholder data until then. */
 export function UpcomingEvents() {
   return (
     <Panel className="flex flex-col gap-3 p-5">
@@ -69,12 +100,16 @@ export function SiteFooter() {
   );
 }
 
-/** Right column: trending topics, people to follow, upcoming events, footer. */
+/** Right column: trending topics, people you may know, upcoming events, footer. */
 export function RightRail() {
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-4">
-      <TrendingTopics />
-      <PeopleToFollow />
+    <aside aria-label="Trending and suggestions" className="flex w-80 shrink-0 flex-col gap-4">
+      <Suspense fallback={<PanelSkeleton className="h-[420px]" lines={5} />}>
+        <Trending />
+      </Suspense>
+      <Suspense fallback={<PanelSkeleton className="h-[220px]" lines={3} />}>
+        <PeopleYouMayKnow />
+      </Suspense>
       <UpcomingEvents />
       <SiteFooter />
     </aside>

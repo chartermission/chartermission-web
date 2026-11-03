@@ -2,20 +2,29 @@
 
 import { useId, useRef } from "react";
 import { Icon, cn } from "@chartermission/ui";
-import { pollDurations } from "@/lib/mock/compose";
 
 export const MIN_POLL_OPTIONS = 2;
 export const MAX_POLL_OPTIONS = 4;
 export const MAX_POLL_OPTION_LENGTH = 80;
+export const MAX_POLL_QUESTION_LENGTH = 200;
 
-export type PollDraft = { options: string[]; duration: string };
+/** CreatePostInput.poll.durationHours: 1, 3 or 7 days. */
+export const pollDurations = [
+  { value: 24, label: "1 day" },
+  { value: 72, label: "3 days" },
+  { value: 168, label: "1 week" },
+] as const;
 
-export const emptyPoll = (): PollDraft => ({ options: ["", ""], duration: "3" });
+export type PollDuration = (typeof pollDurations)[number]["value"];
+
+export type PollDraft = { question: string; options: string[]; duration: PollDuration };
+
+export const emptyPoll = (): PollDraft => ({ question: "", options: ["", ""], duration: 72 });
 
 const inputClasses =
   "h-[38px] w-full rounded-lg border border-line bg-card px-3 text-sm text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint";
 
-/** Poll options (2–4) and duration, shown when the Poll tool is active. */
+/** Poll question, options (2–4) and duration, shown when the Poll tool is active. */
 export function PollBuilder({
   poll,
   onChange,
@@ -68,6 +77,19 @@ export function PollBuilder({
           Remove<span className="sr-only"> poll</span>
         </button>
       </div>
+
+      <label htmlFor={`${id}-question`} className="sr-only">
+        Poll question (required)
+      </label>
+      <input
+        id={`${id}-question`}
+        value={poll.question}
+        maxLength={MAX_POLL_QUESTION_LENGTH}
+        onChange={(event) => onChange({ ...poll, question: event.target.value })}
+        placeholder="Ask a question"
+        aria-invalid={error && !poll.question.trim() ? true : undefined}
+        className={cn(inputClasses, "font-medium")}
+      />
 
       {poll.options.map((option, index) => (
         <div key={index} className="relative">
@@ -124,7 +146,7 @@ export function PollBuilder({
           <select
             id={`${id}-duration`}
             value={poll.duration}
-            onChange={(event) => onChange({ ...poll, duration: event.target.value })}
+            onChange={(event) => onChange({ ...poll, duration: Number(event.target.value) as PollDuration })}
             className="appearance-none rounded-lg border border-line bg-card py-1.5 pl-2.5 pr-7 text-sm text-body hover:border-line-strong"
           >
             {pollDurations.map((duration) => (

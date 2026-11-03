@@ -156,6 +156,7 @@ export class ProfilesService {
       following: false,
       followsYou: false,
       blocked: false,
+      muted: false,
     };
     return this.build(row, PREVIEW_RELATION[as], relationship);
   }

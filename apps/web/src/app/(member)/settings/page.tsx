@@ -1,17 +1,43 @@
 import type { Metadata } from "next";
-import { PrivacySettingsForm } from "@/components/settings/privacy-settings-form";
-import { SettingsNav } from "@/components/settings/settings-nav";
+import { Suspense } from "react";
+import type { FollowView, Page } from "@chartermission/contracts";
+import { LoadError } from "@/components/account/load-error";
+import { AccountOverview } from "@/components/settings/account-overview";
+import { FollowedTopics } from "@/components/settings/followed-topics";
+import { SettingsHeader, SettingsPageSkeleton } from "@/components/settings/settings-card";
+import { apiGet, requireViewer } from "@/lib/api/server";
 
-export const metadata: Metadata = { title: "Privacy & visibility settings" };
+export const metadata: Metadata = { title: "Account settings" };
 
-/** Settings — Figma "Web / Settings — privacy & notifications" (node 20:3056, body 20:3109). */
-export default function SettingsPage() {
+async function AccountSections() {
+  const viewer = await requireViewer("/settings");
+  let topics: Page<FollowView> | null = null;
+  try {
+    topics = await apiGet<Page<FollowView>>("/me/follows", { type: "hashtag", limit: 50 });
+  } catch {
+    topics = null;
+  }
   return (
-    <div className="mx-auto flex w-full max-w-[1064px] flex-col items-start gap-8 px-4 pb-12 pt-8 lg:flex-row lg:justify-center">
-      <SettingsNav />
-      <main id="main" className="flex w-full min-w-0 lg:w-[760px]">
-        <PrivacySettingsForm />
-      </main>
-    </div>
+    <>
+      <AccountOverview
+        email={viewer.email}
+        emailVerified={viewer.emailVerified}
+        status={viewer.status}
+        handle={viewer.handle}
+        mfaEnabled={viewer.mfa.enabled}
+      />
+      {topics ? <FollowedTopics initial={topics} /> : <LoadError title="Your followed topics didn’t load" />}
+    </>
+  );
+}
+
+export default function AccountSettingsPage() {
+  return (
+    <>
+      <SettingsHeader title="Account" description="Your sign-in email, account status and the topics you follow." />
+      <Suspense fallback={<SettingsPageSkeleton cards={2} rows={3} />}>
+        <AccountSections />
+      </Suspense>
+    </>
   );
 }

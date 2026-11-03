@@ -77,13 +77,78 @@ describe('Feed and topic pages', () => {
     expect(ids(more.body)).not.toContain(announcement.id);
     expect(ids(more.body).filter((id) => ids(small.body).includes(id))).toEqual([]);
 
-    // Filters: chapter by slug, announcements only.
-    expect(ids((await viewer.get('/feed?tab=latest&chapter=accra').expect(200)).body)).toEqual([announcement.id, byChapter.id]);
+    // Filters: chapter by slug, announcements only. Pinned announcements obey the filters too.
+    expect(ids((await viewer.get('/feed?tab=latest&chapter=accra').expect(200)).body)).toEqual([byChapter.id]);
     expect(ids((await viewer.get('/feed?tab=latest&chapter=nowhere').expect(200)).body)).toEqual([]);
     const ann = await viewer.get('/feed?tab=latest&announcements=true').expect(200);
     expect(ann.body.items.every((p: { kind: string }) => p.kind === 'announcement')).toBe(true);
     const notAnn = await viewer.get('/feed?tab=latest&announcements=false').expect(200);
     expect(ids(notAnn.body)).toContain(unrelated.id);
+  });
+
+  it('pinned announcements only lead the page when they match the country, sector and chapter filters', async () => {
+    const viewer = await createMember(t, { countryCode: 'NG' });
+    const admin = await createMember(t, { roles: ['platform_admin'], countryCode: 'TZ' });
+    const [accra] = await t.db.select().from(s.chapters).where(eq(s.chapters.slug, 'accra'));
+    const [sector] = await t.db.select().from(s.sectors).where(eq(s.sectors.slug, 'climate-and-energy'));
+    const global = await createPost(admin, 'For everyone', { kind: 'announcement' });
+    const forAccra = await createPost(admin, 'Accra chapter news', { kind: 'announcement', chapterId: accra!.id });
+    const local = await createPost(admin, 'A regular post');
+
+    const unfiltered = ids((await viewer.get('/feed?tab=latest').expect(200)).body);
+    expect(unfiltered.slice(0, 2)).toEqual([forAccra.id, global.id]);
+
+    const tz = ids((await viewer.get('/feed?tab=latest&country=TZ').expect(200)).body);
+    expect(tz.slice(0, 3)).toEqual([forAccra.id, global.id, local.id]);
+    for (const tab of ['latest', 'following', 'for_you']) {
+      const ng = ids((await viewer.get(`/feed?tab=${tab}&country=NG`).expect(200)).body);
+      expect(ng).not.toContain(global.id);
+      expect(ng).not.toContain(forAccra.id);
+    }
+    const accraIds = ids((await viewer.get('/feed?tab=latest&chapter=accra').expect(200)).body);
+    expect(accraIds[0]).toBe(forAccra.id);
+    expect(accraIds).not.toContain(global.id);
+    expect(ids((await viewer.get('/feed?tab=latest&sector=climate-and-energy').expect(200)).body)).not.toContain(global.id);
+    await t.db.insert(s.profileSectors).values({ userId: admin.id, itemId: sector!.id });
+    expect(ids((await viewer.get('/feed?tab=latest&sector=climate-and-energy').expect(200)).body).slice(0, 2)).toEqual([forAccra.id, global.id]);
+    // Clean up so later tests see no extra pinned posts.
+    await t.db.update(s.posts).set({ pinnedAt: null }).where(eq(s.posts.authorId, admin.id));
+  });
+
+  it('author filter: one member’s posts by id or handle, newest first, paginated', async () => {
+    const viewer = await createMember(t);
+    const author = await createMember(t, { roles: ['platform_admin'] });
+    const other = await createMember(t);
+    const base = Date.now() - 3600_000;
+    const created: string[] = [];
+    for (let i = 0; i < 7; i++) created.push((await insertPost(t, author.id, `Author post ${i}`, { createdAt: new Date(base + i * 60_000) })).id);
+    await insertPost(t, other.id, 'Someone else');
+    // The author's pinned announcement stays in date order instead of jumping to the top.
+    const pinned = await createPost(author, 'Pinned news', { kind: 'announcement' });
+    const newestFirst = [pinned.id, ...[...created].reverse()];
+
+    const byHandle = await viewer.get(`/feed?author=${author.handle}&limit=5`).expect(200);
+    expect(ids(byHandle.body)).toEqual(newestFirst.slice(0, 5));
+    const next = await viewer.get(`/feed?author=${author.handle}&limit=5&cursor=${encodeURIComponent(byHandle.body.nextCursor)}`).expect(200);
+    expect(ids(next.body)).toEqual(newestFirst.slice(5));
+    expect(next.body.nextCursor).toBeNull();
+    // By id and case-insensitive handle, whatever the tab.
+    expect(ids((await viewer.get(`/feed?author=${author.id}&tab=for_you`).expect(200)).body)).toEqual(newestFirst);
+    expect(ids((await viewer.get(`/feed?author=${author.handle.toUpperCase()}`).expect(200)).body)).toEqual(newestFirst);
+    // Combined with other filters.
+    expect(ids((await viewer.get(`/feed?author=${author.handle}&announcements=true`).expect(200)).body)).toEqual([pinned.id]);
+    // Unknown members give an empty page.
+    expect((await viewer.get('/feed?author=no-such-member').expect(200)).body).toEqual({ items: [], nextCursor: null });
+    expect((await viewer.get('/feed?author=00000000-0000-4000-8000-000000000000').expect(200)).body.items).toEqual([]);
+
+    // Muting the author hides them from feeds but not from their own profile list.
+    await viewer.post('/mutes', { targetType: 'member', targetId: author.id }).expect(201);
+    expect(ids((await viewer.get('/feed?tab=latest&limit=50').expect(200)).body)).not.toContain(created[6]);
+    expect(ids((await viewer.get(`/feed?author=${author.handle}`).expect(200)).body)).toEqual(newestFirst);
+    // Blocks either way still apply.
+    await block(t, author.id, viewer.id);
+    expect((await viewer.get(`/feed?author=${author.handle}`).expect(200)).body.items).toEqual([]);
+    await t.db.update(s.posts).set({ pinnedAt: null }).where(eq(s.posts.authorId, author.id));
   });
 
   it('sector filter uses the author’s profile sectors', async () => {

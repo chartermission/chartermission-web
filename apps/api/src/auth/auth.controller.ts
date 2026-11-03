@@ -24,9 +24,11 @@ import {
   type SessionUser,
   type SessionView,
   type SignInResult,
+  type PolicyVersions,
   type Taxonomies,
 } from '@chartermission/contracts';
-import { Access, Auth, OptionalAuth } from '../core/guards.js';
+import { SettingsService } from '../infra/settings.service.js';
+import { Access, AllowPendingMfa, Auth, OptionalAuth } from '../core/guards.js';
 import { type AppRequest, type AuthContext, clientIp } from '../core/auth-context.js';
 import { ZBody, ZQuery } from '../common/validation.js';
 import { Errors } from '../common/errors.js';
@@ -123,6 +125,7 @@ export class AuthController {
   @Post('mfa/verify')
   @HttpCode(200)
   @Access('session')
+  @AllowPendingMfa()
   async verifyMfa(@Auth() ctx: AuthContext, @ZBody(MfaCodeInput) input: MfaCodeInput, @Req() req: AppRequest): Promise<Ok> {
     await this.mfa.verify(ctx, input.code, clientIp(req));
     return OK;
@@ -151,6 +154,7 @@ export class AccountController {
 
   @Get()
   @Access('session')
+  @AllowPendingMfa()
   me(@Auth() ctx: AuthContext): Promise<SessionUser> {
     return this.account.me(ctx);
   }
@@ -270,6 +274,18 @@ export class TaxonomiesController {
   @Header('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600')
   taxonomies(): Promise<Taxonomies> {
     return this.taxonomy.all();
+  }
+}
+
+/** GET /policies — the current versions of the terms, privacy policy and community guidelines. */
+@Controller('policies')
+export class PoliciesController {
+  constructor(private readonly settings: SettingsService) {}
+
+  @Get()
+  @Header('Cache-Control', 'public, max-age=60')
+  policies(): Promise<PolicyVersions> {
+    return this.settings.get('policy_versions');
   }
 }
 

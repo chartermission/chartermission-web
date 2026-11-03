@@ -1,55 +1,72 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState, type KeyboardEvent, type RefObject } from "react";
+import { POST_MAX_CHARS, type DirectoryMember, type HashtagSuggestion, type Page } from "@chartermission/contracts";
 import { Avatar, Icon, cn } from "@chartermission/ui";
-import { parseRichText } from "@/components/social/rich-text";
-import { hashtagSuggestions, mentionSuggestions } from "@/lib/mock/compose";
-
-export const MAX_POST_LENGTH = 3000;
+import { api } from "@/lib/api/client";
+import { tokenize } from "@/components/social/rich-text";
 
 type Token = { trigger: "#" | "@"; query: string; start: number; end: number };
 
 type Suggestion =
-  | { kind: "tag"; id: string; insert: string; tag: string; posts: number; trending?: boolean }
-  | { kind: "person"; id: string; insert: string; name: string; headline: string; tone: (typeof mentionSuggestions)[number]["tone"] };
+  | { kind: "tag"; id: string; insert: string; tag: string; posts: number; trending: boolean }
+  | { kind: "person"; id: string; insert: string; member: DirectoryMember };
 
-const people = mentionSuggestions.map(({ name, handle }) => ({ name, handle }));
-
-/** The #tag / @name being typed immediately before the caret, if any. */
+/** The #tag / @handle being typed immediately before the caret, if any. */
 function tokenAt(text: string, caret: number): Token | null {
-  const match = /(^|\s)([#@])([\p{L}\p{N}_-]*)$/u.exec(text.slice(0, caret));
+  const match = /(^|\s)([#@])([A-Za-z0-9_-]*)$/.exec(text.slice(0, caret));
   if (!match) return null;
   const trigger = match[2] as Token["trigger"];
   return { trigger, query: match[3], start: caret - match[3].length - 1, end: caret };
 }
 
-function suggestionsFor(token: Token | null): Suggestion[] {
-  if (!token) return [];
-  const query = token.query.toLowerCase();
-  if (token.trigger === "#") {
-    return hashtagSuggestions
-      .filter((item) => item.tag.toLowerCase().startsWith(query) && item.tag.toLowerCase() !== query)
-      .sort((a, b) => Number(!!b.trending) - Number(!!a.trending) || b.posts - a.posts)
-      .slice(0, 4)
-      .map((item) => ({ kind: "tag", id: `tag-${item.tag}`, insert: `#${item.tag} `, ...item }));
-  }
-  return mentionSuggestions
-    .filter((person) => person.name.toLowerCase().split(/\s+/).some((part) => part.startsWith(query)))
-    .slice(0, 4)
-    .map((person) => ({
-      kind: "person",
-      id: `person-${person.handle}`,
-      insert: `@${person.name} `,
-      name: person.name,
-      headline: person.headline,
-      tone: person.tone,
-    }));
+/** Debounced suggestions: GET /hashtags/suggest?q= for #, GET /members?q= for @. */
+function useSuggestions(token: Token | null): { key: string; items: Suggestion[] } {
+  const key = token ? `${token.trigger}${token.query}` : "";
+  const [result, setResult] = useState<{ key: string; items: Suggestion[] }>({ key: "", items: [] });
+
+  useEffect(() => {
+    if (!token) return;
+    if (token.trigger === "@" && token.query.length < 1) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        if (token.trigger === "#") {
+          const tags = await api<HashtagSuggestion[]>("/hashtags/suggest", { query: { q: token.query }, signal: controller.signal });
+          setResult({
+            key,
+            items: tags
+              .filter((t) => t.tag.toLowerCase() !== token.query.toLowerCase())
+              .slice(0, 6)
+              .map((t) => ({ kind: "tag", id: `tag-${t.tag}`, insert: `#${t.tag} `, ...t })),
+          });
+        } else {
+          const page = await api<Page<DirectoryMember>>("/members", { query: { q: token.query, limit: 6 }, signal: controller.signal });
+          setResult({
+            key,
+            items: page.items
+              .filter((m) => !m.relationship.self && !m.relationship.blocked)
+              .map((member) => ({ kind: "person", id: `person-${member.handle}`, insert: `@${member.handle} `, member })),
+          });
+        }
+      } catch {
+        // Autocomplete is best-effort; typing still works without it.
+      }
+    }, 150);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the token text
+  }, [key]);
+
+  return result.key === key ? result : { key, items: [] };
 }
 
 /**
- * Post text area with live #hashtag / @mention highlighting and an
- * autocomplete list. The highlighted copy sits behind a transparent textarea
- * so native editing, selection and caret behaviour are preserved.
+ * Post text area with live #hashtag / @mention highlighting and an autocomplete list.
+ * The highlighted copy sits behind a transparent textarea so native editing, selection
+ * and caret behaviour are preserved. Mentions insert @handle, which the API resolves.
  */
 export function ComposeEditor({
   value,
@@ -61,6 +78,8 @@ export function ComposeEditor({
   describedBy,
   invalid,
   onSuggestionsOpenChange,
+  placeholder = "Share an update, ask a question or start a poll… Use # for topics and @ to mention",
+  maxLength = POST_MAX_CHARS,
 }: {
   value: string;
   caret: number;
@@ -71,27 +90,29 @@ export function ComposeEditor({
   describedBy?: string;
   invalid?: boolean;
   onSuggestionsOpenChange?: (open: boolean) => void;
+  placeholder?: string;
+  maxLength?: number;
 }) {
   const id = useId();
   const token = useMemo(() => tokenAt(value, caret), [value, caret]);
-  const suggestions = useMemo(() => suggestionsFor(token), [token]);
+  const { items: suggestions } = useSuggestions(token);
   const tokenKey = token ? `${token.start}:${token.trigger}${token.query}` : "";
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   const [activeState, setActiveState] = useState<{ key: string; index: number }>({ key: "", index: 0 });
   const active = activeState.key === tokenKey ? Math.min(activeState.index, Math.max(suggestions.length - 1, 0)) : 0;
-  const open = suggestions.length > 0 && dismissedKey !== tokenKey;
+  const open = !!token && suggestions.length > 0 && dismissedKey !== tokenKey;
 
   useEffect(() => {
     onSuggestionsOpenChange?.(open);
   }, [open, onSuggestionsOpenChange]);
 
-  const segments = useMemo(() => parseRichText(value, people), [value]);
+  const segments = useMemo(() => tokenize(value), [value]);
 
   function choose(suggestion: Suggestion) {
     if (!token) return;
     const before = value.slice(0, token.start);
     const after = value.slice(token.end).replace(/^\s+/, "");
-    const next = (before + suggestion.insert + after).slice(0, MAX_POST_LENGTH);
+    const next = (before + suggestion.insert + after).slice(0, maxLength);
     const nextCaret = Math.min(before.length + suggestion.insert.length, next.length);
     onChange(next, nextCaret);
     requestAnimationFrame(() => {
@@ -124,13 +145,13 @@ export function ComposeEditor({
   return (
     <div className="flex flex-col gap-3.5">
       <div className="relative">
-        <div aria-hidden="true" className="min-h-[44px] whitespace-pre-wrap break-words text-md text-ink">
+        <div aria-hidden="true" className="min-h-[88px] whitespace-pre-wrap break-words text-md text-ink">
           {segments.map((segment, index) =>
-            "text" in segment ? (
+            segment.kind === "text" ? (
               <span key={index}>{segment.text}</span>
             ) : (
               <span key={index} className="text-primary-light [text-shadow:0.35px_0_0_currentColor]">
-                {"tag" in segment ? `#${segment.tag}` : `@${segment.mention}`}
+                {segment.text}
               </span>
             ),
           )}
@@ -139,21 +160,22 @@ export function ComposeEditor({
         <textarea
           ref={textareaRef}
           value={value}
-          maxLength={MAX_POST_LENGTH}
+          maxLength={maxLength}
           onChange={(event) => onChange(event.target.value, event.target.selectionStart)}
           onSelect={syncCaret}
           onKeyDown={onKeyDown}
           onKeyUp={syncCaret}
           onClick={syncCaret}
-          autoFocus
           spellCheck
-          placeholder="Share an update, ask a question or start a poll… Use # for topics and @ to mention"
+          placeholder={placeholder}
           aria-labelledby={labelledBy}
           aria-describedby={describedBy}
           aria-invalid={invalid || undefined}
           aria-autocomplete="list"
+          aria-expanded={open}
           aria-controls={open ? listId : undefined}
           aria-activedescendant={open ? `${id}-${suggestions[active]?.id}` : undefined}
+          role="combobox"
           className="absolute inset-0 size-full resize-none overflow-hidden whitespace-pre-wrap break-words bg-transparent text-md text-transparent caret-ink outline-none selection:bg-primary-tint selection:text-transparent placeholder:text-disabled"
         />
       </div>
@@ -167,7 +189,7 @@ export function ComposeEditor({
           id={listId}
           role="listbox"
           aria-label={token?.trigger === "#" ? "Hashtag suggestions" : "People to mention"}
-          className="flex w-[340px] max-w-full flex-col overflow-hidden rounded-[10px] border border-line bg-card shadow-[0px_8px_20px_0px_rgba(0,0,0,0.1)]"
+          className="flex w-[360px] max-w-full flex-col overflow-hidden rounded-[10px] border border-line bg-card shadow-[0px_8px_20px_0px_rgba(0,0,0,0.1)]"
         >
           {suggestions.map((suggestion, index) => (
             <li
@@ -178,10 +200,7 @@ export function ComposeEditor({
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setActiveState({ key: tokenKey, index })}
               onClick={() => choose(suggestion)}
-              className={cn(
-                "flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5",
-                index === active && "bg-primary-tint-2",
-              )}
+              className={cn("flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5", index === active && "bg-primary-tint-2")}
             >
               {suggestion.kind === "tag" ? (
                 <>
@@ -199,9 +218,11 @@ export function ComposeEditor({
                 </>
               ) : (
                 <span className="flex min-w-0 items-center gap-2">
-                  <Avatar name={suggestion.name} size={24} tone={suggestion.tone} />
-                  <span className="truncate text-sm font-medium text-ink">{suggestion.name}</span>
-                  <span className="truncate text-xs text-secondary">{suggestion.headline}</span>
+                  <span aria-hidden="true" className="flex">
+                    <Avatar name={suggestion.member.name} src={suggestion.member.avatarUrl ?? undefined} size={24} tone={suggestion.member.tone} />
+                  </span>
+                  <span className="truncate text-sm font-medium text-ink">{suggestion.member.name}</span>
+                  <span className="truncate text-xs text-secondary">@{suggestion.member.handle}</span>
                 </span>
               )}
             </li>

@@ -35,6 +35,8 @@ import { AuthMailer } from './auth-mail.js';
 export const LIMITS = {
   registerPerIpHour: 10,
   loginFailures: 5,
+  /** Per IP, higher than per account: offices and mobile networks share addresses. */
+  loginFailuresPerIp: 25,
   loginWindowSec: 15 * 60,
   emailPerAccountHour: 3,
 } as const;
@@ -196,7 +198,7 @@ export class AuthService {
     const accountKey = loginAccountKey(input.email);
     const ipKey = `login:fail:ip:${ip}`;
     await this.limits.assertBelow(accountKey, LIMITS.loginFailures);
-    await this.limits.assertBelow(ipKey, LIMITS.loginFailures);
+    await this.limits.assertBelow(ipKey, LIMITS.loginFailuresPerIp);
 
     const user = await this.findByEmail(input.email);
     let ok = false;
@@ -235,7 +237,8 @@ export class AuthService {
     await this.audit.record({ actorId: user.id, action: 'auth.login.success', targetType: 'user', targetId: user.id, after: { audience }, ip });
 
     if (audience === 'admin') return { status: user.mfaEnabledAt ? 'mfa_required' : 'mfa_setup_required' };
-    return { status: 'ok' };
+    // Members who turned on two-step verification enter a code next (POST /auth/mfa/verify).
+    return { status: user.mfaEnabledAt ? 'mfa_required' : 'ok' };
   }
 
   /** POST /auth/logout — revokes the current session for the request's audience. */

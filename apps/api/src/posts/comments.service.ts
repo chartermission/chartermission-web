@@ -23,6 +23,27 @@ export const COMMENTS_PER_DAY = 100;
 const INLINE_REPLIES = 3;
 
 type CommentRow = typeof comments.$inferSelect;
+type Breakdown = Record<ReactionKind, number>;
+
+/**
+ * Per-kind reaction counts for comments. Only the total is cached on the comment row,
+ * so the split is read from the reactions table (primary key leads with target type and id).
+ */
+export async function commentReactionBreakdowns(db: Db, ids: string[]): Promise<Map<string, Breakdown>> {
+  const out = new Map<string, Breakdown>();
+  if (!ids.length) return out;
+  const rows = await db
+    .select({ targetId: reactions.targetId, kind: reactions.kind, n: sql<number>`count(*)::int` })
+    .from(reactions)
+    .where(and(eq(reactions.targetType, 'comment'), inArray(reactions.targetId, ids)))
+    .groupBy(reactions.targetId, reactions.kind);
+  for (const r of rows) {
+    const b = out.get(r.targetId) ?? { like: 0, insightful: 0, support: 0 };
+    if (r.kind === 'like' || r.kind === 'insightful' || r.kind === 'support') b[r.kind] = r.n;
+    out.set(r.targetId, b);
+  }
+  return out;
+}
 
 function commentTs(col: typeof comments.createdAt): SQL<string> {
   return sql<string>`to_char(${col} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
@@ -232,7 +253,8 @@ export class CommentsService {
     if (!rows.length) return [];
     const mod = isModerator(viewer);
     const reveal = (r: CommentRow) => (!r.deletedAt && r.moderationState === 'visible') || r.authorId === viewer.id || mod;
-    const [refs, mine] = await Promise.all([
+    const ids = rows.map((r) => r.id);
+    const [refs, mine, kinds] = await Promise.all([
       this.members.refs(rows.filter(reveal).map((r) => r.authorId)),
       this.db
         .select({ targetId: reactions.targetId, kind: reactions.kind })
@@ -241,12 +263,10 @@ export class CommentsService {
           and(
             eq(reactions.userId, viewer.id),
             eq(reactions.targetType, 'comment'),
-            inArray(
-              reactions.targetId,
-              rows.map((r) => r.id),
-            ),
+            inArray(reactions.targetId, ids),
           ),
         ),
+      commentReactionBreakdowns(this.db, ids),
     ]);
     const myReaction = new Map(mine.map((m) => [m.targetId, m.kind as ReactionKind]));
     return rows.map((r) => {
@@ -263,6 +283,7 @@ export class CommentsService {
         editedAt: show ? (r.editedAt?.toISOString() ?? null) : null,
         isPostAuthor: show && r.authorId === post.authorId,
         counts: { reactions: r.reactionCount, replies: r.replyCount },
+        reactionBreakdown: kinds.get(r.id) ?? { like: 0, insightful: 0, support: 0 },
         viewer: {
           reaction: myReaction.get(r.id) ?? null,
           canEdit: state === 'visible' && can(viewer, 'comment.edit', { authorId: r.authorId }),

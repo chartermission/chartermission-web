@@ -1,185 +1,180 @@
-import type { ReportStatus } from "@chartermission/contracts";
-import type { ChipTone } from "@chartermission/ui";
-import type { QueueTab } from "@/lib/mock/moderation";
+import type { AdminReportDetail, ModerationActionKind, ReportTargetType } from "@chartermission/contracts";
 import type { ConfirmTone } from "@/components/reason-dialog";
 
 export type ActionStyle = "primary" | "secondary" | "danger" | "ghost";
 
-export type ModerationAction = {
-  id: string;
+export type DurationOption = { value: string; label: string };
+
+export type ModerationActionDef = {
+  kind: ModerationActionKind;
   label: string;
   style: ActionStyle;
-  /** Status the case moves to once confirmed. */
-  result: ReportStatus;
-  /** Past-tense outcome shown in the queue's status column. */
-  outcome: string;
-  outcomeTone: ChipTone;
   confirmTitle: string;
   confirmDescription: string;
   confirmLabel: string;
   confirmTone: ConfirmTone;
-  /** Optional duration picker shown in the confirmation. */
-  durations?: readonly { value: string; label: string }[];
+  /** Duration picker in the confirmation; values are hours, "" = indefinite. */
+  durations?: readonly DurationOption[];
+  defaultDuration?: string;
 };
 
-const suspensionLengths = [
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "permanent", label: "Permanent (until appeal)" },
-] as const;
+const RESTRICTION_LENGTHS: DurationOption[] = [
+  { value: "24", label: "24 hours" },
+  { value: "72", label: "3 days" },
+  { value: "168", label: "7 days" },
+  { value: "720", label: "30 days" },
+];
 
-const suspend: ModerationAction = {
-  id: "suspend",
-  label: "Suspend account",
-  style: "danger",
-  result: "actioned",
-  outcome: "Suspended",
-  outcomeTone: "error",
-  confirmTitle: "Suspend this account?",
-  confirmDescription:
-    "The author is signed out, cannot post, comment or message, and their content is hidden while suspended. They can appeal once.",
-  confirmLabel: "Suspend account",
-  confirmTone: "danger",
-  durations: suspensionLengths,
-};
+const SUSPENSION_LENGTHS: DurationOption[] = [
+  { value: "24", label: "24 hours" },
+  { value: "168", label: "7 days" },
+  { value: "720", label: "30 days" },
+  { value: "", label: "Indefinitely (until lifted or appealed)" },
+];
 
-/** Actions available per queue (Figma "ACTION" group, node 12:1766). */
-export const moderationActions: Record<QueueTab, ModerationAction[]> = {
-  reports: [
-    {
-      id: "hide",
-      label: "Hide content",
-      style: "primary",
-      result: "actioned",
-      outcome: "Hidden",
-      outcomeTone: "info",
-      confirmTitle: "Hide this content?",
-      confirmDescription:
-        "It leaves feeds, topic pages, trending and search within 60 seconds. The author is notified and can appeal once.",
-      confirmLabel: "Hide content",
-      confirmTone: "primary",
-    },
-    {
-      id: "warn",
-      label: "Warn author",
-      style: "secondary",
-      result: "actioned",
-      outcome: "Warned",
-      outcomeTone: "warning",
-      confirmTitle: "Send the author a warning?",
-      confirmDescription:
-        "The content stays up. The author receives a policy warning that counts toward future enforcement.",
-      confirmLabel: "Send warning",
-      confirmTone: "primary",
-    },
-    suspend,
-    {
-      id: "dismiss",
-      label: "Dismiss report",
-      style: "ghost",
-      result: "dismissed",
-      outcome: "Dismissed",
-      outcomeTone: "neutral",
-      confirmTitle: "Dismiss this report?",
-      confirmDescription: "No action is taken on the content. Reporters are told the content does not break the guidelines.",
-      confirmLabel: "Dismiss report",
-      confirmTone: "primary",
-    },
-  ],
-  hidden: [
-    {
-      id: "restore",
-      label: "Restore content",
-      style: "primary",
-      result: "overturned",
-      outcome: "Restored",
-      outcomeTone: "success",
-      confirmTitle: "Restore this content?",
-      confirmDescription: "It returns to feeds, topic pages and search within 60 seconds and the author is notified.",
-      confirmLabel: "Restore content",
-      confirmTone: "primary",
-    },
-    {
-      id: "remove",
-      label: "Remove permanently",
-      style: "danger",
-      result: "actioned",
-      outcome: "Removed",
-      outcomeTone: "error",
-      confirmTitle: "Remove this content permanently?",
-      confirmDescription: "The content is deleted for everyone. A copy is kept for 90 days for legal holds and appeals.",
-      confirmLabel: "Remove permanently",
-      confirmTone: "danger",
-    },
-    { ...suspend },
-  ],
-  appeals: [
-    {
-      id: "uphold",
-      label: "Uphold decision",
-      style: "primary",
-      result: "upheld",
-      outcome: "Upheld",
-      outcomeTone: "neutral",
-      confirmTitle: "Uphold the original decision?",
-      confirmDescription: "The original action stays in place. This is the member's only appeal, so the decision is final.",
-      confirmLabel: "Uphold decision",
-      confirmTone: "primary",
-    },
-    {
-      id: "overturn",
-      label: "Overturn and restore",
-      style: "secondary",
-      result: "overturned",
-      outcome: "Overturned",
-      outcomeTone: "success",
-      confirmTitle: "Overturn the original decision?",
-      confirmDescription: "The original action is reversed, any hidden content is restored and the strike is removed.",
-      confirmLabel: "Overturn decision",
-      confirmTone: "primary",
-    },
-  ],
-  uploads: [
-    {
-      id: "keep-blocked",
-      label: "Keep blocked",
-      style: "primary",
-      result: "actioned",
-      outcome: "Blocked",
-      outcomeTone: "error",
-      confirmTitle: "Keep this upload blocked?",
-      confirmDescription: "The file is deleted and the post is published without the attachment.",
-      confirmLabel: "Keep blocked",
-      confirmTone: "primary",
-    },
-    { ...suspend },
-    {
-      id: "release",
-      label: "Release upload",
-      style: "ghost",
-      result: "dismissed",
-      outcome: "Released",
-      outcomeTone: "success",
-      confirmTitle: "Release this upload?",
-      confirmDescription: "The file is re-scanned and, if clean, attached to the post for members to download.",
-      confirmLabel: "Release upload",
-      confirmTone: "danger",
-    },
-  ],
-};
+const TOPIC_LENGTHS: DurationOption[] = [
+  { value: "24", label: "24 hours" },
+  { value: "168", label: "7 days" },
+  { value: "720", label: "30 days" },
+  { value: "", label: "Until restored" },
+];
 
-/** Policy note under the actions (Figma node 12:1778). */
-export const queueNotes: Record<QueueTab, string> = {
-  reports:
-    "Hidden content leaves feeds, topic pages, trending and search within 60 seconds. The author can appeal once.",
-  hidden: "Restored content returns to feeds, topic pages and search within 60 seconds.",
-  appeals: "Appeals must be decided by a different reviewer from the one who took the original action.",
-  uploads: "Blocked uploads never reach members. Released files are scanned again before they are attached.",
-};
+const noun = (type: ReportTargetType) => (type === "hashtag" ? "topic" : type);
 
-export const reasonsHeading: Record<QueueTab, string> = {
-  reports: "Reporter reasons",
-  hidden: "Reporter reasons",
-  appeals: "Original report",
-  uploads: "Detection",
-};
+/** Confirmation copy and styling per action, phrased for the target type. */
+export function actionDef(kind: ModerationActionKind, type: ReportTargetType): ModerationActionDef {
+  const n = noun(type);
+  switch (kind) {
+    case "hide":
+      return type === "hashtag"
+        ? {
+            kind,
+            label: "Suppress topic",
+            style: "primary",
+            confirmTitle: "Suppress this topic?",
+            confirmDescription: "The topic leaves trending everywhere for the chosen period. Posts using it stay visible.",
+            confirmLabel: "Suppress topic",
+            confirmTone: "primary",
+            durations: TOPIC_LENGTHS,
+            defaultDuration: "168",
+          }
+        : {
+            kind,
+            label: `Hide ${n}`,
+            style: "primary",
+            confirmTitle: `Hide this ${n}?`,
+            confirmDescription:
+              "It leaves feeds, topic pages, trending and search within 60 seconds. The author is notified and can appeal once.",
+            confirmLabel: `Hide ${n}`,
+            confirmTone: "primary",
+          };
+    case "remove":
+      return {
+        kind,
+        label: `Remove ${n}`,
+        style: "danger",
+        confirmTitle: `Remove this ${n}?`,
+        confirmDescription:
+          "Removal is for clear policy breaches. The content is taken down for everyone; a copy is kept for appeals and legal holds. The author can appeal once.",
+        confirmLabel: `Remove ${n}`,
+        confirmTone: "danger",
+      };
+    case "restore":
+      return {
+        kind,
+        label: type === "hashtag" ? "Restore topic" : `Restore ${n}`,
+        style: "secondary",
+        confirmTitle: type === "hashtag" ? "Restore this topic to trending?" : `Restore this ${n}?`,
+        confirmDescription:
+          type === "hashtag"
+            ? "The topic can trend again at the next run if it meets the trending rules."
+            : "It returns to feeds, topic pages and search within 60 seconds and the author is notified.",
+        confirmLabel: "Restore",
+        confirmTone: "primary",
+      };
+    case "warn":
+      return {
+        kind,
+        label: "Warn author",
+        style: "secondary",
+        confirmTitle: type === "member" ? "Warn this member?" : "Send the author a warning?",
+        confirmDescription: "Nothing is taken down. The member receives a policy warning that counts toward future enforcement.",
+        confirmLabel: "Send warning",
+        confirmTone: "primary",
+      };
+    case "restrict_posting":
+      return {
+        kind,
+        label: "Restrict posting",
+        style: "secondary",
+        confirmTitle: "Restrict posting?",
+        confirmDescription: "The member can still sign in and read, but can’t post or comment until the restriction ends.",
+        confirmLabel: "Restrict posting",
+        confirmTone: "primary",
+        durations: RESTRICTION_LENGTHS,
+        defaultDuration: "168",
+      };
+    case "restrict_connecting":
+      return {
+        kind,
+        label: "Restrict connecting",
+        style: "secondary",
+        confirmTitle: "Restrict connecting?",
+        confirmDescription: "The member can’t send connection requests or follow people until the restriction ends.",
+        confirmLabel: "Restrict connecting",
+        confirmTone: "primary",
+        durations: RESTRICTION_LENGTHS,
+        defaultDuration: "168",
+      };
+    case "suspend":
+      return {
+        kind,
+        label: "Suspend account",
+        style: "danger",
+        confirmTitle: "Suspend this account?",
+        confirmDescription:
+          "The member is signed out everywhere, can’t post, comment or connect, and their content is hidden while suspended. They can appeal once.",
+        confirmLabel: "Suspend account",
+        confirmTone: "danger",
+        durations: SUSPENSION_LENGTHS,
+        defaultDuration: "168",
+      };
+    case "escalate":
+      return {
+        kind,
+        label: "Escalate",
+        style: "ghost",
+        confirmTitle: "Escalate this report?",
+        confirmDescription: "The case stays open, moves to high priority and is flagged for a Platform Admin.",
+        confirmLabel: "Escalate",
+        confirmTone: "primary",
+      };
+    case "dismiss":
+      return {
+        kind,
+        label: "Dismiss report",
+        style: "ghost",
+        confirmTitle: "Dismiss this report?",
+        confirmDescription: "No action is taken. Reporters are told the content doesn’t break the Community Guidelines.",
+        confirmLabel: "Dismiss report",
+        confirmTone: "primary",
+      };
+  }
+}
+
+/** Actions that make sense for this case right now (the API re-validates every one). */
+export function availableActions(detail: AdminReportDetail): ModerationActionKind[] {
+  const open = detail.status === "open" || detail.status === "in_review";
+  const type = detail.target.type;
+  const state = detail.content.moderationState;
+  const kinds: ModerationActionKind[] = [];
+  if (type === "post" || type === "comment") {
+    if (state === "visible") kinds.push("hide", "remove");
+    if (state === "hidden") kinds.push("remove", "restore");
+    if (state === "removed") kinds.push("restore");
+  }
+  if (type === "hashtag") kinds.push(state === "hidden" ? "restore" : "hide");
+  if (type !== "hashtag" && detail.author) kinds.push("warn", "restrict_posting", "restrict_connecting", "suspend");
+  if (open) kinds.push("escalate", "dismiss");
+  return kinds;
+}

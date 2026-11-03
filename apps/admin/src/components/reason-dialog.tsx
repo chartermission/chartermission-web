@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button, Icon, buttonClasses, cn } from "@chartermission/ui";
+import { ApiError, errorMessage } from "@/lib/api/client";
 
 export const MIN_REASON_LENGTH = 10;
 
@@ -11,6 +12,8 @@ export type ConfirmTone = "primary" | "danger";
  * Modal confirmation for any console action that changes what members see.
  * The reason is required: it is written to the audit log with the action.
  * Mount it only while an action is pending; it opens itself on mount.
+ * `onConfirm` may be async: the dialog shows a busy state, keeps itself open and shows the API's
+ * message if it throws, and the parent unmounts it on success.
  */
 export function ReasonDialog({
   title,
@@ -31,12 +34,14 @@ export function ReasonDialog({
   reasonPlaceholder?: string;
   /** Extra fields (selects etc.) rendered above the reason. Read them from the FormData. */
   children?: ReactNode;
-  onConfirm: (reason: string, data: FormData) => void;
+  onConfirm: (reason: string, data: FormData) => void | Promise<void>;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const id = useId();
 
   useEffect(() => {
@@ -44,8 +49,9 @@ export function ReasonDialog({
     if (dialog && !dialog.open) dialog.showModal();
   }, []);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     const data = new FormData(event.currentTarget);
     const reason = String(data.get("reason") ?? "").trim();
     if (reason.length < MIN_REASON_LENGTH) {
@@ -57,7 +63,21 @@ export function ReasonDialog({
       reasonRef.current?.focus();
       return;
     }
-    onConfirm(reason, data);
+    setServerError(null);
+    setBusy(true);
+    try {
+      await onConfirm(reason, data);
+    } catch (e) {
+      const fieldError = e instanceof ApiError ? e.fields?.reason : undefined;
+      if (fieldError) {
+        setError(fieldError);
+        reasonRef.current?.focus();
+      } else {
+        setServerError(errorMessage(e));
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -66,6 +86,9 @@ export function ReasonDialog({
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-desc`}
       onClose={onClose}
+      onCancel={(event) => {
+        if (busy) event.preventDefault();
+      }}
       className="m-auto w-[460px] max-w-[calc(100vw-32px)] rounded-card border border-line bg-card p-0 text-ink shadow-[0_12px_40px_rgba(25,37,80,0.18)] backdrop:bg-primary-dark/40"
     >
       <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
@@ -75,6 +98,7 @@ export function ReasonDialog({
           </h2>
           <button
             type="button"
+            disabled={busy}
             onClick={() => ref.current?.close()}
             className="-m-1 rounded-md p-1 text-secondary hover:bg-muted hover:text-ink"
           >
@@ -117,18 +141,26 @@ export function ReasonDialog({
             </p>
           )}
         </div>
+        {serverError && (
+          <p role="alert" className="flex items-start gap-2 rounded-lg bg-error-light p-3 text-sm text-error">
+            <Icon name="alert" size={16} className="mt-0.5 shrink-0" />
+            {serverError}
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-1">
-          <Button variant="secondary" size="small" onClick={() => ref.current?.close()}>
+          <Button variant="secondary" size="small" disabled={busy} onClick={() => ref.current?.close()}>
             Cancel
           </Button>
           <button
             type="submit"
+            disabled={busy}
+            aria-busy={busy}
             className={buttonClasses({
               variant: tone === "danger" ? "accent" : "primary",
               size: "small",
             })}
           >
-            {confirmLabel}
+            {busy ? "Saving…" : confirmLabel}
           </button>
         </div>
       </form>

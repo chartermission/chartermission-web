@@ -117,6 +117,8 @@ export const AdminQueueQuery = z.object({
   status: z.enum(["open", "in_review", "resolved", "all"]).default("open"),
   priority: ReportPriority.optional(),
   targetType: ReportTargetType.optional(),
+  /** Targets with at least one open report for this reason. */
+  reason: ReportReason.optional(),
   assignee: z.enum(["me", "unassigned", "any"]).default("any"),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -156,6 +158,11 @@ export const AdminActionView = z.object({
   expiresAt: z.string().nullable(),
   revokedAt: z.string().nullable(),
   appealStatus: z.enum(["open", "in_review", "upheld", "overturned"]).nullable(),
+  /** What the action was about (so actions on the author's other content are identifiable). */
+  targetType: ReportTargetType,
+  targetId: z.string(),
+  /** Short excerpt of the target (post or comment text, member name, #tag); null when unavailable. */
+  targetPreview: z.string().nullable(),
 });
 export type AdminActionView = z.infer<typeof AdminActionView>;
 
@@ -277,6 +284,8 @@ export const AuditEntry = z.object({
   targetId: z.string().nullable(),
   summary: z.string(),
   createdAt: z.string(),
+  /** Salted hash of the request IP; null for system entries or when unknown. */
+  ipHash: z.string().nullable(),
 });
 export type AuditEntry = z.infer<typeof AuditEntry>;
 
@@ -284,6 +293,10 @@ export const AuditQuery = z.object({
   actor: z.string().optional(),
   action: z.string().optional(),
   targetType: z.string().optional(),
+  /** Inclusive lower bound (ISO datetime). */
+  from: z.string().datetime({ offset: true }).optional(),
+  /** Exclusive upper bound (ISO datetime). */
+  to: z.string().datetime({ offset: true }).optional(),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -351,9 +364,9 @@ export const AdminHiddenRow = z.object({
 });
 export type AdminHiddenRow = z.infer<typeof AdminHiddenRow>;
 
-/** GET /admin/appeals?status= ("open" includes in_review). */
+/** GET /admin/appeals?status= ("open" includes in_review; "decided" is upheld + overturned). */
 export const AdminAppealsQuery = z.object({
-  status: z.enum(["open", "in_review", "upheld", "overturned", "all"]).default("open"),
+  status: z.enum(["open", "in_review", "upheld", "overturned", "decided", "all"]).default("open"),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });

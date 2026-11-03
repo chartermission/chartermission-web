@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Avatar, Icon, Logo, cn, type AvatarTone, type IconName } from "@chartermission/ui";
+import { Icon, Logo, LogoMark, cn, type AvatarTone, type IconName } from "@chartermission/ui";
+import { UserMenu } from "@/components/account/user-menu";
 
 const links: { href: string; label: string; icon: IconName }[] = [
   { href: "/feed", label: "Home", icon: "home" },
@@ -21,60 +22,94 @@ export interface TopNavViewer {
   tone: AvatarTone;
 }
 
+/** Screens where the member should finish a task first: logo and account menu only. */
+const focusedPaths = ["/onboarding"];
+
+/** Top nav that highlights the current section. Reads the URL, so render it inside a <Suspense> boundary. */
 export function TopNav({ viewer, unread = 0 }: { viewer: TopNavViewer | null; unread?: number }) {
-  const pathname = usePathname();
+  return <TopNavBar viewer={viewer} unread={unread} pathname={usePathname()} />;
+}
+
+/**
+ * The bar itself. With `pathname` null (the static-shell fallback) nothing is marked current, so it
+ * never reads URL data outside a boundary.
+ */
+export function TopNavBar({
+  viewer,
+  unread = 0,
+  pathname,
+}: {
+  viewer: TopNavViewer | null;
+  unread?: number;
+  pathname: string | null;
+}) {
+  const under = (path: string) => pathname !== null && (pathname === path || pathname.startsWith(`${path}/`));
+  const focused = focusedPaths.some(under);
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-card">
-      <div className="flex h-16 items-center gap-6 px-8">
-        <Link href="/feed" aria-label="Charter Mission home">
-          <Logo />
+      <div className="flex h-16 items-center gap-6 px-8 max-lg:gap-3 max-lg:px-4">
+        <Link href="/feed" aria-label="Charter Mission home" className="shrink-0 rounded-lg">
+          <Logo className="max-md:hidden" />
+          <LogoMark className="md:hidden" />
         </Link>
-        <form action="/search" role="search" className="w-[420px] max-w-full">
-          <label className="flex h-10 items-center gap-2.5 rounded-lg bg-muted px-3.5 text-secondary focus-within:ring-2 focus-within:ring-primary-light">
-            <Icon name="search" size={18} />
-            <span className="sr-only">Search</span>
-            <input
-              name="q"
-              type="search"
-              placeholder="Search members, opportunities, #topics"
-              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-disabled"
-            />
-          </label>
-        </form>
+        {!focused && (
+          <form action="/search" role="search" className="w-[420px] max-w-full max-xl:w-[280px] max-lg:hidden">
+            <label className="flex h-10 items-center gap-2.5 rounded-lg bg-muted px-3.5 text-secondary focus-within:ring-2 focus-within:ring-primary-light">
+              <Icon name="search" size={18} />
+              <span className="sr-only">Search</span>
+              <input
+                name="q"
+                type="search"
+                placeholder="Search members, opportunities, #topics"
+                className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-disabled"
+              />
+            </label>
+          </form>
+        )}
         <div className="flex-1" />
-        <nav aria-label="Main" className="flex items-center gap-1">
-          {links.map((link) => {
-            const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-xs transition-colors hover:bg-primary-tint-2",
-                  active ? "text-primary" : "text-secondary",
-                )}
-              >
-                <span className="relative">
-                  <Icon name={link.icon} size={20} />
-                  {link.href === "/notifications" && unread > 0 ? (
-                    <span className="absolute -top-1.5 -right-2 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 font-semibold text-inverse">
-                      {unread > 99 ? "99+" : unread}
-                      <span className="sr-only"> unread</span>
-                    </span>
-                  ) : null}
-                </span>
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
+        {!focused && (
+          <nav aria-label="Main" className="flex min-w-0 items-center gap-1 overflow-x-auto max-md:gap-0">
+            <Link
+              href="/search"
+              aria-label="Search"
+              className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs text-secondary hover:bg-primary-tint-2 lg:hidden"
+            >
+              <Icon name="search" size={20} />
+              <span className="max-md:sr-only">Search</span>
+            </Link>
+            {links.map((link) => {
+              const active = under(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-xs transition-colors hover:bg-primary-tint-2 max-md:px-2",
+                    active ? "text-primary" : "text-secondary",
+                    // Learning and Events stay reachable from the feed rail on phones.
+                    (link.href === "/learning" || link.href === "/events") && "max-sm:hidden",
+                  )}
+                >
+                  <span className="relative">
+                    <Icon name={link.icon} size={20} />
+                    {link.href === "/notifications" && unread > 0 ? (
+                      <span className="absolute -top-1.5 -right-2 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 font-semibold text-inverse">
+                        {unread > 99 ? "99+" : unread}
+                        <span className="sr-only"> unread</span>
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="max-md:sr-only">{link.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        )}
         {viewer ? (
-          <Link href={`/members/${viewer.handle}`} aria-label="Your profile">
-            <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} size={32} />
-          </Link>
+          <UserMenu viewer={viewer} />
         ) : (
-          <span aria-hidden className="size-8 rounded-full bg-muted" />
+          <span aria-hidden className="h-9 w-[58px] shrink-0 rounded-full bg-muted max-sm:w-9" />
         )}
       </div>
     </header>

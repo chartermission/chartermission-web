@@ -74,6 +74,16 @@ describe('Admin moderation (queue, detail, actions)', () => {
     const highOnly = await mod.get('/admin/reports?priority=high&limit=50').expect(200);
     expect(highOnly.body.items.some((r: any) => r.target.id === lowPost.id)).toBe(false);
 
+    // Reason filter matches any open report for that reason, not only the group's most common one.
+    const spamOnly = await mod.get('/admin/reports?reason=spam&limit=100').expect(200);
+    const spamRow = spamOnly.body.items.find((r: any) => r.target.id === scamPost.id);
+    expect(spamRow).toMatchObject({ reason: 'spam', reportCount: 3 });
+    expect(spamOnly.body.items.some((r: any) => r.target.id === lowPost.id)).toBe(false);
+    const copyright = await mod.get('/admin/reports?reason=copyright&limit=100').expect(200);
+    expect(copyright.body.items.map((r: any) => r.target.id)).toContain(lowPost.id);
+    expect(copyright.body.items.map((r: any) => r.target.id)).not.toContain(scamPost.id);
+    await mod.get('/admin/reports?reason=not-a-reason').expect(422);
+
     // Keyset pagination walks every group exactly once.
     const seen: string[] = [];
     let cursor: string | null = null;
@@ -162,6 +172,10 @@ describe('Admin moderation (queue, detail, actions)', () => {
       reason: 'Borderline spam, first warning',
       moderator: { id: mod.id },
       appealStatus: null,
+      // The warning was about the author's other post; the view says which.
+      targetType: 'post',
+      targetId: earlier.id,
+      targetPreview: 'An earlier post that was warned about',
     });
 
     await mod.get('/admin/reports/not-a-uuid').expect(404);

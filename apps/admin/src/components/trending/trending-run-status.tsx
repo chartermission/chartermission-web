@@ -1,30 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Chip } from "@chartermission/ui";
+import { useNow } from "@/components/time";
+import { formatDateTime, relativePhrase } from "@/lib/format";
 
-/** "Last run" chip with a manual recompute trigger (Figma node 20:3590). */
-export function TrendingRunStatus({ initialLastRun }: { initialLastRun: string }) {
-  const [lastRun, setLastRun] = useState(initialLastRun);
-  const [running, setRunning] = useState(false);
-
-  function recompute() {
-    setRunning(true);
-    // No backend yet: simulate the job finishing.
-    window.setTimeout(() => {
-      setLastRun("just now");
-      setRunning(false);
-    }, 1200);
-  }
+/**
+ * When the ranking shown was computed (Figma node 20:3590). The API recomputes on its schedule and
+ * after every override or rules change; "Refresh" re-reads the latest snapshot.
+ */
+export function TrendingRunStatus({ computedAt, recomputeMinutes }: { computedAt: string | null; recomputeMinutes: number }) {
+  const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
+  const now = useNow();
+  const stale = computedAt !== null && now !== null && now - new Date(computedAt).getTime() > recomputeMinutes * 3 * 60_000;
 
   return (
-    <>
+    <div className="flex flex-wrap items-center gap-2">
       <p role="status" aria-live="polite">
-        <Chip tone={running ? "info" : "success"}>{running ? "Recomputing…" : `Last run ${lastRun}`}</Chip>
+        {refreshing ? (
+          <Chip tone="info">Refreshing…</Chip>
+        ) : computedAt === null ? (
+          <Chip tone="warning">Not computed yet</Chip>
+        ) : (
+          <Chip tone={stale ? "warning" : "success"}>
+            <span title={now === null ? undefined : formatDateTime(computedAt)}>
+              Snapshot {now === null ? formatDateTime(computedAt, "UTC") : relativePhrase(computedAt, now)}
+              {stale ? " · overdue" : ""}
+            </span>
+          </Chip>
+        )}
       </p>
-      <Button variant="secondary" size="small" onClick={recompute} disabled={running} aria-busy={running}>
-        Recompute now
+      <span className="text-xs text-secondary">Recomputes every {recomputeMinutes} min</span>
+      <Button variant="secondary" size="small" onClick={() => startRefresh(() => router.refresh())} disabled={refreshing} aria-busy={refreshing}>
+        Refresh
       </Button>
-    </>
+    </div>
   );
 }

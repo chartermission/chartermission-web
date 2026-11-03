@@ -11,12 +11,14 @@ export function Switch({
   label,
   describedBy,
   id,
+  disabled,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label?: string;
   describedBy?: string;
   id?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -26,10 +28,12 @@ export function Switch({
       aria-checked={checked}
       aria-label={label}
       aria-describedby={describedBy}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full transition-colors",
-        checked ? "bg-primary hover:bg-primary-light" : "bg-line-strong hover:bg-disabled",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-light disabled:cursor-not-allowed disabled:opacity-60",
+        checked ? "bg-primary enabled:hover:bg-primary-light" : "bg-line-strong enabled:hover:bg-disabled",
       )}
     >
       <span

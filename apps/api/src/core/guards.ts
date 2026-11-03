@@ -27,10 +27,19 @@ export type AccessLevel = 'session' | 'member' | 'verified' | 'admin';
 const ACCESS_KEY = 'cm:access';
 const PERMISSION_KEY = 'cm:permissions';
 const SKIP_CSRF_KEY = 'cm:skip-csrf';
+const ALLOW_PENDING_MFA_KEY = 'cm:allow-pending-mfa';
 
-export function checkAccess(ctx: AuthContext | undefined, level: AccessLevel, perms: Permission[] = []): AuthContext {
+export function checkAccess(
+  ctx: AuthContext | undefined,
+  level: AccessLevel,
+  perms: Permission[] = [],
+  allowPendingMfa = false,
+): AuthContext {
   if (!ctx) throw Errors.unauthenticated();
   const { user, session } = ctx;
+  // Accounts with two-step verification on must enter a code after signing in (any audience)
+  // before using the session, apart from the few routes that finish or end sign-in.
+  if (level !== 'admin' && user.mfaEnabled && !session.mfaVerified && !allowPendingMfa) throw Errors.mfaRequired();
   if (level !== 'session') {
     if (user.status === 'suspended' || isActiveUntil(user.suspendedUntil)) throw Errors.suspended(user.suspendedUntil);
     if (user.status === 'deactivated' || user.status === 'deletion_pending') throw Errors.deactivated();
@@ -60,8 +69,13 @@ export class AccessGuard implements CanActivate {
         context.getHandler(),
         context.getClass(),
       ]) ?? [];
+    const allowPendingMfa =
+      this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_PENDING_MFA_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? false;
     const req = context.switchToHttp().getRequest<AppRequest>();
-    checkAccess(req.auth, level, perms);
+    checkAccess(req.auth, level, perms, allowPendingMfa);
     return true;
   }
 }
@@ -84,6 +98,9 @@ export const OptionalAuth = createParamDecorator(
 
 /** For signed requests that cannot carry the CSRF header (signed upload URLs, provider webhooks). */
 export const SkipCsrf = () => SetMetadata(SKIP_CSRF_KEY, true);
+
+/** Usable before the sign-in MFA code is entered (GET /me, verifying the code, account basics). */
+export const AllowPendingMfa = () => SetMetadata(ALLOW_PENDING_MFA_KEY, true);
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export const CSRF_HEADER = 'x-cm-csrf';

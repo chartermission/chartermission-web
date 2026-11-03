@@ -168,8 +168,9 @@ export class AdminTrendingController {
     return this.trending.revokeOverride(ctx, id, input.reason, clientIp(req));
   }
 
+  /** Rules are platform settings: Platform Admins only (moderators pin and suppress). */
   @Put('rules')
-  @Access('admin', 'trending.manage')
+  @Access('admin', 'settings.manage')
   rules(
     @Auth() ctx: AuthContext,
     @ZBody(TrendingRules) input: TrendingRules,

@@ -226,15 +226,15 @@ describe('Auth: registration, verification, sign-in, reset (spec 4.2)', () => {
     expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
     expect(locked.body.error.retryAfter).toBeGreaterThan(0);
 
-    // Per-IP limit applies across accounts too.
+    // Per-IP limit (25 failures) applies across accounts too.
     await resetLimits();
     const ip = '198.51.100.9';
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 25; i++) {
       await c.post('/auth/login', { email: uniqueEmail('x'), password: 'nope-nope-nope' }).set('X-Forwarded-For', ip).expect(401);
     }
     await c.post('/auth/login', { email: m.email, password: PASSWORD }).set('X-Forwarded-For', ip).expect(429);
     const failures = await count(t.db, s.auditLog, eq(s.auditLog.action, 'auth.login.failure'));
-    expect(failures).toBeGreaterThanOrEqual(14);
+    expect(failures).toBeGreaterThanOrEqual(34);
   });
 
   it('deleted accounts get invalid credentials; suspended members can sign in and read /me', async () => {
