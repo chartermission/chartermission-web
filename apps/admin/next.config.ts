@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   transpilePackages: ["@chartermission/ui", "@chartermission/contracts"],
+  // Same-origin API: the browser calls /api/v1/* and Next proxies to the API.
+  rewrites() {
+    const api = process.env.API_INTERNAL_URL ?? "http://localhost:4000/api/v1";
+    return [{ source: "/api/v1/:path*", destination: `${api}/:path*` }];
+  },
   // The console opens on the moderation queue.
   redirects() {
     return [{ source: "/", destination: "/moderation", permanent: false }];

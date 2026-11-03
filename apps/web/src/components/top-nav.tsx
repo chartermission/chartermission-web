@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Avatar, Icon, Logo, cn, type IconName } from "@chartermission/ui";
+import { Avatar, Icon, Logo, cn, type AvatarTone, type IconName } from "@chartermission/ui";
 
 const links: { href: string; label: string; icon: IconName }[] = [
   { href: "/feed", label: "Home", icon: "home" },
@@ -14,7 +14,14 @@ const links: { href: string; label: string; icon: IconName }[] = [
 ];
 
 /** Member top navigation (Figma "Top nav / Web", node 7:157). */
-export function TopNav({ viewerName }: { viewerName: string }) {
+export interface TopNavViewer {
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+  tone: AvatarTone;
+}
+
+export function TopNav({ viewer, unread = 0 }: { viewer: TopNavViewer | null; unread?: number }) {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-card">
@@ -48,15 +55,27 @@ export function TopNav({ viewerName }: { viewerName: string }) {
                   active ? "text-primary" : "text-secondary",
                 )}
               >
-                <Icon name={link.icon} size={20} />
+                <span className="relative">
+                  <Icon name={link.icon} size={20} />
+                  {link.href === "/notifications" && unread > 0 ? (
+                    <span className="absolute -top-1.5 -right-2 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 font-semibold text-inverse">
+                      {unread > 99 ? "99+" : unread}
+                      <span className="sr-only"> unread</span>
+                    </span>
+                  ) : null}
+                </span>
                 {link.label}
               </Link>
             );
           })}
         </nav>
-        <Link href="/members/owais-iqbal" aria-label="Your profile">
-          <Avatar name={viewerName} size={32} />
-        </Link>
+        {viewer ? (
+          <Link href={`/members/${viewer.handle}`} aria-label="Your profile">
+            <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} size={32} />
+          </Link>
+        ) : (
+          <span aria-hidden className="size-8 rounded-full bg-muted" />
+        )}
       </div>
     </header>
   );
