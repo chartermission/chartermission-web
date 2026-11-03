@@ -1,14 +1,11 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
+import { configureApp } from './bootstrap.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api/v1');
-  app.enableCors({
-    origin: (process.env.WEB_ORIGINS ?? 'http://localhost:3000,http://localhost:3001').split(','),
-    credentials: true,
-  });
-  app.enableShutdownHooks();
-  await app.listen(process.env.PORT ?? 4000);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  const config = configureApp(app);
+  await app.listen(config.PORT);
 }
 await bootstrap();

@@ -1,0 +1,41 @@
+import { Injectable } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
+import { InjectDb, type Db } from '../db/db.module.js';
+import { platformSettings } from '../db/schema.js';
+import type { PolicyVersions, TrendingRules } from '@chartermission/contracts';
+
+export const SETTING_DEFAULTS = {
+  policy_versions: { terms: '2026-11', privacy: '2026-11', guidelines: '2026-11' } satisfies PolicyVersions,
+  trending_rules: {
+    minDistinctAuthors: 25,
+    maxPostsPerAuthorPerHour: 3,
+    baselineDays: 14,
+    recomputeMinutes: 5,
+  } satisfies TrendingRules,
+};
+
+type SettingKey = keyof typeof SETTING_DEFAULTS;
+
+/** Platform settings with defaults; cached for 30 seconds. */
+@Injectable()
+export class SettingsService {
+  private cache = new Map<string, { value: unknown; at: number }>();
+  constructor(@InjectDb() private readonly db: Db) {}
+
+  async get<K extends SettingKey>(key: K): Promise<(typeof SETTING_DEFAULTS)[K]> {
+    const hit = this.cache.get(key);
+    if (hit && Date.now() - hit.at < 30_000) return hit.value as (typeof SETTING_DEFAULTS)[K];
+    const [row] = await this.db.select().from(platformSettings).where(eq(platformSettings.key, key)).limit(1);
+    const value = { ...SETTING_DEFAULTS[key], ...((row?.value as object) ?? {}) } as (typeof SETTING_DEFAULTS)[K];
+    this.cache.set(key, { value, at: Date.now() });
+    return value;
+  }
+
+  async set<K extends SettingKey>(key: K, value: (typeof SETTING_DEFAULTS)[K], actorId: string | null) {
+    await this.db
+      .insert(platformSettings)
+      .values({ key, value, updatedBy: actorId })
+      .onConflictDoUpdate({ target: platformSettings.key, set: { value, updatedBy: actorId, updatedAt: new Date() } });
+    this.cache.delete(key);
+  }
+}
