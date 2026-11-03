@@ -1,6 +1,21 @@
 import { z } from 'zod';
 
 /** Environment, validated once at start-up. See .env.example at the repo root. */
+
+/** Boolean env flag: "true"/"1"/"on"/"yes" or "false"/"0"/"off"/"no" (z.coerce.boolean treats "false" as true). */
+const flag = (fallback: boolean) =>
+  z
+    .string()
+    .optional()
+    .transform((v, ctx) => {
+      if (v === undefined || v.trim() === '') return fallback;
+      const x = v.trim().toLowerCase();
+      if (['true', '1', 'on', 'yes'].includes(x)) return true;
+      if (['false', '0', 'off', 'no'].includes(x)) return false;
+      ctx.addIssue({ code: 'custom', message: 'Expected a boolean flag' });
+      return z.NEVER;
+    });
+
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(4000),
@@ -34,11 +49,11 @@ const Env = z.object({
   CLAMAV_HOST: z.string().optional(),
   CLAMAV_PORT: z.coerce.number().int().default(3310),
   /** Check new passwords against Have I Been Pwned (k-anonymity range API). */
-  HIBP_ENABLED: z.coerce.boolean().default(false),
+  HIBP_ENABLED: flag(false),
   /** Run BullMQ workers in this process (true for dev and a single Railway service). */
-  RUN_WORKERS: z.coerce.boolean().default(true),
+  RUN_WORKERS: flag(true),
   /** Expose /api/v1/dev/* helpers (mailbox) outside production. */
-  DEV_TOOLS: z.coerce.boolean().default(true),
+  DEV_TOOLS: flag(true),
 });
 
 export type Env = z.infer<typeof Env>;

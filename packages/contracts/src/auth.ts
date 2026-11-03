@@ -122,3 +122,13 @@ export const SessionView = z.object({
   lastSeenAt: z.string(),
 });
 export type SessionView = z.infer<typeof SessionView>;
+
+/** GET /dev/mailbox?to= — development only (DEV_TOOLS); 404 otherwise. */
+export const DevMailboxQuery = z.object({ to: z.string().trim().toLowerCase().email() });
+export type DevMailboxQuery = z.infer<typeof DevMailboxQuery>;
+
+export const DevMailboxEntry = z.object({ subject: z.string(), text: z.string().nullable(), createdAt: z.string() });
+export type DevMailboxEntry = z.infer<typeof DevMailboxEntry>;
+
+export const DevMailbox = z.object({ items: z.array(DevMailboxEntry) });
+export type DevMailbox = z.infer<typeof DevMailbox>;

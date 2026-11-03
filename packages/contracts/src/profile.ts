@@ -248,3 +248,80 @@ export type FollowInput = z.infer<typeof FollowInput>;
 
 export const SuggestedMember = MemberRef.extend({ reason: z.string() });
 export type SuggestedMember = z.infer<typeof SuggestedMember>;
+
+/* ---------- Lists and inputs added by the identity workstream ---------- */
+
+/** GET /me/connections?filter=connected|incoming|outgoing */
+export const ConnectionsQuery = z.object({
+  filter: z.enum(["connected", "incoming", "outgoing"]).default("connected"),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type ConnectionsQuery = z.infer<typeof ConnectionsQuery>;
+
+/** GET /me/follows?type= → Page<FollowView> */
+export const FollowsQuery = z.object({
+  type: FollowTargetType.optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type FollowsQuery = z.infer<typeof FollowsQuery>;
+
+export const FollowView = z.object({
+  targetType: FollowTargetType,
+  /** Member id, chapter id or lower-cased hashtag. */
+  targetId: z.string(),
+  member: MemberRef.optional(),
+  chapter: ChapterRef.optional(),
+  hashtag: z.object({ tag: z.string(), display: z.string() }).optional(),
+  createdAt: z.string(),
+});
+export type FollowView = z.infer<typeof FollowView>;
+
+/** GET /me/blocks → BlockView[] (members the viewer blocked). */
+export const BlockView = z.object({ member: MemberRef, createdAt: z.string() });
+export type BlockView = z.infer<typeof BlockView>;
+
+export const MuteTargetType = z.enum(["member", "hashtag"]);
+export type MuteTargetType = z.infer<typeof MuteTargetType>;
+
+/** POST /mutes and DELETE /mutes (same body). Hashtags without "#"; members by id. */
+export const MuteInput = z.object({ targetType: MuteTargetType, targetId: z.string().min(1).max(60) });
+export type MuteInput = z.infer<typeof MuteInput>;
+
+/** GET /me/mutes → MuteView[] */
+export const MuteView = z.object({
+  targetType: MuteTargetType,
+  targetId: z.string(),
+  member: MemberRef.optional(),
+  createdAt: z.string(),
+});
+export type MuteView = z.infer<typeof MuteView>;
+
+/** GET /me/profile/preview?as= */
+export const ProfilePreviewQuery = z.object({ as: PreviewAs });
+export type ProfilePreviewQuery = z.infer<typeof ProfilePreviewQuery>;
+
+/** GET /me/export — the member's own data (spec 8.3). */
+export const AccountExport = z.object({
+  exportedAt: z.string(),
+  account: z.object({
+    id: z.string().uuid(),
+    email: z.string(),
+    status: z.string(),
+    emailVerifiedAt: z.string().nullable(),
+    createdAt: z.string(),
+    lastLoginAt: z.string().nullable(),
+  }),
+  profile: OwnProfile,
+  posts: z.array(z.object({ id: z.string().uuid(), body: z.string(), createdAt: z.string(), editedAt: z.string().nullable() })),
+  comments: z.array(
+    z.object({ id: z.string().uuid(), postId: z.string().uuid(), body: z.string(), createdAt: z.string(), editedAt: z.string().nullable() }),
+  ),
+  connections: z.array(
+    z.object({ handle: z.string(), name: z.string(), status: z.string(), direction: z.enum(["incoming", "outgoing"]), createdAt: z.string() }),
+  ),
+  follows: z.array(z.object({ targetType: z.string(), targetId: z.string(), createdAt: z.string() })),
+  consents: z.array(z.object({ policyType: z.string(), policyVersion: z.string(), acceptedAt: z.string() })),
+});
+export type AccountExport = z.infer<typeof AccountExport>;

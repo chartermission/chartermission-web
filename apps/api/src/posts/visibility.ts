@@ -1,0 +1,92 @@
+import { and, isNull, sql, type SQL } from 'drizzle-orm';
+import { blocks, hashtags, mutes, postHashtags, posts, users } from '../db/schema.js';
+import type { AuthUser } from '../core/auth-context.js';
+import { isActiveUntil } from '../core/policy.js';
+
+/*
+ * Who may see a post (spec 4.5 rules, brief "Moderation states" and "Blocks"):
+ *  - deleted posts: nobody;
+ *  - hidden/removed posts: only the author (with moderationState) and moderators;
+ *  - pending_media posts: only the author until every attachment is clean;
+ *  - blocked either way: never;
+ *  - suspended, deactivated or deleted authors: dropped from feeds and topic pages.
+ */
+
+export type PostRow = typeof posts.$inferSelect;
+export type AuthorState = { status: string; suspendedUntil: Date | null };
+
+/** Moderators see hidden content and its state (admin console, appeals). */
+export function isModerator(viewer: AuthUser | undefined): boolean {
+  return !!viewer?.permissions.has('moderation.view');
+}
+
+export function authorIsActive(author: AuthorState | undefined): boolean {
+  if (!author) return false;
+  return (author.status === 'active' || author.status === 'unverified') && !isActiveUntil(author.suspendedUntil);
+}
+
+/** Single-post check used by GET /posts/{id}, interactions and repost embedding. */
+export function canViewPost(
+  post: PostRow,
+  author: AuthorState | undefined,
+  viewer: AuthUser | undefined,
+  blocked: Set<string>,
+): boolean {
+  if (post.deletedAt) return false;
+  const own = viewer?.id === post.authorId;
+  const mod = isModerator(viewer);
+  if (!viewer && post.visibility !== 'public') return false;
+  if (blocked.has(post.authorId)) return false;
+  if (post.status !== 'published' && !own) return false;
+  if (post.moderationState !== 'visible' && !own && !mod) return false;
+  if (!authorIsActive(author) && !own && !mod) return false;
+  return true;
+}
+
+/** True when the post can receive comments, reactions, votes and reposts. */
+export function isInteractive(post: PostRow): boolean {
+  return !post.deletedAt && post.status === 'published' && post.moderationState === 'visible';
+}
+
+/** SQL: the post author's account is active (not suspended, deactivated or deleted). */
+export function authorActiveSql(authorCol: SQL | typeof posts.authorId = posts.authorId): SQL {
+  return sql`exists (select 1 from ${users} au where au.id = ${authorCol} and au.status in ('active','unverified') and (au.suspended_until is null or au.suspended_until <= now()))`;
+}
+
+/** SQL: the user in `col` and the viewer have not blocked each other. */
+export function notBlockedSql(viewerId: string, col: SQL | typeof posts.authorId = posts.authorId): SQL {
+  return sql`not exists (select 1 from ${blocks} b where (b.blocker_id = ${viewerId} and b.blocked_id = ${col}) or (b.blocked_id = ${viewerId} and b.blocker_id = ${col}))`;
+}
+
+/**
+ * SQL filter for any list of posts (feed tabs, topic pages, bookmarks).
+ * `muteHashtags` drops posts carrying a hashtag the viewer muted (feeds only;
+ * opening a muted topic page still shows it).
+ */
+export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?: boolean } = {}): SQL {
+  const conds: (SQL | undefined)[] = [isNull(posts.deletedAt), authorActiveSql()];
+  if (!viewerId) {
+    conds.push(sql`${posts.visibility} = 'public'`, sql`${posts.status} = 'published'`, sql`${posts.moderationState} = 'visible'`);
+    return and(...conds)!;
+  }
+  conds.push(
+    sql`(${posts.moderationState} = 'visible' or ${posts.authorId} = ${viewerId})`,
+    sql`(${posts.status} = 'published' or ${posts.authorId} = ${viewerId})`,
+    notBlockedSql(viewerId),
+    sql`not exists (select 1 from ${mutes} mm where mm.user_id = ${viewerId} and mm.target_type = 'member' and mm.target_id = ${posts.authorId}::text)`,
+  );
+  if (opts.muteHashtags) {
+    conds.push(
+      sql`(${posts.authorId} = ${viewerId} or not exists (select 1 from ${postHashtags} mph join ${hashtags} mh on mh.id = mph.hashtag_id join ${mutes} mt on mt.target_type = 'hashtag' and mt.target_id = mh.tag and mt.user_id = ${viewerId} where mph.post_id = ${posts.id}))`,
+    );
+  }
+  return and(...conds)!;
+}
+
+/** Engagement used by "top" sorts and the For You score: reactions + 2×comments + 3×reposts. */
+export const engagementSql = sql`(${posts.reactionCount} + 2 * ${posts.commentCount} + 3 * ${posts.repostCount})`;
+
+/** Full-precision timestamp text for keyset cursors (JS Dates drop microseconds). */
+export function tsKey(col: typeof posts.createdAt): SQL<string> {
+  return sql<string>`to_char(${col} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+}

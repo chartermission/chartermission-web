@@ -152,7 +152,11 @@ export const FeedQuery = z.object({
   country: z.string().length(2).optional(),
   sector: z.string().optional(),
   chapter: z.string().optional(),
-  announcements: z.coerce.boolean().optional(),
+  /** Query-string boolean: "true"/"1" or "false"/"0" (z.coerce.boolean would read "false" as true). */
+  announcements: z
+    .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+    .transform((v) => v === true || v === "true" || v === "1")
+    .optional(),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -231,6 +235,17 @@ export const ReactionInput = z.object({
 });
 export type ReactionInput = z.infer<typeof ReactionInput>;
 
+/** PUT /reactions and DELETE /reactions response: the viewer's reaction and the cached counts after the change. */
+export const ReactionState = z.object({
+  targetType: z.enum(["post", "comment"]),
+  targetId: z.string().uuid(),
+  reaction: ReactionKind.nullable(),
+  reactions: z.number().int(),
+  /** Per-kind counts for posts; null for comments (only the total is cached). */
+  breakdown: ReactionCounts.nullable(),
+});
+export type ReactionState = z.infer<typeof ReactionState>;
+
 /** PUT /bookmarks and DELETE /bookmarks. Phase 1 covers posts; other types arrive with their modules. */
 export const BookmarkInput = z.object({ targetType: z.enum(["post"]), targetId: z.string().uuid() });
 export type BookmarkInput = z.infer<typeof BookmarkInput>;
@@ -239,6 +254,10 @@ export type BookmarkInput = z.infer<typeof BookmarkInput>;
 
 export const HashtagSuggestion = z.object({ tag: z.string(), posts: z.number().int(), trending: z.boolean() });
 export type HashtagSuggestion = z.infer<typeof HashtagSuggestion>;
+
+/** GET /hashtags/suggest?q= — composer autocomplete (prefix match, up to 8). */
+export const HashtagSuggestQuery = z.object({ q: z.string().trim().max(51).default("") });
+export type HashtagSuggestQuery = z.infer<typeof HashtagSuggestQuery>;
 
 /** GET /topics/{tag} */
 export const TopicView = z.object({

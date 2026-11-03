@@ -10,6 +10,7 @@ import { runMigrations } from '../src/db/migrate.js';
 import { DB, type Db } from '../src/db/db.module.js';
 import { resetDatabase, seedReference } from '../src/db/seed.js';
 import * as s from '../src/db/schema.js';
+import { SettingsService } from '../src/infra/settings.service.js';
 
 export const ORIGIN = 'http://localhost:3000';
 export const PASSWORD = 'correct-horse-battery-staple';
@@ -39,6 +40,7 @@ export async function createTestApp(): Promise<TestApp> {
   const db = app.get<Db>(DB);
   await resetDatabase(db);
   await seedReference(db);
+  app.get(SettingsService).clearCache();
   const redis = new Redis(process.env.REDIS_URL!);
   await redis.flushdb();
   await redis.quit();

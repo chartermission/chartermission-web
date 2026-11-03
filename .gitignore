@@ -9,3 +9,5 @@ coverage
 !.env.example
 .DS_Store
 next-env.d.ts
+.uploads
+dump.rdb

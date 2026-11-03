@@ -26,7 +26,7 @@ export class SettingsService {
     const hit = this.cache.get(key);
     if (hit && Date.now() - hit.at < 30_000) return hit.value as (typeof SETTING_DEFAULTS)[K];
     const [row] = await this.db.select().from(platformSettings).where(eq(platformSettings.key, key)).limit(1);
-    const value = { ...SETTING_DEFAULTS[key], ...((row?.value as object) ?? {}) } as (typeof SETTING_DEFAULTS)[K];
+    const value = { ...SETTING_DEFAULTS[key], ...(row?.value as object | undefined) } as (typeof SETTING_DEFAULTS)[K];
     this.cache.set(key, { value, at: Date.now() });
     return value;
   }
@@ -37,5 +37,10 @@ export class SettingsService {
       .values({ key, value, updatedBy: actorId })
       .onConflictDoUpdate({ target: platformSettings.key, set: { value, updatedBy: actorId, updatedAt: new Date() } });
     this.cache.delete(key);
+  }
+
+  /** Drops cached values (tests reset the database underneath a running app). */
+  clearCache() {
+    this.cache.clear();
   }
 }

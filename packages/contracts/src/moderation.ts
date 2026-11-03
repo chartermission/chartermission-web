@@ -288,3 +288,99 @@ export const AuditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type AuditQuery = z.infer<typeof AuditQuery>;
+
+/* ---------- Additions (moderation workstream) ---------- */
+
+/** Member-facing names for policy references, used in notices and appeal pages. */
+export const POLICY_REF_LABELS: Record<PolicyRef, string> = {
+  "guidelines.respect": "Be respectful",
+  "guidelines.harassment": "Harassment and bullying",
+  "guidelines.spam": "Spam",
+  "guidelines.scams": "Scams and fraud",
+  "guidelines.impersonation": "Impersonation",
+  "guidelines.misinformation": "False or misleading information",
+  "guidelines.discrimination": "Hate and discrimination",
+  "guidelines.sexual_content": "Sexual content",
+  "guidelines.violence": "Violence and threats",
+  "guidelines.ip": "Intellectual property",
+  "guidelines.platform_integrity": "Platform integrity",
+};
+
+/** Report status as the reporter sees it: general terms only (spec 4.15). */
+export const MyReportStatus = z.enum(["received", "in_review", "action_taken", "no_action"]);
+export type MyReportStatus = z.infer<typeof MyReportStatus>;
+
+/** GET /me/reports — reports I made, newest first. */
+export const MyReport = z.object({
+  id: z.string().uuid(),
+  targetType: ReportTargetType,
+  reason: ReportReason,
+  status: MyReportStatus,
+  /** One plain sentence about where the report stands. Never names the other member's outcome in detail. */
+  summary: z.string(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+});
+export type MyReport = z.infer<typeof MyReport>;
+
+/** POST /appeals response. */
+export const AppealView = z.object({
+  id: z.string().uuid(),
+  actionId: z.string().uuid(),
+  status: z.enum(["open", "in_review", "upheld", "overturned"]),
+  createdAt: z.string(),
+});
+export type AppealView = z.infer<typeof AppealView>;
+
+/** GET /admin/hidden?targetType=&cursor= */
+export const AdminHiddenQuery = z.object({
+  targetType: z.enum(["post", "comment"]).optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type AdminHiddenQuery = z.infer<typeof AdminHiddenQuery>;
+
+/** Hidden or removed posts and comments, with the action that hid them. */
+export const AdminHiddenRow = z.object({
+  target: z.object({ type: z.enum(["post", "comment"]), id: z.string().uuid(), preview: z.string() }),
+  moderationState: z.enum(["hidden", "removed"]),
+  author: MemberRef.nullable(),
+  href: z.string(),
+  hiddenAt: z.string(),
+  action: AdminActionView.nullable(),
+});
+export type AdminHiddenRow = z.infer<typeof AdminHiddenRow>;
+
+/** GET /admin/appeals?status= ("open" includes in_review). */
+export const AdminAppealsQuery = z.object({
+  status: z.enum(["open", "in_review", "upheld", "overturned", "all"]).default("open"),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type AdminAppealsQuery = z.infer<typeof AdminAppealsQuery>;
+
+/** GET /admin/trending query. */
+export const AdminTrendingQuery = z.object({
+  scope: z.enum(["global", "country", "chapter"]).default("global"),
+  scopeId: z.string().max(60).optional(),
+  window: z.enum(["24h", "7d"]).default("24h"),
+});
+export type AdminTrendingQuery = z.infer<typeof AdminTrendingQuery>;
+
+/** POST /admin/trending/overrides response. */
+export const TrendingOverrideView = z.object({
+  id: z.string().uuid(),
+  tag: z.string(),
+  action: z.enum(["pin", "suppress"]),
+  scope: z.enum(["global", "country", "chapter"]),
+  scopeId: z.string().nullable(),
+  reason: z.string(),
+  actor: MemberRef,
+  createdAt: z.string(),
+  expiresAt: z.string().nullable(),
+});
+export type TrendingOverrideView = z.infer<typeof TrendingOverrideView>;
+
+/** GET /admin/audit/export.csv — same filters as the viewer, no paging. */
+export const AuditExportQuery = AuditQuery.omit({ cursor: true, limit: true });
+export type AuditExportQuery = z.infer<typeof AuditExportQuery>;
