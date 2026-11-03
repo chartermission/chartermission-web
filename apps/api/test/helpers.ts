@@ -87,3 +87,66 @@ export async function count(db: Db, table: Parameters<Db['select']>[0] extends n
 }
 
 export { s };
+
+let seq = 0;
+
+/**
+ * Creates a member directly in the database and returns a signed-in client.
+ * Use this to set up actors without going through the registration flow.
+ *   const amara = await createMember(t, { name: 'Amara Okafor' });
+ *   const mod = await createMember(t, { roles: ['moderator'], admin: true }); // admin-audience, MFA verified
+ */
+export async function createMember(
+  t: TestApp,
+  opts: {
+    name?: string;
+    handle?: string;
+    email?: string;
+    verified?: boolean;
+    roles?: string[];
+    /** Sign in to the admin console (admin-audience session with MFA enabled and verified). */
+    admin?: boolean;
+    countryCode?: string;
+    status?: 'unverified' | 'active' | 'suspended' | 'deactivated';
+  } = {},
+) {
+  const { hash } = await import('@node-rs/argon2');
+  const { SessionService, COOKIE_NAMES } = await import('../src/core/session.service.js');
+  const { encrypt } = await import('../src/common/crypto.js');
+  seq += 1;
+  const name = opts.name ?? `Test Member ${seq}`;
+  const handle = opts.handle ?? `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${seq}`;
+  const email = opts.email ?? `${handle}@example.test`;
+  const verified = opts.verified ?? true;
+  const [user] = await t.db
+    .insert(s.users)
+    .values({
+      email,
+      passwordHash: await hash(PASSWORD),
+      status: opts.status ?? (verified ? 'active' : 'unverified'),
+      emailVerifiedAt: verified ? new Date() : null,
+      mfaSecretEnc: opts.admin ? encrypt('JBSWY3DPEHPK3PXP') : null,
+      mfaEnabledAt: opts.admin ? new Date() : null,
+    })
+    .returning();
+  await t.db.insert(s.memberProfiles).values({
+    userId: user!.id,
+    handle,
+    displayName: name,
+    countryCode: opts.countryCode ?? 'NG',
+    onboardingStep: 4,
+    onboardingCompletedAt: new Date(),
+  });
+  for (const key of opts.roles ?? []) {
+    const [role] = await t.db.select().from(s.roles).where(eq(s.roles.key, key));
+    if (!role) throw new Error(`Unknown role ${key}`);
+    await t.db.insert(s.userRoles).values({ userId: user!.id, roleId: role.id });
+  }
+  const audience = opts.admin ? 'admin' : 'member';
+  const sessions = t.app.get(SessionService);
+  const fakeReq = { ip: '127.0.0.1', headers: { 'user-agent': 'vitest' } } as any;
+  const { token } = await sessions.create(user!.id, audience, fakeReq, { mfaVerified: !!opts.admin });
+  const c = client(t, audience);
+  c.agent.jar.setCookie(`${COOKIE_NAMES[audience]}=${token}; Path=/`, '127.0.0.1');
+  return { ...c, user: user!, id: user!.id, handle, email, name };
+}
