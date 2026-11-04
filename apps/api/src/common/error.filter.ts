@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { ZodError } from 'zod';
 import type { ApiError, ErrorCode } from '@chartermission/contracts';
 import { AppError } from './errors.js';
+import { env } from '../config/env.js';
 
 const statusCodes: Record<number, ErrorCode> = {
   400: 'VALIDATION_FAILED',
@@ -56,6 +57,12 @@ export class ErrorFilter implements ExceptionFilter {
       body = { error: { code, message } };
     } else {
       this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+      // Local development only: name the real cause so it shows on the page, not just in the API terminal.
+      if (env().NODE_ENV === 'development') {
+        const root = exception instanceof Error && exception.cause instanceof Error ? exception.cause : exception;
+        const cause = root instanceof Error ? root.message : String(root);
+        body = { error: { code: 'INTERNAL', message: `Something went wrong: ${cause}`.slice(0, 500) } };
+      }
     }
     res.status(status).json(body);
   }

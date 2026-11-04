@@ -1,6 +1,6 @@
 // Loaded before every e2e test file (vitest setupFiles).
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_URL ??= 'postgres://postgres@localhost:5432/chartermission_test';
+process.env.DATABASE_URL ??= 'postgres://postgres@localhost:5433/chartermission_test';
 process.env.REDIS_URL ??= 'redis://localhost:6379/1';
 process.env.QUEUE_INLINE = 'true';
 process.env.RUN_WORKERS = 'false';

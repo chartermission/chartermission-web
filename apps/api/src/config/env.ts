@@ -19,7 +19,7 @@ const flag = (fallback: boolean) =>
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(4000),
-  DATABASE_URL: z.string().default('postgres://postgres@localhost:5432/chartermission'),
+  DATABASE_URL: z.string().default('postgres://postgres@localhost:5433/chartermission'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   /** Comma-separated browser origins allowed to call the API (web and admin apps). */
   WEB_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3001'),
