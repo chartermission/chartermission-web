@@ -1,17 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import type { PostView } from "@chartermission/contracts";
-import { Composer, type ComposeStart } from "@/components/composer";
+import { Composer, blockedReason, type ComposeStart } from "@/components/composer";
 import { CreatePostDialog } from "@/components/compose/create-post-dialog";
 import { announceDraftsChanged } from "@/components/drafts/drafts-events";
+import { onComposeRequest } from "@/components/home/compose-request";
 import { announcePostCreated } from "@/components/social/post-events";
 import { toast } from "@/components/social/toast";
 import type { Viewer } from "@/components/social/viewer";
 
-/** Composer wired to the create-post dialog (Figma "Web / Create post — modal", node 19:2951). */
-export function FeedComposer({ viewer }: { viewer: Viewer }) {
-  const [session, setSession] = useState<({ key: number } & ComposeStart) | null>(null);
+type Session = { key: number; body?: string } & ComposeStart;
+
+/**
+ * Composer wired to the create-post dialog (Figma "Web / Create post — modal", node 19:2951).
+ * Also opens it for `/feed?compose=1` (then drops the parameter from the URL) and for
+ * requestCompose() calls from the welcome strip and the daily prompt card.
+ */
+export function FeedComposer({ viewer, compose = false }: { viewer: Viewer; compose?: boolean }) {
+  const router = useRouter();
+  const [session, setSession] = useState<Session | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const blocked = !!blockedReason(viewer);
+
+  useEffect(() => {
+    const open = (start: Omit<Session, "key">) => {
+      if (blocked) {
+        // The composer explains why posting is unavailable; bring it into view instead.
+        panelRef.current?.scrollIntoView({ block: "center" });
+        return;
+      }
+      setSession((current) => current ?? { key: Date.now(), ...start });
+    };
+    if (compose) {
+      open({});
+      const url = new URL(window.location.href);
+      url.searchParams.delete("compose");
+      router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
+    }
+    return onComposeRequest((request) => open({ body: request.body }));
+  }, [compose, blocked, router]);
 
   function posted(post: PostView) {
     announcePostCreated(post);
@@ -37,13 +66,16 @@ export function FeedComposer({ viewer }: { viewer: Viewer }) {
 
   return (
     <>
-      <Composer viewer={viewer} onOpen={(start) => setSession((current) => ({ key: (current?.key ?? 0) + 1, ...start }))} />
+      <div ref={panelRef}>
+        <Composer viewer={viewer} onOpen={(start) => setSession((current) => ({ key: (current?.key ?? 0) + 1, ...start }))} />
+      </div>
       {session && (
         <CreatePostDialog
           key={session.key}
           viewer={viewer}
           initialTool={session.tool}
           initialType={session.type}
+          initialBody={session.body}
           onClose={() => setSession(null)}
           onPosted={posted}
           onDraftChange={announceDraftsChanged}

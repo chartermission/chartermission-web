@@ -31,6 +31,16 @@ function entranceProps(entrance: Entrance | undefined) {
     : { className: "motion-fade-up", style: staggerStyle(entrance.order, { step: 45, max: 6 }) };
 }
 
+/** Extra cards woven into the list: the first after `after` posts, then one every `every` posts. */
+export type StreamInterleave = { after: number; every: number; items: { key: string; node: ReactNode }[] };
+
+/** The interleaved item that follows the post at `position` (1-based), if any. */
+function interleavedAt(interleave: StreamInterleave | undefined, position: number) {
+  if (!interleave || position < interleave.after) return undefined;
+  const steps = position - interleave.after;
+  return steps % Math.max(1, interleave.every) === 0 ? interleave.items[steps / Math.max(1, interleave.every)] : undefined;
+}
+
 const newest = (posts: PostView[]) => posts.reduce<string | null>((max, p) => (!max || p.createdAt > max ? p.createdAt : max), null);
 
 /**
@@ -53,6 +63,7 @@ export function PostStream({
   dropUnbookmarked = false,
   newPostsPath,
   label,
+  interleave,
 }: {
   path: string;
   query?: Query;
@@ -66,6 +77,12 @@ export function PostStream({
   /** Endpoint returning FeedNewResponse for `since` + the same query; enables the new-posts pill. */
   newPostsPath?: string;
   label: string;
+  /**
+   * Non-post cards (e.g. the feed's community moments) placed between posts as pages load.
+   * Items that would fall past the loaded posts wait for the next page; they are keyed, so
+   * posts arriving at the top move them down without remounting.
+   */
+  interleave?: StreamInterleave;
 }) {
   const [posts, setPosts] = useState<PostView[]>(initial?.items ?? []);
   const [cursor, setCursor] = useState<string | null>(initial ? initial.nextCursor : null);
@@ -205,16 +222,26 @@ export function PostStream({
         {announcement}
       </p>
       {newPostsPath && <NewPostsPill path={newPostsPath} query={query} since={since} onShow={showNew} />}
-      {all.map((post) => (
-        <div key={post.id} data-post-id={post.id} {...entranceProps(entrances[post.id])}>
-          <PostCard
-            post={post}
-            viewer={viewer}
-            onRemoved={remove}
-            onBookmarkChange={dropUnbookmarked ? (p, saved) => !saved && setPosts((current) => current.filter((x) => x.id !== p.id)) : undefined}
-          />
-        </div>
-      ))}
+      {all.flatMap((post, index) => {
+        const card = (
+          <div key={post.id} data-post-id={post.id} {...entranceProps(entrances[post.id])}>
+            <PostCard
+              post={post}
+              viewer={viewer}
+              onRemoved={remove}
+              onBookmarkChange={dropUnbookmarked ? (p, saved) => !saved && setPosts((current) => current.filter((x) => x.id !== p.id)) : undefined}
+            />
+          </div>
+        );
+        const extra = interleavedAt(interleave, index + 1);
+        if (!extra) return [card];
+        return [
+          card,
+          <div key={`interleave:${extra.key}`} className="empty:hidden">
+            {extra.node}
+          </div>,
+        ];
+      })}
       {loading && (
         <>
           {all.length === 0 && (

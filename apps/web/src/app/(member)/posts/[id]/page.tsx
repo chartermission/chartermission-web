@@ -6,7 +6,7 @@ import type { CommentView, HelpOfferView, MemberProfile, Page, PostView, TopicVi
 import { Chip, Icon, Panel } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { requireClientViewer } from "@/components/social/data";
-import { topicHref } from "@/components/social/links";
+import { articleHref, topicHref } from "@/components/social/links";
 import { PostCard } from "@/components/social/post-card";
 import { SectionRail } from "@/components/social/section-nav";
 import { LoadingStatus, PanelSkeleton, PostSkeleton } from "@/components/social/skeletons";
@@ -14,6 +14,7 @@ import { AuthorCard } from "@/components/social/author-card";
 import { HelpOffersPanel } from "@/components/social/post-types/help-offers";
 import { stripMarkdown } from "@/components/social/post-types/markdown";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
+import { ArticleRedirect } from "./article-redirect";
 import { Comments } from "./comments";
 
 type Params = PageProps<"/posts/[id]">["params"];
@@ -42,6 +43,8 @@ async function PostMain({ params }: { params: Params }) {
   const { id } = await params;
   const viewer = await requireClientViewer(`/posts/${id}`);
   const post = await loadPost(params);
+  // Articles are read on their own page; keep #comments / #comment-… anchors.
+  if (post.type === "article") return <ArticleRedirect href={articleHref(post.id)} />;
   const isOwnRequest = post.type === "request" && post.author.id === viewer.id;
   const [comments, offers] = await Promise.all([
     apiGet<Page<CommentView>>(`/posts/${post.id}/comments`, { sort: "relevant" }).catch(() => null),
@@ -68,7 +71,7 @@ async function PostMain({ params }: { params: Params }) {
 
 async function PostRightRail({ params }: { params: Params }) {
   const post = await loadPost(params).catch(() => null);
-  if (!post) return null;
+  if (!post || post.type === "article") return null;
   const firstTag = post.hashtags[0];
   const [author, topic] = await Promise.all([
     apiGetOrNull<MemberProfile>(`/members/${post.author.handle}`).catch(() => null),

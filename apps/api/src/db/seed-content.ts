@@ -104,19 +104,55 @@ const EXTRA: [Key, number, string][] = [
 /** Owais's follows (mock-data.ts followedHashtags + people he follows). */
 const ARTICLE_BODY = `Exporters keep asking the same question: does my product qualify for AfCFTA preferences? For textiles the answer depends on three things — where the fabric was made, how much work happened in your country, and whether you can prove it at the border.
 
+I spend most of my week turning legal texts into checklists. This is the textiles checklist, with the reasoning behind each step.
+
+## Start with the product-specific rule
+
+Every product has a tariff heading, and every heading has its own rule of origin. For many garments the rule is about processing: sewing imported fabric together is not enough, and a defined share of the manufacturing has to happen within the continent. Other lines use a value test, which limits how much of the ex-works price can come from non-originating materials.
+
+Before anything else:
+
+1. Confirm the exact tariff heading for each product line with your customs broker.
+2. Find the product-specific rule for that heading in the published schedule.
+3. Write down, in one sentence, what your factory must do for the product to qualify.
+
+If you cannot write that sentence, stop and get help. Everything else depends on it.
+
 ## Cumulation is your friend
 
 Materials from any other AfCFTA state party count as originating, as long as they come with their own certificate. A Moroccan garment maker using Egyptian cotton yarn can treat that yarn as local. Read the cumulation clause twice: it only works when every step in the chain is documented.
 
+In practice, that Moroccan maker weaves the yarn into fabric, then cuts and sews the garments. The yarn counts as originating because the Egyptian supplier provides its own proof of origin, and the weaving, cutting and sewing all happen in Morocco. The finished shirt can then qualify for preferences in, say, Ghana or Kenya, provided each step is on paper.
+
+Cumulation fails most often for a simple reason: the supplier's proof of origin is missing, late or issued for the wrong product. Ask for it with the first order, not the first shipment.
+
 ## Mind the tolerance
 
 The tolerance rule lets a small share of non-originating materials through — useful for buttons, zips and labels sourced from outside the continent. Keep it under the threshold for your product line and keep the invoices.
+
+Two common mistakes:
+
+- Calculating the share on the retail price instead of the ex-works price. Always use the ex-works price.
+- Forgetting that a new supplier of trims can push you over the threshold. A cheaper zip from outside the continent can cost you the preference on the whole shirt.
+
+Run the calculation for every product line, and run it again whenever you change a supplier or a price.
 
 ## The paperwork that trips people up
 
 - A certificate of origin from the competent authority, not a commercial invoice note.
 - A supplier declaration for every originating input.
 - Records kept for at least five years.
+
+Customs in the importing country can ask for proof long after the goods have cleared. Keep each shipment's file together: the certificate, the supplier declarations, the bill of materials with costs and the production records. A shared folder per shipment, named by invoice number, is enough.
+
+## A pre-shipment checklist
+
+1. Tariff heading confirmed for each product line.
+2. Product-specific rule written down and met.
+3. Supplier proofs of origin received for every originating input.
+4. Tolerance calculated on the ex-works price and within the limit.
+5. Certificate of origin issued by the competent authority and checked for errors.
+6. Shipment file complete and stored.
 
 Most rejected shipments in the pilot phase failed on documents, not on the rules themselves. Get the paperwork right before the first container and the preferences follow.
 

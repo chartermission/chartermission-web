@@ -90,6 +90,7 @@ export function CreatePostDialog({
   viewer,
   initialTool,
   initialType,
+  initialBody,
   draft,
   onClose,
   onPosted,
@@ -98,6 +99,8 @@ export function CreatePostDialog({
   viewer: Viewer;
   initialTool?: ComposeTool;
   initialType?: PostType;
+  /** Pre-filled post text (e.g. "\n\n#DailyPrompt"); the cursor starts before it, and it alone is not a draft. */
+  initialBody?: string;
   draft?: DraftView;
   onClose: () => void;
   onPosted: (post: PostView) => void;
@@ -112,13 +115,14 @@ export function CreatePostDialog({
   const finishedRef = useRef(false);
   const attachments = useAttachments(draft ? { files: draft.attachments, altTexts: draft.payload.altTexts } : undefined);
 
-  const startText = initialTool === "topic" ? "#" : initialTool === "mention" ? "@" : "";
+  const startText = initialBody ?? (initialTool === "topic" ? "#" : initialTool === "mention" ? "@" : "");
+  const startCaret = useRef(initialBody !== undefined ? 0 : null);
   const [fields, setFields] = useState<ComposerFields>(() => {
     if (draft) return fieldsFromDraft(draft.payload);
     const base = initialFields(initialType);
     return { ...base, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
   });
-  const [caret, setCaret] = useState(fields.text.length);
+  const [caret, setCaret] = useState(initialBody !== undefined ? 0 : fields.text.length);
   const [fileMode, setFileMode] = useState<"image" | "document" | null>(
     initialTool === "photo" ? "image" : initialTool === "document" ? "document" : null,
   );
@@ -140,7 +144,7 @@ export function CreatePostDialog({
   const allErrors = validate(fields, ready, fileState);
   const valid = Object.keys(allErrors).length === 0;
   const errors: FieldErrors = { ...serverFields, ...(submitted ? allErrors : {}) };
-  const content = hasContent(fields, attachments.items.length);
+  const content = hasContent(initialBody !== undefined && fields.text === initialBody ? { ...fields, text: "" } : fields, attachments.items.length);
   const payload = toDraftPayload(fields, ready);
 
   const sync = useDraftSync({
@@ -162,7 +166,8 @@ export function CreatePostDialog({
     const target = dialog.querySelector<HTMLElement>("[data-autofocus]") ?? textareaRef.current;
     target?.focus();
     if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
-      target.setSelectionRange(target.value.length, target.value.length);
+      const at = target === textareaRef.current ? (startCaret.current ?? target.value.length) : target.value.length;
+      target.setSelectionRange(at, at);
     }
     const { overflow } = document.documentElement.style;
     document.documentElement.style.overflow = "hidden";

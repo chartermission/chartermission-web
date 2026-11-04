@@ -1,8 +1,12 @@
 import Link from "next/link";
 import type { PostView } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
-import { postHref } from "../links";
+import { BrandCover } from "@/components/illustrations";
+import { articleHref } from "../links";
 import { stripMarkdown } from "./markdown";
+
+/** Default alt text when the author didn't describe the cover. */
+export const coverAlt = (article: NonNullable<PostView["article"]>) => article.coverAlt ?? `Cover image for “${article.title}”`;
 
 /** Cover image of an article, or nothing when it has none. */
 export function ArticleCover({ article, className }: { article: NonNullable<PostView["article"]>; className?: string }) {
@@ -10,38 +14,52 @@ export function ArticleCover({ article, className }: { article: NonNullable<Post
   return (
     <div className={cn("w-full overflow-hidden bg-muted", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media */}
-      <img src={article.coverUrl} alt={article.coverAlt ?? `Cover image for “${article.title}”`} className="size-full object-cover" loading="lazy" />
+      <img src={article.coverUrl} alt={coverAlt(article)} className="size-full object-cover" loading="lazy" />
     </div>
   );
 }
 
-/** Article in a list: cover, title, subtitle, reading time and a two-line excerpt — never the full body. */
+/** The article's plain-text opening, without a trailing line of hashtags. */
+export function articleExcerpt(body: string) {
+  return stripMarkdown(body).replace(/(?:\s*#[\p{L}\p{N}_]{2,60})+\s*$/u, "");
+}
+
+/**
+ * Compact article teaser in the feed (the card header already carries the "Article" chip):
+ * title, subtitle or opening, reading time and a thumbnail. The whole teaser opens the
+ * article on its reader page; the full body is never shown here.
+ */
 export function ArticlePreview({ post }: { post: PostView }) {
   const article = post.article!;
-  const excerpt = stripMarkdown(post.body).replace(/(?:\s*#[A-Za-z0-9_]{2,50})+\s*$/, "");
-  const href = postHref(post.id);
+  const lead = article.subtitle ?? articleExcerpt(post.body);
   return (
-    <div className="group relative flex w-full flex-col overflow-hidden rounded-[10px] border border-line transition-colors hover:border-line-strong">
-      <ArticleCover article={article} className="aspect-[2/1] max-h-[280px]" />
-      <div className="flex flex-col gap-1.5 p-4">
-        <p className="flex items-center gap-1.5 text-label text-accent-hover">
-          <Icon name="book" size={14} />
-          Article
-          <span aria-hidden="true" className="text-disabled">
-            ·
+    <div className="group relative flex w-full items-stretch gap-4 overflow-hidden rounded-[10px] border border-line p-3 transition-colors hover:border-line-strong hover:bg-surface max-sm:gap-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-1 py-1 pl-1">
+        <h3 className="line-clamp-2 text-h3 text-ink group-hover:underline max-sm:text-md max-sm:font-semibold">
+          <Link href={articleHref(post.id)} className="rounded-sm after:absolute after:inset-0">
+            {article.title}
+          </Link>
+        </h3>
+        {lead && <p className="line-clamp-2 text-sm text-body">{lead}</p>}
+        <p className="mt-auto flex items-center gap-1.5 pt-1.5 text-xs text-secondary">
+          <Icon name="clock" size={14} />
+          {article.readingMinutes} min read
+          <span aria-hidden="true">·</span>
+          <span className="flex items-center gap-0.5 font-medium text-primary-light">
+            Read article
+            <Icon name="chevron-right" size={14} className="transition-transform group-hover:translate-x-0.5" />
           </span>
-          <span className="font-medium text-secondary">{article.readingMinutes} min read</span>
         </p>
-        <h3 className="text-h3 text-ink group-hover:underline">{article.title}</h3>
-        {article.subtitle && <p className="text-sm font-medium text-body">{article.subtitle}</p>}
-        {excerpt && <p className="line-clamp-2 text-sm text-secondary">{excerpt}</p>}
-        <Link
-          href={href}
-          className="mt-1 flex w-fit items-center gap-1 rounded-sm text-sm font-medium text-primary-light after:absolute after:inset-0 hover:underline"
-        >
-          Read article<span className="sr-only">: {article.title}</span>
-          <Icon name="chevron-right" size={14} className="transition-transform group-hover:translate-x-0.5" />
-        </Link>
+      </div>
+      <div className="w-[148px] shrink-0 overflow-hidden rounded-lg max-sm:w-[88px]">
+        {article.coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- permission-checked API media
+          <img src={article.coverUrl} alt={coverAlt(article)} className="size-full min-h-[104px] object-cover max-sm:min-h-[88px]" loading="lazy" />
+        ) : (
+          <BrandCover className="size-full min-h-[104px] max-sm:min-h-[88px]">
+            <Icon name="book" size={28} />
+          </BrandCover>
+        )}
       </div>
     </div>
   );

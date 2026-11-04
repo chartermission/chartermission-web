@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { FeedQuery, type Page, type PostView } from "@chartermission/contracts";
+import { FeedQuery, type MomentsResponse, type Page, type PostView } from "@chartermission/contracts";
 import { buttonClasses } from "@chartermission/ui";
 import { FeedControls } from "@/components/feed-controls";
+import { momentItems } from "@/components/home/moments";
+import { Welcome, WelcomeSkeleton } from "@/components/home/welcome";
 import { LeftRail } from "@/components/left-rail";
 import { PageColumns } from "@/components/page-columns";
 import { RightRail } from "@/components/right-rail";
@@ -37,6 +39,15 @@ function apiQuery(query: FeedQuery) {
     announcements: query.announcements ? "true" : undefined,
   };
 }
+
+/** The plain "For you" feed: the only view that gets community moments and the welcome strip. */
+function isHome(query: FeedQuery) {
+  return query.tab === "for_you" && !query.type && !query.country && !query.sector && !query.chapter && !query.announcements && !query.author;
+}
+
+/** Moments go after the 2nd post, then after every 5th. */
+const MOMENTS_AFTER = 2;
+const MOMENTS_EVERY = 5;
 
 function feedHref(params: Record<string, string | undefined>) {
   const qs = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => !!entry[1])).toString();
@@ -129,16 +140,23 @@ function FeedEmpty({ query }: { query: FeedQuery }) {
 }
 
 async function FeedMain({ searchParams }: { searchParams: SearchParams }) {
-  const query = parseQuery(await searchParams);
+  const params = await searchParams;
+  const query = parseQuery(params);
+  const home = isHome(query);
   const viewer = await requireClientViewer("/feed");
-  const [page, taxonomies] = await Promise.all([
+  const [page, taxonomies, moments] = await Promise.all([
     settle(apiGet<Page<PostView>>("/feed", apiQuery(query))),
     getTaxonomies().catch(() => ({ countries: [], sectors: [], chapters: [] })),
+    // Moments are extras: without them the feed is just the feed.
+    home ? apiGet<MomentsResponse>("/home/moments").catch(() => null) : null,
   ]);
   const key = JSON.stringify(query);
+  const interleave = moments?.moments.length
+    ? { after: MOMENTS_AFTER, every: MOMENTS_EVERY, items: momentItems(moments.moments, viewer) }
+    : undefined;
   return (
     <>
-      <FeedComposer viewer={viewer} />
+      <FeedComposer viewer={viewer} compose={params.compose === "1"} />
       <FeedControls query={query} taxonomies={taxonomies} />
       {page.ok ? (
         <PostStream
@@ -151,6 +169,7 @@ async function FeedMain({ searchParams }: { searchParams: SearchParams }) {
           empty={<FeedEmpty query={query} />}
           acceptNew
           newPostsPath="/feed/new"
+          interleave={interleave}
         />
       ) : (
         <SectionError message={errorMessage(page.error)} retryHref="/feed" />
@@ -159,11 +178,25 @@ async function FeedMain({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
+/** The welcome strip, on the unfiltered feed only (tabs keep it; type and filter views don't). */
+async function FeedWelcome({ searchParams }: { searchParams: SearchParams }) {
+  const query = parseQuery(await searchParams);
+  if (query.type || query.country || query.sector || query.chapter || query.announcements || query.author) return null;
+  return (
+    <Suspense fallback={<WelcomeSkeleton />}>
+      <Welcome />
+    </Suspense>
+  );
+}
+
 /** Home feed — Figma "Web / Home feed" (node 8:84). */
 export default function FeedPage({ searchParams }: PageProps<"/feed">) {
   return (
     <PageColumns left={<LeftRail />} right={<RightRail />}>
       <h1 className="sr-only">Home feed</h1>
+      <Suspense fallback={null}>
+        <FeedWelcome searchParams={searchParams} />
+      </Suspense>
       <Suspense
         fallback={
           <>

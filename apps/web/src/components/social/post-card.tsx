@@ -32,9 +32,9 @@ const CLAMP_AT = 420;
 
 type Modal = "report" | "delete" | "block" | "mute" | "repost" | null;
 
-async function copyLink(id: string) {
+async function copyLink(post: Pick<PostView, "id" | "type">) {
   try {
-    await navigator.clipboard.writeText(absoluteUrl(postHref(id)));
+    await navigator.clipboard.writeText(absoluteUrl(postHref(post)));
     toast.success("Link copied");
   } catch {
     toast.error(new Error("copy"));
@@ -128,7 +128,7 @@ export function PostCard({
     onRemoved?.(post, scope);
   }
 
-  const menu: MenuItem[] = [{ label: "Copy link", icon: "link", onSelect: () => copyLink(post.id) }];
+  const menu: MenuItem[] = [{ label: "Copy link", icon: "link", onSelect: () => copyLink(post) }];
   if (post.viewer.canEdit && !post.isRepost) {
     menu.push({
       label: "Edit post",
@@ -187,7 +187,7 @@ export function PostCard({
               <span aria-hidden="true">·</span>
             </>
           )}
-          <Link href={postHref(post.id)} className="hover:underline">
+          <Link href={postHref(post)} className="hover:underline">
             <TimeAgo iso={post.createdAt} />
           </Link>
           {articleDetail && (
@@ -342,7 +342,7 @@ export function PostCard({
           </a>
         ) : (
           <Link
-            href={`${postHref(post.id)}#${post.type === "question" ? "add-comment" : "comments"}`}
+            href={`${postHref(post)}#${post.type === "question" ? "add-comment" : "comments"}`}
             className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
           >
             <Icon name="message" size={18} />
@@ -379,7 +379,7 @@ export function PostCard({
         </button>
         <button
           type="button"
-          onClick={() => copyLink(post.id)}
+          onClick={() => copyLink(post)}
           className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
         >
           <Icon name="share" size={18} />

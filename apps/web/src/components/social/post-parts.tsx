@@ -104,7 +104,7 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
           {original.poll ? "Poll" : images > 0 ? `${images} image${images === 1 ? "" : "s"}` : "PDF document"}
         </p>
       )}
-      <Link href={postHref(original.id)} className="text-xs font-medium text-primary-light after:absolute after:inset-0 hover:underline">
+      <Link href={postHref(original)} className="text-xs font-medium text-primary-light after:absolute after:inset-0 hover:underline">
         {original.article ? "Read article" : "View original post"}
       </Link>
     </div>
@@ -145,7 +145,7 @@ export function PostCounts({ post, total, breakdown }: { post: PostView; total: 
         )}
       </span>
       {parts.length > 0 && (
-        <Link href={`${postHref(post.id)}#comments`} className="hover:text-primary hover:underline">
+        <Link href={`${postHref(post)}#comments`} className="hover:text-primary hover:underline">
           {parts.join(" · ")}
         </Link>
       )}

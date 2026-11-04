@@ -26,7 +26,7 @@ const starts: { start: ComposeStart; icon: IconName; label: string; color: strin
 ];
 
 /** Why the viewer can't post right now, if anything (unverified, restricted or suspended). */
-function blockedReason(viewer: Viewer) {
+export function blockedReason(viewer: Viewer) {
   if (!viewer.emailVerified) return { kind: "verify" as const };
   if (viewer.status === "suspended") return { kind: "standing" as const, text: "Your account is suspended, so you can’t post." };
   const until = activeUntil(viewer.restrictions.postingUntil);

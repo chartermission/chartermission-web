@@ -7,6 +7,7 @@ import { UserMenu } from "@/components/account/user-menu";
 
 const links: { href: string; label: string; icon: IconName }[] = [
   { href: "/feed", label: "Home", icon: "home" },
+  { href: "/articles", label: "Articles", icon: "dashboard" },
   { href: "/network", label: "Network", icon: "users" },
   { href: "/opportunities", label: "Opportunities", icon: "briefcase" },
   { href: "/events", label: "Events", icon: "calendar" },
