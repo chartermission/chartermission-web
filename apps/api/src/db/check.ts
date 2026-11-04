@@ -28,7 +28,7 @@ export async function checkDatabase(pool: pg.Pool): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const hint = /SASL|password/i.test(message)
-      ? 'A different PostgreSQL that needs a password is answering on this port; see the README (port 55432 note)'
+      ? 'A different PostgreSQL that needs a password is answering on this port; see the README (port note)'
       : 'Start it with: docker compose up -d';
     logger.error(`Cannot use ${target}: ${message}. ${hint}`);
   }

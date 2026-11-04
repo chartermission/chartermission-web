@@ -20,7 +20,7 @@ const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(4000),
   DATABASE_URL: z.string().default('postgres://postgres@localhost:55432/chartermission'),
-  REDIS_URL: z.string().default('redis://localhost:6379'),
+  REDIS_URL: z.string().default('redis://localhost:56379'),
   /** Comma-separated browser origins allowed to call the API (web and admin apps). */
   WEB_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3001'),
   /** Public URL of the member web app, used in email links. */

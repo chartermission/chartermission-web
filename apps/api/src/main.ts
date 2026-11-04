@@ -5,11 +5,14 @@ import { AppModule } from './app.module.js';
 import { PG_POOL } from './db/db.module.js';
 import { configureApp } from './bootstrap.js';
 import { checkDatabase } from './db/check.js';
+import { checkRedis } from './infra/redis-preflight.js';
+import { env } from './config/env.js';
 
 // Local development reads apps/api/.env when present; hosted environments set real variables.
 if (existsSync('.env')) process.loadEnvFile('.env');
 
 async function bootstrap() {
+  if (env().NODE_ENV === 'development') await checkRedis();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   const config = configureApp(app);
   await app.listen(config.PORT);
