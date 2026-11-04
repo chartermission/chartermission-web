@@ -18,6 +18,41 @@ export const postTypeMeta: Record<PostType, { label: string; icon: IconName; tit
 
 export const postTypes = Object.keys(postTypeMeta) as PostType[];
 
+/**
+ * Accent colour per non-standard post type, used consistently on cards: a thin top line
+ * (`line`, an inset shadow that follows the card's rounded corners), a type chip (`chip`
+ * text + tint, `icon` colour) and `tone` (a CSS colour for motion/illustrations). Chip
+ * text uses the darker *-ink mixes so 12px labels stay ≥4.5:1. Standard posts have none.
+ */
+export type PostTypeAccent = { line: string; chip: string; icon: string; tone: string };
+
+export const postTypeAccent: Partial<Record<PostType, PostTypeAccent>> = {
+  question: {
+    line: "shadow-[inset_0_2px_0_0_var(--color-warning)]",
+    chip: "bg-warning-light text-warning-ink",
+    icon: "text-warning",
+    tone: "var(--color-warning)",
+  },
+  celebration: {
+    line: "shadow-[inset_0_2px_0_0_var(--color-accent-hover)]",
+    chip: "bg-accent-light text-accent-ink",
+    icon: "text-accent-hover",
+    tone: "var(--color-accent-hover)",
+  },
+  request: {
+    line: "shadow-[inset_0_2px_0_0_var(--color-success)]",
+    chip: "bg-success-light text-success-ink",
+    icon: "text-success",
+    tone: "var(--color-success)",
+  },
+  article: {
+    line: "shadow-[inset_0_2px_0_0_var(--color-primary-light)]",
+    chip: "bg-primary-tint-2 text-primary-light",
+    icon: "text-primary-light",
+    tone: "var(--color-primary-light)",
+  },
+};
+
 export const celebrationMeta: Record<CelebrationCategory, { label: string; icon: IconName; placeholder: string }> = {
   new_role: { label: CELEBRATION_LABELS.new_role, icon: "briefcase", placeholder: "Started as Head of Partnerships at GreenGrid Africa" },
   launch: { label: CELEBRATION_LABELS.launch, icon: "send", placeholder: "Launched PayBridge in Ghana and Côte d’Ivoire" },

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { FeedNewResponse, Page, PostView } from "@chartermission/contracts";
 import { Avatar, Icon, buttonClasses, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
+import { CaughtUpNote } from "@/components/illustrations";
+import { staggerStyle } from "@/components/motion";
 import { ErrorNotice } from "./errors";
 import { PostCard } from "./post-card";
 import { onPostCreated } from "./post-events";
@@ -18,6 +20,16 @@ const PREFETCH_MARGIN = "0px 0px 1200px 0px";
 const POLL_MS = 60_000;
 /** A focus event right after a visibility change shouldn't check twice. */
 const MIN_CHECK_GAP_MS = 5_000;
+
+/** How a card entered after the first render: from the pill / composer, or appended by scrolling. */
+type Entrance = { kind: "arrive" | "more"; order: number; delay?: number };
+
+function entranceProps(entrance: Entrance | undefined) {
+  if (!entrance) return undefined;
+  return entrance.kind === "arrive"
+    ? { className: "motion-arrive", style: staggerStyle(entrance.order, { start: entrance.delay ?? 80, step: 70, max: 5 }) }
+    : { className: "motion-fade-up", style: staggerStyle(entrance.order, { step: 45, max: 6 }) };
+}
 
 const newest = (posts: PostView[]) => posts.reduce<string | null>((max, p) => (!max || p.createdAt > max ? p.createdAt : max), null);
 
@@ -61,6 +73,7 @@ export function PostStream({
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<PostView[]>([]);
   const [announcement, setAnnouncement] = useState("");
+  const [entrances, setEntrances] = useState<Record<string, Entrance>>({});
   const queryRef = useRef(query);
   const sectionRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -99,6 +112,9 @@ export function PostStream({
           const seen = new Set(current.map((p) => p.id));
           return [...current, ...page.items.filter((p) => !seen.has(p.id))];
         });
+        if (next && added.length) {
+          setEntrances((current) => ({ ...current, ...Object.fromEntries(added.map((p, order) => [p.id, { kind: "more", order } as Entrance])) }));
+        }
         setCursor(page.nextCursor);
         if (next) {
           setAnnouncement(
@@ -140,7 +156,10 @@ export function PostStream({
 
   useEffect(() => {
     if (!acceptNew) return;
-    return onPostCreated((post) => setCreated((current) => [post, ...current.filter((p) => p.id !== post.id)]));
+    return onPostCreated((post) => {
+      setCreated((current) => [post, ...current.filter((p) => p.id !== post.id)]);
+      setEntrances((current) => ({ ...current, [post.id]: { kind: "arrive", order: 0 } }));
+    });
   }, [acceptNew]);
 
   const createdIds = new Set(created.map((p) => p.id));
@@ -162,12 +181,15 @@ export function PostStream({
       const added = fresh.length ? fresh : unseen;
       const addedIds = new Set(added.map((p) => p.id));
       setPosts((current) => [...added, ...current.filter((p) => !addedIds.has(p.id))]);
+      const section = sectionRef.current;
+      const top = section ? Math.max(0, section.getBoundingClientRect().top + window.scrollY - 88) : 0;
+      // Let a long smooth scroll mostly finish before the cards slide in.
+      const delay = Math.round(Math.min(450, 80 + Math.abs(window.scrollY - top) / 6));
+      setEntrances((current) => ({ ...current, ...Object.fromEntries(added.map((p, order) => [p.id, { kind: "arrive", order, delay } as Entrance])) }));
       const first = added[0];
       setAnnouncement(added.length ? `${added.length === 1 ? "1 new post" : `${added.length} new posts`} added to the top of the feed` : "No new posts");
-      const section = sectionRef.current;
       if (section) {
-        const top = section.getBoundingClientRect().top + window.scrollY - 88;
-        window.scrollTo({ top: Math.max(0, top), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+        window.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       }
       if (first) requestAnimationFrame(() => focusPost(first.id));
       return added.length;
@@ -184,7 +206,7 @@ export function PostStream({
       </p>
       {newPostsPath && <NewPostsPill path={newPostsPath} query={query} since={since} onShow={showNew} />}
       {all.map((post) => (
-        <div key={post.id} data-post-id={post.id} className="contents">
+        <div key={post.id} data-post-id={post.id} {...entranceProps(entrances[post.id])}>
           <PostCard
             post={post}
             viewer={viewer}
@@ -221,10 +243,7 @@ export function PostStream({
         </>
       )}
       {!loading && !error && !cursor && all.length > 0 && (
-        <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-secondary">
-          <Icon name="check" size={14} />
-          You’re all caught up
-        </p>
+        <CaughtUpNote>You’ve seen every post here. New ones will show up at the top.</CaughtUpNote>
       )}
     </section>
   );

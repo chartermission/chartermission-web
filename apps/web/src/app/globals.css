@@ -2,3 +2,210 @@
 @import "@chartermission/ui/styles.css";
 
 @source "../../../../packages/ui/src";
+
+/*
+ * Darker text tones for small labels on the status tints (post type chips). The status
+ * colours themselves are too light for 12px text on their -light backgrounds (~2:1);
+ * these mixes reach ≥4.5:1 while staying recognisably amber / green / orange.
+ */
+@theme {
+  --color-warning-ink: color-mix(in srgb, var(--color-warning) 55%, var(--color-ink));
+  --color-success-ink: color-mix(in srgb, var(--color-success) 55%, var(--color-ink));
+  --color-accent-ink: color-mix(in srgb, var(--color-accent-hover) 85%, var(--color-ink));
+}
+
+/* ------------------------------------------------------------------------------------
+ * Motion (components/motion). Every animation here is decorative: it never delays or
+ * blocks interaction, and under prefers-reduced-motion it becomes a plain fade or stops.
+ * ---------------------------------------------------------------------------------- */
+
+@keyframes cm-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cm-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cm-highlight {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes cm-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes cm-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.32);
+  }
+  65% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes cm-tick-up {
+  from {
+    opacity: 0;
+    transform: translateY(70%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cm-tick-down {
+  from {
+    opacity: 0;
+    transform: translateY(-70%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cm-twinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* A card that just arrived from the "new posts" pill: slides down into place, with a ring that fades. */
+@utility motion-arrive {
+  position: relative;
+  animation: cm-arrive 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-card);
+    box-shadow:
+      0 0 0 2px var(--color-primary-light),
+      0 0 0 6px color-mix(in srgb, var(--color-primary-light) 14%, transparent);
+    pointer-events: none;
+    animation: cm-highlight 2200ms ease-out both;
+    animation-delay: inherit;
+  }
+}
+
+/* A card appended by infinite scroll: a gentle fade up. */
+@utility motion-fade-up {
+  animation: cm-fade-up 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Icon "pop" (reaction chosen, bookmark saved). */
+@utility motion-pop {
+  animation: cm-pop 420ms cubic-bezier(0.3, 0.7, 0.4, 1.4);
+}
+
+@utility motion-tick-up {
+  display: inline-block;
+  animation: cm-tick-up 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@utility motion-tick-down {
+  display: inline-block;
+  animation: cm-tick-down 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Rising element inside an illustration (sun over the horizon). */
+@utility motion-rise {
+  transform-box: fill-box;
+  animation: cm-rise 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@utility motion-twinkle {
+  animation: cm-twinkle 2400ms ease-in-out infinite;
+}
+
+/* Skeleton bone: one shimmer sweep shared by every bone on screen (fixed attachment). */
+@utility motion-shimmer {
+  background-color: var(--color-muted);
+  background-image: linear-gradient(
+    100deg,
+    var(--color-muted) 30%,
+    var(--color-card) 50%,
+    var(--color-muted) 70%
+  );
+  background-size: 200% 100%;
+  background-attachment: fixed;
+  animation: cm-shimmer 1600ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-arrive,
+  .motion-fade-up,
+  .motion-tick-up,
+  .motion-tick-down,
+  .motion-rise {
+    animation-name: cm-fade-in;
+    animation-duration: 200ms;
+    transform: none;
+  }
+  .motion-arrive::after {
+    animation-duration: 1600ms;
+    box-shadow: 0 0 0 2px var(--color-primary-light);
+  }
+  .motion-pop,
+  .motion-twinkle,
+  .motion-shimmer {
+    animation: none;
+  }
+}

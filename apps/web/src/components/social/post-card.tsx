@@ -2,20 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { PostView } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
+import { confetti, pop } from "@/components/motion";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog, UnblockHint } from "./confirm-dialog";
 import { absoluteUrl, postHref } from "./links";
 import { Menu, type MenuItem } from "./menu";
 import { PostAttachments } from "./post-attachments";
-import { AuthorName, LinkPreviewCard, MemberAvatar, PostCounts, RepostEmbed, TimeAgo } from "./post-parts";
+import { AuthorName, LinkPreviewCard, MemberAvatar, PostCounts, PostTypeChip, RepostEmbed, TimeAgo } from "./post-parts";
 import { PostPoll } from "./post-poll";
 import { ArticleCover, ArticlePreview } from "./post-types/article";
 import { CelebrationBand } from "./post-types/celebration";
 import { onQuestionChange } from "./post-types/events";
+import { postTypeAccent } from "./post-types/meta";
 import { Markdown } from "./post-types/markdown";
 import { PostEditForm } from "./post-types/post-edit-form";
 import { QuestionFooterNote, QuestionLabel } from "./post-types/question";
@@ -72,6 +74,8 @@ export function PostCard({
   const [modal, setModal] = useState<Modal>(null);
   const [editing, setEditing] = useState(false);
   const [gone, setGone] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
+  const bookmarkIconRef = useRef<HTMLSpanElement>(null);
 
   // The answers list on the post page reports best-answer changes.
   useEffect(
@@ -94,6 +98,7 @@ export function PostCard({
   async function toggleBookmark() {
     const next = !bookmarked;
     setBookmarked(next);
+    if (next) pop(bookmarkIconRef.current, { scale: 1.25, duration: 380 });
     try {
       await api("/bookmarks", { method: next ? "PUT" : "DELETE", body: { targetType: "post", targetId: post.id } });
       toast.success(next ? "Saved to your bookmarks" : "Removed from your bookmarks");
@@ -198,14 +203,20 @@ export function PostCard({
           )}
         </p>
       </div>
+      <PostTypeChip type={post.type} className="mt-0.5" />
       <Menu label={`More options for ${subject}`} items={menu} />
     </header>
   );
 
   return (
     <article
+      ref={cardRef}
       aria-labelledby={`${id}-author`}
-      className={cn("flex w-full flex-col gap-[14px] rounded-card border bg-card p-5 max-sm:px-4", moderated ? "border-error/40" : "border-line")}
+      className={cn(
+        "flex w-full flex-col gap-[14px] rounded-card border bg-card p-5 max-sm:px-4",
+        moderated ? "border-error/40" : "border-line",
+        postTypeAccent[post.type]?.line,
+      )}
     >
       {post.pinned && (
         <p className="flex items-center gap-1.5 text-label text-accent-hover">
@@ -318,6 +329,11 @@ export function PostCard({
           onChange={setReactions}
           subject={subject}
           primary={post.celebration ? { kind: "support", label: "Congratulate", activeLabel: "Congratulated", icon: "flame" } : undefined}
+          onReacted={
+            post.celebration
+              ? (kind) => kind === "support" && confetti(cardRef.current?.querySelector("[data-milestone-banner]"))
+              : undefined
+          }
         />
         {detail ? (
           <a href="#add-comment" className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary">
@@ -355,7 +371,9 @@ export function PostCard({
             bookmarked ? "text-primary" : "text-secondary",
           )}
         >
-          <Icon name="bookmark" size={18} />
+          <span ref={bookmarkIconRef} className="flex">
+            <Icon name="bookmark" size={18} fill={bookmarked ? "currentColor" : "none"} className="transition-[fill] duration-200" />
+          </span>
           <span className="max-sm:sr-only">{bookmarked ? "Saved" : "Save"}</span>
           <span className="sr-only"> {subject}</span>
         </button>

@@ -53,16 +53,19 @@ export async function seedMembers(db: Db): Promise<Record<string, string>> {
   const ids: Record<string, string> = {};
   const roleRows = await db.select().from(s.roles);
   const versions = SETTING_DEFAULTS.policy_versions;
+  const sectorRows = await db.select({ id: s.sectors.id, name: s.sectors.name }).from(s.sectors);
   for (const m of MEMBERS) {
+    const joinedAt = new Date(Date.now() - m.joinedDaysAgo * 86_400_000);
     const [u] = await db
       .insert(s.users)
       .values({
         email: m.email,
         passwordHash,
         status: 'active',
-        emailVerifiedAt: new Date(),
+        emailVerifiedAt: joinedAt,
         isStaff: !!m.staff,
         verifiedAt: m.verified || m.staff ? new Date() : null,
+        createdAt: joinedAt,
       })
       .onConflictDoNothing()
       .returning({ id: s.users.id });
@@ -83,9 +86,17 @@ export async function seedMembers(db: Db): Promise<Record<string, string>> {
         avatarTone: m.tone,
         fieldVisibility: { ...DEFAULT_FIELD_VISIBILITY },
         onboardingStep: 4,
-        onboardingCompletedAt: new Date(),
+        onboardingCompletedAt: joinedAt,
+        createdAt: joinedAt,
       })
       .onConflictDoNothing();
+    const sectorIds = (m.sectors ?? []).map((name) => sectorRows.find((r) => r.name === name)?.id).filter((x): x is string => !!x);
+    if (sectorIds.length) {
+      await db
+        .insert(s.profileSectors)
+        .values(sectorIds.map((itemId) => ({ userId: id, itemId })))
+        .onConflictDoNothing();
+    }
     await db
       .insert(s.consentRecords)
       .values((['terms', 'privacy', 'guidelines'] as const).map((p) => ({ userId: id, policyType: p, policyVersion: versions[p] })))

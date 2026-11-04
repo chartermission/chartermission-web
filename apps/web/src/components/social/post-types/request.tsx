@@ -127,7 +127,7 @@ export function RequestBlock({
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-label text-primary shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]">
           <Icon name="search" size={13} className="text-accent" />
-          Looking for · {meta.label}
+          {meta.label}
         </span>
         <span
           className={cn(

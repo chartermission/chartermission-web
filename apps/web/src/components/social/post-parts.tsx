@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
 import { Avatar, Icon, cn } from "@chartermission/ui";
+import { TickNumber } from "@/components/motion";
 import { absoluteDateTime, relativeTime } from "./format";
 import { memberHref, postHref } from "./links";
+import { postTypeAccent, postTypeMeta } from "./post-types/meta";
 import { RichText } from "./rich-text";
 
 /** Name with verified tick and staff badge. */
@@ -133,7 +135,7 @@ export function PostCounts({ post, total, breakdown }: { post: PostView; total: 
               ))}
             </span>
             <span>
-              {total} reaction{total === 1 ? "" : "s"}
+              <TickNumber value={total} /> reaction{total === 1 ? "" : "s"}
               <span className="sr-only">
                 {" "}
                 ({used.map((kind) => `${breakdown[kind]} ${kind}`).join(", ")})
@@ -148,5 +150,19 @@ export function PostCounts({ post, total, breakdown }: { post: PostView; total: 
         </Link>
       )}
     </p>
+  );
+}
+
+/** Small "Question" / "Celebration" / "Looking for" / "Article" chip in the post type's accent. Nothing for standard posts. */
+export function PostTypeChip({ type, className }: { type: PostView["type"]; className?: string }) {
+  const accent = postTypeAccent[type];
+  if (!accent) return null;
+  const meta = postTypeMeta[type];
+  return (
+    // On phones the chip shrinks to its icon (the label stays for screen readers and as a tooltip).
+    <span title={meta.badge} className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-label max-sm:size-6 max-sm:justify-center max-sm:p-0", accent.chip, className)}>
+      <Icon name={meta.icon} size={13} className={accent.icon} />
+      <span className="max-sm:sr-only">{meta.badge}</span>
+    </span>
   );
 }

@@ -1,5 +1,11 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Icon, Panel, cn, type IconName } from "@chartermission/ui";
+import { Illustration, illustrationForIcon, type IllustrationName } from "@/components/illustrations";
+
+/** One placeholder shape with the shared shimmer sweep (static under reduced motion). */
+export function Bone({ className, style }: { className?: string; style?: CSSProperties }) {
+  return <span className={cn("motion-shimmer block rounded", className)} style={style} />;
+}
 
 /**
  * Loading placeholders shown while URL- or session-dependent content streams in.
@@ -8,9 +14,9 @@ import { Icon, Panel, cn, type IconName } from "@chartermission/ui";
 export function PanelSkeleton({ className, lines = 3 }: { className?: string; lines?: number }) {
   return (
     <Panel aria-hidden="true" className={cn("flex flex-col gap-3 p-5", className)}>
-      <span className="h-5 w-2/5 animate-pulse rounded bg-muted" />
+      <Bone className="h-5 w-2/5" />
       {Array.from({ length: lines }, (_, index) => (
-        <span key={index} className="h-3.5 animate-pulse rounded bg-muted" style={{ width: `${90 - index * 15}%` }} />
+        <Bone key={index} className="h-3.5" style={{ width: `${90 - index * 15}%` }} />
       ))}
     </Panel>
   );
@@ -20,17 +26,21 @@ export function PostSkeleton() {
   return (
     <Panel aria-hidden="true" className="flex h-[220px] flex-col gap-3.5 p-5">
       <div className="flex items-center gap-3">
-        <span className="size-10 animate-pulse rounded-full bg-muted" />
+        <Bone className="size-10 shrink-0 rounded-full" />
         <span className="flex flex-1 flex-col gap-1.5">
-          <span className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-          <span className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+          <Bone className="h-4 w-1/3" />
+          <Bone className="h-3 w-1/2" />
         </span>
       </div>
-      <span className="h-3.5 w-[92%] animate-pulse rounded bg-muted" />
-      <span className="h-3.5 w-[80%] animate-pulse rounded bg-muted" />
-      <span className="h-3.5 w-[60%] animate-pulse rounded bg-muted" />
+      <Bone className="h-3.5 w-[92%]" />
+      <Bone className="h-3.5 w-[80%]" />
+      <Bone className="h-3.5 w-[60%]" />
       <span className="mt-auto h-px w-full bg-line" />
-      <span className="h-5 w-full animate-pulse rounded bg-muted" />
+      <span className="flex items-center justify-between">
+        {[0, 1, 2, 3, 4].map((index) => (
+          <Bone key={index} className="h-5 w-16 max-sm:w-10" />
+        ))}
+      </span>
     </Panel>
   );
 }
@@ -43,25 +53,36 @@ export function LoadingStatus({ label }: { label: string }) {
   );
 }
 
-/** Empty state panel with an icon, title, text and optional actions. */
+/**
+ * Empty state panel with an illustration (or icon), title, text and optional actions.
+ * The illustration defaults from `icon` (see illustrationForIcon); pass `illustration`
+ * to choose one, or `illustration={false}` for the small icon bubble.
+ */
 export function EmptyState({
   icon = "hash",
+  illustration,
   title,
   children,
   actions,
   className,
 }: {
   icon?: IconName;
+  illustration?: IllustrationName | false;
   title: string;
   children?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }) {
+  const art = illustration === false ? undefined : (illustration ?? illustrationForIcon[icon]);
   return (
-    <Panel className={cn("flex flex-col items-center gap-2 px-6 py-10 text-center", className)}>
-      <span className="flex size-11 items-center justify-center rounded-full bg-primary-tint-2 text-primary-light">
-        <Icon name={icon} size={22} />
-      </span>
+    <Panel className={cn("flex flex-col items-center gap-2 px-6 py-10 text-center", art && "pt-8", className)}>
+      {art ? (
+        <Illustration name={art} size={120} className="mb-1" />
+      ) : (
+        <span className="flex size-11 items-center justify-center rounded-full bg-primary-tint-2 text-primary-light">
+          <Icon name={icon} size={22} />
+        </span>
+      )}
       <p className="text-md font-medium text-ink">{title}</p>
       {children && <div className="max-w-sm text-sm text-secondary">{children}</div>}
       {actions && <div className="mt-2 flex flex-wrap justify-center gap-2">{actions}</div>}

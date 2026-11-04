@@ -195,6 +195,9 @@ export const memberProfiles = pgTable(
     connectionRequestsFrom: text('connection_requests_from').notNull().default('members'),
     onboardingStep: integer('onboarding_step').notNull().default(0),
     onboardingCompletedAt: ts('onboarding_completed_at'),
+    /** Home feed visits (GET /home/welcome): the current visit and the one before it. */
+    homeSeenAt: ts('home_seen_at'),
+    homePrevSeenAt: ts('home_prev_seen_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

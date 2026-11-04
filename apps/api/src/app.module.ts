@@ -13,6 +13,7 @@ import { MediaModule } from './media/media.module.js';
 import { PostsModule } from './posts/posts.module.js';
 import { TopicsModule } from './topics/topics.module.js';
 import { FeedModule } from './feed/feed.module.js';
+import { HomeModule } from './home/home.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ModerationModule } from './moderation/moderation.module.js';
 import { AdminModule } from './admin/admin.module.js';
@@ -28,6 +29,7 @@ import { AdminModule } from './admin/admin.module.js';
     PostsModule,
     TopicsModule,
     FeedModule,
+    HomeModule,
     NotificationsModule,
     ModerationModule,
     AdminModule,

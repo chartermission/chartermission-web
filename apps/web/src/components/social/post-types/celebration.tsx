@@ -1,13 +1,21 @@
 import type { CelebrationDetails } from "@chartermission/contracts";
 import { Icon } from "@chartermission/ui";
+import { BrandPattern } from "@/components/illustrations";
 import { celebrationMeta } from "./meta";
 
-/** Header band for a celebration: category, headline and organisation above the story. */
+/**
+ * Header band for a celebration: category, headline and organisation above the story.
+ * `data-milestone-banner` marks it as the origin of the congratulate confetti (PostCard).
+ */
 export function CelebrationBand({ celebration, headingLevel = 3 }: { celebration: CelebrationDetails; headingLevel?: 2 | 3 }) {
   const meta = celebrationMeta[celebration.category];
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
-    <div className="relative w-full overflow-hidden rounded-[10px] border border-accent/20 bg-linear-to-br from-accent-light via-warning-light to-primary-tint-2 px-5 py-4 max-sm:px-4">
+    <div
+      data-milestone-banner=""
+      className="relative w-full overflow-hidden rounded-[10px] border border-accent/20 bg-linear-to-br from-accent-light via-warning-light to-primary-tint-2 px-5 py-4 max-sm:px-4"
+    >
+      <BrandPattern tone="text-accent-hover" opacity={0.11} fade="right" />
       <span aria-hidden="true" className="pointer-events-none absolute inset-0">
         <span className="absolute right-6 top-3 size-2 rotate-12 rounded-[2px] bg-accent/50" />
         <span className="absolute right-14 top-8 size-1.5 rounded-full bg-warning" />

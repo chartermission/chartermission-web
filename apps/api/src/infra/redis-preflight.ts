@@ -23,7 +23,7 @@ export async function checkRedis(): Promise<void> {
   try {
     await client.connect();
     const reply = await client.ping();
-    if (reply !== 'PONG') throw new Error(`unexpected reply ${reply}`);
+    if (reply !== 'PONG') throw new Error(`unexpected reply ${String(reply)}`);
   } catch (error) {
     const cause = lastError ?? error;
     const message = (cause instanceof Error ? cause.message : String(cause)).replace(/\.+$/, '');

@@ -3,14 +3,10 @@ import type { PostView } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
 import { postHref } from "../links";
 
-/** "Question · Answered/Unanswered" row shown above a question's text. */
+/** "Answered/Unanswered" status shown above a question's text (the card header already says "Question"). */
 export function QuestionLabel({ question }: { question: NonNullable<PostView["question"]> }) {
   return (
     <p className="flex flex-wrap items-center gap-2">
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-info-light px-2.5 py-1 text-label text-info">
-        <Icon name="lightbulb" size={14} />
-        Question
-      </span>
       <span
         className={cn(
           "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-label",

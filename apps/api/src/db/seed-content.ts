@@ -8,6 +8,9 @@ import { attachHashtags } from '../posts/hashtags.js';
 import { parseHashtags, parseMentions } from '../posts/text-parse.js';
 import { computeTrending } from '../topics/trending.js';
 import { createStorage } from '../media/storage.js';
+import { DAILY_PROMPT_TAG } from '@chartermission/contracts';
+import { promptFor } from '../home/prompts.js';
+import { ARTICLES, PROMPT_ANSWERS } from './seed-home.js';
 
 /*
  * Demo content for the feed, post detail, topic and trending screens, converted from
@@ -523,6 +526,79 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
     },
   ]);
 
+  /* ---------- Home feed character: articles, daily prompt, new members, chapters ---------- */
+
+  // Avatars for a few members (the rest keep their tone initials), so welcome nudges differ per account.
+  for (const [key, initials, colors] of [
+    ['amara', 'AO', ['#b4532a', '#f2b36b']],
+    ['kwame', 'KM', ['#1f6f50', '#8fd1a5']],
+    ['leila', 'LB', ['#244c8f', '#8fb4e8']],
+    ['tunde', 'TB', ['#7a4b12', '#e8b75e']],
+    ['kofi', 'KA', ['#5b2d7a', '#d29be8']],
+  ] as [Key, string, [string, string]][]) {
+    const fileId = await storeDemoImage(db, uid(key), 'avatar', initials, { width: 400, height: 400, colors, initials });
+    if (fileId) await db.update(s.memberProfiles).set({ avatarFileId: fileId }).where(eq(s.memberProfiles.userId, uid(key)));
+  }
+
+  // Chapter follows (the first one followed is a member's main chapter).
+  const chapterFollows: [Key, string, number][] = [
+    ['amara', 'lagos', 200], ['tunde', 'lagos', 2], ['ngozi', 'lagos', 5], ['aisha', 'abuja', 250],
+    ['kwame', 'accra', 180], ['kofi', 'accra', 7], ['wanjiru', 'nairobi', 200], ['zainab', 'nairobi', 9],
+    ['thabo', 'johannesburg', 150], ['fatou', 'dakar', 140], ['yohannes', 'addis-ababa', 100],
+  ];
+  await db
+    .insert(s.follows)
+    .values(
+      chapterFollows.map(([who, slug, daysAgo]) => ({
+        followerId: uid(who),
+        targetType: 'chapter',
+        targetId: chapter(slug)!,
+        createdAt: new Date(now - daysAgo * 24 * H),
+      })),
+    )
+    .onConflictDoNothing();
+
+  // New members introduce themselves in their chapters (Tunde has not posted yet: "Share your first update").
+  const ngoziHello = await post(
+    'ngozi',
+    'Hello Lagos chapter! I run paid apprenticeships that place young people in agribusiness and logistics roles. If your company could host an apprentice for six months, I would love to talk. #YouthEmployment',
+    22 * H,
+    { chapter: 'lagos' },
+  );
+  for (const who of ['amara', 'kwame', 'tunde', 'aisha'] as Key[]) await react('post', ngoziHello, who, 'support');
+  await comment(ngoziHello, 'amara', 'Welcome Ngozi! Lagos AgriHub hosts apprentices every quarter — let’s talk this week.', 20 * H);
+  const kofiHello = await post(
+    'kofi',
+    'Hi everyone, just joined from Kumasi. I develop solar mini-grids for market towns and I am keen to meet anyone working on productive-use financing. #CleanEnergy',
+    3 * 24 * H,
+    { chapter: 'accra' },
+  );
+  for (const who of ['thabo', 'kwame'] as Key[]) await react('post', kofiHello, who, 'like');
+  await comment(kofiHello, 'thabo', 'Welcome Kofi! Happy to compare notes on tariffs — our village grids use a similar model.', 3 * 24 * H - 2 * H);
+
+  // Today's daily prompt, answered by a few members (placed earlier today in UTC).
+  const prompt = promptFor(new Date(now));
+  const sinceMidnight = now - Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
+  const answers = PROMPT_ANSWERS[prompt.id] ?? [];
+  for (const [i, [who, text]] of answers.entries()) {
+    const ago = Math.min([5 * H, 3 * H, 50 * 60_000][i] ?? H, sinceMidnight * [0.8, 0.5, 0.2][i]!);
+    const answer = await post(who, `${text}\n\n#${DAILY_PROMPT_TAG}`, ago);
+    for (const fan of (['amara', 'leila', 'chinedu'] as Key[]).filter((k) => k !== who).slice(0, 2 - (i % 2))) await react('post', answer, fan, 'like');
+  }
+
+  // Articles from several authors over the last month, with covers, so the hub's featured,
+  // popular and latest lists all differ.
+  for (const a of ARTICLES) {
+    const id = await post(a.author, `${a.body.trim()}\n\n${a.tags.map((t) => `#${t}`).join(' ')}`, a.daysAgo * 24 * H, {
+      type: 'article',
+      details: { title: a.title, subtitle: a.subtitle },
+    });
+    const fileId = await storeDemoImage(db, uid(a.author), 'post_image', a.cover, { width: 1200, height: 675, colors: a.colors });
+    if (fileId) await db.insert(s.postAttachments).values({ postId: id, fileId, kind: 'image', position: 0, alt: a.alt });
+    for (const [who, kind] of a.reactions) await react('post', id, who, kind);
+    for (const [i, [who, text]] of a.comments.entries()) await comment(id, who, text, a.daysAgo * 24 * H - (i + 1) * 3 * H);
+  }
+
   /* ---------- Hashtag descriptions and follows ---------- */
 
   for (const [tag, description] of Object.entries(TOPIC_DESCRIPTIONS)) {
@@ -558,37 +634,57 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
   console.log(`Seeded ${n} demo posts, comments, reactions, polls, bookmarks, follows and trending.`);
 }
 
-/** A generated placeholder photo for the Kigali post (stored clean, members-only). */
+/** A generated placeholder photo for a post (stored clean, members-only). */
 async function attachDemoImage(db: Db, postId: string, ownerId: string, label: string) {
+  const fileId = await storeDemoImage(db, ownerId, 'post_image', label, { width: 1200, height: 675, colors: ['#0f5c4d', '#d98b2b'] });
+  if (fileId) await db.insert(s.postAttachments).values({ postId, fileId, kind: 'image', position: 0 });
+}
+
+/**
+ * Renders a gradient JPEG (a caption bottom-left, or centred initials for avatars), stores it
+ * as a clean file owned by `ownerId` and returns its id (null when image rendering is unavailable).
+ */
+async function storeDemoImage(
+  db: Db,
+  ownerId: string,
+  purpose: 'post_image' | 'avatar',
+  label: string,
+  opts: { width: number; height: number; colors: [string, string]; initials?: string },
+): Promise<string | null> {
   try {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
-      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f5c4d"/><stop offset="1" stop-color="#d98b2b"/></linearGradient></defs>
-      <rect width="1200" height="675" fill="url(#g)"/>
-      <text x="60" y="610" font-family="sans-serif" font-size="40" fill="#ffffff">${label.replace(/[<&>]/g, '')}</text></svg>`;
+    const { width, height, colors } = opts;
+    const text = (opts.initials ?? label).replace(/[<&>]/g, '');
+    const caption = opts.initials
+      ? `<text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="${Math.round(height * 0.38)}" fill="#ffffff">${text}</text>`
+      : `<text x="60" y="${height - 65}" font-family="sans-serif" font-size="40" fill="#ffffff">${text}</text>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${colors[0]}"/><stop offset="1" stop-color="${colors[1]}"/></linearGradient></defs>
+      <rect width="${width}" height="${height}" fill="url(#g)"/>${caption}</svg>`;
     const data = await sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toBuffer();
     const storage = createStorage();
     const [file] = await db
       .insert(s.files)
       .values({
         ownerId,
-        purpose: 'post_image',
+        purpose,
         storageKey: 'pending',
-        originalName: `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.jpg`,
+        originalName: `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'image'}.jpg`,
         declaredMime: 'image/jpeg',
         mime: 'image/jpeg',
         sizeBytes: data.length,
         sha256: createHash('sha256').update(data).digest('hex'),
-        width: 1200,
-        height: 675,
+        width,
+        height,
         scanStatus: 'clean',
         attachedAt: new Date(),
       })
       .returning();
-    const key = `uploads/post_image/${file!.id}`;
+    const key = `uploads/${purpose}/${file!.id}`;
     await storage.write(key, data, 'image/jpeg');
     await db.update(s.files).set({ storageKey: key }).where(eq(s.files.id, file!.id));
-    await db.insert(s.postAttachments).values({ postId, fileId: file!.id, kind: 'image', position: 0 });
+    return file!.id;
   } catch (err) {
-    console.warn(`Skipped the demo image: ${String(err)}`);
+    console.warn(`Skipped a demo image: ${String(err)}`);
+    return null;
   }
 }

@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactionKind, ReactionState } from "@chartermission/contracts";
 import { Icon, cn, type IconName } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
+import { TickNumber, burst, pop } from "@/components/motion";
 import { Menu } from "./menu";
 import { toast } from "./toast";
 
-export const reactionMeta: Record<ReactionKind, { label: string; icon: IconName; color: string }> = {
-  like: { label: "Like", icon: "like", color: "text-primary-light" },
-  insightful: { label: "Insightful", icon: "lightbulb", color: "text-warning" },
-  support: { label: "Support", icon: "users", color: "text-success" },
+/** `color` is the text class of the chosen button; `tone` the same colour for motion effects. */
+export const reactionMeta: Record<ReactionKind, { label: string; icon: IconName; color: string; tone: string }> = {
+  like: { label: "Like", icon: "like", color: "text-primary-light", tone: "var(--color-primary-light)" },
+  insightful: { label: "Insightful", icon: "lightbulb", color: "text-warning", tone: "var(--color-warning)" },
+  support: { label: "Support", icon: "users", color: "text-success", tone: "var(--color-success)" },
 };
 
 export const reactionKinds = Object.keys(reactionMeta) as ReactionKind[];
@@ -48,6 +50,7 @@ export function ReactionButton({
   compact = false,
   subject,
   primary,
+  onReacted,
 }: {
   targetType: "post" | "comment";
   targetId: string;
@@ -58,13 +61,22 @@ export function ReactionButton({
   subject: string;
   /** Main button action other than "Like", e.g. celebrations: "Congratulate" (support). */
   primary?: { kind: ReactionKind; label: string; activeLabel: string; icon?: IconName };
+  /** The viewer added or switched to `kind` (not called on removal), e.g. for confetti. */
+  onReacted?: (kind: ReactionKind) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const iconRef = useRef<HTMLSpanElement>(null);
 
   async function set(next: ReactionKind | null) {
     if (busy) return;
     const previous = state;
     onChange(applyLocal(state, next));
+    if (next && next !== previous.reaction) {
+      // Decorative only: both are no-ops under prefers-reduced-motion.
+      pop(iconRef.current);
+      burst(iconRef.current, compact ? { colors: [reactionMeta[next].tone], count: 6, radius: 15, size: 3 } : { colors: [reactionMeta[next].tone] });
+      onReacted?.(next);
+    }
     setBusy(true);
     try {
       const result = await api<ReactionState>("/reactions", {
@@ -95,10 +107,16 @@ export function ReactionButton({
         onClick={() => set(state.reaction ? null : (primary?.kind ?? "like"))}
         className={cn(base, "hover:bg-muted", current ? current.color : "text-secondary hover:text-primary")}
       >
-        <Icon name={current?.icon ?? idle.icon} size={compact ? 14 : 18} />
+        <span ref={iconRef} className="flex">
+          <Icon name={current?.icon ?? idle.icon} size={compact ? 14 : 18} />
+        </span>
         {current?.label ?? idle.label}
         <span className="sr-only"> {subject}</span>
-        {compact && state.total > 0 && <span className="text-secondary">· {state.total}</span>}
+        {compact && state.total > 0 && (
+          <span className="text-secondary">
+            · <TickNumber value={state.total} />
+          </span>
+        )}
       </button>
       <Menu
         label={`Choose a reaction for ${subject}`}
