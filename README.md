@@ -35,9 +35,12 @@ Next apps: both proxy `/api/v1/*` to the API (`API_INTERNAL_URL`), so session co
 Run one app: `pnpm dev:web`, `pnpm dev:admin` or `pnpm dev:api`. Reset demo data with
 `pnpm --filter @chartermission/api db:reset`.
 
-The Docker PostgreSQL listens on port **5433** (not 5432), so it never clashes with a Homebrew or Postgres.app server
-on the same machine. In development the API checks the database when it starts and logs what to run if it is
-unreachable, empty or behind on migrations; unexpected errors also show their real cause on the page.
+The Docker PostgreSQL listens on port **55432** (not 5432), so it doesn't clash with other PostgreSQL servers on the
+same machine (Homebrew, Postgres.app or other projects' containers). If 55432 is taken too, start Docker with another
+port and point the API at it: `CM_POSTGRES_PORT=55433 docker compose up -d` and
+`DATABASE_URL=postgres://postgres@localhost:55433/chartermission` in `apps/api/.env`. In development the API checks the
+database when it starts and logs what to run if it is unreachable, empty or behind on migrations; unexpected errors also
+show their real cause on the page.
 
 ### Demo accounts
 

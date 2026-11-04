@@ -7,7 +7,7 @@ services:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_DB: chartermission
     ports:
-      - "5433:5432"
+      - "${CM_POSTGRES_PORT:-55432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./apps/api/docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
