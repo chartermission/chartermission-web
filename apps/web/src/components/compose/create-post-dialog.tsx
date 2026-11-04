@@ -1,20 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { POST_MAX_CHARS, type CreatePostInput, type PostView } from "@chartermission/contracts";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type SyntheticEvent } from "react";
+import type { DraftView, PostType, PostView } from "@chartermission/contracts";
 import { Avatar, Button, Divider, Icon, cn, type IconName } from "@chartermission/ui";
 import { api, ApiError } from "@/lib/api/client";
 import { ErrorNotice } from "@/components/social/errors";
+import { absoluteDateTime } from "@/components/social/format";
+import { postTypeMeta } from "@/components/social/post-types/meta";
+import { toast } from "@/components/social/toast";
 import { can, type Viewer } from "@/components/social/viewer";
+import { ArticleEditor } from "./article-editor";
 import { AttachmentPicker, useAttachments } from "./attachments";
 import { ComposeEditor } from "./compose-editor";
-import { MIN_POLL_OPTIONS, PollBuilder, emptyPoll, type PollDraft } from "./poll-builder";
+import {
+  fieldsFromDraft,
+  focusFirstInvalid,
+  hasContent,
+  initialFields,
+  mapServerFields,
+  maxBodyFor,
+  toComposition,
+  toDraftPayload,
+  validate,
+  type ComposerFields,
+  type FieldErrors,
+  type Visibility,
+} from "./composition";
+import { PollBuilder, emptyPoll } from "./poll-builder";
+import { PostTypeSwitcher } from "./post-type-switcher";
+import { ScheduleDialog, scheduleLabel } from "./schedule-dialog";
+import { CelebrationForm, FieldError, RequestForm } from "./type-fields";
+import { useDraftSync } from "./use-draft";
 
 export type ComposeTool = "photo" | "document" | "link" | "poll" | "topic" | "mention";
-
-type Visibility = CreatePostInput["visibility"];
-
-type Errors = { text?: string; poll?: string; link?: string; files?: string };
 
 const visibilityOptions: { value: Visibility; label: string; icon: IconName; hint: string }[] = [
   { value: "members", label: "Members", icon: "users", hint: "Signed-in Charter Mission members" },
@@ -30,6 +48,26 @@ const toolButtons: { tool: ComposeTool; icon: IconName; label: string; color: st
   { tool: "mention", icon: "at", label: "Mention someone", color: "text-primary-light" },
 ];
 
+/** Tools each post type offers (articles keep their cover in the form, links inline). */
+const toolsFor: Record<PostType, ComposeTool[]> = {
+  standard: ["photo", "document", "link", "poll", "topic", "mention"],
+  question: ["photo", "document", "link", "topic", "mention"],
+  celebration: ["photo", "document", "link", "topic", "mention"],
+  request: ["photo", "document", "link", "topic", "mention"],
+  article: ["topic", "mention"],
+};
+
+const bodyCopy: Record<Exclude<PostType, "article">, { label: string; placeholder: string; hint?: string }> = {
+  standard: { label: "Post text", placeholder: "Share an update, ask a question or start a poll… Use # for topics and @ to mention" },
+  question: {
+    label: "Your question",
+    placeholder: "What would you like to ask? e.g. Has anyone registered a company in Rwanda remotely?",
+    hint: "Ask one clear question, with any context members need. Answers go in the comments, and you can mark the best one.",
+  },
+  celebration: { label: "The story", placeholder: "Tell the story — who helped, what it took, what’s next… (optional)" },
+  request: { label: "Details", placeholder: "Add the details — what you need, what you can offer, how to get in touch… (optional)" },
+};
+
 const firstUrl = (text: string) => /https?:\/\/[^\s<>"'`]+/i.exec(text)?.[0]?.replace(/[.,;:!?)\]]+$/, "") ?? null;
 
 function domainOf(url: string) {
@@ -40,80 +78,92 @@ function domainOf(url: string) {
   }
 }
 
-function validate(text: string, poll: PollDraft | null, link: string | null, files: { busy: boolean; rejected: boolean; count: number }): Errors {
-  const errors: Errors = {};
-  const body = text.trim();
-  if (!body && files.count === 0) errors.text = "Write something or attach a file.";
-  else if (body.length > POST_MAX_CHARS) errors.text = `Posts can be up to ${POST_MAX_CHARS.toLocaleString("en-US")} characters.`;
-  if (poll) {
-    const options = poll.options.map((option) => option.trim()).filter(Boolean);
-    if (!poll.question.trim()) errors.poll = "Add a question for your poll.";
-    else if (options.length < MIN_POLL_OPTIONS) errors.poll = `Add at least ${MIN_POLL_OPTIONS} options.`;
-    else if (new Set(options.map((option) => option.toLowerCase())).size !== options.length) errors.poll = "Each option must be different.";
-  }
-  if (link !== null && link.trim()) {
-    try {
-      const url = new URL(link.trim());
-      if (!/^https?:$/.test(url.protocol)) throw new Error("protocol");
-    } catch {
-      errors.link = "Enter a full web address starting with https://";
-    }
-  }
-  if (files.busy) errors.files = "Wait for your files to finish uploading.";
-  else if (files.rejected) errors.files = "Remove the files that couldn’t be accepted.";
-  return errors;
-}
-
 /**
- * Create post dialog — Figma "Web / Create post — modal" (node 19:2951), wired to
- * POST /posts with uploads, poll, link, hashtags/mentions, visibility and (for the
- * platform team) the announcement option. Mount it to open; it calls onClose when dismissed.
+ * Create post dialog — Figma "Web / Create post — modal" (node 19:2951), extended with
+ * post types (Post, Ask, Celebrate, Looking for, Article), alt text, autosaved drafts and
+ * scheduling. Mount it to open; it calls onClose when dismissed.
+ *
+ * With `draft`, it opens pre-filled from a saved draft or scheduled post and keeps saving
+ * to it; `onDraftChange` hears every save (and null once it is published or deleted).
  */
 export function CreatePostDialog({
   viewer,
   initialTool,
+  initialType,
+  draft,
   onClose,
   onPosted,
+  onDraftChange,
 }: {
   viewer: Viewer;
   initialTool?: ComposeTool;
+  initialType?: PostType;
+  draft?: DraftView;
   onClose: () => void;
   onPosted: (post: PostView) => void;
+  onDraftChange?: (draft: DraftView | null) => void;
 }) {
   const id = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const openerRef = useRef<Element | null>(null);
   const suggestionsOpenRef = useRef(false);
-  const attachments = useAttachments();
+  /** Set once the composer's job is done (posted, scheduled, discarded) so closing says nothing. */
+  const finishedRef = useRef(false);
+  const attachments = useAttachments(draft ? { files: draft.attachments, altTexts: draft.payload.altTexts } : undefined);
 
   const startText = initialTool === "topic" ? "#" : initialTool === "mention" ? "@" : "";
-  const [text, setText] = useState(startText);
-  const [caret, setCaret] = useState(startText.length);
-  const [visibility, setVisibility] = useState<Visibility>("members");
-  const [announcement, setAnnouncement] = useState(false);
-  const [poll, setPoll] = useState<PollDraft | null>(initialTool === "poll" ? emptyPoll() : null);
-  const [link, setLink] = useState<string | null>(initialTool === "link" ? "" : null);
+  const [fields, setFields] = useState<ComposerFields>(() => {
+    if (draft) return fieldsFromDraft(draft.payload);
+    const base = initialFields(initialType);
+    return { ...base, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
+  });
+  const [caret, setCaret] = useState(fields.text.length);
   const [fileMode, setFileMode] = useState<"image" | "document" | null>(
     initialTool === "photo" ? "image" : initialTool === "document" ? "document" : null,
   );
   const [submitted, setSubmitted] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"post" | "schedule" | "unschedule" | null>(null);
   const [serverError, setServerError] = useState<unknown>(null);
-  const [serverFields, setServerFields] = useState<Errors>({});
+  const [serverFields, setServerFields] = useState<FieldErrors>({});
+  const [scheduling, setScheduling] = useState(false);
+  const [notice, setNotice] = useState("");
 
-  const fileState = { busy: attachments.busy, rejected: attachments.rejected, count: attachments.ids.length };
-  const local: Errors = submitted ? validate(text, poll, link, fileState) : {};
-  const errors: Errors = { ...serverFields, ...Object.fromEntries(Object.entries(local).filter(([, v]) => v)) };
+  const patch = (change: Partial<ComposerFields>) => {
+    setFields((current) => ({ ...current, ...change }));
+    if (Object.keys(serverFields).length) setServerFields({});
+  };
+
+  const { type } = fields;
+  const ready = attachments.ready;
+  const fileState = { busy: attachments.busy, rejected: attachments.rejected, hasDocument: attachments.hasDocument };
+  const allErrors = validate(fields, ready, fileState);
+  const valid = Object.keys(allErrors).length === 0;
+  const errors: FieldErrors = { ...serverFields, ...(submitted ? allErrors : {}) };
+  const content = hasContent(fields, attachments.items.length);
+  const payload = toDraftPayload(fields, ready);
+
+  const sync = useDraftSync({
+    draft,
+    payload,
+    autosave: content && !busy && !attachments.busy,
+    valid,
+    onDraftChange,
+  });
+  const saved = sync.view;
+  const scheduled = saved?.status === "scheduled" ? saved : null;
+  const failed = saved?.status === "failed" ? saved : null;
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     openerRef.current = document.activeElement;
     if (!dialog.open) dialog.showModal();
-    const textarea = textareaRef.current;
-    textarea?.focus();
-    textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+    const target = dialog.querySelector<HTMLElement>("[data-autofocus]") ?? textareaRef.current;
+    target?.focus();
+    if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+      target.setSelectionRange(target.value.length, target.value.length);
+    }
     const { overflow } = document.documentElement.style;
     document.documentElement.style.overflow = "hidden";
     return () => {
@@ -123,7 +173,22 @@ export function CreatePostDialog({
 
   const close = useCallback(() => dialogRef.current?.close(), []);
 
-  function handleClose() {
+  function handleClose(event: SyntheticEvent<HTMLDialogElement>) {
+    if (event.target !== event.currentTarget) return;
+    if (!finishedRef.current) {
+      if (scheduled) {
+        if (sync.dirty && valid) {
+          sync.flush().then(() => toast.success("Scheduled post updated"), toast.error);
+        } else if (sync.dirty) {
+          toast.success("Your scheduled post wasn’t changed — the edits weren’t complete.");
+        }
+      } else if (content && (sync.dirty || !draft)) {
+        sync.flush().then(() => toast.success("Saved to drafts"), toast.error);
+      } else if (!content && saved && !draft) {
+        // Everything was cleared: don't leave an empty draft behind.
+        sync.remove().catch(() => undefined);
+      }
+    }
     const opener = openerRef.current;
     onClose();
     if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
@@ -137,15 +202,18 @@ export function CreatePostDialog({
     suggestionsOpenRef.current = open;
   }, []);
 
+  const maxBody = maxBodyFor(type);
+
   function insertAtCaret(trigger: "#" | "@") {
     const textarea = textareaRef.current;
+    const text = fields.text;
     const start = textarea?.selectionStart ?? caret;
     const end = textarea?.selectionEnd ?? caret;
     const before = text.slice(0, start);
     const insert = before && !/\s$/.test(before) ? ` ${trigger}` : trigger;
-    const next = (before + insert + text.slice(end)).slice(0, POST_MAX_CHARS);
+    const next = (before + insert + text.slice(end)).slice(0, maxBody);
     const nextCaret = Math.min(start + insert.length, next.length);
-    setText(next);
+    patch({ text: next });
     setCaret(nextCaret);
     requestAnimationFrame(() => {
       textarea?.focus();
@@ -156,73 +224,141 @@ export function CreatePostDialog({
   function onTool(tool: ComposeTool) {
     if (tool === "topic") return insertAtCaret("#");
     if (tool === "mention") return insertAtCaret("@");
-    if (tool === "poll") setPoll((current) => (current ? null : emptyPoll()));
-    if (tool === "link") setLink((current) => (current === null ? "" : null));
+    if (tool === "poll") patch({ poll: fields.poll ? null : emptyPoll() });
+    if (tool === "link") patch({ link: fields.link === null ? "" : null });
     if (tool === "photo") setFileMode((current) => (current === "image" && attachments.items.length === 0 ? null : "image"));
     if (tool === "document") setFileMode((current) => (current === "document" && attachments.items.length === 0 ? null : "document"));
   }
 
   const isActive = (tool: ComposeTool) =>
-    (tool === "poll" && poll !== null) ||
-    (tool === "link" && link !== null) ||
+    (tool === "poll" && fields.poll !== null) ||
+    (tool === "link" && fields.link !== null) ||
     (tool === "photo" && fileMode === "image") ||
     (tool === "document" && fileMode === "document");
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextErrors = validate(text, poll, link, fileState);
+  function changeType(next: PostType) {
+    patch({ type: next });
+    if (next === "article" && fileMode === "document" && attachments.items.length === 0) setFileMode(null);
+    setNotice(`${postTypeMeta[next].label} selected`);
+  }
+
+  /** Validate for posting or scheduling; focus the first problem. */
+  function checkReady(): boolean {
     setSubmitted(true);
     setServerFields({});
     setServerError(null);
-    if (Object.values(nextErrors).some(Boolean)) {
-      if (nextErrors.text) textareaRef.current?.focus();
-      else requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
-      return;
-    }
-    const input: Partial<CreatePostInput> = {
-      body: text.trim(),
-      attachmentIds: attachments.ids,
-      visibility,
-      kind: announcement ? "announcement" : "standard",
-    };
-    if (poll) {
-      input.poll = {
-        question: poll.question.trim(),
-        options: poll.options.map((o) => o.trim()).filter(Boolean),
-        durationHours: poll.duration,
-      };
-    }
-    if (link?.trim()) input.linkUrl = link.trim();
+    if (valid) return true;
+    requestAnimationFrame(() => focusFirstInvalid(dialogRef.current));
+    return false;
+  }
 
-    setBusy(true);
-    try {
-      const post = await api<PostView>("/posts", { method: "POST", body: input });
-      onPosted(post);
-      close();
-    } catch (e) {
-      setBusy(false);
-      if (e instanceof ApiError && e.fields) {
-        const mapped: Errors = {};
-        for (const [field, message] of Object.entries(e.fields)) {
-          if (field.startsWith("poll")) mapped.poll = message;
-          else if (field.startsWith("link")) mapped.link = message;
-          else if (field.startsWith("attachment")) mapped.files = message;
-          else mapped.text = message;
-        }
-        setServerFields(mapped);
-        if (!Object.keys(mapped).length) setServerError(e);
-      } else {
-        setServerError(e);
-      }
+  function showFailure(e: unknown) {
+    if (e instanceof ApiError && e.fields) {
+      const mapped = mapServerFields(e.fields);
+      setServerFields(mapped);
+      if (!Object.keys(mapped).length) setServerError(e);
+      requestAnimationFrame(() => focusFirstInvalid(dialogRef.current));
+    } else {
+      setServerError(e);
     }
   }
 
-  const count = text.length;
-  const nearLimit = count > POST_MAX_CHARS - 200;
-  const visibilityMeta = visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[0];
-  const previewUrl = link?.trim() || firstUrl(text);
+  async function submit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (busy || !checkReady()) return;
+    setBusy("post");
+    try {
+      sync.cancel();
+      const existing = await sync.settle();
+      // From a draft: publish it, so no stale draft stays behind.
+      const post = existing
+        ? await sync.publish()
+        : await api<PostView>("/posts", { method: "POST", body: toComposition(fields, ready) });
+      finishedRef.current = true;
+      onPosted(post);
+      close();
+    } catch (e) {
+      setBusy(null);
+      showFailure(e);
+    }
+  }
+
+  function openSchedule() {
+    if (busy || !checkReady()) return;
+    setScheduling(true);
+  }
+
+  async function schedule(iso: string) {
+    setBusy("schedule");
+    try {
+      const view = await sync.save({ scheduledFor: iso });
+      finishedRef.current = true;
+      toast.success(`Scheduled for ${scheduleLabel(view.scheduledFor ?? iso)}. Find it in Drafts → Scheduled.`);
+      close();
+    } catch (e) {
+      setBusy(null);
+      if (e instanceof ApiError && e.fields && !e.fields.scheduledFor) {
+        setScheduling(false);
+        showFailure(e);
+        return;
+      }
+      throw e;
+    }
+  }
+
+  async function unschedule() {
+    setBusy("unschedule");
+    try {
+      await sync.save({ scheduledFor: null });
+      setNotice("Unscheduled. It’s saved in your drafts.");
+      toast.success("Unscheduled. It’s saved in your drafts.");
+    } catch (e) {
+      showFailure(e);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function discard() {
+    if (busy) return;
+    try {
+      await sync.remove();
+      finishedRef.current = true;
+      toast.success("Draft discarded");
+      close();
+    } catch (e) {
+      toast.error(e);
+    }
+  }
+
+  const tools = toolsFor[type];
+  const count = fields.text.length;
+  const nearLimit = count > maxBody - 200;
+  const visibilityMeta = visibilityOptions.find((option) => option.value === fields.visibility) ?? visibilityOptions[0];
+  const previewUrl = type === "article" ? null : fields.link?.trim() || firstUrl(fields.text);
   const previewDomain = previewUrl ? domainOf(previewUrl) : null;
   const titleId = `${id}-title`;
+  const meta = postTypeMeta[type];
+  const copy = type === "article" ? null : bodyCopy[type];
+  const showFiles = type === "article" || fileMode !== null || attachments.items.length > 0;
+  const fileModeNow = attachments.items.find((i) => i.status !== "rejected")?.purpose === "post_document" ? "document" : (fileMode ?? "image");
+
+  const statusText =
+    sync.status === "saving"
+      ? "Saving…"
+      : sync.status === "error"
+        ? "Couldn’t save draft"
+        : sync.status === "saved" && saved
+          ? scheduled
+            ? sync.dirty
+              ? valid
+                ? "Unsaved changes"
+                : "Finish the post to save changes"
+              : "Changes saved"
+            : sync.dirty
+              ? ""
+              : "Draft saved"
+          : "";
 
   return (
     <dialog
@@ -230,24 +366,95 @@ export function CreatePostDialog({
       aria-labelledby={titleId}
       onClose={handleClose}
       onCancel={(event) => {
+        if (event.target !== event.currentTarget) return;
         // Escape first closes the suggestion list, not the dialog.
         if (suggestionsOpenRef.current || busy) event.preventDefault();
       }}
       onClick={onBackdropClick}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[640px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl bg-card p-0 text-ink shadow-[0px_24px_48px_0px_rgba(0,0,0,0.25)] backdrop:bg-primary-dark/55"
+      className={cn(
+        "m-auto max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl bg-card p-0 text-ink shadow-[0px_24px_48px_0px_rgba(0,0,0,0.25)] backdrop:bg-primary-dark/55 max-sm:max-w-[calc(100vw-1rem)]",
+        type === "article" ? "w-[760px]" : "w-[640px]",
+      )}
     >
       <form onSubmit={submit} noValidate className="flex flex-col">
-        <div className="flex items-center justify-between px-5 py-[18px]">
-          <h2 id={titleId} className="text-h3 text-ink">
-            Create post
-          </h2>
-          <button type="button" onClick={close} aria-label="Close" className="rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink">
-            <Icon name="x" size={22} />
-          </button>
+        <div className="flex items-center justify-between gap-3 px-5 py-[18px] max-sm:px-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h2 id={titleId} className="truncate text-h3 text-ink">
+              {scheduled ? "Edit scheduled post" : meta.title}
+            </h2>
+          </div>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <p aria-live="polite" className={cn("flex items-center gap-1 text-xs", sync.status === "error" ? "text-error" : "text-secondary")}>
+              {sync.status === "saved" && !sync.dirty && <Icon name="check" size={14} className="text-success" />}
+              {sync.status === "error" && <Icon name="alert" size={14} />}
+              <span className={cn(sync.status === "saved" && !sync.dirty && "max-sm:sr-only")}>{statusText}</span>
+              {sync.status === "error" && (
+                <button type="button" onClick={() => sync.save().catch(() => undefined)} className="ml-1 font-medium text-primary-light hover:underline">
+                  Retry
+                </button>
+              )}
+            </p>
+            {saved && !scheduled && (
+              <button type="button" onClick={discard} className="rounded-sm text-xs font-medium text-secondary hover:text-error hover:underline">
+                Discard<span className="sr-only"> draft</span>
+              </button>
+            )}
+            <button type="button" onClick={close} aria-label="Close" className="rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink">
+              <Icon name="x" size={22} />
+            </button>
+          </div>
         </div>
         <Divider />
 
-        <div className="flex flex-col gap-3.5 p-5">
+        <div className="flex flex-col gap-3.5 p-5 max-sm:px-4">
+          <PostTypeSwitcher
+            value={type}
+            onChange={changeType}
+            disabled={fields.repostOfId ? ["question", "celebration", "request", "article"] : []}
+          />
+          <p className="sr-only" aria-live="polite">
+            {notice}
+          </p>
+
+          {(scheduled || failed) && (
+            <div
+              role="note"
+              className={cn(
+                "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2.5 text-sm",
+                failed ? "border border-error/30 bg-error-light" : "bg-primary-tint-2",
+              )}
+            >
+              <Icon name={failed ? "alert" : "clock"} size={18} className={cn("shrink-0", failed ? "text-error" : "text-primary-light")} />
+              <p className="min-w-0 flex-1 text-ink">
+                {failed ? (
+                  <>
+                    Couldn’t publish{failed.scheduledFor ? ` at ${absoluteDateTime(failed.scheduledFor)}` : ""}: {failed.lastError ?? "something went wrong"}. Fix it
+                    and post now, or schedule it again.
+                  </>
+                ) : (
+                  <>
+                    Scheduled for <span className="font-medium">{scheduleLabel(scheduled!.scheduledFor!)}</span>
+                  </>
+                )}
+              </p>
+              <span className="flex items-center gap-3">
+                <button type="button" onClick={openSchedule} className="rounded-sm text-sm font-medium text-primary-light hover:underline">
+                  {failed ? "Reschedule" : "Change time"}
+                </button>
+                {scheduled && (
+                  <button
+                    type="button"
+                    onClick={unschedule}
+                    disabled={busy !== null}
+                    className="rounded-sm text-sm font-medium text-secondary hover:text-ink hover:underline disabled:opacity-60"
+                  >
+                    {busy === "unschedule" ? "Unscheduling…" : "Unschedule"}
+                  </button>
+                )}
+              </span>
+            </div>
+          )}
+
           <div className="flex items-center gap-3">
             <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} size={40} tone={viewer.tone} />
             <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
@@ -258,8 +465,8 @@ export function CreatePostDialog({
                   <select
                     aria-label="Who can see this post"
                     aria-describedby={`${id}-visibility-hint`}
-                    value={visibility}
-                    onChange={(event) => setVisibility(event.target.value as Visibility)}
+                    value={fields.visibility}
+                    onChange={(event) => patch({ visibility: event.target.value as Visibility })}
                     className="appearance-none rounded-full bg-transparent py-1 pl-[30px] pr-[26px] outline-none field-sizing-content"
                   >
                     {visibilityOptions.map((option) => (
@@ -270,7 +477,7 @@ export function CreatePostDialog({
                   </select>
                   <Icon name="chevron-down" size={12} className="pointer-events-none absolute right-2.5 text-secondary" />
                 </span>
-                <span id={`${id}-visibility-hint`} className="text-xs text-secondary">
+                <span id={`${id}-visibility-hint`} className="text-xs text-secondary max-sm:hidden">
                   {visibilityMeta.hint}
                 </span>
               </div>
@@ -281,8 +488,8 @@ export function CreatePostDialog({
             <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-accent/30 bg-accent-light px-3 py-2.5 text-sm">
               <input
                 type="checkbox"
-                checked={announcement}
-                onChange={(event) => setAnnouncement(event.target.checked)}
+                checked={fields.announcement}
+                onChange={(event) => patch({ announcement: event.target.checked })}
                 className="mt-0.5 size-4 accent-accent"
               />
               <span className="flex flex-col gap-0.5">
@@ -292,125 +499,255 @@ export function CreatePostDialog({
             </label>
           )}
 
-          <span id={`${id}-label`} className="sr-only">
-            Post text
-          </span>
-          <span id={`${id}-hint`} className="sr-only">
-            Up to {POST_MAX_CHARS.toLocaleString("en-US")} characters. Type # to add a topic or @ to mention a member.
-          </span>
-          <ComposeEditor
-            value={text}
-            caret={caret}
-            onChange={(value, nextCaret) => {
-              setText(value);
-              setCaret(nextCaret);
-            }}
-            onCaretChange={setCaret}
-            textareaRef={textareaRef}
-            labelledBy={`${id}-label`}
-            describedBy={errors.text ? `${id}-hint ${id}-text-error` : `${id}-hint`}
-            invalid={!!errors.text}
-            onSuggestionsOpenChange={onSuggestionsOpenChange}
-          />
-          {errors.text && (
-            <p id={`${id}-text-error`} role="alert" className="-mt-2 text-xs text-error">
-              {errors.text}
-            </p>
-          )}
+          {type === "celebration" && <CelebrationForm value={fields.celebration} onChange={(celebration) => patch({ celebration })} errors={errors} />}
+          {type === "request" && <RequestForm value={fields.request} onChange={(request) => patch({ request })} errors={errors} />}
 
-          {(fileMode || attachments.items.length > 0) && (
-            <AttachmentPicker
-              state={attachments}
-              id={`${id}-files`}
-              mode={attachments.items.find((i) => i.status !== "rejected")?.purpose === "post_document" ? "document" : (fileMode ?? "image")}
-            />
-          )}
-          {errors.files && (
-            <p role="alert" className="-mt-2 text-xs text-error">
-              {errors.files}
-            </p>
-          )}
-
-          {link !== null && (
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={`${id}-link`} className="text-label text-body">
-                Link
-              </label>
-              <div className="relative">
-                <Icon name="link" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-success" />
-                <input
-                  id={`${id}-link`}
-                  type="url"
-                  inputMode="url"
-                  value={link}
-                  onChange={(event) => setLink(event.target.value)}
-                  placeholder="https://"
-                  aria-invalid={errors.link ? true : undefined}
-                  aria-describedby={errors.link ? `${id}-link-error` : undefined}
+          {type === "article" ? (
+            <>
+              <div className="flex flex-col gap-1">
+                <label htmlFor={`${id}-article-title`} className="sr-only">
+                  Article title (required)
+                </label>
+                <textarea
+                  id={`${id}-article-title`}
+                  rows={1}
+                  data-autofocus={draft?.payload.type === "article" || initialType === "article" ? "" : undefined}
+                  value={fields.article.title}
+                  maxLength={150}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      textareaRef.current?.focus();
+                    }
+                  }}
+                  onChange={(event) => patch({ article: { ...fields.article, title: event.target.value.replace(/\s*\n+\s*/g, " ") } })}
+                  placeholder="Title"
+                  aria-invalid={errors["article.title"] ? true : undefined}
+                  aria-describedby={errors["article.title"] ? `${id}-article-title-error` : undefined}
                   className={cn(
-                    "h-[38px] w-full rounded-lg border bg-card pl-9 pr-3 text-sm text-ink outline-none placeholder:text-disabled focus:ring-2 focus:ring-primary-tint",
-                    errors.link ? "border-error" : "border-line focus:border-primary-light",
+                    "w-full resize-none rounded-md bg-transparent py-1 text-h1 text-ink outline-none field-sizing-content placeholder:text-disabled max-sm:text-h2",
+                    errors["article.title"] && "ring-2 ring-error ring-offset-2",
                   )}
                 />
+                <FieldError id={`${id}-article-title-error`} message={errors["article.title"]} />
+                <label htmlFor={`${id}-article-subtitle`} className="sr-only">
+                  Subtitle (optional)
+                </label>
+                <input
+                  id={`${id}-article-subtitle`}
+                  value={fields.article.subtitle}
+                  maxLength={200}
+                  onChange={(event) => patch({ article: { ...fields.article, subtitle: event.target.value } })}
+                  placeholder="Add a subtitle (optional)"
+                  aria-invalid={errors["article.subtitle"] ? true : undefined}
+                  className="w-full bg-transparent py-1 text-h3 font-normal text-body outline-none placeholder:text-disabled"
+                />
+                <FieldError id={`${id}-article-subtitle-error`} message={errors["article.subtitle"]} />
               </div>
-              {errors.link && (
-                <p id={`${id}-link-error`} role="alert" className="text-xs text-error">
-                  {errors.link}
+              <AttachmentPicker state={attachments} id={`${id}-files`} mode="image" maxImages={1} variant="cover" />
+              {errors.files && (
+                <p role="alert" className="-mt-2 text-xs text-error">
+                  {errors.files}
                 </p>
               )}
-            </div>
+              <ArticleEditor
+                value={fields.text}
+                onChange={(text) => patch({ text })}
+                error={errors.text}
+                textareaRef={textareaRef}
+                label="Article text (required)"
+              />
+            </>
+          ) : (
+            <>
+              {type !== "standard" && copy && (
+                <p id={`${id}-label`} className="-mb-1.5 text-label text-body">
+                  {copy.label}
+                  {type === "question" && <span className="sr-only"> (required)</span>}
+                </p>
+              )}
+              {type === "standard" && (
+                <span id={`${id}-label`} className="sr-only">
+                  {copy!.label}
+                </span>
+              )}
+              <span id={`${id}-hint`} className="sr-only">
+                Up to {maxBody.toLocaleString("en-US")} characters. Type # to add a topic or @ to mention a member.
+              </span>
+              <div className={cn(type === "question" && "rounded-card border border-line bg-surface px-4 py-3 [&_.text-md]:text-h3")}>
+                <ComposeEditor
+                  value={fields.text}
+                  caret={caret}
+                  onChange={(value, nextCaret) => {
+                    patch({ text: value });
+                    setCaret(nextCaret);
+                  }}
+                  onCaretChange={setCaret}
+                  textareaRef={textareaRef}
+                  labelledBy={`${id}-label`}
+                  describedBy={[`${id}-hint`, copy?.hint ? `${id}-type-hint` : null, errors.text ? `${id}-text-error` : null].filter(Boolean).join(" ")}
+                  invalid={!!errors.text}
+                  onSuggestionsOpenChange={onSuggestionsOpenChange}
+                  placeholder={copy!.placeholder}
+                  maxLength={maxBody}
+                />
+              </div>
+              {copy?.hint && (
+                <p id={`${id}-type-hint`} className="-mt-1.5 flex items-start gap-1.5 text-xs text-secondary">
+                  <Icon name="lightbulb" size={14} className="mt-px shrink-0 text-warning" />
+                  {copy.hint}
+                </p>
+              )}
+              {errors.text && (
+                <p id={`${id}-text-error`} role="alert" className="-mt-2 text-xs text-error">
+                  {errors.text}
+                </p>
+              )}
+
+              {showFiles && <AttachmentPicker state={attachments} id={`${id}-files`} mode={fileModeNow} />}
+              {errors.files && (
+                <p role="alert" className="-mt-2 text-xs text-error">
+                  {errors.files}
+                </p>
+              )}
+
+              {fields.link !== null && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor={`${id}-link`} className="text-label text-body">
+                    Link
+                  </label>
+                  <div className="relative">
+                    <Icon name="link" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-success" />
+                    <input
+                      id={`${id}-link`}
+                      type="url"
+                      inputMode="url"
+                      value={fields.link}
+                      onChange={(event) => patch({ link: event.target.value })}
+                      placeholder="https://"
+                      aria-invalid={errors.link ? true : undefined}
+                      aria-describedby={errors.link ? `${id}-link-error` : undefined}
+                      className={cn(
+                        "h-[38px] w-full rounded-lg border bg-card pl-9 pr-3 text-sm text-ink outline-none placeholder:text-disabled focus:ring-2 focus:ring-primary-tint",
+                        errors.link ? "border-error" : "border-line focus:border-primary-light",
+                      )}
+                    />
+                  </div>
+                  {errors.link && (
+                    <p id={`${id}-link-error`} role="alert" className="text-xs text-error">
+                      {errors.link}
+                    </p>
+                  )}
+                </div>
+              )}
+              {previewDomain && !errors.link && (
+                <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
+                  <Icon name="link" size={14} className="text-success" />A preview card for {previewDomain} will be added after you post.
+                </p>
+              )}
+
+              {type === "standard" && fields.poll && (
+                <PollBuilder poll={fields.poll} onChange={(poll) => patch({ poll })} onRemove={() => patch({ poll: null })} error={errors.poll} />
+              )}
+              {type !== "standard" && fields.poll && (
+                <p className="flex items-center gap-1.5 text-xs text-secondary">
+                  <Icon name="chart" size={14} />
+                  Polls are only for standard posts. Your poll is kept if you switch back to Post.
+                </p>
+              )}
+            </>
           )}
-          {previewDomain && !errors.link && (
-            <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
-              <Icon name="link" size={14} className="text-success" />A preview card for {previewDomain} will be added after you post.
+
+          {errors.schedule && (
+            <p role="alert" className="text-xs text-error">
+              {errors.schedule}
             </p>
           )}
-
-          {poll && <PollBuilder poll={poll} onChange={setPoll} onRemove={() => setPoll(null)} error={errors.poll} />}
-
           <div aria-live="polite">{serverError ? <ErrorNotice error={serverError} /> : null}</div>
         </div>
 
         <Divider />
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5">
-          <div className="flex items-center gap-2 sm:gap-3" role="toolbar" aria-label="Add to your post">
-            {toolButtons.map((item) => {
-              const toggles = item.activeBg !== undefined;
-              const active = isActive(item.tool);
-              return (
-                <button
-                  key={item.tool}
-                  type="button"
-                  title={item.label}
-                  aria-label={item.label}
-                  aria-pressed={toggles ? active : undefined}
-                  onClick={() => onTool(item.tool)}
-                  className={cn("flex size-8 items-center justify-center rounded-lg transition-colors", item.color, active ? item.activeBg : "hover:bg-muted")}
-                >
-                  <Icon name={item.icon} size={18} />
-                </button>
-              );
-            })}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5 max-sm:px-4">
+          <div className="flex items-center gap-1.5 sm:gap-2.5" role="toolbar" aria-label="Add to your post">
+            {toolButtons
+              .filter((item) => tools.includes(item.tool))
+              .map((item) => {
+                const toggles = item.activeBg !== undefined;
+                const active = isActive(item.tool);
+                return (
+                  <button
+                    key={item.tool}
+                    type="button"
+                    title={item.label}
+                    aria-label={item.label}
+                    aria-pressed={toggles ? active : undefined}
+                    onClick={() => onTool(item.tool)}
+                    className={cn("flex size-8 items-center justify-center rounded-lg transition-colors", item.color, active ? item.activeBg : "hover:bg-muted")}
+                  >
+                    <Icon name={item.icon} size={18} />
+                  </button>
+                );
+              })}
           </div>
-          <div className="ml-auto flex items-center gap-3.5">
-            <p className={cn("text-xs", count >= POST_MAX_CHARS ? "text-error" : nearLimit ? "text-warning" : "text-secondary")}>
-              <span aria-hidden="true">
-                {count.toLocaleString("en-US")} / {POST_MAX_CHARS.toLocaleString("en-US")}
-              </span>
-              <span className="sr-only" aria-live="polite">
-                {nearLimit ? `${(POST_MAX_CHARS - count).toLocaleString("en-US")} characters left` : ""}
-              </span>
-            </p>
-            <Button type="submit" disabled={busy}>
-              {busy ? "Posting…" : "Post"}
-            </Button>
+          <div className="ml-auto flex items-center gap-2.5">
+            {type !== "article" && (
+              <p className={cn("text-xs max-sm:hidden", count >= maxBody ? "text-error" : nearLimit ? "text-warning" : "text-secondary")}>
+                <span aria-hidden="true">
+                  {count.toLocaleString("en-US")} / {maxBody.toLocaleString("en-US")}
+                </span>
+                <span className="sr-only" aria-live="polite">
+                  {nearLimit ? `${(maxBody - count).toLocaleString("en-US")} characters left` : ""}
+                </span>
+              </p>
+            )}
+            {scheduled ? (
+              <>
+                <Button variant="secondary" onClick={() => submit()} disabled={busy !== null}>
+                  {busy === "post" ? "Posting…" : "Post now"}
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!checkReady()) return;
+                    sync
+                      .flush()
+                      .then(() => {
+                        finishedRef.current = true;
+                        toast.success("Scheduled post updated");
+                        close();
+                      })
+                      .catch(showFailure);
+                  }}
+                  disabled={busy !== null || sync.status === "saving"}
+                >
+                  Save
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={openSchedule} disabled={busy !== null} aria-haspopup="dialog">
+                  <Icon name="clock" size={16} />
+                  <span className="max-sm:sr-only">Schedule</span>
+                </Button>
+                <Button type="submit" disabled={busy !== null}>
+                  {busy === "post" ? "Posting…" : draft ? "Post now" : type === "question" ? "Ask" : type === "article" ? "Publish" : "Post"}
+                </Button>
+              </>
+            )}
           </div>
         </div>
-        <p className="flex items-center gap-2 bg-surface px-5 py-3 text-xs text-secondary">
+        <p className="flex items-center gap-2 bg-surface px-5 py-3 text-xs text-secondary max-sm:px-4">
           <Icon name="shield" size={14} className="shrink-0" />
-          Images and documents appear once a quick safety scan finishes.
+          {saved || content ? "Drafts save automatically. " : ""}Images and documents appear once a quick safety scan finishes.
         </p>
       </form>
+      {scheduling && (
+        <ScheduleDialog
+          initial={scheduled?.scheduledFor ?? null}
+          confirmLabel={scheduled ? "Update time" : "Schedule"}
+          onConfirm={schedule}
+          onClose={() => setScheduling(false)}
+        />
+      )}
     </dialog>
   );
 }

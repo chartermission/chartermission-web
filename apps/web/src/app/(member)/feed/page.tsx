@@ -4,12 +4,12 @@ import { Suspense } from "react";
 import { FeedQuery, type Page, type PostView } from "@chartermission/contracts";
 import { buttonClasses } from "@chartermission/ui";
 import { FeedControls } from "@/components/feed-controls";
-import { FeedList } from "@/components/feed-list";
 import { LeftRail } from "@/components/left-rail";
 import { PageColumns } from "@/components/page-columns";
 import { RightRail } from "@/components/right-rail";
 import { requireClientViewer, settle } from "@/components/social/data";
 import { errorMessage } from "@/components/social/error-message";
+import { PostStream } from "@/components/social/post-stream";
 import { EmptyState, LoadingStatus, PanelSkeleton, PostSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet } from "@/lib/api/server";
 import { getTaxonomies } from "@/lib/taxonomies";
@@ -25,11 +25,64 @@ function parseQuery(params: Awaited<SearchParams>): FeedQuery {
   return parsed.success ? { ...parsed.data, cursor: undefined } : FeedQuery.parse({});
 }
 
+/** The /feed API query for a parsed URL query (also what /feed/new is asked with). */
+function apiQuery(query: FeedQuery) {
+  return {
+    tab: query.tab,
+    type: query.type,
+    unanswered: query.type === "question" && query.unanswered ? "true" : undefined,
+    country: query.country,
+    sector: query.sector,
+    chapter: query.chapter,
+    announcements: query.announcements ? "true" : undefined,
+  };
+}
+
+function feedHref(params: Record<string, string | undefined>) {
+  const qs = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => !!entry[1])).toString();
+  return qs ? `/feed?${qs}` : "/feed";
+}
+
+const typeEmpty: Record<string, { title: string; text: string }> = {
+  question: { title: "No questions here yet", text: "Ask the community something: questions get answers from members across the network." },
+  unanswered: { title: "No unanswered questions", text: "Every question here has an accepted answer. Check back later." },
+  celebration: { title: "No celebrations yet", text: "New roles, funding rounds and milestones from members show up here." },
+  request: { title: "No “Looking for” posts yet", text: "Members looking for co-founders, mentors or volunteers show up here." },
+  article: { title: "No articles yet", text: "Long-form posts from members show up here." },
+};
+
 function FeedEmpty({ query }: { query: FeedQuery }) {
-  if (query.country || query.sector || query.chapter || query.announcements) {
+  const tab = query.tab === "for_you" ? undefined : query.tab;
+  const filtered = !!(query.country || query.sector || query.chapter || query.announcements);
+  const typeKey = query.type === "question" && query.unanswered ? "unanswered" : query.type;
+  if (filtered) {
     return (
-      <EmptyState icon="filter" title="No posts match these filters" actions={<Link href={query.tab === "for_you" ? "/feed" : `/feed?tab=${query.tab}`} className={buttonClasses({ variant: "secondary", size: "small" })}>Clear filters</Link>}>
+      <EmptyState
+        icon="filter"
+        title="No posts match these filters"
+        actions={
+          <Link href={feedHref({ tab, type: query.type, unanswered: typeKey === "unanswered" ? "true" : undefined })} className={buttonClasses({ variant: "secondary", size: "small" })}>
+            Clear filters
+          </Link>
+        }
+      >
         Try another country, sector or chapter.
+      </EmptyState>
+    );
+  }
+  const forType = typeKey ? typeEmpty[typeKey] : undefined;
+  if (forType) {
+    return (
+      <EmptyState
+        icon="filter"
+        title={forType.title}
+        actions={
+          <Link href={feedHref({ tab })} className={buttonClasses({ variant: "secondary", size: "small" })}>
+            Show all posts
+          </Link>
+        }
+      >
+        {forType.text}
       </EmptyState>
     );
   }
@@ -79,15 +132,7 @@ async function FeedMain({ searchParams }: { searchParams: SearchParams }) {
   const query = parseQuery(await searchParams);
   const viewer = await requireClientViewer("/feed");
   const [page, taxonomies] = await Promise.all([
-    settle(
-      apiGet<Page<PostView>>("/feed", {
-        tab: query.tab,
-        country: query.country,
-        sector: query.sector,
-        chapter: query.chapter,
-        announcements: query.announcements ? "true" : undefined,
-      }),
-    ),
+    settle(apiGet<Page<PostView>>("/feed", apiQuery(query))),
     getTaxonomies().catch(() => ({ countries: [], sectors: [], chapters: [] })),
   ]);
   const key = JSON.stringify(query);
@@ -96,7 +141,17 @@ async function FeedMain({ searchParams }: { searchParams: SearchParams }) {
       <FeedComposer viewer={viewer} />
       <FeedControls query={query} taxonomies={taxonomies} />
       {page.ok ? (
-        <FeedList key={key} query={query} initial={page.data} viewer={viewer} empty={<FeedEmpty query={query} />} />
+        <PostStream
+          key={key}
+          path="/feed"
+          label="Feed"
+          query={apiQuery(query)}
+          initial={page.data}
+          viewer={viewer}
+          empty={<FeedEmpty query={query} />}
+          acceptNew
+          newPostsPath="/feed/new"
+        />
       ) : (
         <SectionError message={errorMessage(page.error)} retryHref="/feed" />
       )}

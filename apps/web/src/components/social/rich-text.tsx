@@ -42,6 +42,8 @@ export function tokenize(text: string): RichSegment[] {
 }
 
 const highlight = "font-medium text-primary-light hover:underline";
+/** Hashtags use the Figma hashtag colour (orange); mentions and links stay primary. */
+const hashtag = "font-medium text-accent-hover hover:underline";
 
 /**
  * User-written text with linked #hashtags, @mentions and URLs. Pass `mentions` (from a
@@ -64,7 +66,7 @@ export function RichText({
         switch (segment.kind) {
           case "tag":
             return (
-              <Link key={index} href={topicHref(segment.tag)} className={highlight}>
+              <Link key={index} href={topicHref(segment.tag)} className={hashtag}>
                 {segment.text}
               </Link>
             );

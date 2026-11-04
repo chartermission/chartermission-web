@@ -13,6 +13,7 @@ import { Menu, type MenuItem } from "@/components/social/menu";
 import { MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { ReactionButton, type ReactionSnapshot } from "@/components/social/reaction-button";
 import { RichText } from "@/components/social/rich-text";
+import { announceQuestionChange } from "@/components/social/post-types/events";
 import { toast } from "@/components/social/toast";
 import type { Viewer } from "@/components/social/viewer";
 
@@ -140,18 +141,23 @@ const placeholderText: Record<Exclude<CommentView["state"], "visible">, string> 
   removed: "This comment was removed for breaking the community guidelines.",
 };
 
+/** For answers to a question: best-answer badge and, for the asker, the mark/unmark action. */
+type AnswerControls = { accepted: boolean; canAccept: boolean; busy: boolean; onToggle: () => void };
+
 function CommentItem({
   comment,
   viewer,
   highlighted,
   onReply,
   onChanged,
+  answer,
 }: {
   comment: CommentView;
   viewer: Viewer;
   highlighted: boolean;
   onReply: (comment: CommentView) => void;
   onChanged: (comment: CommentView) => void;
+  answer?: AnswerControls;
 }) {
   const [editing, setEditing] = useState(false);
   const [modal, setModal] = useState<"report" | "delete" | null>(null);
@@ -176,14 +182,20 @@ function CommentItem({
 
   const author = comment.author;
   const own = author.id === viewer.id;
-  const subject = `${author.name}’s comment`;
+  const subject = answer ? `${author.name}’s answer` : `${author.name}’s comment`;
+  const accepted = !!answer?.accepted;
   const menu: MenuItem[] = [];
-  if (comment.viewer.canEdit && own) menu.push({ label: "Edit comment", icon: "message", onSelect: () => setEditing(true) });
-  if (comment.viewer.canDelete) menu.push({ label: own ? "Delete comment" : "Delete comment (moderator)", icon: "x", danger: true, onSelect: () => setModal("delete") });
-  if (comment.viewer.canReport) menu.push({ label: "Report comment", icon: "flag", onSelect: () => setModal("report") });
+  const noun = answer ? "answer" : "comment";
+  if (comment.viewer.canEdit && own) menu.push({ label: `Edit ${noun}`, icon: "message", onSelect: () => setEditing(true) });
+  if (comment.viewer.canDelete) menu.push({ label: own ? `Delete ${noun}` : `Delete ${noun} (moderator)`, icon: "x", danger: true, onSelect: () => setModal("delete") });
+  if (comment.viewer.canReport) menu.push({ label: `Report ${noun}`, icon: "flag", onSelect: () => setModal("report") });
 
   return (
-    <article id={anchor} aria-label={`Comment by ${author.name}`} className="flex scroll-mt-24 items-start gap-2.5">
+    <article
+      id={anchor}
+      aria-label={`${accepted ? "Best answer" : answer ? "Answer" : "Comment"} by ${author.name}`}
+      className="flex scroll-mt-24 items-start gap-2.5"
+    >
       <Link href={memberHref(author.handle)} tabIndex={-1} aria-hidden="true">
         <MemberAvatar member={author} size={32} />
       </Link>
@@ -208,9 +220,19 @@ function CommentItem({
           <div
             className={cn(
               "flex flex-col gap-1 rounded-card bg-surface px-3.5 py-2.5 transition-shadow",
+              accepted && "bg-success-light ring-1 ring-success/40",
               highlighted && "bg-accent-light ring-2 ring-accent",
             )}
           >
+            {accepted && (
+              <p className="-mb-0.5 flex items-center gap-1.5 text-label text-success">
+                <span className="flex size-4 items-center justify-center rounded-full bg-success text-inverse">
+                  <Icon name="check" size={10} />
+                </span>
+                Best answer
+                <span className="font-normal text-secondary">· chosen by the asker</span>
+              </p>
+            )}
             <div className="flex items-start gap-2">
               <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5">
                 <Link href={memberHref(author.handle)} className="text-sm font-medium text-ink hover:underline">
@@ -235,6 +257,22 @@ function CommentItem({
             <button type="button" onClick={() => onReply(comment)} className="rounded-sm font-medium text-secondary hover:text-primary">
               Reply<span className="sr-only"> to {author.name}</span>
             </button>
+            {answer?.canAccept && (
+              <button
+                type="button"
+                onClick={answer.onToggle}
+                disabled={answer.busy}
+                aria-pressed={accepted}
+                className={cn(
+                  "flex items-center gap-1 rounded-sm font-medium disabled:opacity-60",
+                  accepted ? "text-secondary hover:text-error" : "text-success hover:underline",
+                )}
+              >
+                <Icon name="check" size={13} />
+                {accepted ? "Unmark best answer" : "Mark as best answer"}
+                <span className="sr-only"> ({author.name})</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -269,13 +307,20 @@ export function Comments({
   initial,
   total: initialTotal,
   viewer,
+  question = null,
 }: {
   postId: string;
   initial: Page<CommentView> | null;
   total: number;
   viewer: Viewer;
+  /** For questions: comments are answers, and the asker picks the best one. */
+  question?: { acceptedCommentId: string | null; askerId: string } | null;
 }) {
   const id = useId();
+  const isQuestion = question !== null;
+  const isAsker = !!question && question.askerId === viewer.id;
+  const [acceptedId, setAcceptedId] = useState<string | null>(question?.acceptedCommentId ?? null);
+  const [accepting, setAccepting] = useState(false);
   const [sort, setSort] = useState<Sort>("relevant");
   const [threads, setThreads] = useState<Thread[]>(initial?.items ?? []);
   const [cursor, setCursor] = useState<string | null>(initial?.nextCursor ?? null);
@@ -359,6 +404,28 @@ export function Comments({
     );
   }
 
+  async function toggleAccepted(commentId: string) {
+    if (accepting) return;
+    const previous = acceptedId;
+    const next = previous === commentId ? null : commentId;
+    setAcceptedId(next);
+    setAccepting(true);
+    announceQuestionChange(postId, { acceptedCommentId: next, answered: next !== null });
+    try {
+      if (next) await api(`/posts/${postId}/accepted-answer`, { method: "PUT", body: { commentId: next } });
+      else await api(`/posts/${postId}/accepted-answer`, { method: "DELETE" });
+      setStatus(next ? "Marked as the best answer. It now shows first." : "Best answer removed.");
+      toast.success(next ? "Marked as the best answer" : "Best answer removed");
+      if (next) requestAnimationFrame(() => document.getElementById(`comment-${next}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+    } catch (e) {
+      setAcceptedId(previous);
+      announceQuestionChange(postId, { acceptedCommentId: previous, answered: previous !== null });
+      toast.error(e);
+    } finally {
+      setAccepting(false);
+    }
+  }
+
   async function addComment(body: string, parentId?: string) {
     const created = await api<CommentView>(`/posts/${postId}/comments`, { method: "POST", body: { body, parentId } });
     setTotal((value) => value + 1);
@@ -413,17 +480,30 @@ export function Comments({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount and on hash changes
   }, []);
 
+  // "Answer" / "Comment" links land on #add-comment: put the caret in the box.
+  useEffect(() => {
+    if (window.location.hash !== "#add-comment") return;
+    const box = document.querySelector<HTMLTextAreaElement>("#add-comment textarea");
+    box?.focus({ preventScroll: true });
+    document.getElementById("add-comment")?.scrollIntoView({ block: "center" });
+  }, []);
+
   const canComment = viewer.emailVerified;
+  const noun = isQuestion ? "response" : "comment";
+  // The best answer leads the list; everything else keeps its order.
+  const accepted = acceptedId ? threads.find((t) => t.id === acceptedId) : undefined;
+  const ordered = accepted ? [accepted, ...threads.filter((t) => t.id !== acceptedId)] : threads;
 
   return (
     <Panel id="comments" aria-labelledby={`${id}-title`} className="flex scroll-mt-24 flex-col gap-4 p-5 max-sm:px-4">
       <div className="flex items-center justify-between">
         <h2 id={`${id}-title`} className="text-h3 text-ink">
-          {total.toLocaleString("en-US")} comment{total === 1 ? "" : "s"}
+          {total.toLocaleString("en-US")} {noun}
+          {total === 1 ? "" : "s"}
         </h2>
         <span className="relative inline-flex items-center">
           <select
-            aria-label="Sort comments"
+            aria-label={`Sort ${noun}s`}
             value={sort}
             onChange={(event) => reload(event.target.value as Sort)}
             className="appearance-none rounded-md bg-transparent py-0.5 pl-1 pr-5 text-sm font-medium text-body hover:text-ink"
@@ -437,11 +517,17 @@ export function Comments({
 
       <div id="add-comment" className="scroll-mt-24">
         {canComment ? (
-          <CommentForm viewer={viewer} label="Add a comment" placeholder="Add a comment… use @handle to mention" submitLabel="Post" onSubmit={(body) => addComment(body)} />
+          <CommentForm
+            viewer={viewer}
+            label={isQuestion ? (isAsker ? "Add a comment" : "Write an answer") : "Add a comment"}
+            placeholder={isQuestion ? (isAsker ? "Add more detail or reply to answers…" : "Write an answer… share what worked for you") : "Add a comment… use @handle to mention"}
+            submitLabel={isQuestion && !isAsker ? "Answer" : "Post"}
+            onSubmit={(body) => addComment(body)}
+          />
         ) : (
           <div className="flex items-start gap-2.5 rounded-lg bg-warning-light px-3 py-2.5">
             <Icon name="mail" size={18} className="mt-0.5 shrink-0 text-warning" />
-            <VerifyEmailPrompt message="Verify your email address to comment and react." />
+            <VerifyEmailPrompt message={`Verify your email address to ${isQuestion ? "answer" : "comment"} and react.`} />
           </div>
         )}
       </div>
@@ -449,10 +535,20 @@ export function Comments({
         {status}
       </p>
 
-      {threads.length === 0 && !loading && !error && <p className="py-4 text-center text-sm text-secondary">No comments yet. Start the conversation.</p>}
+      {isAsker && threads.length > 0 && !acceptedId && (
+        <p className="flex items-center gap-2 rounded-lg bg-success-light px-3 py-2 text-xs text-ink">
+          <Icon name="check" size={14} className="shrink-0 text-success" />
+          Got what you needed? Choose “Mark as best answer” on the answer that helped most.
+        </p>
+      )}
+      {threads.length === 0 && !loading && !error && (
+        <p className="py-4 text-center text-sm text-secondary">
+          {isQuestion ? "No answers yet. Be the first to help." : "No comments yet. Start the conversation."}
+        </p>
+      )}
 
       <ul className="flex flex-col gap-4" aria-busy={loading}>
-        {threads.map((thread) => {
+        {ordered.map((thread) => {
           const hiddenReplies = thread.counts.replies - thread.replies.length;
           return (
             <li key={thread.id} className="flex flex-col gap-3">
@@ -462,6 +558,16 @@ export function Comments({
                 highlighted={highlight === thread.id}
                 onReply={(c) => setReplyTo({ parentId: thread.id, mention: c.author && c.author.id !== viewer.id ? `@${c.author.handle} ` : "" })}
                 onChanged={replace}
+                answer={
+                  isQuestion
+                    ? {
+                        accepted: thread.id === acceptedId,
+                        canAccept: isAsker && thread.state === "visible" && !!thread.author && thread.author.id !== viewer.id,
+                        busy: accepting,
+                        onToggle: () => toggleAccepted(thread.id),
+                      }
+                    : undefined
+                }
               />
               {(thread.replies.length > 0 || hiddenReplies > 0 || replyTo?.parentId === thread.id) && (
                 <ul className="flex flex-col gap-3 pl-[42px]">
@@ -518,13 +624,13 @@ export function Comments({
       {error ? <ErrorNotice error={error} onRetry={() => (threads.length ? loadMore() : reload(sort))} /> : null}
       {loading && (
         <p role="status" className="py-2 text-center text-sm text-secondary">
-          Loading comments…
+          Loading {noun}s…
         </p>
       )}
       {!loading && cursor && (
         <div className="flex justify-center">
           <button type="button" onClick={loadMore} className="rounded-lg px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-tint-2">
-            Load more comments
+            Load more {noun}s
           </button>
         </div>
       )}

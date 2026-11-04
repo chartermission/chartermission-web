@@ -3,13 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import type { Page, PostView, TopicView } from "@chartermission/contracts";
-import { Panel, chipClasses } from "@chartermission/ui";
+import { Icon, Panel, chipClasses, cn } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { requireClientViewer } from "@/components/social/data";
 import { topicHref } from "@/components/social/links";
 import { SectionRail } from "@/components/social/section-nav";
 import { EmptyState, LoadingStatus, PanelSkeleton, PostSkeleton } from "@/components/social/skeletons";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
+import { activityDays } from "./activity-chart";
 import { TopicHeader } from "./topic-header";
 import { TopicTabs } from "./topic-tabs";
 
@@ -45,7 +46,7 @@ async function TopicMain({ params }: { params: Params }) {
   );
   return (
     <>
-      <TopicHeader topic={topic} />
+      <TopicHeader topic={topic} days={activityDays(new Date())} />
       <TopicTabs
         tag={topic.tag}
         initialTop={top}
@@ -62,19 +63,30 @@ async function TopicMain({ params }: { params: Params }) {
 
 async function TopicRightRail({ params }: { params: Params }) {
   const topic = await loadTopic(params).catch(() => null);
-  if (!topic || topic.related.length === 0) return null;
+  if (!topic) return null;
   return (
     <Panel className="flex flex-col gap-3 p-5">
-      <h2 className="text-h3 text-ink">Related topics</h2>
-      <ul className="flex flex-wrap gap-2">
-        {topic.related.map((tag) => (
-          <li key={tag}>
-            <Link href={topicHref(tag)} className={chipClasses("hashtag", "hover:bg-accent hover:text-inverse")}>
-              #{tag}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {topic.related.length > 0 && (
+        <>
+          <h2 className="text-h3 text-ink">Related topics</h2>
+          <ul className="flex flex-wrap gap-2">
+            {topic.related.map((tag) => (
+              <li key={tag}>
+                <Link href={topicHref(tag)} className={chipClasses("hashtag", "hover:bg-accent hover:text-inverse")}>
+                  #{tag}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <Link
+        href="/topics"
+        className={cn("flex items-center gap-1 text-sm font-medium text-primary-light hover:underline", topic.related.length > 0 && "border-t border-line pt-3")}
+      >
+        Explore all topics
+        <Icon name="chevron-right" size={16} />
+      </Link>
     </Panel>
   );
 }

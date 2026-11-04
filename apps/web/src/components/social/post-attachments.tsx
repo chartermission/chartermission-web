@@ -1,46 +1,18 @@
 import type { AttachmentView } from "@chartermission/contracts";
-import { Icon, cn } from "@chartermission/ui";
+import { Icon } from "@chartermission/ui";
+import { ImageGrid } from "@/components/gallery/image-grid";
 import { formatBytes } from "./format";
 
-/** Up to 4 images in a grid, or one PDF tile (CM-FED-01). URLs are permission-checked /media links. */
+/**
+ * Up to 4 images as a gallery that opens a lightbox, or one PDF tile (CM-FED-01). Images use the
+ * author's alt text (generic fallback). URLs are permission-checked /media links.
+ */
 export function PostAttachments({ attachments }: { attachments: AttachmentView[] }) {
   const images = attachments.filter((a) => a.kind === "image");
   const documents = attachments.filter((a) => a.kind === "document");
   return (
     <>
-      {images.length > 0 && (
-        <div
-          className={cn(
-            "grid w-full gap-1 overflow-hidden rounded-[10px]",
-            images.length === 1 ? "grid-cols-1" : "grid-cols-2",
-            images.length === 3 && "grid-rows-2",
-          )}
-        >
-          {images.map((image, index) => (
-            <a
-              key={image.id}
-              href={image.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                "block overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-primary-light",
-                images.length === 3 && index === 0 && "row-span-2",
-                images.length === 1 ? "max-h-[420px]" : "aspect-square",
-              )}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media, not static assets */}
-              <img
-                src={image.url}
-                alt={image.name ? `Image: ${image.name}` : "Attached image"}
-                width={image.width ?? undefined}
-                height={image.height ?? undefined}
-                loading="lazy"
-                className={cn("size-full object-cover", images.length === 1 && "h-auto max-h-[420px]")}
-              />
-            </a>
-          ))}
-        </div>
-      )}
+      {images.length > 0 && <ImageGrid images={images} />}
       {documents.map((doc) => (
         <a
           key={doc.id}

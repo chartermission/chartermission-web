@@ -7,6 +7,7 @@ import { Divider, Icon, Panel, SegmentedControl, TrendingItem, chipClasses } fro
 import { api } from "@/lib/api/client";
 import { errorMessage } from "./social/errors";
 import { topicHref } from "./social/links";
+import { exploreHref } from "@/app/(member)/topics/explore-params";
 
 const windows = [
   { value: "24h", label: "24h" },
@@ -17,7 +18,8 @@ type Scope = { key: string; label: string; scope: "global" | "country"; scopeId?
 
 /**
  * Trending topics (GET /trending) with a time window and an Africa / my-country scope switch.
- * Each item shows the API's context label ("Trending in Nigeria").
+ * Each item shows the API's context label ("Trending in Nigeria"). "Show more topics" opens the
+ * explore page (/topics) on the same window and scope.
  */
 export function TrendingTopics({
   initial,
@@ -114,6 +116,14 @@ export function TrendingTopics({
           </ol>
         )}
       </div>
+      <Divider />
+      <Link
+        href={exploreHref({ window, scope: scope.scope, scopeId: scope.scopeId })}
+        className="-mb-1 flex items-center justify-center gap-1 rounded-md pt-2.5 text-sm font-medium text-primary-light hover:underline"
+      >
+        Show more topics
+        <Icon name="chevron-right" size={16} />
+      </Link>
     </Panel>
   );
 }

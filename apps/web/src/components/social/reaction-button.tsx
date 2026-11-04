@@ -47,6 +47,7 @@ export function ReactionButton({
   onChange,
   compact = false,
   subject,
+  primary,
 }: {
   targetType: "post" | "comment";
   targetId: string;
@@ -55,6 +56,8 @@ export function ReactionButton({
   compact?: boolean;
   /** For screen readers, e.g. "Amara Okafor's post". */
   subject: string;
+  /** Main button action other than "Like", e.g. celebrations: "Congratulate" (support). */
+  primary?: { kind: ReactionKind; label: string; activeLabel: string; icon?: IconName };
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -77,7 +80,9 @@ export function ReactionButton({
     }
   }
 
-  const current = state.reaction ? reactionMeta[state.reaction] : null;
+  const chosen = state.reaction ? reactionMeta[state.reaction] : null;
+  const current = chosen && primary && state.reaction === primary.kind ? { ...chosen, label: primary.activeLabel, icon: primary.icon ?? chosen.icon } : chosen;
+  const idle = primary ? { label: primary.label, icon: primary.icon ?? reactionMeta[primary.kind].icon } : { label: "Like", icon: "like" as IconName };
   const base = compact
     ? "flex items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium"
     : "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium";
@@ -87,11 +92,11 @@ export function ReactionButton({
       <button
         type="button"
         aria-pressed={!!state.reaction}
-        onClick={() => set(state.reaction ? null : "like")}
+        onClick={() => set(state.reaction ? null : (primary?.kind ?? "like"))}
         className={cn(base, "hover:bg-muted", current ? current.color : "text-secondary hover:text-primary")}
       >
-        <Icon name={current?.icon ?? "like"} size={compact ? 14 : 18} />
-        {current?.label ?? "Like"}
+        <Icon name={current?.icon ?? idle.icon} size={compact ? 14 : 18} />
+        {current?.label ?? idle.label}
         <span className="sr-only"> {subject}</span>
         {compact && state.total > 0 && <span className="text-secondary">· {state.total}</span>}
       </button>

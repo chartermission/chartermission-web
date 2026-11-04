@@ -11,4 +11,5 @@ export const sectionNavItems: { href: string; label: string; icon: IconName }[] 
   { href: "/chapters", label: "Chapters", icon: "globe" },
   { href: "/organisations", label: "Organisations", icon: "building" },
   { href: "/bookmarks", label: "Saved", icon: "bookmark" },
+  { href: "/drafts", label: "Drafts", icon: "send" },
 ];

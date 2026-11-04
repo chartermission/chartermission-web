@@ -2,18 +2,20 @@
 
 import { useState } from "react";
 import type { PostView } from "@chartermission/contracts";
-import { Composer } from "@/components/composer";
-import { CreatePostDialog, type ComposeTool } from "@/components/compose/create-post-dialog";
+import { Composer, type ComposeStart } from "@/components/composer";
+import { CreatePostDialog } from "@/components/compose/create-post-dialog";
+import { announceDraftsChanged } from "@/components/drafts/drafts-events";
 import { announcePostCreated } from "@/components/social/post-events";
 import { toast } from "@/components/social/toast";
 import type { Viewer } from "@/components/social/viewer";
 
 /** Composer wired to the create-post dialog (Figma "Web / Create post — modal", node 19:2951). */
 export function FeedComposer({ viewer }: { viewer: Viewer }) {
-  const [session, setSession] = useState<{ key: number; tool?: ComposeTool } | null>(null);
+  const [session, setSession] = useState<({ key: number } & ComposeStart) | null>(null);
 
   function posted(post: PostView) {
     announcePostCreated(post);
+    announceDraftsChanged();
     toast.success(
       post.status === "pending_media"
         ? "Posted. Your files are being checked; others will see the post once that finishes."
@@ -21,14 +23,32 @@ export function FeedComposer({ viewer }: { viewer: Viewer }) {
           ? "Announcement published and pinned for all members"
           : post.poll
             ? "Your poll is live"
-            : "Your post is live",
+            : post.type === "question"
+              ? "Your question is live"
+              : post.type === "celebration"
+                ? "Your milestone is live"
+                : post.type === "request"
+                  ? "Your request is live"
+              : post.type === "article"
+                ? "Your article is published"
+                : "Your post is live",
     );
   }
 
   return (
     <>
-      <Composer viewer={viewer} onOpen={(tool) => setSession((current) => ({ key: (current?.key ?? 0) + 1, tool }))} />
-      {session && <CreatePostDialog key={session.key} viewer={viewer} initialTool={session.tool} onClose={() => setSession(null)} onPosted={posted} />}
+      <Composer viewer={viewer} onOpen={(start) => setSession((current) => ({ key: (current?.key ?? 0) + 1, ...start }))} />
+      {session && (
+        <CreatePostDialog
+          key={session.key}
+          viewer={viewer}
+          initialTool={session.tool}
+          initialType={session.type}
+          onClose={() => setSession(null)}
+          onPosted={posted}
+          onDraftChange={announceDraftsChanged}
+        />
+      )}
     </>
   );
 }

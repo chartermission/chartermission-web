@@ -5,7 +5,7 @@ export default function TopicNotFound() {
     <NotFoundPanel
       title="No one has used this hashtag yet"
       description="Topics appear once members post with them. Use it in a post to start one, or explore what’s trending."
-      action={{ href: "/feed", label: "Back to your feed" }}
+      action={{ href: "/topics", label: "Explore topics" }}
     />
   );
 }

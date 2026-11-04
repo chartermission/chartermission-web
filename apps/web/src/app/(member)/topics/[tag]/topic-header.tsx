@@ -3,34 +3,11 @@
 import { useState } from "react";
 import type { TopicView } from "@chartermission/contracts";
 import { Icon, Panel } from "@chartermission/ui";
+import { ActivityChart, type ChartDay } from "./activity-chart";
 import { TopicActions } from "./topic-actions";
 
-const dayLabels = ["6 days ago", "5 days ago", "4 days ago", "3 days ago", "2 days ago", "Yesterday", "Today"];
-
-function ActivityChart({ values }: { values: number[] }) {
-  const max = Math.max(...values, 1);
-  const total = values.reduce((sum, value) => sum + value, 0);
-  return (
-    <figure className="flex flex-col gap-1.5">
-      <div className="flex h-14 w-full items-end gap-1.5" role="img" aria-label={`Posts per day over the last 7 days: ${values.map((v, i) => `${dayLabels[i]} ${v}`).join(", ")}`}>
-        {values.map((value, index) => (
-          <span
-            key={dayLabels[index]}
-            title={`${dayLabels[index]}: ${value} post${value === 1 ? "" : "s"}`}
-            className={index === values.length - 1 ? "flex-1 rounded-[3px] bg-accent" : "flex-1 rounded-[3px] bg-primary-tint"}
-            style={{ height: `${Math.max(value / max, 0.04) * 100}%` }}
-          />
-        ))}
-      </div>
-      <figcaption className="text-xs text-secondary">
-        {total.toLocaleString("en-US")} post{total === 1 ? "" : "s"} in the last 7 days
-      </figcaption>
-    </figure>
-  );
-}
-
 /** Topic header: followers, 7-day activity, trending rank and velocity, follow / mute / report. */
-export function TopicHeader({ topic }: { topic: TopicView }) {
+export function TopicHeader({ topic, days }: { topic: TopicView; days?: ChartDay[] }) {
   const [followers, setFollowers] = useState(topic.followers);
   const stats: { value: string; label: string; tone?: "positive" | "negative" }[] = [
     { value: topic.posts.toLocaleString("en-US"), label: topic.posts === 1 ? "post" : "posts" },
@@ -72,7 +49,7 @@ export function TopicHeader({ topic }: { topic: TopicView }) {
         ))}
       </dl>
 
-      <ActivityChart values={topic.activity7d} />
+      <ActivityChart values={topic.activity7d} days={days} />
 
       <TopicActions tag={topic.tag} following={topic.following} muted={topic.muted} onFollowersChange={(delta) => setFollowers((n) => Math.max(0, n + delta))} />
     </Panel>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { LinkPreview, MemberRef, PostView } from "@chartermission/contracts";
+import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
 import { Avatar, Icon, cn } from "@chartermission/ui";
 import { absoluteDateTime, relativeTime } from "./format";
 import { memberHref, postHref } from "./links";
@@ -78,15 +78,32 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
           · <TimeAgo iso={original.createdAt} />
         </span>
       </div>
-      {original.body && <RichText text={original.body} mentions={original.mentions} className="line-clamp-4 text-sm text-ink" />}
-      {(images > 0 || docs > 0 || original.poll) && (
+      {original.type !== "standard" && (
+        <p className="text-label text-accent-hover">
+          {original.article
+            ? "Article"
+            : original.question
+              ? "Question"
+              : original.celebration
+                ? CELEBRATION_LABELS[original.celebration.category]
+                : original.request
+                  ? `Looking for · ${REQUEST_LABELS[original.request.category]}`
+                  : null}
+        </p>
+      )}
+      {(original.article || original.celebration || original.request) && (
+        <p className="text-sm font-semibold text-ink">{original.article?.title ?? original.celebration?.headline ?? original.request?.title}</p>
+      )}
+      {original.body && !original.article && <RichText text={original.body} mentions={original.mentions} className="line-clamp-4 text-sm text-ink" />}
+      {original.article?.subtitle && <p className="line-clamp-2 text-sm text-body">{original.article.subtitle}</p>}
+      {(images > 0 || docs > 0 || original.poll) && !original.article && (
         <p className="flex items-center gap-1.5 text-xs text-secondary">
           <Icon name={original.poll ? "chart" : "image"} size={14} />
           {original.poll ? "Poll" : images > 0 ? `${images} image${images === 1 ? "" : "s"}` : "PDF document"}
         </p>
       )}
       <Link href={postHref(original.id)} className="text-xs font-medium text-primary-light after:absolute after:inset-0 hover:underline">
-        View original post
+        {original.article ? "Read article" : "View original post"}
       </Link>
     </div>
   );
@@ -95,7 +112,9 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
 /** "3 reactions · 2 comments · 1 repost" with the reaction kinds that were used. */
 export function PostCounts({ post, total, breakdown }: { post: PostView; total: number; breakdown: PostView["reactionBreakdown"] }) {
   const parts: string[] = [];
-  if (post.counts.comments) parts.push(`${post.counts.comments} comment${post.counts.comments === 1 ? "" : "s"}`);
+  // Counts include replies, so questions say "responses" rather than "answers".
+  const noun = post.type === "question" ? "response" : "comment";
+  if (post.counts.comments) parts.push(`${post.counts.comments} ${noun}${post.counts.comments === 1 ? "" : "s"}`);
   if (post.counts.reposts) parts.push(`${post.counts.reposts} repost${post.counts.reposts === 1 ? "" : "s"}`);
   if (!total && !parts.length) return null;
   const used = (["like", "insightful", "support"] as const).filter((kind) => breakdown[kind] > 0);

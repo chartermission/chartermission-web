@@ -22,6 +22,8 @@ const iconFor: Record<NotificationView["icon"], { name: IconName; className: str
   users: { name: "users", className: "bg-success-light text-success" },
   flag: { name: "flag", className: "bg-error-light text-error" },
   alert: { name: "alert", className: "bg-warning-light text-warning" },
+  check: { name: "check", className: "bg-success-light text-success" },
+  clock: { name: "clock", className: "bg-primary-tint text-primary" },
 };
 
 const filters: { value: Filter; label: string }[] = [

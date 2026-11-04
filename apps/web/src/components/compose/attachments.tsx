@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { UploadPurpose } from "@chartermission/contracts";
+import { useEffect, useId, useRef, useState } from "react";
+import { ALT_TEXT_MAX_CHARS, type DraftView, type UploadPurpose } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
 import { uploadFile } from "@/lib/upload";
 import { errorMessage } from "@/components/social/errors";
@@ -19,6 +19,8 @@ export type Attachment = {
   status: "uploading" | "scanning" | "ready" | "rejected";
   fileId: string | null;
   error: string | null;
+  /** Image description for screen readers (alt text). */
+  alt: string;
 };
 
 let counter = 0;
@@ -27,8 +29,21 @@ let counter = 0;
  * Up to 4 images or 1 PDF (CM-FED-01). Each file goes through lib/upload.ts:
  * signed upload with progress, then the server-side validation and malware scan.
  */
-export function useAttachments() {
-  const [items, setItems] = useState<Attachment[]>([]);
+export function useAttachments(initial?: { files: DraftView["attachments"]; altTexts?: Record<string, string> }) {
+  const [items, setItems] = useState<Attachment[]>(() =>
+    (initial?.files ?? []).map((file) => ({
+      key: `att-${++counter}`,
+      name: file.name ?? (file.kind === "image" ? "Image" : "Document"),
+      size: 0,
+      purpose: file.kind === "image" ? "post_image" : "post_document",
+      previewUrl: file.kind === "image" ? file.url : null,
+      progress: 1,
+      status: "ready",
+      fileId: file.id,
+      error: null,
+      alt: initial?.altTexts?.[file.id] ?? "",
+    })),
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const urls = useRef(new Set<string>());
 
@@ -40,7 +55,7 @@ export function useAttachments() {
   const patch = (key: string, change: Partial<Attachment>) =>
     setItems((current) => current.map((item) => (item.key === key ? { ...item, ...change } : item)));
 
-  function add(files: File[], kind: "image" | "document") {
+  function add(files: File[], kind: "image" | "document", maxImages: number = MAX_IMAGES) {
     setNotice(null);
     const live = items.filter((item) => item.status !== "rejected");
     const hasDoc = live.some((item) => item.purpose === "post_document");
@@ -57,8 +72,8 @@ export function useAttachments() {
         setNotice("A post can have up to 4 images or 1 PDF, not both. Remove the PDF first.");
         return;
       }
-      accepted = files.slice(0, Math.max(0, MAX_IMAGES - imageCount));
-      if (accepted.length < files.length) setNotice(`You can add up to ${MAX_IMAGES} images.`);
+      accepted = files.slice(0, Math.max(0, maxImages - imageCount));
+      if (accepted.length < files.length) setNotice(maxImages === 1 ? "An article takes one cover image." : `You can add up to ${maxImages} images.`);
     }
 
     const next: Attachment[] = accepted.map((file) => {
@@ -74,6 +89,7 @@ export function useAttachments() {
         status: "uploading",
         fileId: null,
         error: null,
+        alt: "",
       };
     });
     setItems((current) => [...current, ...next]);
@@ -86,10 +102,14 @@ export function useAttachments() {
     });
   }
 
+  function setAlt(key: string, alt: string) {
+    patch(key, { alt: alt.slice(0, ALT_TEXT_MAX_CHARS) });
+  }
+
   function remove(key: string) {
     setItems((current) => {
       const item = current.find((i) => i.key === key);
-      if (item?.previewUrl) {
+      if (item?.previewUrl?.startsWith("blob:")) {
         URL.revokeObjectURL(item.previewUrl);
         urls.current.delete(item.previewUrl);
       }
@@ -98,14 +118,19 @@ export function useAttachments() {
     setNotice(null);
   }
 
+  const ready = items.filter((item) => item.status === "ready" && item.fileId);
   return {
     items,
     notice,
     add,
     remove,
-    ids: items.filter((item) => item.status === "ready" && item.fileId).map((item) => item.fileId!),
+    setAlt,
+    ids: ready.map((item) => item.fileId!),
+    /** Ready files with their kind and description, for the post or draft payload. */
+    ready: ready.map((item) => ({ fileId: item.fileId!, kind: item.purpose === "post_image" ? ("image" as const) : ("document" as const), alt: item.alt })),
     busy: items.some((item) => item.status === "uploading" || item.status === "scanning"),
     rejected: items.some((item) => item.status === "rejected"),
+    hasDocument: items.some((item) => item.purpose === "post_document" && item.status !== "rejected"),
   };
 }
 
@@ -124,35 +149,103 @@ function statusText(item: Attachment) {
   }
 }
 
-/** File chooser and the list of uploads with progress, scan state and remove. */
-export function AttachmentPicker({ state, id, mode }: { state: AttachmentsState; id: string; mode: "image" | "document" }) {
-  const { items, notice, add, remove } = state;
+/** "Add description" (alt text) for one image, collapsed until asked for. */
+function AltTextField({ item, onChange }: { item: Attachment; onChange: (alt: string) => void }) {
+  const id = useId();
+  const [open, setOpen] = useState(item.alt.length > 0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          requestAnimationFrame(() => inputRef.current?.focus());
+        }}
+        className="flex w-fit items-center gap-1 rounded-sm text-xs font-medium text-primary-light hover:underline"
+      >
+        <Icon name="plus" size={12} />
+        Add description<span className="sr-only"> for {item.name}</span>
+      </button>
+    );
+  }
+  const near = item.alt.length > ALT_TEXT_MAX_CHARS - 40;
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs font-medium text-body">
+        Description <span className="font-normal text-secondary">(alt text for people using screen readers)</span>
+      </label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          id={id}
+          value={item.alt}
+          maxLength={ALT_TEXT_MAX_CHARS}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="e.g. Three founders cutting a ribbon outside a solar plant"
+          aria-describedby={`${id}-count`}
+          className="h-8 w-full rounded-md border border-line bg-card pl-2.5 pr-16 text-xs text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
+        />
+        <span id={`${id}-count`} className={cn("pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px]", near ? "text-warning" : "text-disabled")}>
+          <span aria-hidden="true">
+            {item.alt.length}/{ALT_TEXT_MAX_CHARS}
+          </span>
+          <span className="sr-only">Up to {ALT_TEXT_MAX_CHARS} characters</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** File chooser and the list of uploads with progress, scan state, alt text and remove. */
+export function AttachmentPicker({
+  state,
+  id,
+  mode,
+  maxImages = MAX_IMAGES,
+  variant = "attachments",
+}: {
+  state: AttachmentsState;
+  id: string;
+  mode: "image" | "document";
+  maxImages?: number;
+  /** "cover": one article cover image. */
+  variant?: "attachments" | "cover";
+}) {
+  const { items, notice, add, remove, setAlt } = state;
   const images = items.filter((i) => i.purpose === "post_image" && i.status !== "rejected").length;
-  const full = mode === "image" ? images >= MAX_IMAGES : items.some((i) => i.purpose === "post_document" && i.status !== "rejected");
+  const full = mode === "image" ? images >= maxImages : items.some((i) => i.purpose === "post_document" && i.status !== "rejected");
+  const cover = variant === "cover";
 
   return (
     <div className="flex flex-col gap-3 rounded-card border border-dashed border-line-strong bg-surface p-4">
       {!full && (
         <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md text-sm font-medium text-primary focus-within:ring-2 focus-within:ring-primary-light">
           <Icon name={mode === "image" ? "image" : "book"} size={18} className={mode === "image" ? "text-info" : "text-error"} />
-          {mode === "image" ? (images ? "Add more images" : "Choose images to upload") : "Choose a PDF to upload"}
+          {cover ? "Choose a cover image" : mode === "image" ? (images ? "Add more images" : "Choose images to upload") : "Choose a PDF to upload"}
           <input
             id={id}
             type="file"
             accept={mode === "image" ? "image/jpeg,image/png,image/webp" : "application/pdf"}
-            multiple={mode === "image"}
+            multiple={mode === "image" && maxImages > 1}
             className="sr-only"
             onChange={(event) => {
-              add(Array.from(event.target.files ?? []), mode);
+              add(Array.from(event.target.files ?? []), mode, maxImages);
               event.target.value = "";
             }}
           />
         </label>
       )}
-      <p className="text-xs text-secondary">
-        {mode === "image" ? "Up to 4 images. JPEG, PNG or WebP, 5 MB each." : "One PDF, up to 10 MB."} Files are checked for safety before anyone else
-        sees them.
-      </p>
+      {!(cover && full) && (
+        <p className="text-xs text-secondary">
+          {cover
+            ? "Optional. One JPEG, PNG or WebP image, 5 MB max. Wide images (2:1) look best."
+            : mode === "image"
+              ? "Up to 4 images. JPEG, PNG or WebP, 5 MB each."
+              : "One PDF, up to 10 MB."}{" "}
+          {!cover && "Files are checked for safety before anyone else sees them."}
+        </p>
+      )}
       {notice && (
         <p role="alert" className="text-xs text-warning">
           {notice}
@@ -161,17 +254,22 @@ export function AttachmentPicker({ state, id, mode }: { state: AttachmentsState;
       {items.length > 0 && (
         <ul className="flex flex-col gap-2" aria-live="polite">
           {items.map((item) => (
-            <li key={item.key} className="flex items-center gap-3 rounded-lg border border-line bg-card p-2">
+            <li key={item.key} className="flex items-start gap-3 rounded-lg border border-line bg-card p-2">
               {item.previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
-                <img src={item.previewUrl} alt="" className="size-12 shrink-0 rounded-md object-cover" />
+                // eslint-disable-next-line @next/next/no-img-element -- local object URL or draft media preview
+                <img src={item.previewUrl} alt="" className={cn("shrink-0 rounded-md object-cover", cover ? "h-16 w-28" : "size-12")} />
+              ) : item.purpose === "post_image" ? (
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-info-light text-info">
+                  <Icon name="image" size={20} />
+                </span>
               ) : (
                 <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-error-light text-[11px] font-bold text-error">PDF</span>
               )}
               <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="truncate text-sm font-medium text-ink">{item.name}</span>
                 <span className={cn("text-xs", item.status === "rejected" ? "text-error" : item.status === "ready" ? "text-success" : "text-secondary")}>
-                  {formatBytes(item.size)} · {statusText(item)}
+                  {item.size > 0 && `${formatBytes(item.size)} · `}
+                  {statusText(item)}
                 </span>
                 {(item.status === "uploading" || item.status === "scanning") && (
                   <span
@@ -188,6 +286,7 @@ export function AttachmentPicker({ state, id, mode }: { state: AttachmentsState;
                     />
                   </span>
                 )}
+                {item.purpose === "post_image" && item.status !== "rejected" && <AltTextField item={item} onChange={(alt) => setAlt(item.key, alt)} />}
               </span>
               <button
                 type="button"

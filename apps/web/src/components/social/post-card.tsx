@@ -2,18 +2,24 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
-import { POST_MAX_CHARS, type PostView } from "@chartermission/contracts";
-import { Button, Icon, cn } from "@chartermission/ui";
+import { useEffect, useId, useState } from "react";
+import type { PostView } from "@chartermission/contracts";
+import { Icon, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog, UnblockHint } from "./confirm-dialog";
-import { ErrorNotice } from "./errors";
 import { absoluteUrl, postHref } from "./links";
 import { Menu, type MenuItem } from "./menu";
 import { PostAttachments } from "./post-attachments";
 import { AuthorName, LinkPreviewCard, MemberAvatar, PostCounts, RepostEmbed, TimeAgo } from "./post-parts";
 import { PostPoll } from "./post-poll";
+import { ArticleCover, ArticlePreview } from "./post-types/article";
+import { CelebrationBand } from "./post-types/celebration";
+import { onQuestionChange } from "./post-types/events";
+import { Markdown } from "./post-types/markdown";
+import { PostEditForm } from "./post-types/post-edit-form";
+import { QuestionFooterNote, QuestionLabel } from "./post-types/question";
+import { RequestBlock } from "./post-types/request";
 import { ReactionButton, type ReactionSnapshot } from "./reaction-button";
 import { RepostDialog } from "./repost-dialog";
 import { RichText } from "./rich-text";
@@ -65,10 +71,16 @@ export function PostCard({
   const [expanded, setExpanded] = useState(detail);
   const [modal, setModal] = useState<Modal>(null);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(initial.body);
-  const [saving, setSaving] = useState(false);
-  const [editError, setEditError] = useState<unknown>(null);
   const [gone, setGone] = useState(false);
+
+  // The answers list on the post page reports best-answer changes.
+  useEffect(
+    () =>
+      onQuestionChange((postId, question) => {
+        if (postId === initial.id) setPost((current) => ({ ...current, question }));
+      }),
+    [initial.id],
+  );
 
   const isOwn = post.author.id === viewer.id;
   const subject = `${post.author.name}’s post`;
@@ -92,19 +104,12 @@ export function PostCard({
     }
   }
 
-  async function saveEdit() {
-    const body = draft.trim();
-    if (!body) return setEditError(new Error("empty"));
-    setSaving(true);
-    setEditError(null);
+  async function setClosed(closed: boolean) {
     try {
-      update(await api<PostView>(`/posts/${post.id}`, { method: "PATCH", body: { body } }));
-      setEditing(false);
-      toast.success("Post updated");
+      update(await api<PostView>(`/posts/${post.id}/closed`, { method: "PUT", body: { closed } }));
+      toast.success(closed ? "Request closed. Members can no longer offer help." : "Request reopened");
     } catch (e) {
-      setEditError(e);
-    } finally {
-      setSaving(false);
+      toast.error(e);
     }
   }
 
@@ -124,11 +129,17 @@ export function PostCard({
       label: "Edit post",
       icon: "message",
       onSelect: () => {
-        setDraft(post.body);
         setEditing(true);
         setExpanded(true);
       },
     });
+  }
+  if (isOwn && post.request) {
+    menu.push(
+      post.request.closed
+        ? { label: "Reopen request", icon: "repeat", onSelect: () => setClosed(false) }
+        : { label: "Close request", icon: "check", onSelect: () => setClosed(true) },
+    );
   }
   if (isOwn && post.viewer.canDelete) menu.push({ label: "Delete post", icon: "x", danger: true, onSelect: () => setModal("delete") });
   if (!isOwn) {
@@ -142,6 +153,54 @@ export function PostCard({
 
   const moderated = post.moderationState && post.moderationState !== "visible";
   const bodyText = long ? `${post.body.slice(0, CLAMP_AT).trimEnd()}…` : post.body;
+
+  const articleDetail = detail && post.article ? post.article : null;
+  const answerLabel = post.type === "question" ? "Answer" : "Comment";
+
+  function saved(next: PostView) {
+    update(next);
+    setEditing(false);
+  }
+
+  const header = (
+    <header className="flex w-full items-start gap-3">
+      <Link href={`/members/${post.author.handle}`} tabIndex={-1} aria-hidden="true">
+        <MemberAvatar member={post.author} />
+      </Link>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span id={`${id}-author`}>
+          <AuthorName member={post.author} />
+        </span>
+        <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-secondary">
+          {post.author.headline && <span className="truncate">{post.author.headline}</span>}
+          {post.author.headline && <span aria-hidden="true">·</span>}
+          {post.chapter && (
+            <>
+              <Link href={`/chapters/${post.chapter.slug}`} className="hover:underline">
+                {post.chapter.name}
+              </Link>
+              <span aria-hidden="true">·</span>
+            </>
+          )}
+          <Link href={postHref(post.id)} className="hover:underline">
+            <TimeAgo iso={post.createdAt} />
+          </Link>
+          {articleDetail && (
+            <span>
+              <span aria-hidden="true">· </span>
+              {articleDetail.readingMinutes} min read
+            </span>
+          )}
+          {post.editedAt && (
+            <span title="Edited">
+              <span aria-hidden="true">· </span>Edited
+            </span>
+          )}
+        </p>
+      </div>
+      <Menu label={`More options for ${subject}`} items={menu} />
+    </header>
+  );
 
   return (
     <article
@@ -180,121 +239,99 @@ export function PostCard({
         </div>
       )}
 
-      <header className="flex w-full items-start gap-3">
-        <Link href={`/members/${post.author.handle}`} tabIndex={-1} aria-hidden="true">
-          <MemberAvatar member={post.author} />
-        </Link>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span id={`${id}-author`}>
-            <AuthorName member={post.author} />
-          </span>
-          <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-secondary">
-            {post.author.headline && <span className="truncate">{post.author.headline}</span>}
-            {post.author.headline && <span aria-hidden="true">·</span>}
-            {post.chapter && (
+      {articleDetail ? (
+        <>
+          <ArticleCover article={articleDetail} className="aspect-[2/1] max-h-[400px] rounded-[10px]" />
+          <div className="flex flex-col gap-2">
+            <p className="flex items-center gap-1.5 text-label text-accent-hover">
+              <Icon name="book" size={14} />
+              Article
+            </p>
+            {!editing && (
               <>
-                <Link href={`/chapters/${post.chapter.slug}`} className="hover:underline">
-                  {post.chapter.name}
-                </Link>
-                <span aria-hidden="true">·</span>
+                <h1 className="text-h1 text-ink max-sm:text-h2">{articleDetail.title}</h1>
+                {articleDetail.subtitle && <p className="text-h3 font-normal text-body max-sm:text-md">{articleDetail.subtitle}</p>}
               </>
             )}
-            <Link href={postHref(post.id)} className="hover:underline">
-              <TimeAgo iso={post.createdAt} />
-            </Link>
-            {post.editedAt && (
-              <span title={`Edited`}>
-                <span aria-hidden="true">· </span>Edited
-              </span>
-            )}
-          </p>
-        </div>
-        <Menu label={`More options for ${subject}`} items={menu} />
-      </header>
-
-      {post.isRepost && !post.body && (
-        <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
-          <Icon name="repeat" size={14} />
-          Reposted
-        </p>
-      )}
-
-      {editing ? (
-        <div className="flex flex-col gap-2">
-          <label htmlFor={`${id}-edit`} className="sr-only">
-            Edit your post
-          </label>
-          <textarea
-            id={`${id}-edit`}
-            value={draft}
-            autoFocus
-            onChange={(event) => setDraft(event.target.value)}
-            maxLength={POST_MAX_CHARS}
-            rows={Math.min(12, Math.max(3, draft.split("\n").length + 1))}
-            className="w-full resize-y rounded-lg border border-line bg-card px-3 py-2 text-md text-ink outline-none focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
-          />
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-secondary">
-              {draft.length.toLocaleString("en-US")} / {POST_MAX_CHARS.toLocaleString("en-US")} · Edited posts are marked “Edited”.
-            </p>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="small" onClick={() => setEditing(false)}>
-                Cancel
-              </Button>
-              <Button size="small" onClick={saveEdit} disabled={saving}>
-                {saving ? "Saving…" : "Save"}
-              </Button>
-            </div>
           </div>
-          <div aria-live="polite">
-            {editError ? (
-              editError instanceof Error && editError.message === "empty" ? (
-                <p role="alert" className="text-xs text-error">
-                  Write something before saving.
-                </p>
-              ) : (
-                <ErrorNotice error={editError} />
-              )
-            ) : null}
-          </div>
-        </div>
+          {header}
+          <div className="h-px w-full bg-line" />
+          {editing ? (
+            <PostEditForm post={post} onSaved={saved} onCancel={() => setEditing(false)} />
+          ) : (
+            <Markdown text={post.body} mentions={post.mentions} className="text-[16px] leading-7" />
+          )}
+        </>
       ) : (
-        post.body && (
-          <div className="w-full text-md text-ink">
-            <RichText text={bodyText} mentions={post.mentions} />
-            {long && (
-              <button type="button" onClick={() => setExpanded(true)} className="mt-1 rounded-sm text-sm font-medium text-secondary hover:text-primary hover:underline">
-                See more<span className="sr-only"> of {subject}</span>
-              </button>
-            )}
-          </div>
-        )
-      )}
+        <>
+          {header}
 
-      {post.attachments.length > 0 && <PostAttachments attachments={post.attachments} />}
-      {post.poll && <PostPoll postId={post.id} poll={post.poll} onUpdated={update} />}
-      {post.linkPreview && !post.isRepost && <LinkPreviewCard preview={post.linkPreview} />}
-      {post.isRepost && <RepostEmbed original={post.repostOf} />}
+          {post.isRepost && !post.body && (
+            <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
+              <Icon name="repeat" size={14} />
+              Reposted
+            </p>
+          )}
+
+          {post.question && !editing && <QuestionLabel question={post.question} />}
+          {post.celebration && !editing && <CelebrationBand celebration={post.celebration} headingLevel={detail ? 2 : 3} />}
+          {post.request && !editing && <RequestBlock post={post} viewerId={viewer.id} detail={detail} onUpdated={update} />}
+
+          {editing ? (
+            <PostEditForm post={post} onSaved={saved} onCancel={() => setEditing(false)} />
+          ) : post.article ? (
+            <ArticlePreview post={post} />
+          ) : (
+            post.body && (
+              <div className={cn("w-full", post.type === "question" ? "text-h3 text-ink" : "text-md text-ink")}>
+                <RichText text={bodyText} mentions={post.mentions} />
+                {long && (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(true)}
+                    className="mt-1 rounded-sm text-sm font-medium text-secondary hover:text-primary hover:underline"
+                  >
+                    See more<span className="sr-only"> of {subject}</span>
+                  </button>
+                )}
+              </div>
+            )
+          )}
+
+          {post.attachments.length > 0 && !post.article && <PostAttachments attachments={post.attachments} />}
+          {post.poll && <PostPoll postId={post.id} poll={post.poll} onUpdated={update} />}
+          {post.linkPreview && !post.isRepost && !post.article && <LinkPreviewCard preview={post.linkPreview} />}
+          {post.isRepost && <RepostEmbed original={post.repostOf} />}
+          {post.question && !editing && <QuestionFooterNote post={post} detail={detail} />}
+        </>
+      )}
 
       <PostCounts post={post} total={reactions.total} breakdown={reactions.breakdown ?? post.reactionBreakdown} />
 
       <div className="h-px w-full bg-line" />
 
       <footer className="flex w-full flex-wrap items-center justify-between gap-y-1">
-        <ReactionButton targetType="post" targetId={post.id} state={reactions} onChange={setReactions} subject={subject} />
+        <ReactionButton
+          targetType="post"
+          targetId={post.id}
+          state={reactions}
+          onChange={setReactions}
+          subject={subject}
+          primary={post.celebration ? { kind: "support", label: "Congratulate", activeLabel: "Congratulated", icon: "flame" } : undefined}
+        />
         {detail ? (
           <a href="#add-comment" className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary">
             <Icon name="message" size={18} />
-            <span className="max-sm:sr-only">Comment</span>
+            <span className="max-sm:sr-only">{answerLabel}</span>
           </a>
         ) : (
           <Link
-            href={`${postHref(post.id)}#comments`}
+            href={`${postHref(post.id)}#${post.type === "question" ? "add-comment" : "comments"}`}
             className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
           >
             <Icon name="message" size={18} />
-            <span className="max-sm:sr-only">Comment</span>
-            <span className="sr-only"> on {subject}</span>
+            <span className="max-sm:sr-only">{answerLabel}</span>
+            <span className="sr-only"> {post.type === "question" ? "the question in" : "on"} {subject}</span>
           </Link>
         )}
         <button

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import type { CommentView, MemberProfile, Page, PostView, TopicView } from "@chartermission/contracts";
+import type { CommentView, HelpOfferView, MemberProfile, Page, PostView, TopicView } from "@chartermission/contracts";
 import { Chip, Icon, Panel } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { requireClientViewer } from "@/components/social/data";
@@ -11,12 +11,22 @@ import { PostCard } from "@/components/social/post-card";
 import { SectionRail } from "@/components/social/section-nav";
 import { LoadingStatus, PanelSkeleton, PostSkeleton } from "@/components/social/skeletons";
 import { AuthorCard } from "@/components/social/author-card";
+import { HelpOffersPanel } from "@/components/social/post-types/help-offers";
+import { stripMarkdown } from "@/components/social/post-types/markdown";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { Comments } from "./comments";
 
-export const metadata: Metadata = { title: "Post" };
-
 type Params = PageProps<"/posts/[id]">["params"];
+
+export async function generateMetadata({ params }: PageProps<"/posts/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  if (!isUuid(id)) return { title: "Post" };
+  const post = await apiGetOrNull<PostView>(`/posts/${id}`).catch(() => null);
+  if (!post) return { title: "Post" };
+  if (post.article) return { title: post.article.title, description: post.article.subtitle ?? stripMarkdown(post.body).slice(0, 160) };
+  const lead = post.celebration?.headline ?? post.request?.title ?? stripMarkdown(post.body).slice(0, 70);
+  return { title: lead ? `${post.author.name}: ${lead}` : `Post by ${post.author.name}` };
+}
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
@@ -32,12 +42,26 @@ async function PostMain({ params }: { params: Params }) {
   const { id } = await params;
   const viewer = await requireClientViewer(`/posts/${id}`);
   const post = await loadPost(params);
-  const comments = await apiGet<Page<CommentView>>(`/posts/${post.id}/comments`, { sort: "relevant" }).catch(() => null);
+  const isOwnRequest = post.type === "request" && post.author.id === viewer.id;
+  const [comments, offers] = await Promise.all([
+    apiGet<Page<CommentView>>(`/posts/${post.id}/comments`, { sort: "relevant" }).catch(() => null),
+    isOwnRequest ? apiGet<HelpOfferView[]>(`/posts/${post.id}/help`).catch(() => null) : Promise.resolve(null),
+  ]);
+  const heading =
+    post.type === "question" ? `Question from ${post.author.name}` : post.type === "request" ? `${post.author.name} is looking for help` : `Post by ${post.author.name}`;
   return (
     <>
-      <h1 className="sr-only">Post by {post.author.name}</h1>
+      {/* Articles use their title as the page heading. */}
+      {!post.article && <h1 className="sr-only">{heading}</h1>}
       <PostCard post={post} viewer={viewer} detail />
-      <Comments postId={post.id} initial={comments} total={post.counts.comments} viewer={viewer} />
+      {isOwnRequest && <HelpOffersPanel offers={offers} closed={post.request?.closed ?? false} />}
+      <Comments
+        postId={post.id}
+        initial={comments}
+        total={post.counts.comments}
+        viewer={viewer}
+        question={post.question ? { acceptedCommentId: post.question.acceptedCommentId, askerId: post.author.id } : null}
+      />
     </>
   );
 }
