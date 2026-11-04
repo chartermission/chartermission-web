@@ -6,6 +6,7 @@ import { CHAPTERS, COUNTRIES, DEMO_PASSWORD, INTERESTS, LANGUAGES, MEMBERS, SECT
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
 import { DEFAULT_FIELD_VISIBILITY } from '@chartermission/contracts';
+import { isMain } from './is-main.js';
 
 const slug = (v: string) => v.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -128,4 +129,4 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (isMain(import.meta.url)) await main();

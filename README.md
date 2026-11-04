@@ -35,6 +35,10 @@ Next apps: both proxy `/api/v1/*` to the API (`API_INTERNAL_URL`), so session co
 Run one app: `pnpm dev:web`, `pnpm dev:admin` or `pnpm dev:api`. Reset demo data with
 `pnpm --filter @chartermission/api db:reset`.
 
+If pages fail with "Something went wrong" and `db:migrate` errors or connects to the wrong database, check that no other
+PostgreSQL is listening on port 5432 (`lsof -nP -iTCP:5432 -sTCP:LISTEN`). A Homebrew or Postgres.app server on
+`127.0.0.1:5432` takes `localhost` connections before Docker does; stop it, or point `DATABASE_URL` at another port.
+
 ### Demo accounts
 
 All seeded accounts use the password `charter-mission-demo` and have verified emails and finished onboarding.

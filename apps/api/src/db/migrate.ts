@@ -2,6 +2,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createDb, createPool } from './client.js';
+import { isMain } from './is-main.js';
 
 /** Apply pending migrations. Used by `pnpm db:migrate`, tests and the Railway release step. */
 export async function runMigrations(url?: string) {
@@ -15,7 +16,7 @@ export async function runMigrations(url?: string) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   await runMigrations();
   console.log('Migrations applied');
 }
