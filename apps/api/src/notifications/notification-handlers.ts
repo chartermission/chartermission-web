@@ -29,6 +29,87 @@ export class NotificationHandlers implements OnModuleInit {
     this.events.on('post.reposted', (e) => this.onRepost(e));
     this.events.on('upload.rejected', (e) => this.onUploadRejected(e));
     this.events.on('trending.updated', (e) => this.onTrending(e));
+    this.events.on('answer.accepted', (e) => this.onAnswerAccepted(e));
+    this.events.on('help.offered', (e) => this.onHelpOffered(e));
+    this.events.on('scheduled.published', (e) => this.onScheduledPublished(e));
+    this.events.on('scheduled.failed', (e) => this.onScheduledFailed(e));
+  }
+
+  private async onAnswerAccepted(e: { postId: string; commentId: string; commentAuthorId: string; actorId: string }) {
+    const name = await this.actorName(e.actorId);
+    await this.notify.notify({
+      userId: e.commentAuthorId,
+      type: 'answer_accepted',
+      actorId: e.actorId,
+      objectType: 'comment',
+      objectId: e.commentId,
+      segments: [{ text: ' marked your answer as the best answer', strong: false }],
+      href: `/posts/${e.postId}#comment-${e.commentId}`,
+      icon: 'check',
+      dedupeKey: `answer_accepted:${e.commentId}`,
+      email: {
+        subject: `${name} marked your answer as the best answer`,
+        heading: 'Your answer helped',
+        paragraphs: [`${name} marked your answer as the best answer to their question on Charter Mission.`],
+        buttonLabel: 'View the question',
+      },
+    });
+  }
+
+  /** Offers of help are batched per request for an hour: "Amina and 2 others offered to help". */
+  private async onHelpOffered(e: { postId: string; authorId: string; helperId: string }) {
+    const [post] = await this.db.select({ details: posts.details }).from(posts).where(eq(posts.id, e.postId)).limit(1);
+    const title = typeof post?.details?.title === 'string' ? post.details.title : 'your request';
+    await this.notify.notify({
+      userId: e.authorId,
+      type: 'help_offered',
+      actorId: e.helperId,
+      objectType: 'post',
+      objectId: e.postId,
+      segments: [
+        { text: ' offered to help with ', strong: false },
+        { text: title, strong: true },
+      ],
+      href: `/posts/${e.postId}#offers`,
+      icon: 'users',
+      dedupeKey: `help_offered:${e.postId}`,
+      windowMinutes: 60,
+    });
+  }
+
+  private async onScheduledPublished(e: { draftId: string; postId: string; authorId: string }) {
+    await this.notify.notify({
+      userId: e.authorId,
+      type: 'scheduled_post_published',
+      objectType: 'post',
+      objectId: e.postId,
+      segments: [{ text: 'Your scheduled post is now live', strong: false }],
+      href: `/posts/${e.postId}`,
+      icon: 'clock',
+      dedupeKey: `scheduled_published:${e.draftId}`,
+    });
+  }
+
+  private async onScheduledFailed(e: { draftId: string; authorId: string; reason: string }) {
+    await this.notify.notify({
+      userId: e.authorId,
+      type: 'scheduled_post_failed',
+      objectType: 'draft',
+      objectId: e.draftId,
+      segments: [
+        { text: 'Your scheduled post could not be published: ', strong: false },
+        { text: e.reason, strong: true },
+      ],
+      href: '/drafts?tab=scheduled',
+      icon: 'alert',
+      dedupeKey: `scheduled_failed:${e.draftId}`,
+      email: {
+        subject: 'Your scheduled post was not published',
+        heading: 'Your scheduled post was not published',
+        paragraphs: [`We could not publish your scheduled post: ${e.reason}`, 'Open your scheduled posts to fix it and try again.'],
+        buttonLabel: 'Open scheduled posts',
+      },
+    });
   }
 
   private async actorName(id: string) {

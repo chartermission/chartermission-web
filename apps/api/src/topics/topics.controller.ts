@@ -2,7 +2,9 @@ import { Controller, Get, Param } from '@nestjs/common';
 import {
   HashtagSuggestQuery,
   TopicPostsQuery,
+  TopicsQuery,
   TrendingQuery,
+  type TopicSummary,
   type HashtagSuggestion,
   type Page,
   type PostView,
@@ -17,6 +19,13 @@ import { TopicsService } from './topics.service.js';
 @Controller()
 export class TopicsController {
   constructor(private readonly topics: TopicsService) {}
+
+  /** Explore page lists. Declared before topics/:tag so "topics" alone is not read as a tag. */
+  @Get('topics')
+  @Access('member')
+  list(@Auth() ctx: AuthContext, @ZQuery(TopicsQuery) q: TopicsQuery): Promise<Page<TopicSummary>> {
+    return this.topics.list(ctx.user, q);
+  }
 
   @Get('topics/:tag')
   @Access('member')

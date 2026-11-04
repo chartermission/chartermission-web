@@ -20,7 +20,11 @@ export type DomainEvent =
   | { type: 'report.resolved'; reportId: string; outcome: 'actioned' | 'dismissed' }
   | { type: 'appeal.decided'; appealId: string }
   | { type: 'upload.rejected'; fileId: string; ownerId: string }
-  | { type: 'trending.updated'; tags: string[] };
+  | { type: 'trending.updated'; tags: string[] }
+  | { type: 'answer.accepted'; postId: string; commentId: string; commentAuthorId: string; actorId: string }
+  | { type: 'help.offered'; postId: string; authorId: string; helperId: string }
+  | { type: 'scheduled.published'; draftId: string; postId: string; authorId: string }
+  | { type: 'scheduled.failed'; draftId: string; authorId: string; reason: string };
 
 @Injectable()
 export class EventsService {

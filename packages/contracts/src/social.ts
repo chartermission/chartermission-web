@@ -7,13 +7,90 @@ import { ChapterRef, MemberRef } from "./common.js";
  */
 
 export const POST_MAX_CHARS = 3000;
+/** Articles (long-form posts) allow a longer body. */
+export const ARTICLE_MAX_CHARS = 20000;
+/** Shortest article body worth publishing as an article. */
+export const ARTICLE_MIN_CHARS = 200;
 export const COMMENT_MAX_CHARS = 1500;
+export const ALT_TEXT_MAX_CHARS = 300;
+/** Article reading time: words per minute, rounded up, at least 1 minute. */
+export const READING_WPM = 220;
 
 export const ReactionKind = z.enum(["like", "insightful", "support"]);
 export type ReactionKind = z.infer<typeof ReactionKind>;
 
 export const PostKind = z.enum(["standard", "announcement"]);
 export type PostKind = z.infer<typeof PostKind>;
+
+/**
+ * What a post is. "kind" says who it comes from (an announcement is a platform-team
+ * post); "type" says what shape it has:
+ *  - standard: text, photos, a document, a poll or a link;
+ *  - question: Ask the community; comments are answers and the author can mark the best one;
+ *  - celebration: a milestone (new role, launch, funding, award, graduation);
+ *  - request: "Looking for…" a co-founder, mentor, volunteers, partners, a hire or advice;
+ *  - article: long-form, with a title, an optional cover image and headings.
+ */
+export const PostType = z.enum(["standard", "question", "celebration", "request", "article"]);
+export type PostType = z.infer<typeof PostType>;
+
+export const CelebrationCategory = z.enum(["new_role", "launch", "funding", "award", "graduation", "milestone"]);
+export type CelebrationCategory = z.infer<typeof CelebrationCategory>;
+
+export const CELEBRATION_LABELS: Record<CelebrationCategory, string> = {
+  new_role: "New role",
+  launch: "Launch",
+  funding: "Funding",
+  award: "Award",
+  graduation: "Graduation",
+  milestone: "Milestone",
+};
+
+export const RequestCategory = z.enum(["cofounder", "mentor", "volunteers", "partner", "hire", "advice"]);
+export type RequestCategory = z.infer<typeof RequestCategory>;
+
+export const REQUEST_LABELS: Record<RequestCategory, string> = {
+  cofounder: "Co-founder",
+  mentor: "Mentor",
+  volunteers: "Volunteers",
+  partner: "Partners",
+  hire: "Hiring",
+  advice: "Advice",
+};
+
+export const CelebrationDetails = z.object({
+  category: CelebrationCategory,
+  /** e.g. "Started as Head of Partnerships at GreenGrid Africa". */
+  headline: z.string().trim().min(3, "Add a headline").max(120),
+  organisation: z.string().trim().max(80).optional(),
+});
+export type CelebrationDetails = z.infer<typeof CelebrationDetails>;
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-12-31");
+
+export const RequestDetails = z.object({
+  category: RequestCategory,
+  /** e.g. "Looking for a technical co-founder for a cold-chain startup". */
+  title: z.string().trim().min(3, "Say what you are looking for").max(120),
+  skills: z.array(z.string().trim().min(1).max(40)).max(8, "Up to 8 skills").default([]),
+  location: z.string().trim().max(80).optional(),
+  remote: z.boolean().default(false),
+  /** Optional last day to respond (YYYY-MM-DD). */
+  closesOn: isoDate.optional(),
+});
+export type RequestDetails = z.infer<typeof RequestDetails>;
+
+export const ArticleDetails = z.object({
+  title: z.string().trim().min(5, "Give the article a title").max(150),
+  subtitle: z.string().trim().max(200).optional(),
+});
+export type ArticleDetails = z.infer<typeof ArticleDetails>;
+
+/** Words in a text, for article reading time. */
+export function readingMinutes(text: string): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / READING_WPM));
+}
 
 export const ModerationState = z.enum(["visible", "hidden", "removed"]);
 export type ModerationState = z.infer<typeof ModerationState>;
@@ -27,6 +104,8 @@ export const AttachmentView = z.object({
   sizeBytes: z.number().int(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
+  /** Description for screen readers; null when the author left it empty. */
+  alt: z.string().nullable(),
 });
 export type AttachmentView = z.infer<typeof AttachmentView>;
 
@@ -53,11 +132,38 @@ export type LinkPreview = z.infer<typeof LinkPreview>;
 
 export const ReactionCounts = z.object({ like: z.number().int(), insightful: z.number().int(), support: z.number().int() });
 
+export type QuestionState = {
+  /** The comment the author marked as the best answer. */
+  acceptedCommentId: string | null;
+  answered: boolean;
+};
+
+export type RequestState = RequestDetails & {
+  /** Closed by the author, or past closesOn. */
+  closed: boolean;
+  helpOffers: number;
+  viewerOffered: boolean;
+};
+
+export type ArticleState = {
+  title: string;
+  subtitle: string | null;
+  readingMinutes: number;
+  /** First image attachment, used as the cover. */
+  coverUrl: string | null;
+  coverAlt: string | null;
+};
+
 export type PostView = {
   id: string;
   author: MemberRef;
   body: string;
   kind: PostKind;
+  type: PostType;
+  question: QuestionState | null;
+  celebration: CelebrationDetails | null;
+  request: RequestState | null;
+  article: ArticleState | null;
   pinned: boolean;
   chapter: ChapterRef | null;
   hashtags: string[];
@@ -85,12 +191,31 @@ export type PostView = {
   moderationState?: ModerationState;
 };
 
+export const QuestionState = z.object({ acceptedCommentId: z.string().uuid().nullable(), answered: z.boolean() });
+export const RequestState = RequestDetails.extend({
+  closed: z.boolean(),
+  helpOffers: z.number().int(),
+  viewerOffered: z.boolean(),
+});
+export const ArticleState = z.object({
+  title: z.string(),
+  subtitle: z.string().nullable(),
+  readingMinutes: z.number().int(),
+  coverUrl: z.string().nullable(),
+  coverAlt: z.string().nullable(),
+});
+
 export const PostView: z.ZodType<PostView> = z.lazy(() =>
   z.object({
     id: z.string().uuid(),
     author: MemberRef,
     body: z.string(),
     kind: PostKind,
+    type: PostType,
+    question: QuestionState.nullable(),
+    celebration: CelebrationDetails.nullable(),
+    request: RequestState.nullable(),
+    article: ArticleState.nullable(),
     pinned: z.boolean(),
     chapter: ChapterRef.nullable(),
     hashtags: z.array(z.string()),
@@ -117,34 +242,170 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
   }),
 );
 
-/** POST /posts — up to 4 images or 1 document (CM-FED-01). */
-export const CreatePostInput = z
-  .object({
-    body: z.string().trim().max(POST_MAX_CHARS, `Posts can be up to ${POST_MAX_CHARS} characters`),
-    attachmentIds: z.array(z.string().uuid()).max(4).default([]),
-    poll: z
-      .object({
-        question: z.string().trim().min(1).max(200),
-        options: z.array(z.string().trim().min(1).max(80)).min(2).max(4),
-        durationHours: z.union([z.literal(24), z.literal(72), z.literal(168)]).default(72),
-      })
-      .optional(),
-    linkUrl: z.string().url().max(500).optional(),
-    repostOfId: z.string().uuid().optional(),
-    chapterId: z.string().uuid().optional(),
-    visibility: z.enum(["members", "public"]).default("members"),
-    /** Only for accounts with post.announce. */
-    kind: PostKind.default("standard"),
-  })
-  .refine((v) => v.body.length > 0 || v.repostOfId || v.attachmentIds.length > 0, {
-    message: "Write something or attach a file",
-    path: ["body"],
-  });
+/** Poll as written in the composer. */
+export const PollInput = z.object({
+  question: z.string().trim().min(1).max(200),
+  options: z.array(z.string().trim().min(1).max(80)).min(2).max(4),
+  durationHours: z.union([z.literal(24), z.literal(72), z.literal(168)]).default(72),
+});
+export type PollInput = z.infer<typeof PollInput>;
+
+/** Everything a post is made from. Shared by POST /posts and drafts. */
+export const PostComposition = z.object({
+  type: PostType.default("standard"),
+  body: z.string().trim().max(ARTICLE_MAX_CHARS),
+  attachmentIds: z.array(z.string().uuid()).max(4).default([]),
+  /** Alt text per attachment id (images). */
+  altTexts: z.record(z.string().uuid(), z.string().trim().max(ALT_TEXT_MAX_CHARS)).optional(),
+  poll: PollInput.optional(),
+  linkUrl: z.string().url().max(500).optional(),
+  repostOfId: z.string().uuid().optional(),
+  chapterId: z.string().uuid().optional(),
+  visibility: z.enum(["members", "public"]).default("members"),
+  /** Only for accounts with post.announce. */
+  kind: PostKind.default("standard"),
+  celebration: CelebrationDetails.optional(),
+  request: RequestDetails.optional(),
+  article: ArticleDetails.optional(),
+});
+export type PostComposition = z.infer<typeof PostComposition>;
+
+type Issue = { path: (string | number)[]; message: string };
+
+/** Rules for each post type. Returned as issues so drafts can show them without failing. */
+export function compositionIssues(v: PostComposition): Issue[] {
+  const issues: Issue[] = [];
+  const add = (path: string, message: string) => issues.push({ path: [path], message });
+  const max = v.type === "article" ? ARTICLE_MAX_CHARS : POST_MAX_CHARS;
+  if (v.body.length > max) add("body", `Posts can be up to ${max.toLocaleString("en")} characters`);
+  if (!v.body.length && !v.repostOfId && v.attachmentIds.length === 0 && v.type === "standard") {
+    add("body", "Write something or attach a file");
+  }
+  if (v.type !== "standard") {
+    if (v.poll) add("poll", "Polls can only be added to standard posts");
+    if (v.repostOfId) add("repostOfId", "Only standard posts can quote another post");
+  }
+  if (v.type !== "celebration" && v.celebration) add("celebration", "Only celebration posts have milestone details");
+  if (v.type !== "request" && v.request) add("request", "Only “Looking for” posts have request details");
+  if (v.type !== "article" && v.article) add("article", "Only articles have a title");
+  switch (v.type) {
+    case "question":
+      if (v.body.length < 10) add("body", "Write your question (at least 10 characters)");
+      break;
+    case "celebration":
+      if (!v.celebration) add("celebration", "Choose what you are celebrating");
+      break;
+    case "request":
+      if (!v.request) add("request", "Say what you are looking for");
+      break;
+    case "article":
+      if (!v.article) add("article", "Give the article a title");
+      if (v.body.length < ARTICLE_MIN_CHARS) add("body", `Articles need at least ${ARTICLE_MIN_CHARS} characters`);
+      if (v.attachmentIds.length > 1) add("attachmentIds", "Articles take one cover image");
+      break;
+  }
+  return issues;
+}
+
+/** POST /posts — up to 4 images or 1 document (CM-FED-01); type rules in compositionIssues. */
+export const CreatePostInput = PostComposition.superRefine((v, ctx) => {
+  for (const issue of compositionIssues(v)) ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
+});
 export type CreatePostInput = z.infer<typeof CreatePostInput>;
 
-/** PATCH /posts/{id} — author edit, marked "edited" (CM-FED-06). */
-export const UpdatePostInput = z.object({ body: z.string().trim().min(1).max(POST_MAX_CHARS) });
+/** PATCH /posts/{id} — author edit, marked "edited" (CM-FED-06). Type-specific details can be edited too. */
+export const UpdatePostInput = z.object({
+  body: z.string().trim().min(1).max(ARTICLE_MAX_CHARS),
+  altTexts: z.record(z.string().uuid(), z.string().trim().max(ALT_TEXT_MAX_CHARS)).optional(),
+  celebration: CelebrationDetails.optional(),
+  request: RequestDetails.optional(),
+  article: ArticleDetails.optional(),
+});
 export type UpdatePostInput = z.infer<typeof UpdatePostInput>;
+
+/** PUT /posts/{id}/accepted-answer — question author marks the best answer. */
+export const AcceptAnswerInput = z.object({ commentId: z.string().uuid() });
+export type AcceptAnswerInput = z.infer<typeof AcceptAnswerInput>;
+
+/** PUT /posts/{id}/closed — request author closes or reopens a "Looking for" post. */
+export const CloseRequestInput = z.object({ closed: z.boolean() });
+export type CloseRequestInput = z.infer<typeof CloseRequestInput>;
+
+/** PUT /posts/{id}/help — "I can help" on a request, with an optional note to the author. */
+export const HelpOfferInput = z.object({ note: z.string().trim().max(500).default("") });
+export type HelpOfferInput = z.infer<typeof HelpOfferInput>;
+
+/** GET /posts/{id}/help — request author only. */
+export const HelpOfferView = z.object({ member: MemberRef, note: z.string(), createdAt: z.string() });
+export type HelpOfferView = z.infer<typeof HelpOfferView>;
+
+/* ---------- Drafts and scheduled posts ---------- */
+
+/** Composer state saved as a draft: any field may be missing or incomplete. */
+export const DraftPayload = PostComposition.extend({
+  body: z.string().max(ARTICLE_MAX_CHARS).default(""),
+  poll: z
+    .object({
+      question: z.string().max(200).default(""),
+      options: z.array(z.string().max(80)).max(4).default([]),
+      durationHours: z.union([z.literal(24), z.literal(72), z.literal(168)]).default(72),
+    })
+    .optional(),
+  // Details as typed so far: lengths are capped, but nothing is required yet.
+  celebration: z
+    .object({ category: CelebrationCategory.optional(), headline: z.string().max(120).optional(), organisation: z.string().max(80).optional() })
+    .optional(),
+  request: z
+    .object({
+      category: RequestCategory.optional(),
+      title: z.string().max(120).optional(),
+      skills: z.array(z.string().max(40)).max(8).optional(),
+      location: z.string().max(80).optional(),
+      remote: z.boolean().optional(),
+      closesOn: z.string().max(10).optional(),
+    })
+    .optional(),
+  article: z.object({ title: z.string().max(150).optional(), subtitle: z.string().max(200).optional() }).optional(),
+});
+export type DraftPayload = z.infer<typeof DraftPayload>;
+
+/** A scheduled post publishes between 5 minutes and 60 days from now. */
+export const SCHEDULE_MIN_MINUTES = 5;
+export const SCHEDULE_MAX_DAYS = 60;
+export const MAX_DRAFTS = 50;
+
+export const DraftStatus = z.enum(["draft", "scheduled", "failed"]);
+export type DraftStatus = z.infer<typeof DraftStatus>;
+
+/** POST /me/drafts and PATCH /me/drafts/{id}. scheduledFor turns a draft into a scheduled post; null unschedules. */
+export const SaveDraftInput = z.object({
+  payload: DraftPayload,
+  scheduledFor: z.string().datetime({ offset: true }).nullable().optional(),
+});
+export type SaveDraftInput = z.infer<typeof SaveDraftInput>;
+
+export const DraftView = z.object({
+  id: z.string().uuid(),
+  status: DraftStatus,
+  payload: DraftPayload,
+  scheduledFor: z.string().nullable(),
+  /** Why a scheduled post could not be published (status "failed"). */
+  lastError: z.string().nullable(),
+  /** Short text for lists: article title, request title, or the start of the body. */
+  preview: z.string(),
+  attachments: z.array(z.object({ id: z.string().uuid(), url: z.string().nullable(), kind: z.enum(["image", "document"]), name: z.string().nullable() })),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type DraftView = z.infer<typeof DraftView>;
+
+/** GET /me/drafts?status=draft|scheduled */
+export const DraftsQuery = z.object({
+  status: z.enum(["draft", "scheduled"]).default("draft"),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type DraftsQuery = z.infer<typeof DraftsQuery>;
 
 /** GET /feed (CM-FED-07: cursor pagination, 20 per page). */
 export const FeedQuery = z.object({
@@ -162,10 +423,30 @@ export const FeedQuery = z.object({
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
     .transform((v) => v === true || v === "true" || v === "1")
     .optional(),
+  /** Only one type of post, e.g. questions. */
+  type: PostType.optional(),
+  /** With type=question: questions without an accepted answer. Same boolean encoding as announcements. */
+  unanswered: z
+    .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+    .transform((v) => v === true || v === "true" || v === "1")
+    .optional(),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 export type FeedQuery = z.infer<typeof FeedQuery>;
+
+/** GET /feed/new — same filters as /feed, counts posts newer than `since` (for the "new posts" pill). */
+export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true }).extend({
+  since: z.string().datetime({ offset: true }),
+});
+export type FeedNewQuery = z.infer<typeof FeedNewQuery>;
+
+export const FeedNewResponse = z.object({
+  count: z.number().int(),
+  /** Up to 3 authors of the new posts, for the avatars on the pill. */
+  authors: z.array(MemberRef),
+});
+export type FeedNewResponse = z.infer<typeof FeedNewResponse>;
 
 /** POST /posts/{id}/poll/vote */
 export const PollVoteInput = z.object({ optionId: z.string().uuid() });
@@ -183,6 +464,8 @@ export type CommentView = {
   createdAt: string;
   editedAt: string | null;
   isPostAuthor: boolean;
+  /** Marked by the question's author as the best answer. */
+  isAcceptedAnswer: boolean;
   counts: { reactions: number; replies: number };
   reactionBreakdown: z.infer<typeof ReactionCounts>;
   viewer: { reaction: ReactionKind | null; canEdit: boolean; canDelete: boolean; canReport: boolean };
@@ -201,6 +484,7 @@ export const CommentView: z.ZodType<CommentView> = z.lazy(() =>
     createdAt: z.string(),
     editedAt: z.string().nullable(),
     isPostAuthor: z.boolean(),
+    isAcceptedAnswer: z.boolean(),
     counts: z.object({ reactions: z.number().int(), replies: z.number().int() }),
     reactionBreakdown: ReactionCounts,
     viewer: z.object({
@@ -290,6 +574,27 @@ export const TopicPostsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 export type TopicPostsQuery = z.infer<typeof TopicPostsQuery>;
+
+/** GET /topics?sort=popular|new|followed&q= — the explore page. */
+export const TopicsQuery = z.object({
+  sort: z.enum(["popular", "new", "followed"]).default("popular"),
+  q: z.string().trim().max(51).optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type TopicsQuery = z.infer<typeof TopicsQuery>;
+
+export const TopicSummary = z.object({
+  tag: z.string(),
+  description: z.string().nullable(),
+  posts: z.number().int(),
+  followers: z.number().int(),
+  following: z.boolean(),
+  /** Posts in the last 7 days. */
+  posts7d: z.number().int(),
+  createdAt: z.string(),
+});
+export type TopicSummary = z.infer<typeof TopicSummary>;
 
 export const TrendingScope = z.enum(["global", "country", "chapter"]);
 export type TrendingScope = z.infer<typeof TrendingScope>;

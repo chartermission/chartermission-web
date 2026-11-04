@@ -99,6 +99,26 @@ const EXTRA: [Key, number, string][] = [
 ];
 
 /** Owais's follows (mock-data.ts followedHashtags + people he follows). */
+const ARTICLE_BODY = `Exporters keep asking the same question: does my product qualify for AfCFTA preferences? For textiles the answer depends on three things — where the fabric was made, how much work happened in your country, and whether you can prove it at the border.
+
+## Cumulation is your friend
+
+Materials from any other AfCFTA state party count as originating, as long as they come with their own certificate. A Moroccan garment maker using Egyptian cotton yarn can treat that yarn as local. Read the cumulation clause twice: it only works when every step in the chain is documented.
+
+## Mind the tolerance
+
+The tolerance rule lets a small share of non-originating materials through — useful for buttons, zips and labels sourced from outside the continent. Keep it under the threshold for your product line and keep the invoices.
+
+## The paperwork that trips people up
+
+- A certificate of origin from the competent authority, not a commercial invoice note.
+- A supplier declaration for every originating input.
+- Records kept for at least five years.
+
+Most rejected shipments in the pilot phase failed on documents, not on the rules themselves. Get the paperwork right before the first container and the preferences follow.
+
+#AfCFTA #TradeAfrica`;
+
 const OWAIS_FOLLOWS = {
   members: ['amara', 'kwame', 'wanjiru', 'leila', 'team'] as Key[],
   hashtags: ['africantech', 'climateaction', 'diasporainvest', 'womeninleadership'],
@@ -141,6 +161,8 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
       link?: LinkPreview;
       visibility?: 'members' | 'public';
       repostOf?: string;
+      type?: 'standard' | 'question' | 'celebration' | 'request' | 'article';
+      details?: Record<string, unknown>;
     } = {},
   ) {
     const createdAt = new Date(now - agoMs);
@@ -150,6 +172,8 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
         authorId: uid(author),
         body,
         kind: opts.kind ?? 'standard',
+        type: opts.type ?? 'standard',
+        details: opts.details ?? null,
         visibility: opts.visibility ?? 'members',
         chapterId: opts.chapter ? chapter(opts.chapter) : null,
         countryCode: COUNTRY[author] ?? null,
@@ -371,6 +395,134 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
 
   for (const [author, hoursAgo, body] of EXTRA) await post(author, body, hoursAgo * H);
 
+  /* ---------- Questions, celebrations, requests and an article ---------- */
+
+  const sheaQuestion = await post(
+    'chinedu',
+    'What is the fastest way to get an export licence for shea butter from Ghana to the EU? Our first buyer wants a sample shipment in January. #TradeAfrica #AgriTech',
+    20 * H,
+    { type: 'question' },
+  );
+  const firstAnswer = await comment(sheaQuestion, 'amara', 'Register with GEPA first — the exporter certificate takes about two weeks if your documents are in order.', 19 * H);
+  const bestAnswer = await comment(
+    sheaQuestion,
+    'kwame',
+    'Do the GEPA registration and the FDA product listing in parallel, then book the EU phytosanitary inspection with PPRSD. Doing them one after another is what usually adds a month.',
+    18 * H,
+  );
+  await comment(sheaQuestion, 'chinedu', 'This saved us weeks — thank you!', 17 * H, { parentId: bestAnswer });
+  await react('comment', bestAnswer, 'amara');
+  await react('comment', bestAnswer, 'leila', 'insightful');
+  await react('comment', firstAnswer, 'chinedu');
+  await db.update(s.posts).set({ acceptedCommentId: bestAnswer }).where(eq(s.posts.id, sheaQuestion));
+
+  const momoQuestion = await post(
+    'yohannes',
+    'Has anyone integrated M-Pesa and MTN MoMo in one checkout? Which aggregator did you use, and how long did onboarding take? #Fintech',
+    7 * H,
+    { type: 'question' },
+  );
+  await comment(momoQuestion, 'fatou', 'We looked at three aggregators last year; happy to share our comparison sheet.', 6 * H);
+
+  const seedRound = await post(
+    'thabo',
+    'Two years of pilots, 40 village micro-grids and a lot of patient partners. Thank you to everyone in this community who opened doors. #CleanEnergy',
+    9 * H,
+    { type: 'celebration', details: { category: 'funding', headline: 'GreenGrid Africa closed its $2M seed round', organisation: 'GreenGrid Africa' } },
+  );
+  for (const who of ['amara', 'kwame', 'wanjiru', 'fatou', 'owais'] as Key[]) await react('post', seedRound, who, 'support');
+  await comment(seedRound, 'wanjiru', 'Congratulations Thabo! Well deserved.', 8 * H);
+
+  const newRole = await post(
+    'leila',
+    'Starting a new chapter: I am joining the AfCFTA Secretariat’s rules-of-origin team. Still very much here for your questions. #AfCFTA',
+    30 * H,
+    { type: 'celebration', details: { category: 'new_role', headline: 'Joined the AfCFTA Secretariat as Rules of Origin Adviser', organisation: 'AfCFTA Secretariat' } },
+  );
+  for (const who of ['amara', 'chinedu', 'kwame'] as Key[]) await react('post', newRole, who, 'support');
+
+  const cofounder = await post(
+    'amara',
+    'Lagos AgriHub is spinning out its cold-chain unit. We have paying customers and a pilot hub; we need someone who has shipped IoT hardware at scale to lead the product. Equity plus salary from day one. #AgriTech',
+    4 * H,
+    {
+      type: 'request',
+      details: {
+        category: 'cofounder',
+        title: 'Technical co-founder for a cold-chain startup',
+        skills: ['IoT', 'Embedded systems', 'Logistics', 'Team building'],
+        location: 'Lagos, Nigeria',
+        remote: true,
+      },
+    },
+  );
+  await db.insert(s.postHelpOffers).values([
+    { postId: cofounder, userId: uid('kwame'), note: 'Not me, but I know two hardware leads in Accra — happy to introduce.' },
+    { postId: cofounder, userId: uid('chinedu'), note: 'I can help with product design for the farmer app.' },
+  ]);
+
+  await post(
+    'wanjiru',
+    'Our Nairobi hackathon still needs mentors with hardware or carbon-finance experience. One Saturday, lunch on us. #CleanCooking #NairobiChapter',
+    10 * H,
+    {
+      type: 'request',
+      chapter: 'nairobi',
+      details: {
+        category: 'volunteers',
+        title: 'Mentors for the Clean Cooking Hackathon on 28 November',
+        skills: ['Hardware', 'Carbon finance', 'Pitch coaching'],
+        location: 'Nairobi, Kenya',
+        remote: false,
+        closesOn: '2026-11-27',
+      },
+    },
+  );
+
+  const article = await post('leila', ARTICLE_BODY, 26 * H, {
+    type: 'article',
+    details: {
+      title: 'What the new rules of origin mean for textile exporters',
+      subtitle: 'Cumulation, tolerance and the paperwork that trips people up',
+    },
+  });
+  await attachDemoImage(db, article, uid('leila'), 'Rules of origin · textiles');
+  await db
+    .update(s.postAttachments)
+    .set({ alt: 'Gradient cover reading “Rules of origin · textiles”' })
+    .where(eq(s.postAttachments.postId, article));
+  for (const who of ['amara', 'kwame', 'chinedu', 'fatou'] as Key[]) await react('post', article, who, 'insightful');
+  await comment(article, 'amara', 'The cumulation section is exactly what we needed for our Ghana co-packer.', 20 * H);
+
+  /* ---------- A draft and a scheduled post for the demo founder account ---------- */
+
+  await db.insert(s.postDrafts).values([
+    {
+      authorId: uid('owais'),
+      status: 'draft',
+      payload: {
+        type: 'article',
+        body: 'Notes from Dubai: what GCC investors ask African founders first.',
+        article: { title: 'What GCC investors ask African founders first' },
+        attachmentIds: [],
+        visibility: 'members',
+        kind: 'standard',
+      },
+    },
+    {
+      authorId: uid('owais'),
+      status: 'scheduled',
+      scheduledFor: new Date(now + 26 * H),
+      payload: {
+        type: 'standard',
+        body: 'Reminder: Diaspora Investment Forum registrations close this Friday. #DiasporaInvest',
+        attachmentIds: [],
+        visibility: 'members',
+        kind: 'standard',
+      },
+    },
+  ]);
+
   /* ---------- Hashtag descriptions and follows ---------- */
 
   for (const [tag, description] of Object.entries(TOPIC_DESCRIPTIONS)) {
@@ -421,7 +573,7 @@ async function attachDemoImage(db: Db, postId: string, ownerId: string, label: s
         ownerId,
         purpose: 'post_image',
         storageKey: 'pending',
-        originalName: 'kigali-workshop.jpg',
+        originalName: `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.jpg`,
         declaredMime: 'image/jpeg',
         mime: 'image/jpeg',
         sizeBytes: data.length,

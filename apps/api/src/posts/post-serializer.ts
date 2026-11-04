@@ -1,10 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
-import type { AttachmentView, ChapterRef, MemberRef, PollView, PostKind, PostView, ReactionKind } from '@chartermission/contracts';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  ArticleDetails,
+  CelebrationDetails,
+  RequestDetails,
+  readingMinutes,
+  type AttachmentView,
+  type ChapterRef,
+  type MemberRef,
+  type PollView,
+  type PostKind,
+  type PostType,
+  type PostView,
+  type ReactionKind,
+  type RequestState,
+} from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import {
   bookmarks,
   chapters,
+  comments,
   files,
   hashtags,
   mentions,
@@ -13,6 +28,7 @@ import {
   polls,
   postAttachments,
   postHashtags,
+  postHelpOffers,
   posts,
   reactions,
   users,
@@ -79,7 +95,7 @@ export class PostSerializer {
     }
 
     const postIds = rows.map((r) => r.id);
-    const [authorRefs, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState] = await Promise.all([
+    const [authorRefs, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
       this.chapters(rows),
       this.hashtags(postIds),
@@ -87,6 +103,8 @@ export class PostSerializer {
       this.attachments(postIds),
       this.polls(postIds, viewer),
       this.viewerState(postIds, viewer),
+      this.acceptedAnswers(rows),
+      this.helpOffers(rows, viewer),
     ]);
 
     const out: PostView[] = [];
@@ -94,16 +112,18 @@ export class PostSerializer {
       const r = byId.get(id);
       if (!r) continue;
       const own = viewer?.id === r.authorId;
+      const attachments = attachmentMap.get(r.id) ?? [];
       const view: PostView = {
         id: r.id,
         author: authorRefs.get(r.authorId) ?? FALLBACK_AUTHOR,
         body: r.body,
         kind: r.kind as PostKind,
+        ...typeState(r, attachments, answers, offers),
         pinned: !!r.pinnedAt,
         chapter: (r.chapterId && chapterMap.get(r.chapterId)) || null,
         hashtags: tagMap.get(r.id) ?? [],
         mentions: mentionMap.get(r.id) ?? [],
-        attachments: attachmentMap.get(r.id) ?? [],
+        attachments,
         poll: pollMap.get(r.id) ?? null,
         linkPreview: r.linkPreview ?? null,
         repostOf: depth === 0 && r.repostOfId ? (originals.get(r.repostOfId) ?? null) : null,
@@ -128,6 +148,11 @@ export class PostSerializer {
       out.push(view);
     }
     return out;
+  }
+
+  /** Member cards for ids (deleted accounts are left out). */
+  memberRefs(ids: string[]): Promise<Map<string, MemberRef>> {
+    return this.members.refs(ids);
   }
 
   async authorStates(ids: string[]): Promise<Map<string, AuthorState>> {
@@ -182,6 +207,7 @@ export class PostSerializer {
       .select({
         postId: postAttachments.postId,
         kind: postAttachments.kind,
+        alt: postAttachments.alt,
         file: {
           id: files.id,
           name: files.originalName,
@@ -206,6 +232,7 @@ export class PostSerializer {
         sizeBytes: r.file.sizeBytes,
         width: r.file.width,
         height: r.file.height,
+        alt: r.alt,
       };
       map.set(r.postId, [...(map.get(r.postId) ?? []), view]);
     }
@@ -247,6 +274,40 @@ export class PostSerializer {
     return map;
   }
 
+  /** Question posts whose accepted answer still shows (not deleted, hidden or removed). */
+  private async acceptedAnswers(rows: PostRow[]): Promise<Set<string>> {
+    const ids = rows.filter((r) => r.type === 'question' && r.acceptedCommentId).map((r) => r.acceptedCommentId!);
+    if (!ids.length) return new Set();
+    const live = await this.db
+      .select({ id: comments.id })
+      .from(comments)
+      .where(and(inArray(comments.id, ids), isNull(comments.deletedAt), eq(comments.moderationState, 'visible')));
+    return new Set(live.map((c) => c.id));
+  }
+
+  /** Request posts: number of "I can help" offers and whether the viewer made one. */
+  private async helpOffers(rows: PostRow[], viewer: AuthUser | undefined) {
+    const ids = rows.filter((r) => r.type === 'request').map((r) => r.id);
+    const out = { counts: new Map<string, number>(), mine: new Set<string>() };
+    if (!ids.length) return out;
+    const [counts, mine] = await Promise.all([
+      this.db
+        .select({ postId: postHelpOffers.postId, n: sql<number>`count(*)::int` })
+        .from(postHelpOffers)
+        .where(inArray(postHelpOffers.postId, ids))
+        .groupBy(postHelpOffers.postId),
+      viewer
+        ? this.db
+            .select({ postId: postHelpOffers.postId })
+            .from(postHelpOffers)
+            .where(and(inArray(postHelpOffers.postId, ids), eq(postHelpOffers.userId, viewer.id)))
+        : Promise.resolve([] as { postId: string }[]),
+    ]);
+    for (const c of counts) out.counts.set(c.postId, c.n);
+    for (const m of mine) out.mine.add(m.postId);
+    return out;
+  }
+
   private async viewerState(postIds: string[], viewer: AuthUser | undefined) {
     const state = { reactions: new Map<string, ReactionKind>(), bookmarks: new Set<string>(), reposts: new Set<string>() };
     if (!viewer) return state;
@@ -268,5 +329,61 @@ export class PostSerializer {
     for (const b of bm) state.bookmarks.add(b.targetId);
     for (const r of rp) if (r.repostOfId) state.reposts.add(r.repostOfId);
     return state;
+  }
+}
+
+/** Today in UTC as YYYY-MM-DD, for request closesOn comparisons. */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** The type-specific part of PostView. Details that fail validation are dropped (shown as a standard post). */
+export function typeState(
+  r: PostRow,
+  attachments: AttachmentView[],
+  answers: Set<string>,
+  offers: { counts: Map<string, number>; mine: Set<string> },
+): Pick<PostView, 'type' | 'question' | 'celebration' | 'request' | 'article'> {
+  const none = { question: null, celebration: null, request: null, article: null };
+  const type = r.type as PostType;
+  switch (type) {
+    case 'question': {
+      const accepted = r.acceptedCommentId && answers.has(r.acceptedCommentId) ? r.acceptedCommentId : null;
+      return { ...none, type, question: { acceptedCommentId: accepted, answered: !!accepted } };
+    }
+    case 'celebration': {
+      const parsed = CelebrationDetails.safeParse(r.details);
+      return parsed.success ? { ...none, type, celebration: parsed.data } : { ...none, type: 'standard' };
+    }
+    case 'request': {
+      const parsed = RequestDetails.safeParse(r.details);
+      if (!parsed.success) return { ...none, type: 'standard' };
+      const closed = !!r.closedAt || (!!parsed.data.closesOn && parsed.data.closesOn < todayUtc());
+      const request: RequestState = {
+        ...parsed.data,
+        closed,
+        helpOffers: offers.counts.get(r.id) ?? 0,
+        viewerOffered: offers.mine.has(r.id),
+      };
+      return { ...none, type, request };
+    }
+    case 'article': {
+      const parsed = ArticleDetails.safeParse(r.details);
+      if (!parsed.success) return { ...none, type: 'standard' };
+      const cover = attachments.find((a) => a.kind === 'image') ?? null;
+      return {
+        ...none,
+        type,
+        article: {
+          title: parsed.data.title,
+          subtitle: parsed.data.subtitle ?? null,
+          readingMinutes: readingMinutes(r.body),
+          coverUrl: cover?.url ?? null,
+          coverAlt: cover?.alt ?? null,
+        },
+      };
+    }
+    default:
+      return { ...none, type: 'standard' };
   }
 }

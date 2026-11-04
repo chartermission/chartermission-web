@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, lte, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, ne, sql, type SQL } from 'drizzle-orm';
 import type { CommentView, CommentsQuery, CreateCommentInput, CursorQuery, Page, ReactionKind, UpdateCommentInput } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { comments, posts, reactions } from '../db/schema.js';
@@ -71,6 +71,9 @@ export class CommentsService {
     const post = await this.postsService.findVisible(viewer, postId);
     const ts = commentTs(comments.createdAt);
     const conds: SQL[] = [eq(comments.postId, postId), isNull(comments.parentId), notBlockedSql(viewer.id, sql`${comments.authorId}`)];
+    // Questions: the accepted answer leads the first page of the "relevant" sort.
+    const accepted = post.type === 'question' && q.sort === 'relevant' ? post.acceptedCommentId : null;
+    if (accepted) conds.push(ne(comments.id, accepted));
     let order: SQL[];
     if (q.sort === 'newest') {
       const c = decodeCursor<{ t: string; id: string }>(q.cursor);
@@ -96,6 +99,21 @@ export class CommentsService {
       q.sort === 'newest' ? { t: last.ts, id: last.row.id } : { r: last.row.reactionCount, t: last.ts, id: last.row.id },
     );
     const tops = page.items.map((i) => i.row);
+    if (accepted && !q.cursor) {
+      const [answer] = await this.db
+        .select()
+        .from(comments)
+        .where(
+          and(
+            eq(comments.id, accepted),
+            isNull(comments.deletedAt),
+            eq(comments.moderationState, 'visible'),
+            notBlockedSql(viewer.id, sql`${comments.authorId}`),
+          ),
+        )
+        .limit(1);
+      if (answer) tops.unshift(answer);
+    }
 
     // Up to 3 newest replies per top-level comment, shown oldest first.
     let replies: CommentRow[] = [];
@@ -224,6 +242,8 @@ export class CommentsService {
         .update(posts)
         .set({ commentCount: sql`greatest(${posts.commentCount} - 1, 0)` })
         .where(eq(posts.id, comment.postId));
+      // A deleted answer can no longer be the accepted one.
+      await tx.update(posts).set({ acceptedCommentId: null }).where(and(eq(posts.id, comment.postId), eq(posts.acceptedCommentId, id)));
       if (comment.parentId) {
         await tx
           .update(comments)
@@ -282,6 +302,7 @@ export class CommentsService {
         createdAt: r.createdAt.toISOString(),
         editedAt: show ? (r.editedAt?.toISOString() ?? null) : null,
         isPostAuthor: show && r.authorId === post.authorId,
+        isAcceptedAnswer: post.type === 'question' && post.acceptedCommentId === r.id && state === 'visible',
         counts: { reactions: r.reactionCount, replies: r.replyCount },
         reactionBreakdown: kinds.get(r.id) ?? { like: 0, insightful: 0, support: 0 },
         viewer: {

@@ -437,6 +437,14 @@ export const posts = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     body: text('body').notNull().default(''),
     kind: text('kind').notNull().default('standard'),
+    /** standard | question | celebration | request | article (contracts PostType). */
+    type: text('type').notNull().default('standard'),
+    /** Type-specific fields: celebration, request or article details (validated by contracts). */
+    details: jsonb('details').$type<Record<string, unknown> | null>(),
+    /** Questions: the comment the author marked as the best answer. */
+    acceptedCommentId: uuid('accepted_comment_id'),
+    /** Requests: closed by the author. */
+    closedAt: ts('closed_at'),
     visibility: text('visibility').notNull().default('members'),
     chapterId: uuid('chapter_id').references(() => chapters.id),
     /** Author's country at posting time, for country filters and trending scopes. */
@@ -469,7 +477,9 @@ export const posts = pgTable(
     index('posts_created_idx').on(t.createdAt, t.id),
     index('posts_chapter_idx').on(t.chapterId),
     index('posts_repost_idx').on(t.repostOfId),
+    index('posts_type_idx').on(t.type, t.createdAt),
     check('posts_kind_ck', sql`${t.kind} in ('standard','announcement')`),
+    check('posts_type_ck', sql`${t.type} in ('standard','question','celebration','request','article')`),
     check('posts_visibility_ck', sql`${t.visibility} in ('members','public')`),
     check('posts_status_ck', sql`${t.status} in ('pending_media','published')`),
     check('posts_mod_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
@@ -487,10 +497,56 @@ export const postAttachments = pgTable(
       .references(() => files.id, { onDelete: 'cascade' }),
     kind: text('kind').notNull(),
     position: integer('position').notNull().default(0),
+    /** Image description for screen readers. */
+    alt: text('alt'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [primaryKey({ columns: [t.postId, t.fileId] }), check('post_att_kind_ck', sql`${t.kind} in ('image','document')`)],
+);
+
+/** "I can help" offers on request ("Looking for…") posts. */
+export const postHelpOffers = pgTable(
+  'post_help_offers',
+  {
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    note: text('note').notNull().default(''),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index('post_help_offers_user_idx').on(t.userId)],
+);
+
+/**
+ * Composer drafts and scheduled posts. The payload is the composer state
+ * (contracts DraftPayload); publishing runs it through the normal post creation,
+ * so hashtags, mentions, polls and notifications only happen once it is live.
+ */
+export const postDrafts = pgTable(
+  'post_drafts',
+  {
+    id: id(),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    status: text('status').notNull().default('draft'),
+    scheduledFor: ts('scheduled_for'),
+    lastError: text('last_error'),
+    publishedPostId: uuid('published_post_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('post_drafts_author_idx').on(t.authorId, t.status, t.updatedAt),
+    index('post_drafts_due_idx').on(t.status, t.scheduledFor),
+    check('post_drafts_status_ck', sql`${t.status} in ('draft','scheduled','publishing','failed')`),
+  ],
 );
 
 export const postHashtags = pgTable(

@@ -1,6 +1,10 @@
 import { Controller, Delete, Get, HttpCode, Patch, Post, Put, Req } from '@nestjs/common';
 import {
+  AcceptAnswerInput,
   BookmarkInput,
+  CloseRequestInput,
+  HelpOfferInput,
+  type HelpOfferView,
   CommentsQuery,
   CreateCommentInput,
   CreatePostInput,
@@ -64,6 +68,44 @@ export class PostsController {
   @Access('verified')
   vote(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(PollVoteInput) input: PollVoteInput): Promise<PostView> {
     return this.postsService.vote(ctx.user, id, input.optionId);
+  }
+
+  /* ---------- Questions and requests ---------- */
+
+  @Put('posts/:id/accepted-answer')
+  @Access('verified')
+  acceptAnswer(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(AcceptAnswerInput) input: AcceptAnswerInput): Promise<PostView> {
+    return this.postsService.acceptAnswer(ctx.user, id, input.commentId);
+  }
+
+  @Delete('posts/:id/accepted-answer')
+  @Access('verified')
+  clearAnswer(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<PostView> {
+    return this.postsService.clearAnswer(ctx.user, id);
+  }
+
+  @Put('posts/:id/closed')
+  @Access('verified')
+  setClosed(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(CloseRequestInput) input: CloseRequestInput): Promise<PostView> {
+    return this.postsService.setClosed(ctx.user, id, input.closed);
+  }
+
+  @Put('posts/:id/help')
+  @Access('verified')
+  offerHelp(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(HelpOfferInput) input: HelpOfferInput): Promise<PostView> {
+    return this.postsService.offerHelp(ctx.user, id, input.note);
+  }
+
+  @Delete('posts/:id/help')
+  @Access('verified')
+  withdrawHelp(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<PostView> {
+    return this.postsService.withdrawHelp(ctx.user, id);
+  }
+
+  @Get('posts/:id/help')
+  @Access('member')
+  helpOffers(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<HelpOfferView[]> {
+    return this.postsService.helpOffers(ctx.user, id);
   }
 
   /* ---------- Comments (one level of replies) ---------- */

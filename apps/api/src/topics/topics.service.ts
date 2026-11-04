@@ -5,13 +5,15 @@ import type {
   Page,
   PostView,
   TopicPostsQuery,
+  TopicSummary,
   TopicView,
+  TopicsQuery,
   TrendingQuery,
   TrendingResponse,
   TrendingScope,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, countries, follows, hashtags, mutes, postHashtags, posts } from '../db/schema.js';
+import { chapters, countries, follows, hashtags, mutes, postHashtags, posts, trendingOverrides } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -151,6 +153,52 @@ export class TopicsService {
       .limit(q.limit + 1);
     const page = paginate(rows, q.limit, (last) => ({ t: last.ts, id: last.id }));
     return { items: await this.serializer.posts(page.items.map((r) => r.id), viewer), nextCursor: page.nextCursor };
+  }
+
+  /**
+   * GET /topics?sort=popular|new|followed&q= — the explore page. Popular = most followed,
+   * then most used; new = most recently created; followed = the viewer's topics. Tags the
+   * moderation team suppressed everywhere are left out of popular and new.
+   */
+  async list(viewer: AuthUser, q: TopicsQuery): Promise<Page<TopicSummary>> {
+    const c = decodeCursor<{ o: number }>(q.cursor);
+    const offset = c ? Number(c.o) : 0;
+    if (!Number.isInteger(offset) || offset < 0 || offset > 10_000) throw Errors.badRequest('Invalid cursor');
+    const term = q.q?.replace(/^#/, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+    // Columns of the outer hashtags row are written out in full: drizzle leaves them
+    // unqualified in single-table selects, which a subquery would resolve to its own table.
+    const followedSql = sql`exists (select 1 from ${follows} tf where tf.follower_id = ${viewer.id} and tf.target_type = 'hashtag' and tf.target_id = "hashtags"."tag")`;
+    const suppressedSql = sql`exists (select 1 from ${trendingOverrides} tov where tov.hashtag_id = "hashtags"."id" and tov.action = 'suppress'
+      and tov.scope_type = 'global' and tov.revoked_at is null and (tov.expires_at is null or tov.expires_at > now()))`;
+    const conds: SQL[] = [sql`${hashtags.postCount} > 0`];
+    if (term) conds.push(like(hashtags.tag, `%${term.replace(/_/g, '\\_')}%`));
+    if (q.sort === 'followed') conds.push(followedSql);
+    else conds.push(sql`not ${suppressedSql}`);
+    const posts7d = sql<number>`(select count(*)::int from ${postHashtags} tph join ${posts} tp on tp.id = tph.post_id
+      where tph.hashtag_id = "hashtags"."id" and tp.deleted_at is null and tp.status = 'published' and tp.moderation_state = 'visible'
+      and tp.created_at > now() - interval '7 days')`;
+    const order =
+      q.sort === 'new'
+        ? [desc(hashtags.createdAt), asc(hashtags.tag)]
+        : [desc(hashtags.followerCount), desc(hashtags.postCount), asc(hashtags.tag)];
+    const rows = await this.db
+      .select({
+        tag: hashtags.display,
+        description: hashtags.description,
+        posts: hashtags.postCount,
+        followers: hashtags.followerCount,
+        following: sql<boolean>`${followedSql}`,
+        posts7d,
+        createdAt: hashtags.createdAt,
+      })
+      .from(hashtags)
+      .where(and(...conds))
+      .orderBy(...order)
+      .limit(q.limit + 1)
+      .offset(offset);
+    const hasMore = rows.length > q.limit;
+    const items = rows.slice(0, q.limit).map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+    return { items, nextCursor: hasMore ? Buffer.from(JSON.stringify({ o: offset + q.limit })).toString('base64url') : null };
   }
 
   /** GET /hashtags/suggest?q= — prefix match on the tag, most used first, up to 8. */

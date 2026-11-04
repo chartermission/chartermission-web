@@ -1,8 +1,29 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type { CreatePostInput, PostView, UpdatePostInput } from '@chartermission/contracts';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  ARTICLE_MAX_CHARS,
+  ARTICLE_MIN_CHARS,
+  POST_MAX_CHARS,
+  type CreatePostInput,
+  type HelpOfferView,
+  type PostView,
+  type UpdatePostInput,
+} from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, files, hashtags, mentions, pollOptions, pollVotes, polls, postAttachments, postHashtags, posts } from '../db/schema.js';
+import {
+  chapters,
+  comments,
+  files,
+  hashtags,
+  mentions,
+  pollOptions,
+  pollVotes,
+  polls,
+  postAttachments,
+  postHashtags,
+  postHelpOffers,
+  posts,
+} from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { can, isActiveUntil } from '../core/policy.js';
@@ -23,6 +44,27 @@ import { canViewPost, isInteractive, type PostRow } from './visibility.js';
 
 /** Spec 8.2 (proposed): posts per member per day. */
 export const POSTS_PER_DAY = 20;
+
+/** Help offers per member per day (spec 8.2 style limit for abuse-prone actions). */
+export const HELP_OFFERS_PER_DAY = 30;
+
+/** Type-specific details stored in posts.details. */
+function detailsFor(input: Pick<CreatePostInput, 'type' | 'celebration' | 'request' | 'article'>): Record<string, unknown> | null {
+  if (input.type === 'celebration') return input.celebration ?? null;
+  if (input.type === 'request') return input.request ?? null;
+  if (input.type === 'article') return input.article ?? null;
+  return null;
+}
+
+/** Body length rules by type, for edits (creation runs contracts compositionIssues). */
+function checkBody(type: string, body: string) {
+  const max = type === 'article' ? ARTICLE_MAX_CHARS : POST_MAX_CHARS;
+  if (body.length > max) throw Errors.validation({ body: `Posts can be up to ${max.toLocaleString('en')} characters` });
+  if (type === 'article' && body.length < ARTICLE_MIN_CHARS) {
+    throw Errors.validation({ body: `Articles need at least ${ARTICLE_MIN_CHARS} characters` });
+  }
+  if (type === 'question' && body.length < 10) throw Errors.validation({ body: 'Write your question (at least 10 characters)' });
+}
 
 /** Posting, commenting and reacting are blocked while a time-boxed restriction runs (CM-ADM-04). */
 export function assertNotRestricted(user: AuthUser) {
@@ -86,6 +128,9 @@ export class PostsService implements OnModuleInit {
     await this.limits.consume(`posts:${user.id}`, POSTS_PER_DAY, 24 * 3600);
 
     const attachments = await this.validateAttachments(user.id, input.attachmentIds);
+    if (input.type === 'article' && attachments.some((f) => f.purpose === 'post_document')) {
+      throw Errors.validation({ attachmentIds: 'An article’s cover must be an image' });
+    }
     const original = input.repostOfId ? await this.repostTarget(user, input.repostOfId) : null;
     if (input.chapterId) {
       const [chapter] = await this.db.select({ id: chapters.id }).from(chapters).where(eq(chapters.id, input.chapterId)).limit(1);
@@ -105,6 +150,8 @@ export class PostsService implements OnModuleInit {
           authorId: user.id,
           body: input.body,
           kind: input.kind,
+          type: input.type,
+          details: detailsFor(input),
           visibility: input.visibility,
           chapterId: input.chapterId ?? null,
           countryCode: user.countryCode,
@@ -121,6 +168,7 @@ export class PostsService implements OnModuleInit {
             fileId: f.id,
             kind: f.purpose === 'post_document' ? 'document' : 'image',
             position,
+            alt: f.purpose === 'post_image' ? input.altTexts?.[f.id]?.trim() || null : null,
           })),
         );
         const claimed = await tx
@@ -172,14 +220,27 @@ export class PostsService implements OnModuleInit {
       throw Errors.forbidden('Only the author can edit this post');
     }
     assertNotRestricted(user);
+    checkBody(post.type, input.body);
+    const details = this.editedDetails(post, input);
     const tags = parseHashtags(input.body);
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
     const newLink = !post.linkUrl ? firstHttpsUrl(input.body) : null;
     const added = await this.db.transaction(async (tx) => {
       await tx
         .update(posts)
-        .set({ body: input.body, editedAt: new Date(), ...(newLink ? { linkUrl: newLink } : {}) })
+        .set({
+          body: input.body,
+          editedAt: new Date(),
+          ...(newLink ? { linkUrl: newLink } : {}),
+          ...(details ? { details } : {}),
+        })
         .where(eq(posts.id, id));
+      for (const [fileId, alt] of Object.entries(input.altTexts ?? {})) {
+        await tx
+          .update(postAttachments)
+          .set({ alt: alt.trim() || null })
+          .where(and(eq(postAttachments.postId, id), eq(postAttachments.fileId, fileId), eq(postAttachments.kind, 'image')));
+      }
       await syncHashtags(tx, id, tags);
       return replaceMentions(tx, 'post', id, mentionIds);
     });
@@ -214,6 +275,100 @@ export class PostsService implements OnModuleInit {
     if (post.authorId !== user.id) {
       await this.audit.record({ actorId: user.id, action: 'post.delete', targetType: 'post', targetId: id, before: { authorId: post.authorId }, ip });
     }
+  }
+
+  /** Details sent with an edit must match the post's type. */
+  private editedDetails(post: PostRow, input: UpdatePostInput): Record<string, unknown> | null {
+    const sent = { celebration: input.celebration, request: input.request, article: input.article };
+    for (const [key, value] of Object.entries(sent)) {
+      if (value && key !== post.type) throw Errors.validation({ [key]: 'These details don’t match this kind of post' });
+    }
+    return detailsFor({ type: post.type as CreatePostInput['type'], ...sent });
+  }
+
+  /** PUT /posts/{id}/accepted-answer: the question's author marks a top-level answer as the best one. */
+  async acceptAnswer(user: AuthUser, postId: string, commentId: string): Promise<PostView> {
+    const post = await this.findVisible(user, postId, { interactive: true });
+    if (post.type !== 'question') throw Errors.conflict('Only questions have answers to accept');
+    if (post.authorId !== user.id) throw Errors.forbidden('Only the person who asked can choose the best answer');
+    const [answer] = await this.db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+    if (!answer || answer.postId !== postId || answer.deletedAt || answer.moderationState !== 'visible') throw Errors.notFound('Comment');
+    if (answer.parentId) throw Errors.validation({ commentId: 'Choose an answer, not a reply' });
+    if (await this.relations.isBlockedEitherWay(user.id, answer.authorId)) throw Errors.notFound('Comment');
+    if (post.acceptedCommentId !== commentId) {
+      await this.db.update(posts).set({ acceptedCommentId: commentId }).where(eq(posts.id, postId));
+      await this.events.emit({ type: 'answer.accepted', postId, commentId, commentAuthorId: answer.authorId, actorId: user.id });
+    }
+    return this.serializer.one(postId, user);
+  }
+
+  /** DELETE /posts/{id}/accepted-answer */
+  async clearAnswer(user: AuthUser, postId: string): Promise<PostView> {
+    const post = await this.findVisible(user, postId);
+    if (post.type !== 'question') throw Errors.conflict('Only questions have answers to accept');
+    if (post.authorId !== user.id) throw Errors.forbidden('Only the person who asked can choose the best answer');
+    await this.db.update(posts).set({ acceptedCommentId: null }).where(eq(posts.id, postId));
+    return this.serializer.one(postId, user);
+  }
+
+  /** PUT /posts/{id}/closed: the author closes or reopens a "Looking for" request. */
+  async setClosed(user: AuthUser, postId: string, closed: boolean): Promise<PostView> {
+    const post = await this.findVisible(user, postId);
+    if (post.type !== 'request') throw Errors.conflict('Only “Looking for” posts can be closed');
+    if (post.authorId !== user.id) throw Errors.forbidden('Only the author can close this request');
+    await this.db.update(posts).set({ closedAt: closed ? new Date() : null }).where(eq(posts.id, postId));
+    return this.serializer.one(postId, user);
+  }
+
+  /** PUT /posts/{id}/help: "I can help" on an open request; the note is only shown to the author. */
+  async offerHelp(user: AuthUser, postId: string, note: string): Promise<PostView> {
+    assertNotRestricted(user);
+    const post = await this.findVisible(user, postId, { interactive: true });
+    if (post.type !== 'request') throw Errors.conflict('Only “Looking for” posts take offers of help');
+    if (post.authorId === user.id) throw Errors.validation({ postId: 'You can’t offer help on your own request' });
+    const view = await this.serializer.one(postId, user);
+    if (view.request?.closed) throw Errors.conflict('This request is closed');
+    const [existing] = await this.db
+      .select({ postId: postHelpOffers.postId })
+      .from(postHelpOffers)
+      .where(and(eq(postHelpOffers.postId, postId), eq(postHelpOffers.userId, user.id)))
+      .limit(1);
+    if (existing) {
+      await this.db
+        .update(postHelpOffers)
+        .set({ note })
+        .where(and(eq(postHelpOffers.postId, postId), eq(postHelpOffers.userId, user.id)));
+    } else {
+      await this.limits.consume(`help:${user.id}`, HELP_OFFERS_PER_DAY, 24 * 3600);
+      await this.db.insert(postHelpOffers).values({ postId, userId: user.id, note }).onConflictDoNothing();
+      await this.events.emit({ type: 'help.offered', postId, authorId: post.authorId, helperId: user.id });
+    }
+    return this.serializer.one(postId, user);
+  }
+
+  /** DELETE /posts/{id}/help */
+  async withdrawHelp(user: AuthUser, postId: string): Promise<PostView> {
+    await this.findVisible(user, postId);
+    await this.db.delete(postHelpOffers).where(and(eq(postHelpOffers.postId, postId), eq(postHelpOffers.userId, user.id)));
+    return this.serializer.one(postId, user);
+  }
+
+  /** GET /posts/{id}/help: the request's author (or a moderator) sees who offered and their notes. */
+  async helpOffers(user: AuthUser, postId: string): Promise<HelpOfferView[]> {
+    const post = await this.findVisible(user, postId);
+    if (post.type !== 'request') throw Errors.conflict('Only “Looking for” posts take offers of help');
+    if (post.authorId !== user.id && !can(user, 'moderation.view')) throw Errors.forbidden('Only the author can see who offered to help');
+    const blocked = await this.relations.blockedSet(user.id);
+    const rows = await this.db
+      .select()
+      .from(postHelpOffers)
+      .where(eq(postHelpOffers.postId, postId))
+      .orderBy(desc(postHelpOffers.createdAt))
+      .limit(200);
+    const refs = await this.members.refs(rows.map((r) => r.userId));
+    return rows
+      .filter((r) => !blocked.has(r.userId) && refs.has(r.userId))
+      .map((r) => ({ member: refs.get(r.userId)!, note: r.note, createdAt: r.createdAt.toISOString() }));
   }
 
   /** POST /posts/{id}/poll/vote: one vote per member; closed polls are 409. */

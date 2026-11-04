@@ -17,6 +17,10 @@ export const NotificationType = z.enum([
   "moderation_action",
   "appeal_outcome",
   "upload_rejected",
+  "answer_accepted",
+  "help_offered",
+  "scheduled_post_published",
+  "scheduled_post_failed",
   "welcome",
   "security",
 ]);
@@ -51,7 +55,7 @@ export const NotificationView = z.object({
   segments: z.array(z.object({ text: z.string(), strong: z.boolean().default(false) })),
   /** Web path to open, e.g. /posts/{id}#comment-{id}. */
   href: z.string(),
-  icon: z.enum(["avatar", "trending", "briefcase", "calendar", "lightbulb", "shield", "users", "flag", "alert"]),
+  icon: z.enum(["avatar", "trending", "briefcase", "calendar", "lightbulb", "shield", "users", "flag", "alert", "check", "clock"]),
   createdAt: z.string(),
   read: z.boolean(),
 });

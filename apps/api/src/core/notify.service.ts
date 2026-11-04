@@ -33,6 +33,10 @@ export const CATEGORY_OF: Record<NotificationType, NotificationCategory | 'alway
   moderation_action: 'always',
   appeal_outcome: 'always',
   upload_rejected: 'always',
+  answer_accepted: 'mentions_replies',
+  help_offered: 'comments',
+  scheduled_post_published: 'always',
+  scheduled_post_failed: 'always',
   welcome: 'always',
   security: 'always',
 };

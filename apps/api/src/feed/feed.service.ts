@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, isNotNull, sql, type SQL } from 'drizzle-orm';
-import type { FeedQuery, Page, PostView } from '@chartermission/contracts';
+import { and, desc, eq, isNotNull, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import type { FeedNewQuery, FeedNewResponse, FeedQuery, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { chapters, follows, hashtags, memberProfiles, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
@@ -66,6 +66,39 @@ export class FeedService {
     }
     const ids = [...pinned, ...page.ids.filter((id) => !pinned.includes(id))];
     return { items: await this.serializer.posts(ids, viewer, blocked), nextCursor: page.nextCursor };
+  }
+
+  /**
+   * GET /feed/new: posts newer than `since` that the tab would show, for the
+   * "See N new posts" pill. The viewer's own posts don't count (they already see them).
+   */
+  async newSince(viewer: AuthUser, q: FeedNewQuery): Promise<FeedNewResponse> {
+    const filters = await this.filters({ ...q, limit: 20 });
+    if (!filters) return { count: 0, authors: [] };
+    const conds = [
+      listablePostsSql(viewer.id, { muteHashtags: true }),
+      ...filters,
+      ne(posts.authorId, viewer.id),
+      sql`${posts.status} = 'published'`,
+      sql`${posts.createdAt} > ${q.since}::timestamptz`,
+    ];
+    if (q.tab === 'following') conds.push(sql`(${this.followedSql(viewer.id)} or ${posts.kind} = 'announcement')`);
+    if (q.tab === 'for_you') conds.push(sql`${posts.createdAt} > now() - make_interval(days => ${FOR_YOU_DAYS}::int)`);
+    const [counted] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(posts)
+      .where(and(...conds));
+    const count = counted?.n ?? 0;
+    if (!count) return { count: 0, authors: [] };
+    const recent = await this.db
+      .select({ authorId: posts.authorId })
+      .from(posts)
+      .where(and(...conds))
+      .orderBy(desc(posts.createdAt))
+      .limit(20);
+    const authorIds = [...new Set(recent.map((r) => r.authorId))].slice(0, 3);
+    const refs = await this.serializer.memberRefs(authorIds);
+    return { count, authors: authorIds.map((id) => refs.get(id)).filter((r) => !!r) };
   }
 
   private async pinned(conds: SQL[], max: number): Promise<string[]> {
@@ -139,7 +172,7 @@ export class FeedService {
   }
 
   /** Author, country, sector (author's sectors), chapter (slug or id) and announcements filters (CM-FED-04). Null = nothing can match. */
-  private async filters(q: FeedQuery): Promise<SQL[] | null> {
+  private async filters(q: Omit<FeedQuery, 'cursor' | 'author'> & { author?: string }): Promise<SQL[] | null> {
     const out: SQL[] = [];
     if (q.author) {
       const [member] = await this.db
@@ -166,6 +199,8 @@ export class FeedService {
       out.push(eq(posts.chapterId, chapter.id));
     }
     if (q.announcements) out.push(eq(posts.kind, 'announcement'));
+    if (q.type) out.push(eq(posts.type, q.type));
+    if (q.unanswered) out.push(eq(posts.type, 'question'), isNull(posts.acceptedCommentId));
     return out;
   }
 }

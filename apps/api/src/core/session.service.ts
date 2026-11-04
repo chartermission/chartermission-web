@@ -5,7 +5,7 @@ import { InjectDb, type Db } from '../db/db.module.js';
 import { roles, rolePermissions, sessions, userRoles, users, memberProfiles } from '../db/schema.js';
 import { env, isProd } from '../config/env.js';
 import { hashIp, randomToken, sha256 } from '../common/crypto.js';
-import type { AuthContext } from './auth-context.js';
+import type { AuthContext, AuthUser } from './auth-context.js';
 import { ROLES, type Permission } from './permissions.js';
 
 /** Session lifetimes (spec 4.2, proposed values). */
@@ -107,12 +107,39 @@ export class SessionService {
         .where(eq(sessions.id, row.session.id));
     }
 
+    return {
+      session: {
+        id: row.session.id,
+        audience,
+        mfaVerified: !!row.session.mfaVerifiedAt,
+        createdAt: row.session.createdAt,
+      },
+      user: await this.buildUser(row.user, row.countryCode ?? null),
+    };
+  }
+
+  /**
+   * The account as an AuthUser without a session, for work done on a member's behalf
+   * (publishing their scheduled posts). Null when the account is gone.
+   */
+  async userById(userId: string): Promise<AuthUser | null> {
+    const [row] = await this.db
+      .select({ user: users, countryCode: memberProfiles.countryCode })
+      .from(users)
+      .leftJoin(memberProfiles, eq(memberProfiles.userId, users.id))
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!row || row.user.status === 'deleted') return null;
+    return this.buildUser(row.user, row.countryCode ?? null);
+  }
+
+  private async buildUser(user: typeof users.$inferSelect, countryCode: string | null): Promise<AuthUser> {
     const roleRows = await this.db
       .select({ key: roles.key, permission: rolePermissions.permissionKey })
       .from(userRoles)
       .innerJoin(roles, eq(roles.id, userRoles.roleId))
       .leftJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
-      .where(and(eq(userRoles.userId, row.user.id), isNull(userRoles.revokedAt)));
+      .where(and(eq(userRoles.userId, user.id), isNull(userRoles.revokedAt)));
 
     const roleKeys = new Set<string>(['member']);
     const permissions = new Set<Permission>(ROLES.member!.permissions);
@@ -122,26 +149,18 @@ export class SessionService {
     }
 
     return {
-      session: {
-        id: row.session.id,
-        audience,
-        mfaVerified: !!row.session.mfaVerifiedAt,
-        createdAt: row.session.createdAt,
-      },
-      user: {
-        id: row.user.id,
-        email: row.user.email,
-        status: row.user.status as AuthContext['user']['status'],
-        emailVerified: !!row.user.emailVerifiedAt,
-        isStaff: row.user.isStaff,
-        roles: [...roleKeys],
-        permissions,
-        mfaEnabled: !!row.user.mfaEnabledAt,
-        suspendedUntil: row.user.suspendedUntil,
-        restrictedPostingUntil: row.user.restrictedPostingUntil,
-        restrictedConnectingUntil: row.user.restrictedConnectingUntil,
-        countryCode: row.countryCode ?? null,
-      },
+      id: user.id,
+      email: user.email,
+      status: user.status as AuthUser['status'],
+      emailVerified: !!user.emailVerifiedAt,
+      isStaff: user.isStaff,
+      roles: [...roleKeys],
+      permissions,
+      mfaEnabled: !!user.mfaEnabledAt,
+      suspendedUntil: user.suspendedUntil,
+      restrictedPostingUntil: user.restrictedPostingUntil,
+      restrictedConnectingUntil: user.restrictedConnectingUntil,
+      countryCode,
     };
   }
 
