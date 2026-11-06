@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import type { SuggestedMember, TrendingResponse } from "@chartermission/contracts";
+import type { EventSummary, Page, SuggestedMember, TrendingResponse } from "@chartermission/contracts";
 import { Panel } from "@chartermission/ui";
 import { apiGet, getViewer } from "@/lib/api/server";
 import { getTaxonomies } from "@/lib/taxonomies";
-import { upcomingEvents } from "@/lib/mock-data";
+import { RailEventList } from "./events/rail-events";
 import { SuggestionList } from "./network/suggestion-list";
 import { PanelSkeleton } from "./social/skeletons";
 import { TrendingTopics } from "./trending-topics";
@@ -62,26 +62,53 @@ export function DateBadge({ month, day }: { month: string; day: string }) {
   );
 }
 
-/** Events arrive in a later phase; this widget stays on placeholder data until then. */
-export function UpcomingEvents() {
+/**
+ * "Upcoming events": the viewer's own upcoming registrations, else the next featured events,
+ * else the next public events (GET /me/events, GET /events).
+ */
+async function UpcomingEventsList() {
+  const mine = await apiGet<Page<EventSummary>>("/me/events", { role: "registered", when: "upcoming", limit: 3 }).catch(() => null);
+  let events = (mine?.items ?? []).filter((e) => e.viewer.status === "registered" || e.viewer.status === "waitlisted");
+  let title = "Your upcoming events";
+  if (!events.length) {
+    title = "Upcoming events";
+    const featured = await apiGet<Page<EventSummary>>("/events", { featured: true, limit: 3 }).catch(() => null);
+    events = (featured?.items ?? []).filter((e) => !e.cancelledAt);
+    if (events.length < 3) {
+      const next = await apiGet<Page<EventSummary>>("/events", { limit: 5 }).catch(() => null);
+      const seen = new Set(events.map((e) => e.id));
+      events = [...events, ...(next?.items ?? []).filter((e) => !e.cancelledAt && !seen.has(e.id))].slice(0, 3);
+    }
+  }
   return (
-    <Panel className="flex flex-col gap-3 p-5">
+    <Panel aria-labelledby="rail-events-heading" className="flex flex-col gap-3 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-h3 text-ink">Upcoming events</h2>
-        <Link href="/events" className="text-xs text-primary-light hover:underline">
+        <h2 id="rail-events-heading" className="text-h3 text-ink">
+          {title}
+        </h2>
+        <Link href={mine?.items.length ? "/events/mine" : "/events"} className="text-xs text-primary-light hover:underline">
           See all
         </Link>
       </div>
-      {upcomingEvents.map((event) => (
-        <Link key={event.slug} href={`/events/${event.slug}`} className="group flex items-center gap-3">
-          <DateBadge month={event.month} day={event.day} />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-sm font-medium text-ink group-hover:underline">{event.title}</span>
-            <span className="text-xs text-secondary">{event.meta}</span>
-          </span>
-        </Link>
-      ))}
+      {events.length ? (
+        <RailEventList events={events} />
+      ) : (
+        <p className="text-sm text-secondary">
+          No upcoming events yet.{" "}
+          <Link href="/events" className="font-medium text-primary-light hover:underline">
+            Browse events
+          </Link>
+        </p>
+      )}
     </Panel>
+  );
+}
+
+export function UpcomingEvents() {
+  return (
+    <Suspense fallback={<PanelSkeleton className="h-[220px]" lines={3} />}>
+      <UpcomingEventsList />
+    </Suspense>
   );
 }
 

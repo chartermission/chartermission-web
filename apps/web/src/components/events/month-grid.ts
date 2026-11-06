@@ -32,3 +32,20 @@ export function monthWeeks({ year, month }: MonthRef): (string | null)[][] {
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
   return weeks;
 }
+
+/** "YYYY-MM" for a MonthRef. */
+export function monthKey({ year, month }: MonthRef): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+/** The ISO calendar date after `iso` ("YYYY-MM-DD"). */
+export function nextDate(iso: string): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/** "Saturday 21 November" for an ISO calendar date. */
+export function dateHeading(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).replace(",", "");
+}

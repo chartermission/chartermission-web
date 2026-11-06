@@ -43,6 +43,16 @@ const groups: {
     rows: [{ category: "trending", label: "Trending topics you follow", description: "A hashtag you follow starts trending." }],
   },
   {
+    title: "Events",
+    rows: [
+      {
+        category: "events",
+        label: "Event reminders and changes",
+        description: "Reminders 24 hours and 1 hour before events you registered for, and changes to their time or place. Confirmations and cancellations are always sent.",
+      },
+    ],
+  },
+  {
     title: "Safety",
     rows: [
       {
