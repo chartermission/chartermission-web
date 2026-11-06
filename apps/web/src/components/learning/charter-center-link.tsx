@@ -1,36 +1,55 @@
 "use client";
 
-import type { AnchorHTMLAttributes } from "react";
+import type { AnchorHTMLAttributes, MouseEvent } from "react";
 
 /**
- * Records that a member opened Charter Center content. There is no API yet,
- * so this only dispatches a DOM event ("chartermission:charter-center-click")
- * that analytics can pick up; swap in the API call when it exists.
+ * Records the disclosed first-party click (POST /courses/:id/click → charter_center_click,
+ * CM-LRN-04). Fire-and-forget with keepalive so it survives the tab switch; it never blocks
+ * or changes the link, and the URL gets no tracking parameters.
  */
-export function recordCharterCenterClick(kind: "course" | "path", slug: string) {
-  window.dispatchEvent(new CustomEvent("chartermission:charter-center-click", { detail: { kind, slug } }));
+export function recordCharterCenterClick(courseId: string) {
+  try {
+    void fetch(`/api/v1/courses/${encodeURIComponent(courseId)}/click`, {
+      method: "POST",
+      headers: { "x-cm-csrf": "1" },
+      credentials: "same-origin",
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    /* analytics must never break the link */
+  }
 }
 
-/** External link to Charter Center: opens in a new tab and records the click. */
+/**
+ * The exact Charter Center course page, in a new tab. Records the click on primary click,
+ * keyboard activation (Enter fires click) and middle-click (auxclick).
+ */
 export function CharterCenterLink({
-  kind,
-  slug,
+  courseId,
+  href,
   children,
   onClick,
+  onAuxClick,
   ...rest
-}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "target" | "rel"> & { kind: "course" | "path"; slug: string; href: string }) {
+}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "target" | "rel" | "href"> & { courseId: string; href: string }) {
   return (
     <a
       {...rest}
+      href={href}
       target="_blank"
-      rel="noopener noreferrer"
+      rel="noopener"
+      referrerPolicy="strict-origin-when-cross-origin"
       onClick={(event) => {
-        recordCharterCenterClick(kind, slug);
+        recordCharterCenterClick(courseId);
         onClick?.(event);
+      }}
+      onAuxClick={(event: MouseEvent<HTMLAnchorElement>) => {
+        if (event.button === 1) recordCharterCenterClick(courseId);
+        onAuxClick?.(event);
       }}
     >
       {children}
-      <span className="sr-only"> (opens Charter Center in a new tab)</span>
+      <span className="sr-only"> (opens in a new tab)</span>
     </a>
   );
 }
