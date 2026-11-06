@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { BookmarkInput, CursorQuery, Page, PostView, ReactionInput, ReactionKind, ReactionState } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { bookmarks, comments, posts, reactions } from '../db/schema.js';
+import { bookmarks, comments, courses, events, posts, reactions } from '../db/schema.js';
+import { visibleCourseSql } from '../learning/course-views.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -82,8 +83,9 @@ export class ReactionsService {
     return this.state(user.id, input.targetType, input.targetId);
   }
 
+  /** PUT /bookmarks — posts, events and courses; the target must be visible to the viewer. */
   async bookmark(user: AuthUser, input: BookmarkInput): Promise<void> {
-    await this.postsService.findVisible(user, input.targetId);
+    await this.assertBookmarkable(user, input);
     await this.db.insert(bookmarks).values({ userId: user.id, targetType: input.targetType, targetId: input.targetId }).onConflictDoNothing();
   }
 
@@ -113,6 +115,33 @@ export class ReactionsService {
       .limit(q.limit + 1);
     const page = paginate(rows, q.limit, (last) => ({ t: last.ts, id: last.id }));
     return { items: await this.serializer.posts(page.items.map((r) => r.id), user), nextCursor: page.nextCursor };
+  }
+
+  private async assertBookmarkable(user: AuthUser, input: BookmarkInput) {
+    switch (input.targetType) {
+      case 'post':
+        await this.postsService.findVisible(user, input.targetId);
+        return;
+      case 'event': {
+        // Published (or archived past) events are public to members; drafts, reviews and unpublished are not.
+        const [row] = await this.db
+          .select({ id: events.id })
+          .from(events)
+          .where(and(eq(events.id, input.targetId), inArray(events.status, ['published', 'archived'])))
+          .limit(1);
+        if (!row) throw Errors.notFound('Event');
+        return;
+      }
+      case 'course': {
+        const [row] = await this.db
+          .select({ id: courses.id })
+          .from(courses)
+          .where(and(eq(courses.id, input.targetId), visibleCourseSql))
+          .limit(1);
+        if (!row) throw Errors.notFound('Course');
+        return;
+      }
+    }
   }
 
   private key(targetType: string, targetId: string, userId: string) {

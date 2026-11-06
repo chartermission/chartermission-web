@@ -17,6 +17,8 @@ import { HomeModule } from './home/home.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ModerationModule } from './moderation/moderation.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { LearningModule } from './learning/learning.module.js';
+import { EventsModule } from './events/events.module.js';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { AdminModule } from './admin/admin.module.js';
     NotificationsModule,
     ModerationModule,
     AdminModule,
+    LearningModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [

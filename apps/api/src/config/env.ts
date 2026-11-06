@@ -54,6 +54,13 @@ const Env = z.object({
   RUN_WORKERS: flag(true),
   /** Expose /api/v1/dev/* helpers (mailbox) outside production. */
   DEV_TOOLS: flag(true),
+  /**
+   * Charter Center catalogue API (Learning, spec 4.10), e.g. https://api.chartercenter.org/v1.
+   * Unset: the catalogue comes from the JSON fixture in src/learning/fixtures (dev, tests, demo).
+   */
+  CHARTER_CENTER_API_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
+  /** Sent as Authorization: Bearer <key>. */
+  CHARTER_CENTER_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof Env>;

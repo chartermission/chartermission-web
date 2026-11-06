@@ -1,0 +1,551 @@
+{
+  "_comment": "Demo Charter Center catalogue in the ASSUMED API shape (packages/contracts/src/learning.ts). Served by FixtureCharterCenterClient when CHARTER_CENTER_API_URL is unset. Providers other than Charter Center are fictional.",
+  "courses": [
+    {
+      "id": 1001,
+      "slug": "export-readiness-for-african-smes",
+      "title": "Export Readiness for African SMEs",
+      "provider": "Charter Center",
+      "description": "A practical first course for small and medium-sized businesses getting ready to sell across borders.\n\nYou will work through a readiness checklist covering product, pricing, paperwork and partners, using real examples from exporters in Nigeria, Ghana and Kenya.\n\n- Assess whether your business is export-ready\n- Build a simple export plan\n- Understand what buyers and customs will ask for",
+      "level": "Beginner",
+      "topics": [
+        "Business & trade"
+      ],
+      "duration_minutes": 240,
+      "lessons_count": 12,
+      "language": "en",
+      "is_free": true,
+      "eligibility": "Open to founders and managers of registered SMEs",
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Score your business against an export-readiness checklist",
+        "Choose a first target market using trade data",
+        "Prepare a one-page export plan",
+        "Know which documents a first shipment needs"
+      ],
+      "url": "https://chartercenter.org/courses/export-readiness-for-african-smes",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-02T09:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1002,
+      "slug": "data-for-development-intro-to-sql",
+      "title": "Data for Development: Intro to SQL",
+      "provider": "Charter Center",
+      "description": "Learn to query real development datasets with SQL. No prior coding experience needed.\n\nEach lesson uses open data on health, trade and education from across the continent, so you practise on the kind of questions programme teams actually ask.",
+      "level": "beginner",
+      "topics": [
+        "tech"
+      ],
+      "duration_minutes": 360,
+      "lessons_count": 18,
+      "language": "en",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Write SELECT queries with filters and sorting",
+        "Join tables and summarise with GROUP BY",
+        "Clean messy survey data",
+        "Share results as simple charts"
+      ],
+      "url": "https://chartercenter.org/courses/data-for-development-intro-to-sql",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-20T12:30:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1003,
+      "slug": "leading-distributed-teams",
+      "title": "Leading Distributed Teams",
+      "provider": "Charter Center",
+      "description": "How to lead teams spread across countries, time zones and cultures.\n\nCovers rituals, written communication, trust-building and performance conversations, with case studies from pan-African organisations and diaspora-led startups.",
+      "level": "Intermediate",
+      "topics": [
+        "Leadership"
+      ],
+      "duration_minutes": 180,
+      "lessons_count": 9,
+      "language": "en",
+      "is_free": true,
+      "eligibility": "For people who manage or are about to manage a team",
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Design a weekly operating rhythm for a remote team",
+        "Run effective asynchronous decisions",
+        "Give feedback across cultures",
+        "Spot and prevent burnout"
+      ],
+      "url": "https://chartercenter.org/courses/leading-distributed-teams",
+      "thumbnail_url": null,
+      "updated_at": "2026-09-14T08:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1004,
+      "slug": "carbon-finance-fundamentals",
+      "title": "Carbon Finance Fundamentals",
+      "provider": "Charter Center",
+      "description": "An introduction to carbon markets and climate finance for African projects.\n\nYou will learn how credits are created, verified and sold, what makes a project bankable, and where the opportunities and risks are for founders and investors.",
+      "level": "intermediate",
+      "topics": [
+        "Climate",
+        "Finance"
+      ],
+      "duration_minutes": 300,
+      "lessons_count": 14,
+      "language": "en",
+      "is_free": false,
+      "eligibility": null,
+      "access_conditions": "Included with Charter Center Pro membership (paid); sign in on Charter Center to enrol",
+      "outcomes": [
+        "Explain compliance and voluntary carbon markets",
+        "Read a project design document",
+        "Estimate credit revenue for a small project",
+        "Identify common integrity risks"
+      ],
+      "url": "https://chartercenter.org/courses/carbon-finance-fundamentals",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-28T10:15:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1005,
+      "slug": "pitching-to-diaspora-investors",
+      "title": "Pitching to Diaspora Investors",
+      "provider": "Charter Center",
+      "description": "Craft a pitch that lands with diaspora angel investors and networks.\n\nCovers what diaspora investors look for, how to structure a short deck, and how to follow up after the first meeting.",
+      "level": "Beginner",
+      "topics": [
+        "Business & trade",
+        "finance"
+      ],
+      "duration_minutes": 120,
+      "lessons_count": 6,
+      "language": "en",
+      "is_free": true,
+      "eligibility": "Open to founders with a registered or soon-to-be registered business",
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Tell your story in a two-minute pitch",
+        "Build a ten-slide deck",
+        "Answer the five questions investors always ask",
+        "Follow up without being pushy"
+      ],
+      "url": "https://chartercenter.org/courses/pitching-to-diaspora-investors",
+      "thumbnail_url": null,
+      "updated_at": "2026-08-30T15:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1006,
+      "slug": "product-management-in-emerging-markets",
+      "title": "Product Management in Emerging Markets",
+      "provider": "Charter Center",
+      "description": "An advanced course for product managers building for users on low-bandwidth networks, shared devices and mobile money.\n\nIncludes discovery in the field, pricing for informal economies, and shipping with small teams.",
+      "level": "Advanced",
+      "topics": [
+        "Tech & data",
+        "Leadership"
+      ],
+      "duration_minutes": 420,
+      "lessons_count": 20,
+      "language": "en",
+      "is_free": false,
+      "eligibility": "For product managers with at least two years' experience",
+      "access_conditions": "Included with Charter Center Pro membership (paid); sign in on Charter Center to enrol",
+      "outcomes": [
+        "Run user research in low-connectivity settings",
+        "Prioritise a roadmap with limited engineering capacity",
+        "Design for USSD, SMS and offline-first apps",
+        "Measure product-market fit in informal markets"
+      ],
+      "url": "https://chartercenter.org/courses/product-management-in-emerging-markets",
+      "thumbnail_url": null,
+      "updated_at": "2026-07-11T09:45:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1007,
+      "slug": "mobile-money-and-payments-apis",
+      "title": "Mobile Money & Payments APIs",
+      "provider": "Charter Center",
+      "description": "Integrate mobile money and card payments into your product.\n\nHands-on lessons with sandbox APIs, webhooks and reconciliation, plus the regulatory basics for handling payments in several markets.",
+      "level": "Intermediate",
+      "topics": [
+        "Tech & data",
+        "Finance"
+      ],
+      "duration_minutes": 240,
+      "lessons_count": 11,
+      "language": "en",
+      "is_free": true,
+      "eligibility": "Some programming experience recommended",
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Accept a mobile money payment through an API",
+        "Handle webhooks and failed payments safely",
+        "Reconcile transactions daily",
+        "Understand KYC and licensing basics"
+      ],
+      "url": "https://chartercenter.org/courses/mobile-money-and-payments-apis",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-09T11:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1008,
+      "slug": "grant-writing-that-wins",
+      "title": "Grant Writing That Wins",
+      "provider": "Charter Center",
+      "description": "Write grant proposals that funders want to fund.\n\nFrom reading a call for proposals to building a logframe and budget, with annotated examples of winning applications.",
+      "level": "Beginner",
+      "topics": [
+        "Policy",
+        "Finance"
+      ],
+      "duration_minutes": 180,
+      "lessons_count": 8,
+      "language": "en",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Decode what a funder is really asking for",
+        "Write a clear problem statement and theory of change",
+        "Build a realistic budget",
+        "Avoid the ten most common rejection reasons"
+      ],
+      "url": "https://chartercenter.org/courses/grant-writing-that-wins",
+      "thumbnail_url": null,
+      "updated_at": "2026-09-25T13:20:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1009,
+      "slug": "afcfta-rules-of-origin-explained",
+      "title": "AfCFTA Rules of Origin Explained",
+      "provider": "Pan-African Trade Institute",
+      "description": "A short, focused course on the African Continental Free Trade Area's rules of origin and how they decide whether your goods qualify for lower tariffs.",
+      "level": "Intermediate",
+      "topics": [
+        "Business & trade",
+        "Policy"
+      ],
+      "duration_minutes": 90,
+      "lessons_count": 5,
+      "language": "en",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Explain wholly obtained and sufficiently processed goods",
+        "Apply value-added thresholds to a product",
+        "Prepare a certificate of origin"
+      ],
+      "url": "https://chartercenter.org/courses/afcfta-rules-of-origin-explained",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-30T07:30:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1010,
+      "slug": "exporter-en-afrique-de-l-ouest",
+      "title": "Exporter en Afrique de l’Ouest : douanes et logistique",
+      "provider": "Institut Sahel Entreprendre",
+      "description": "Un cours pratique pour les entreprises qui veulent vendre dans l’espace CEDEAO et UEMOA.\n\nDédouanement, transport routier et maritime, assurances et paiements : chaque leçon s’appuie sur des cas réels au Sénégal, en Côte d’Ivoire et au Bénin.",
+      "level": "Beginner",
+      "topics": [
+        "Business & trade"
+      ],
+      "duration_minutes": 150,
+      "lessons_count": 7,
+      "language": "fr",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Préparer un dossier de dédouanement",
+        "Choisir un transitaire et un incoterm",
+        "Calculer le coût rendu d’une expédition"
+      ],
+      "url": "https://chartercenter.org/courses/exporter-en-afrique-de-l-ouest",
+      "thumbnail_url": null,
+      "updated_at": "2026-09-03T10:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1011,
+      "slug": "politiques-publiques-numeriques",
+      "title": "Politiques publiques et transformation numérique",
+      "provider": "Institut Sahel Entreprendre",
+      "description": "Comment les États africains conçoivent et mettent en œuvre leurs stratégies numériques : identité numérique, données publiques, cybersécurité et inclusion.",
+      "level": "Intermediate",
+      "topics": [
+        "Policy",
+        "Tech & data"
+      ],
+      "duration_minutes": 210,
+      "lessons_count": 9,
+      "language": "fr",
+      "is_free": false,
+      "eligibility": "Destiné aux agents publics, chercheurs et membres de la société civile",
+      "access_conditions": "Accès payant ; tarif réduit pour les agents publics",
+      "outcomes": [
+        "Analyser une stratégie nationale du numérique",
+        "Évaluer un projet d’e-gouvernement",
+        "Rédiger une note de politique publique"
+      ],
+      "url": "https://chartercenter.org/courses/politiques-publiques-numeriques",
+      "thumbnail_url": null,
+      "updated_at": "2026-08-18T09:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1012,
+      "slug": "kilimo-kinachostahimili-tabianchi",
+      "title": "Kilimo Kinachostahimili Mabadiliko ya Tabianchi",
+      "provider": "Afrika Climate Lab",
+      "description": "Kozi fupi kwa wakulima wadogo na maafisa ugani kuhusu mbinu za kilimo zinazostahimili ukame na mvua zisizotabirika.",
+      "level": "Beginner",
+      "topics": [
+        "Agriculture",
+        "Climate"
+      ],
+      "duration_minutes": 60,
+      "lessons_count": 4,
+      "language": "sw",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Kuchagua mbegu zinazostahimili ukame",
+        "Kuhifadhi maji shambani",
+        "Kupanga msimu kwa kutumia taarifa za hali ya hewa"
+      ],
+      "url": "https://chartercenter.org/courses/kilimo-kinachostahimili-tabianchi",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-12T06:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1013,
+      "slug": "uongozi-wa-vijana-katika-jamii",
+      "title": "Uongozi wa Vijana katika Jamii",
+      "provider": "Charter Center",
+      "description": "Kozi ya utangulizi kwa vijana wanaotaka kuongoza miradi ya kijamii katika jamii zao.",
+      "level": "beginner",
+      "topics": [
+        "Leadership"
+      ],
+      "duration_minutes": null,
+      "lessons_count": 3,
+      "language": "sw",
+      "is_free": true,
+      "eligibility": "Kwa vijana wenye umri wa miaka 18 hadi 35",
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Kuunda timu ya kujitolea",
+        "Kupanga mradi mdogo wa jamii",
+        "Kuwasiliana na viongozi wa mtaa"
+      ],
+      "url": "https://chartercenter.org/courses/uongozi-wa-vijana-katika-jamii",
+      "thumbnail_url": null,
+      "updated_at": "2026-07-29T08:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1014,
+      "slug": "community-health-data-essentials",
+      "title": "Community Health Data Essentials",
+      "provider": "Accra School of Public Health",
+      "description": "A 30-minute primer on collecting and using community health data responsibly, for health workers and programme staff.",
+      "level": "Beginner",
+      "topics": [
+        "Health",
+        "tech"
+      ],
+      "duration_minutes": 30,
+      "lessons_count": 2,
+      "language": "en",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Open access — no account needed",
+      "outcomes": [
+        "Collect consistent household health data",
+        "Protect patient privacy in the field",
+        "Turn tallies into a monthly summary"
+      ],
+      "url": "https://chartercenter.org/courses/community-health-data-essentials",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-24T14:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1015,
+      "slug": "health-systems-financing-in-africa",
+      "title": "Health Systems Financing in Africa",
+      "provider": "Accra School of Public Health",
+      "description": "A rigorous 12-hour course on how African health systems are financed — taxation, insurance, donor funding and private capital — and how to reform them.\n\n**Includes** three case studies (Ghana NHIS, Rwanda Mutuelles, Nigeria BHCPF) and a final policy memo assessed by faculty.",
+      "level": "ADVANCED",
+      "topics": [
+        "Health",
+        "Finance",
+        "Policy"
+      ],
+      "duration_minutes": 720,
+      "lessons_count": 24,
+      "language": "en",
+      "is_free": false,
+      "eligibility": "Open to health-sector professionals with three or more years' experience",
+      "access_conditions": "Paid course; scholarships available for Charter Mission members",
+      "outcomes": [
+        "Compare health financing models",
+        "Model the fiscal impact of an insurance scheme",
+        "Assess equity and financial protection",
+        "Write a reform policy memo"
+      ],
+      "url": "https://chartercenter.org/courses/health-systems-financing-in-africa",
+      "thumbnail_url": null,
+      "updated_at": "2026-06-30T09:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1016,
+      "slug": "cooperative-agribusiness-farm-to-market",
+      "title": "Cooperative Agribusiness: From Farm to Market",
+      "provider": "Pan-African Trade Institute",
+      "description": "How farmer cooperatives can aggregate, process and sell to bigger buyers.\n\nCovers governance, quality standards, warehouse receipts and contract farming.",
+      "level": "Intermediate",
+      "topics": [
+        "Agriculture",
+        "Business & trade"
+      ],
+      "duration_minutes": 270,
+      "lessons_count": 10,
+      "language": "en",
+      "is_free": true,
+      "eligibility": "For cooperative leaders and agribusiness staff",
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Set up cooperative governance that lasts",
+        "Meet buyer quality standards",
+        "Use warehouse receipt systems",
+        "Negotiate an offtake contract"
+      ],
+      "url": "https://chartercenter.org/courses/cooperative-agribusiness-farm-to-market",
+      "thumbnail_url": null,
+      "updated_at": "2026-05-21T10:00:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1017,
+      "slug": "introducao-ao-financiamento-de-startups",
+      "title": "Introdução ao Financiamento de Startups",
+      "provider": "Academia Lusófona de Comércio",
+      "description": "Um curso introdutório sobre as opções de financiamento para startups em Angola, Moçambique e Cabo Verde: subsídios, business angels, capital de risco e dívida.",
+      "level": "Beginner",
+      "topics": [
+        "Finance",
+        "Business & trade"
+      ],
+      "duration_minutes": 100,
+      "lessons_count": 6,
+      "language": "pt",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "Comparar fontes de financiamento",
+        "Preparar uma tabela de capitalização simples",
+        "Negociar um term sheet básico"
+      ],
+      "url": "https://chartercenter.org/courses/introducao-ao-financiamento-de-startups",
+      "thumbnail_url": null,
+      "updated_at": "2026-09-10T11:30:00Z",
+      "status": "published"
+    },
+    {
+      "id": 1018,
+      "slug": "digital-entrepreneurship-north-africa",
+      "title": "ريادة الأعمال الرقمية في شمال أفريقيا",
+      "provider": "Maghreb Innovation Forum",
+      "description": "دورة تمهيدية لرواد الأعمال في المغرب والجزائر وتونس ومصر حول بناء مشروع رقمي: من الفكرة إلى أول عميل.",
+      "level": "Beginner",
+      "topics": [
+        "Business & trade",
+        "Tech & data"
+      ],
+      "duration_minutes": 150,
+      "lessons_count": 8,
+      "language": "ar",
+      "is_free": true,
+      "eligibility": null,
+      "access_conditions": "Free Charter Center account required",
+      "outcomes": [
+        "اختبار فكرة المشروع بسرعة",
+        "بناء نموذج أولي بسيط",
+        "الوصول إلى أول عشرة عملاء"
+      ],
+      "url": "https://chartercenter.org/courses/digital-entrepreneurship-north-africa",
+      "thumbnail_url": null,
+      "updated_at": "2026-10-05T09:00:00Z",
+      "status": "published"
+    }
+  ],
+  "paths": [
+    {
+      "id": "p-201",
+      "slug": "from-idea-to-first-export",
+      "title": "From idea to first export",
+      "description": "A guided path for founders selling across borders under AfCFTA — market research, certification, logistics and getting paid.",
+      "level": "beginner",
+      "course_ids": [
+        1001,
+        1009,
+        1010,
+        1005,
+        1007
+      ],
+      "url": "https://chartercenter.org/paths/from-idea-to-first-export",
+      "updated_at": "2026-10-30T08:00:00Z"
+    },
+    {
+      "id": "p-202",
+      "slug": "data-and-digital-for-development",
+      "title": "Data and digital for development",
+      "description": "Build the data and product skills to design digital services that work for African users.",
+      "level": "intermediate",
+      "course_ids": [
+        1014,
+        1002,
+        1007,
+        1006
+      ],
+      "url": "https://chartercenter.org/paths/data-and-digital-for-development",
+      "updated_at": "2026-10-21T08:00:00Z"
+    },
+    {
+      "id": "p-203",
+      "slug": "climate-smart-enterprise",
+      "title": "Climate-smart enterprise",
+      "description": "From climate-resilient farming to carbon finance: build an enterprise that is ready for a changing climate.",
+      "level": null,
+      "course_ids": [
+        1012,
+        1016,
+        1004,
+        1003
+      ],
+      "url": "https://chartercenter.org/paths/climate-smart-enterprise",
+      "updated_at": "2026-10-29T08:00:00Z"
+    }
+  ],
+  "link_check": {
+    "_comment": "FixtureLinkChecker: these URLs fail every check (HTTP 404); every other URL is ok.",
+    "broken_urls": [
+      "https://chartercenter.org/courses/cooperative-agribusiness-farm-to-market"
+    ]
+  }
+}
