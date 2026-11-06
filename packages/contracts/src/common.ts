@@ -109,3 +109,63 @@ export const Taxonomies = z.object({
   chapters: z.array(ChapterRef),
 });
 export type Taxonomies = z.infer<typeof Taxonomies>;
+
+/**
+ * Query-string boolean: "true"/"1" or "false"/"0" (z.coerce.boolean would read "false" as true).
+ * Also accepts a real boolean so the same schema validates JSON bodies.
+ */
+export const QueryBoolean = z
+  .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+  .transform((v) => v === true || v === "true" || v === "1");
+
+/** Longest outbound link we store (opportunity links, event registration links). */
+export const EXTERNAL_URL_MAX_CHARS = 2000;
+
+/**
+ * An outbound link a member types in (opportunity links, external event registration, online
+ * meeting links): https only, no user:password@, a real host name, at most 2000 characters.
+ * Reachability is checked later by a worker, never at validation time.
+ */
+export const ExternalUrl = z
+  .string()
+  .trim()
+  .min(1, "Add a link")
+  .max(EXTERNAL_URL_MAX_CHARS, `Links can be up to ${EXTERNAL_URL_MAX_CHARS} characters`)
+  .superRefine((value, ctx) => {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      ctx.addIssue({ code: "custom", message: "Enter a full link starting with https://" });
+      return;
+    }
+    if (url.protocol !== "https:") ctx.addIssue({ code: "custom", message: "Links must start with https://" });
+    else if (url.username || url.password) ctx.addIssue({ code: "custom", message: "Links cannot contain a user name or password" });
+    else if (!url.hostname.includes(".") || url.hostname.endsWith(".")) ctx.addIssue({ code: "custom", message: "Enter a link to a public website" });
+  });
+
+let timeZones: Set<string> | null = null;
+
+/** True for an IANA time zone name this runtime knows (Intl.supportedValuesOf plus UTC and aliases). */
+export function isIanaTimeZone(value: string): boolean {
+  if (!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$/.test(value)) return false;
+  timeZones ??= new Set(Intl.supportedValuesOf("timeZone"));
+  if (timeZones.has(value) || value === "UTC" || value === "Etc/UTC") return true;
+  // Older aliases (e.g. Asia/Calcutta) are not listed but are valid; the formatter accepts them.
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return value.includes("/");
+  } catch {
+    return false;
+  }
+}
+
+/** IANA time zone name, e.g. "Africa/Lagos". */
+export const TimeZone = z.string().trim().min(1).max(64).refine(isIanaTimeZone, "Choose a valid time zone");
+
+/** ISO 8601 timestamp with an offset or Z; the API stores and returns UTC. */
+export const IsoDateTime = z.string().datetime({ offset: true });
+
+/** Organisation as an event host. Organisations are a later module: no table yet, so this is read-only. */
+export const OrganisationRef = z.object({ id: z.string().uuid(), name: z.string(), slug: z.string(), logoUrl: z.string().nullable() });
+export type OrganisationRef = z.infer<typeof OrganisationRef>;

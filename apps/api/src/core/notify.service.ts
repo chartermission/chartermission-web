@@ -16,6 +16,7 @@ export const DEFAULT_PREFERENCES: Record<NotificationCategory, { in_app: boolean
   follows: { in_app: true, email: false, push: false },
   trending: { in_app: true, email: false, push: false },
   moderation: { in_app: true, email: true, push: true },
+  events: { in_app: true, email: true, push: true },
   digest: { in_app: false, email: false, push: false },
 };
 
@@ -39,6 +40,16 @@ export const CATEGORY_OF: Record<NotificationType, NotificationCategory | 'alway
   scheduled_post_failed: 'always',
   welcome: 'always',
   security: 'always',
+  event_registration_confirmed: 'always',
+  event_waitlisted: 'always',
+  event_waitlist_promoted: 'always',
+  event_reminder: 'events',
+  event_cancelled: 'always',
+  event_updated: 'events',
+  event_review_approved: 'always',
+  event_review_changes_requested: 'always',
+  event_review_rejected: 'always',
+  course_link_broken: 'always',
 };
 
 export interface NotifyInput {

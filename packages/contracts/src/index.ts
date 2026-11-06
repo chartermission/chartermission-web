@@ -12,3 +12,6 @@ export * from "./notifications.js";
 export * from "./moderation.js";
 export * from "./listings.js";
 export * from "./home.js";
+export * from "./analytics.js";
+export * from "./events.js";
+export * from "./learning.js";

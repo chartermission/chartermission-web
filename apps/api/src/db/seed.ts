@@ -2,7 +2,21 @@ import { hash } from '@node-rs/argon2';
 import { sql } from 'drizzle-orm';
 import { createDb, createPool, type Db } from './client.js';
 import * as s from './schema.js';
-import { CHAPTERS, COUNTRIES, DEMO_PASSWORD, INTERESTS, LANGUAGES, MEMBERS, SECTORS, SKILLS } from './seed-data.js';
+import {
+  CHAPTERS,
+  COUNTRIES,
+  COURSE_TOPICS,
+  DEMO_PASSWORD,
+  EVENT_CATEGORIES,
+  INTERESTS,
+  LANGUAGES,
+  MEMBERS,
+  SECTORS,
+  SKILLS,
+  type SeedContext,
+} from './seed-data.js';
+import { seedEvents } from './seed-events.js';
+import { seedLearning } from './seed-learning.js';
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
 import { DEFAULT_FIELD_VISIBILITY } from '@chartermission/contracts';
@@ -17,12 +31,17 @@ export async function seedReference(db: Db) {
     [s.skills, SKILLS],
     [s.interests, INTERESTS],
     [s.languages, LANGUAGES],
+    [s.eventCategories, EVENT_CATEGORIES],
   ] as const) {
     await db
       .insert(table)
       .values(items.map((name, i) => ({ slug: slug(name), name, position: i })))
       .onConflictDoNothing();
   }
+  await db
+    .insert(s.courseTopics)
+    .values(COURSE_TOPICS.map(([sl, name], i) => ({ slug: sl, name, position: i })))
+    .onConflictDoNothing();
   await db
     .insert(s.chapters)
     .values(CHAPTERS.map(([sl, name, countryCode]) => ({ slug: sl, name, countryCode })))
@@ -134,6 +153,10 @@ async function main() {
     } catch (err) {
       if ((err as { code?: string }).code !== 'ERR_MODULE_NOT_FOUND') throw err;
     }
+    const chapterRows = await db.select({ id: s.chapters.id, slug: s.chapters.slug }).from(s.chapters);
+    const ctx: SeedContext = { ids, chapters: Object.fromEntries(chapterRows.map((c) => [c.slug, c.id])) };
+    await seedEvents(db, ctx);
+    await seedLearning(db, ctx);
     console.log(`Seeded ${Object.keys(ids).length} demo members (password: ${DEMO_PASSWORD})`);
   } finally {
     await pool.end();

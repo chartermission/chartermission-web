@@ -537,8 +537,13 @@ export const ReactionState = z.object({
 });
 export type ReactionState = z.infer<typeof ReactionState>;
 
-/** PUT /bookmarks and DELETE /bookmarks. Phase 1 covers posts; other types arrive with their modules. */
-export const BookmarkInput = z.object({ targetType: z.enum(["post"]), targetId: z.string().uuid() });
+/**
+ * PUT /bookmarks and DELETE /bookmarks. Posts, events (EventSummary.viewer.saved) and courses
+ * (CourseSummary.saved). PUT checks the target is visible to the viewer (NOT_FOUND otherwise).
+ */
+export const BookmarkTargetType = z.enum(["post", "event", "course"]);
+export type BookmarkTargetType = z.infer<typeof BookmarkTargetType>;
+export const BookmarkInput = z.object({ targetType: BookmarkTargetType, targetId: z.string().uuid() });
 export type BookmarkInput = z.infer<typeof BookmarkInput>;
 
 /* ---------- Hashtags and trending ---------- */
@@ -634,13 +639,15 @@ export type TrendingResponse = z.infer<typeof TrendingResponse>;
 
 /* ---------- Uploads (CM-FED-02, spec 6.3) ---------- */
 
-export const UploadPurpose = z.enum(["avatar", "post_image", "post_document"]);
+export const UploadPurpose = z.enum(["avatar", "post_image", "post_document", "event_cover"]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
 
 export const UPLOAD_LIMITS = {
   avatar: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   post_image: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   post_document: { maxBytes: 10 * 1024 * 1024, mimes: ["application/pdf"] },
+  /** Event cover image (shown 16:9 on cards and the event page). */
+  event_cover: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
 } as const;
 
 /** POST /uploads → a short-lived URL to PUT the bytes to. */

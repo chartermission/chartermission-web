@@ -36,8 +36,5 @@ export type RemoteMode = z.infer<typeof RemoteMode>;
 export const InitiativeStatus = z.enum(["idea", "recruiting", "active", "paused", "completed", "archived"]);
 export type InitiativeStatus = z.infer<typeof InitiativeStatus>;
 
-export const EventFormat = z.enum(["online", "in_person", "hybrid"]);
-export type EventFormat = z.infer<typeof EventFormat>;
-
 export const HealthResponse = z.object({ status: z.literal("ok"), service: z.string(), time: z.string() });
 export type HealthResponse = z.infer<typeof HealthResponse>;

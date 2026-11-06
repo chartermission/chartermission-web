@@ -23,10 +23,30 @@ export const NotificationType = z.enum([
   "scheduled_post_failed",
   "welcome",
   "security",
+  /* Events (spec 4.9). Icons: calendar unless noted. Transactional ("always") unless noted. */
+  /** You have a seat; email has the .ics link. */
+  "event_registration_confirmed",
+  /** The event was full; you are number N on the waitlist. Icon clock. */
+  "event_waitlisted",
+  /** A seat opened and you now hold it (in-app + email). Icon check. */
+  "event_waitlist_promoted",
+  /** 24 h / 1 h before start (category events, respects preferences). Icon clock. */
+  "event_reminder",
+  /** Called off by the host or staff, with the reason (in-app + email). Icon alert. */
+  "event_cancelled",
+  /** Time, venue or online access changed (category events). */
+  "event_updated",
+  /** Review outcomes for the host. approved: icon check; changes requested: lightbulb; rejected: alert. */
+  "event_review_approved",
+  "event_review_changes_requested",
+  "event_review_rejected",
+  /* Learning (spec 4.10) */
+  /** To admins with course.curate: a Charter Center course link failed its checks. Icon alert. */
+  "course_link_broken",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
-/** Preference categories. "security" and "account" are always on (transactional). */
+/** Preference categories. "security", "account" and transactional event messages are always on. */
 export const NotificationCategory = z.enum([
   "mentions_replies",
   "comments",
@@ -35,6 +55,8 @@ export const NotificationCategory = z.enum([
   "follows",
   "trending",
   "moderation",
+  /** Event reminders and changes to events you registered for (confirmations and cancellations are always sent). */
+  "events",
   "digest",
 ]);
 export type NotificationCategory = z.infer<typeof NotificationCategory>;

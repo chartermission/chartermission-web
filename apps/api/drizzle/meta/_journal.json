@@ -29,6 +29,13 @@
       "when": 1793823913681,
       "tag": "0003_home_moments",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793962802451,
+      "tag": "0004_events_learning",
+      "breakpoints": true
     }
   ]
 }

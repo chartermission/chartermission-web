@@ -1,4 +1,5 @@
 import { and, eq, like } from 'drizzle-orm';
+import { NotificationCategory } from '@chartermission/contracts';
 import { count, createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { actorPrefix } from '../../src/notifications/notifications.service.js';
 import { block, createPost } from './social-helpers.js';
@@ -25,7 +26,8 @@ describe('Notifications', () => {
   it('returns defaults for every category and channel', async () => {
     const m = await createMember(t);
     const res = await m.get('/me/notification-preferences').expect(200);
-    expect(res.body.preferences).toHaveLength(8 * 3);
+    expect(res.body.preferences).toHaveLength(NotificationCategory.options.length * 3);
+    expect(res.body.preferences).toContainEqual({ category: 'events', channel: 'email', enabled: true });
     expect(res.body.preferences).toContainEqual({ category: 'comments', channel: 'email', enabled: false });
     expect(res.body.preferences).toContainEqual({ category: 'mentions_replies', channel: 'email', enabled: true });
     await m.put('/me/notification-preferences', { preferences: [{ category: 'security', channel: 'email', enabled: false }] }).expect(422);

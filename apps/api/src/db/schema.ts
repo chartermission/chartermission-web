@@ -413,7 +413,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','post_image','post_document')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','post_image','post_document','event_cover')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -975,8 +975,339 @@ export const analyticsEvents = pgTable(
     name: text('name').notNull(),
     memberPseudoId: text('member_pseudo_id'),
     countryCode: text('country_code'),
+    /** Id of the thing acted on, for events that define one (event id, course id). */
+    subjectId: text('subject_id'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('analytics_name_idx').on(t.name, t.createdAt)],
+  (t) => [index('analytics_name_idx').on(t.name, t.createdAt), index('analytics_subject_idx').on(t.name, t.subjectId)],
+);
+
+/* ======================= Events (spec 4.9, migration 0004) ======================= */
+
+/** Reference values for event filters and the create form (seeded: Conference, Workshop …). */
+export const eventCategories = taxonomy('event_categories');
+
+/** One agenda entry, stored in events.agenda (UTC ISO strings). */
+export type EventAgendaRow = {
+  startsAt: string;
+  endsAt: string | null;
+  title: string;
+  description: string | null;
+  speakerNames: string[];
+};
+
+/**
+ * An event. Host: exactly one of host_member_id / host_chapter_id / host_organisation_id matches
+ * host_type (organisations have no table yet, so that column has no foreign key and the API does
+ * not create organisation hosts). Online access URL is AES-256-GCM encrypted (common/crypto.ts).
+ * registered_count / waitlist_count are maintained in the same transaction as registration
+ * changes, under SELECT … FOR UPDATE on this row (capacity enforcement).
+ * country_code = venue country, or the host chapter's country for online-only events (filters).
+ */
+export const events = pgTable(
+  'events',
+  {
+    id: id(),
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    description: text('description').notNull().default(''),
+    categoryId: uuid('category_id').references(() => eventCategories.id, { onDelete: 'set null' }),
+    format: text('format').notNull(),
+    status: text('status').notNull().default('draft'),
+    hostType: text('host_type').notNull(),
+    hostMemberId: uuid('host_member_id').references(() => users.id, { onDelete: 'cascade' }),
+    hostChapterId: uuid('host_chapter_id').references(() => chapters.id),
+    /** Future organisations table; no foreign key yet. */
+    hostOrganisationId: uuid('host_organisation_id'),
+    startsAt: ts('starts_at').notNull(),
+    endsAt: ts('ends_at').notNull(),
+    /** IANA zone the event is organised in. */
+    timezone: text('timezone').notNull(),
+    venueName: text('venue_name'),
+    venueAddress: text('venue_address'),
+    venueCity: text('venue_city'),
+    venueMapUrl: text('venue_map_url'),
+    countryCode: text('country_code').references(() => countries.code),
+    onlinePlatform: text('online_platform'),
+    /** Encrypted join link (encrypt()/decrypt() in common/crypto.ts). Never logged or sent in .ics. */
+    onlineUrlEnc: text('online_url_enc'),
+    registrationMode: text('registration_mode').notNull().default('internal'),
+    externalUrl: text('external_url'),
+    /** Null = unlimited. */
+    capacity: integer('capacity'),
+    waitlistEnabled: boolean('waitlist_enabled').notNull().default(true),
+    registrationDeadline: ts('registration_deadline'),
+    /** Seats held (registered + attended). */
+    registeredCount: integer('registered_count').notNull().default(0),
+    waitlistCount: integer('waitlist_count').notNull().default(0),
+    agenda: jsonb('agenda').$type<EventAgendaRow[]>().notNull().default([]),
+    coverFileId: uuid('cover_file_id').references(() => files.id, { onDelete: 'set null' }),
+    featured: boolean('featured').notNull().default(false),
+    featuredAt: ts('featured_at'),
+    submittedAt: ts('submitted_at'),
+    submitNote: text('submit_note'),
+    reviewedAt: ts('reviewed_at'),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Reviewer note (changes requested / rejected) or unpublish reason. */
+    reviewNote: text('review_note'),
+    /** First time the event went live. Host cannot change after this. */
+    publishedAt: ts('published_at'),
+    cancelledAt: ts('cancelled_at'),
+    cancelReason: text('cancel_reason'),
+    cancelledBy: uuid('cancelled_by').references(() => users.id, { onDelete: 'set null' }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('events_status_starts_idx').on(t.status, t.startsAt),
+    index('events_status_ends_idx').on(t.status, t.endsAt),
+    index('events_chapter_idx').on(t.hostChapterId, t.startsAt),
+    index('events_host_member_idx').on(t.hostMemberId),
+    index('events_country_idx').on(t.countryCode, t.startsAt),
+    index('events_category_idx').on(t.categoryId),
+    index('events_created_by_idx').on(t.createdBy),
+    index('events_queue_idx').on(t.submittedAt).where(sql`${t.status} = 'pending_review'`),
+    check('events_format_ck', sql`${t.format} in ('online','in_person','hybrid')`),
+    check(
+      'events_status_ck',
+      sql`${t.status} in ('draft','pending_review','changes_requested','published','rejected','unpublished','archived')`,
+    ),
+    check('events_host_type_ck', sql`${t.hostType} in ('member','chapter','organisation')`),
+    check(
+      'events_host_ck',
+      sql`(${t.hostType} = 'member' and ${t.hostMemberId} is not null and ${t.hostChapterId} is null and ${t.hostOrganisationId} is null)
+        or (${t.hostType} = 'chapter' and ${t.hostChapterId} is not null and ${t.hostMemberId} is null and ${t.hostOrganisationId} is null)
+        or (${t.hostType} = 'organisation' and ${t.hostOrganisationId} is not null and ${t.hostMemberId} is null and ${t.hostChapterId} is null)`,
+    ),
+    check('events_time_ck', sql`${t.endsAt} > ${t.startsAt}`),
+    check('events_deadline_ck', sql`${t.registrationDeadline} is null or ${t.registrationDeadline} <= ${t.startsAt}`),
+    check('events_reg_mode_ck', sql`${t.registrationMode} in ('internal','external')`),
+    check('events_capacity_ck', sql`${t.capacity} is null or ${t.capacity} >= 1`),
+    check('events_external_ck', sql`${t.registrationMode} = 'internal' or (${t.capacity} is null and ${t.externalUrl} is not null)`),
+    check('events_counts_ck', sql`${t.registeredCount} >= 0 and ${t.waitlistCount} >= 0`),
+  ],
+);
+
+/** Speakers in display order. A linked member supplies name/avatar on read. */
+export const eventSpeakers = pgTable(
+  'event_speakers',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    name: text('name').notNull(),
+    title: text('title'),
+    organisation: text('organisation'),
+    memberId: uuid('member_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('event_speakers_event_idx').on(t.eventId, t.position), index('event_speakers_member_idx').on(t.memberId)],
+);
+
+/**
+ * One row per member and event (re-registering after cancelling updates the row).
+ * position: waitlist sequence, assigned max(position)+1 for the event (under the event row lock)
+ * whenever the row enters the waitlist, and never renumbered; the displayed place is the rank among
+ * currently waitlisted rows. Promotion takes the lowest position.
+ */
+export const eventRegistrations = pgTable(
+  'event_registrations',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text('status').notNull(),
+    position: integer('position'),
+    registeredAt: ts('registered_at').notNull().defaultNow(),
+    promotedAt: ts('promoted_at'),
+    cancelledAt: ts('cancelled_at'),
+    attendedAt: ts('attended_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('event_registrations_uq').on(t.eventId, t.userId),
+    uniqueIndex('event_registrations_position_uq').on(t.eventId, t.position).where(sql`${t.position} is not null`),
+    index('event_registrations_event_status_idx').on(t.eventId, t.status, t.position),
+    index('event_registrations_user_idx').on(t.userId, t.status),
+    check('event_registrations_status_ck', sql`${t.status} in ('registered','waitlisted','cancelled','attended')`),
+    check('event_registrations_waitlist_ck', sql`${t.status} <> 'waitlisted' or ${t.position} is not null`),
+  ],
+);
+
+/** Makes reminders idempotent: insert … on conflict do nothing before sending. */
+export const eventRemindersSent = pgTable(
+  'event_reminders_sent',
+  {
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Minutes before start (EVENT_REMINDER_OFFSETS: 1440, 60). */
+    offsetMinutes: integer('offset_minutes').notNull(),
+    sentAt: ts('sent_at').notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.userId, t.offsetMinutes] }),
+    check('event_reminders_offset_ck', sql`${t.offsetMinutes} in (1440, 60)`),
+  ],
+);
+
+/* ======================= Learning (spec 4.10, migration 0004) ======================= */
+
+/** Reference topics; the sync maps Charter Center topic names onto these (creating unknown ones). */
+export const courseTopics = taxonomy('course_topics');
+
+/**
+ * Synced copy of a Charter Center course. Content columns are overwritten by every sync; local
+ * curation (hidden, featured) and link-check columns are never touched by the sync.
+ * Members see a course when hidden = false and removed_at is null.
+ */
+export const courses = pgTable(
+  'courses',
+  {
+    id: id(),
+    externalId: text('external_id').notNull().unique(),
+    /** From the source; on a clash with another course the mapper appends "-2", "-3" … */
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    provider: text('provider').notNull(),
+    description: text('description').notNull().default(''),
+    level: text('level').notNull().default('beginner'),
+    durationMinutes: integer('duration_minutes'),
+    lessons: integer('lessons'),
+    /** BCP-47 tag. */
+    language: text('language').notNull().default('en'),
+    free: boolean('free').notNull().default(true),
+    eligibility: text('eligibility'),
+    accessConditions: text('access_conditions'),
+    outcomes: text('outcomes').array().notNull().default(sql`'{}'::text[]`),
+    /** Exact Charter Center course page ("Start learning"). */
+    startUrl: text('start_url').notNull(),
+    thumbnailUrl: text('thumbnail_url'),
+    sourceUpdatedAt: ts('source_updated_at'),
+    syncedAt: ts('synced_at').notNull().defaultNow(),
+    /** Missing from the source (or archived there) since this time. */
+    removedAt: ts('removed_at'),
+    hidden: boolean('hidden').notNull().default(false),
+    featured: boolean('featured').notNull().default(false),
+    featuredAt: ts('featured_at'),
+    linkStatus: text('link_status').notNull().default('unknown'),
+    linkHttpStatus: integer('link_http_status'),
+    linkCheckedAt: ts('link_checked_at'),
+    /** Consecutive failed checks; broken at LEARNING_LINK_FAILURES_TO_BREAK. */
+    linkFailures: integer('link_failures').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('courses_visible_idx').on(t.featured, t.sourceUpdatedAt).where(sql`${t.hidden} = false and ${t.removedAt} is null`),
+    index('courses_language_idx').on(t.language),
+    index('courses_level_idx').on(t.level),
+    index('courses_link_idx').on(t.linkStatus),
+    check('courses_level_ck', sql`${t.level} in ('beginner','intermediate','advanced')`),
+    check('courses_link_status_ck', sql`${t.linkStatus} in ('ok','broken','unknown')`),
+  ],
+);
+
+export const courseTopicLinks = pgTable(
+  'course_topic_links',
+  {
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    topicId: uuid('topic_id')
+      .notNull()
+      .references(() => courseTopics.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.courseId, t.topicId] }), index('course_topic_links_topic_idx').on(t.topicId)],
+);
+
+/** Curated sequences from Charter Center. */
+export const learningPaths = pgTable(
+  'learning_paths',
+  {
+    id: id(),
+    externalId: text('external_id').notNull().unique(),
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    level: text('level'),
+    sourceUrl: text('source_url'),
+    /** Source order for the hub. */
+    position: integer('position').notNull().default(0),
+    sourceUpdatedAt: ts('source_updated_at'),
+    syncedAt: ts('synced_at').notNull().defaultNow(),
+    removedAt: ts('removed_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check('learning_paths_level_ck', sql`${t.level} is null or ${t.level} in ('beginner','intermediate','advanced')`)],
+);
+
+export const learningPathCourses = pgTable(
+  'learning_path_courses',
+  {
+    pathId: uuid('path_id')
+      .notNull()
+      .references(() => learningPaths.id, { onDelete: 'cascade' }),
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.pathId, t.courseId] }), index('learning_path_courses_order_idx').on(t.pathId, t.position), index('learning_path_courses_course_idx').on(t.courseId)],
+);
+
+/**
+ * Catalogue syncs and link checks. At most one running row per kind (partial unique index): a
+ * second start gets a unique violation → CONFLICT. A run still "running" after an hour is stale and
+ * may be marked failed by the next run before it starts.
+ */
+export const learningSyncRuns = pgTable(
+  'learning_sync_runs',
+  {
+    id: id(),
+    kind: text('kind').notNull().default('sync'),
+    trigger: text('trigger').notNull(),
+    triggeredBy: uuid('triggered_by').references(() => users.id, { onDelete: 'set null' }),
+    status: text('status').notNull().default('running'),
+    startedAt: ts('started_at').notNull().defaultNow(),
+    finishedAt: ts('finished_at'),
+    createdCount: integer('created_count').notNull().default(0),
+    updatedCount: integer('updated_count').notNull().default(0),
+    removedCount: integer('removed_count').notNull().default(0),
+    checkedCount: integer('checked_count').notNull().default(0),
+    brokenCount: integer('broken_count').notNull().default(0),
+    error: text('error'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('learning_sync_runs_started_idx').on(t.startedAt),
+    uniqueIndex('learning_sync_runs_running_uq').on(t.kind).where(sql`${t.status} = 'running'`),
+    check('learning_sync_runs_kind_ck', sql`${t.kind} in ('sync','link_check')`),
+    check('learning_sync_runs_trigger_ck', sql`${t.trigger} in ('schedule','admin')`),
+    check('learning_sync_runs_status_ck', sql`${t.status} in ('running','succeeded','failed')`),
+  ],
 );

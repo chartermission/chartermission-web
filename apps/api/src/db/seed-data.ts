@@ -43,6 +43,18 @@ export const INTERESTS = [
 ];
 export const LANGUAGES = ['English', 'French', 'Arabic', 'Portuguese', 'Swahili', 'Hausa', 'Yoruba', 'Igbo', 'Amharic', 'Zulu', 'Wolof', 'Twi'];
 
+/** Event categories (reference data, GET /events/categories), in display order. */
+export const EVENT_CATEGORIES = ['Conference', 'Workshop', 'Webinar', 'Meet-up', 'Networking', 'Hackathon', 'Panel', 'Training'];
+
+/** Course topics as [slug, name]; slugs match the Learning page filter values. */
+export const COURSE_TOPICS: [string, string][] = [
+  ['business', 'Business & trade'], ['tech', 'Tech & data'], ['leadership', 'Leadership'], ['climate', 'Climate'],
+  ['finance', 'Finance'], ['policy', 'Policy'], ['health', 'Health'], ['agriculture', 'Agriculture'],
+];
+
+/** What the module seeders (seed-events, seed-learning) get: demo member ids by key and chapter ids by slug. */
+export type SeedContext = { ids: Record<string, string>; chapters: Record<string, string> };
+
 export const CHAPTERS: [string, string, string][] = [
   ['lagos', 'Lagos Chapter', 'NG'], ['abuja', 'Abuja Chapter', 'NG'], ['accra', 'Accra Chapter', 'GH'],
   ['nairobi', 'Nairobi Chapter', 'KE'], ['johannesburg', 'Johannesburg Chapter', 'ZA'], ['dakar', 'Dakar Chapter', 'SN'],
