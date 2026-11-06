@@ -1,7 +1,8 @@
 import { Suspense, type ReactNode } from "react";
-import type { QueueStats } from "@chartermission/contracts";
+import type { AdminEventRow, Page, QueueStats } from "@chartermission/contracts";
 import { AdminBar } from "@/components/shell/admin-bar";
 import { AdminSidebar } from "@/components/shell/admin-sidebar";
+import { Toaster } from "@/components/toast";
 import { apiGet, getViewer } from "@/lib/api/server";
 import { CONSOLE_NAV, PERM, can, roleLabel } from "@/lib/permissions";
 
@@ -19,16 +20,21 @@ async function ViewerAdminBar() {
   );
 }
 
-/** Sections the admin's permissions allow, with open-work counts from the queue stats. */
+/** Sections the admin’s permissions allow, with open-work counts (reports, appeals, events awaiting review). */
 async function ViewerSidebar() {
   const viewer = await getViewer().catch(() => null);
   if (!viewer?.mfa.verifiedThisSession) return <AdminSidebar items={[]} />;
-  const stats = can(viewer, PERM.moderationView)
-    ? await apiGet<QueueStats>("/admin/queue/stats").catch(() => null)
-    : null;
-  const counts: Partial<Record<string, number>> = stats
-    ? { moderation: stats.openReports, appeals: stats.openAppeals }
-    : {};
+  const [stats, eventQueue] = await Promise.all([
+    can(viewer, PERM.moderationView) ? apiGet<QueueStats>("/admin/queue/stats").catch(() => null) : null,
+    // The review queue's length (one page of 100 is plenty for a badge).
+    can(viewer, PERM.eventReview)
+      ? apiGet<Page<AdminEventRow>>("/admin/events", { status: "queue", limit: 100 }).catch(() => null)
+      : null,
+  ]);
+  const counts: Partial<Record<string, number>> = {
+    ...(stats ? { moderation: stats.openReports, appeals: stats.openAppeals } : {}),
+    ...(eventQueue ? { events: eventQueue.items.length } : {}),
+  };
   const items = CONSOLE_NAV.filter((item) => can(viewer, item.permission)).map((item) => ({
     ...item,
     count: counts[item.key],
@@ -57,6 +63,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

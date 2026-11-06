@@ -11,6 +11,14 @@ export const PERM = {
   auditExport: "audit.export",
   /** Platform Admin and above; gates the trending rules form (spec 4.17). */
   settingsManage: "settings.manage",
+  /** Events review queue: approve / request changes / reject / unpublish. Moderator and above. */
+  eventReview: "event.review",
+  /** Feature an event. Platform Admin and above. */
+  eventFeature: "event.feature",
+  /** Host powers on any event (sees registrations). Platform Admin and above. */
+  eventManage: "event.manage",
+  /** Learning catalogue curation, link status and sync. Platform Admin and above. */
+  courseCurate: "course.curate",
 } as const;
 
 export type ConsoleViewer = Pick<SessionUser, "id" | "name" | "handle" | "avatarUrl" | "tone" | "roles" | "permissions">;
@@ -31,7 +39,7 @@ export function roleLabel(roles: readonly string[]): string {
   return ROLE_LABELS.find(([role]) => roles.includes(role))?.[1] ?? "Staff";
 }
 
-export type NavKey = "moderation" | "hidden" | "appeals" | "trending" | "audit";
+export type NavKey = "moderation" | "hidden" | "appeals" | "trending" | "events" | "courses" | "audit";
 
 export type ConsoleNavItem = {
   key: NavKey;
@@ -43,12 +51,14 @@ export type ConsoleNavItem = {
   count?: number;
 };
 
-/** Admin sidebar sections for Phase 1 (Figma "Sidebar", node 12:1570). */
+/** Admin sidebar sections (Figma "Sidebar", node 12:1570; Events and Courses added in the events/learning round). */
 export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "moderation", href: "/moderation", label: "Moderation", icon: "shield", permission: PERM.moderationView },
   { key: "hidden", href: "/moderation/hidden", label: "Hidden content", icon: "eye-off", permission: PERM.moderationView },
   { key: "appeals", href: "/appeals", label: "Appeals", icon: "flag", permission: PERM.moderationView },
   { key: "trending", href: "/trending", label: "Trending", icon: "trending", permission: PERM.moderationView },
+  { key: "events", href: "/events", label: "Events", icon: "calendar", permission: PERM.eventReview },
+  { key: "courses", href: "/courses", label: "Courses", icon: "book", permission: PERM.courseCurate },
   { key: "audit", href: "/audit", label: "Audit log", icon: "clock", permission: PERM.auditView },
 ];
 

@@ -18,6 +18,8 @@ const ACTION_PREFIXES = [
   { value: "report.", label: "Reports and assignment" },
   { value: "appeal.", label: "Appeals" },
   { value: "trending.", label: "Trending controls" },
+  { value: "event.", label: "Events review" },
+  { value: "course.", label: "Course curation" },
   { value: "auth.", label: "Sign-ins and security" },
   { value: "audit.", label: "Audit exports" },
 ];
@@ -28,6 +30,8 @@ const TARGET_TYPES = [
   { value: "comment", label: "Comments" },
   { value: "member", label: "Members" },
   { value: "hashtag", label: "Topics" },
+  { value: "event", label: "Events" },
+  { value: "course", label: "Courses" },
   { value: "user", label: "Accounts" },
   { value: "session", label: "Sessions" },
   { value: "setting", label: "Settings" },

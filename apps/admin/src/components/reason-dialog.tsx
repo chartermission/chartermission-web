@@ -9,7 +9,7 @@ export const MIN_REASON_LENGTH = 10;
 export type ConfirmTone = "primary" | "danger";
 
 /**
- * Modal confirmation for any console action that changes what members see.
+ * Modal confirmation for any console action that changes what members see (or a plain confirm with reasonField="none").
  * The reason is required: it is written to the audit log with the action.
  * Mount it only while an action is pending; it opens itself on mount.
  * `onConfirm` may be async: the dialog shows a busy state, keeps itself open and shows the API's
@@ -22,6 +22,10 @@ export function ReasonDialog({
   tone = "primary",
   reasonLabel = "Reason",
   reasonPlaceholder = "Explain the decision for the audit log and any appeal reviewer",
+  reasonField = "required",
+  minReasonLength = MIN_REASON_LENGTH,
+  reasonHint = "Recorded in the audit log with your name and the time.",
+  requiredMessage = "A reason is required. It is recorded in the audit log.",
   children,
   onConfirm,
   onClose,
@@ -32,6 +36,11 @@ export function ReasonDialog({
   tone?: ConfirmTone;
   reasonLabel?: string;
   reasonPlaceholder?: string;
+  /** "optional" accepts an empty reason; "none" makes this a plain confirmation (onConfirm gets ""). */
+  reasonField?: "required" | "optional" | "none";
+  minReasonLength?: number;
+  reasonHint?: string;
+  requiredMessage?: string;
   /** Extra fields (selects etc.) rendered above the reason. Read them from the FormData. */
   children?: ReactNode;
   onConfirm: (reason: string, data: FormData) => void | Promise<void>;
@@ -54,11 +63,12 @@ export function ReasonDialog({
     if (busy) return;
     const data = new FormData(event.currentTarget);
     const reason = String(data.get("reason") ?? "").trim();
-    if (reason.length < MIN_REASON_LENGTH) {
+    const mustCheck = reasonField === "required" || (reasonField === "optional" && reason.length > 0);
+    if (mustCheck && reason.length < minReasonLength) {
       setError(
         reason.length === 0
-          ? "A reason is required. It is recorded in the audit log."
-          : `Add a little more detail (at least ${MIN_REASON_LENGTH} characters).`,
+          ? requiredMessage
+          : `Add a little more detail (at least ${minReasonLength} characters).`,
       );
       reasonRef.current?.focus();
       return;
@@ -109,38 +119,40 @@ export function ReasonDialog({
           {description}
         </div>
         {children}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${id}-reason`} className="text-label text-ink">
-            {reasonLabel} <span className="font-normal text-secondary">(required)</span>
-          </label>
-          <textarea
-            ref={reasonRef}
-            id={`${id}-reason`}
-            name="reason"
-            rows={3}
-            required
-            minLength={MIN_REASON_LENGTH}
-            maxLength={500}
-            placeholder={reasonPlaceholder}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? `${id}-error` : `${id}-hint`}
-            onChange={() => error && setError(null)}
-            className={cn(
-              "w-full resize-y rounded-lg border bg-card px-3 py-2 text-sm text-ink outline-none placeholder:text-disabled focus:ring-2 focus:ring-primary-light/40",
-              error ? "border-error" : "border-line-strong focus:border-primary-light",
+        {reasonField !== "none" && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`${id}-reason`} className="text-label text-ink">
+              {reasonLabel} <span className="font-normal text-secondary">({reasonField === "required" ? "required" : "optional"})</span>
+            </label>
+            <textarea
+              ref={reasonRef}
+              id={`${id}-reason`}
+              name="reason"
+              rows={3}
+              required={reasonField === "required"}
+              minLength={minReasonLength}
+              maxLength={500}
+              placeholder={reasonPlaceholder}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? `${id}-error` : `${id}-hint`}
+              onChange={() => error && setError(null)}
+              className={cn(
+                "w-full resize-y rounded-lg border bg-card px-3 py-2 text-sm text-ink outline-none placeholder:text-disabled focus:ring-2 focus:ring-primary-light/40",
+                error ? "border-error" : "border-line-strong focus:border-primary-light",
+              )}
+            />
+            {error ? (
+              <p id={`${id}-error`} role="alert" className="flex items-center gap-1.5 text-xs text-error">
+                <Icon name="alert" size={14} />
+                {error}
+              </p>
+            ) : (
+              <p id={`${id}-hint`} className="text-xs text-secondary">
+                {reasonHint}
+              </p>
             )}
-          />
-          {error ? (
-            <p id={`${id}-error`} role="alert" className="flex items-center gap-1.5 text-xs text-error">
-              <Icon name="alert" size={14} />
-              {error}
-            </p>
-          ) : (
-            <p id={`${id}-hint`} className="text-xs text-secondary">
-              Recorded in the audit log with your name and the time.
-            </p>
-          )}
-        </div>
+          </div>
+        )}
         {serverError && (
           <p role="alert" className="flex items-start gap-2 rounded-lg bg-error-light p-3 text-sm text-error">
             <Icon name="alert" size={16} className="mt-0.5 shrink-0" />
