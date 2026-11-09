@@ -10,13 +10,22 @@ import { ApiError } from "@/lib/api/errors";
  */
 export async function getTaxonomies(): Promise<Taxonomies> {
   "use cache";
-  cacheLife("minutes");
-  const res = await fetch(`${API_INTERNAL_URL}/taxonomies`, { headers: { accept: "application/json" } }).catch(() => {
+  const res = await fetch(`${API_INTERNAL_URL}/taxonomies`, { headers: { accept: "application/json" } }).catch(() => null);
+  if (!res) {
+    // `next build` prerenders pages without the API (the Docker build has no route to it). Ship an empty
+    // list that revalidates on the first requests at runtime instead of failing the build.
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      cacheLife("seconds");
+      return EMPTY_TAXONOMIES;
+    }
     throw new ApiError(503, "NETWORK_ERROR", "The service is unavailable. Please try again shortly.");
-  });
+  }
+  cacheLife("minutes");
   if (!res.ok) throw await ApiError.from(res);
   return (await res.json()) as Taxonomies;
 }
+
+const EMPTY_TAXONOMIES: Taxonomies = { countries: [], sectors: [], skills: [], interests: [], languages: [], chapters: [] };
 
 export type CountryGroup = { label: string; countries: Pick<Country, "code" | "name">[] };
 
