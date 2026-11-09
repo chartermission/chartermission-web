@@ -45,18 +45,24 @@ show their real cause on the page.
 
 ### Demo accounts
 
-All seeded accounts use the password `charter-mission-demo` and have verified emails and finished onboarding.
+All seeded accounts use the password `CharterMission@123` and have verified emails and finished onboarding.
 
 | Email | Role |
 | --- | --- |
-| owais@example.com | Super Admin |
-| team@example.com | Platform Admin (official "Charter Mission" account) |
-| aisha@example.com | Moderator |
-| amara@, kwame@, wanjiru@, leila@, thabo@, fatou@, yohannes@, chinedu@example.com | Members |
+| admin@chartermission.com | Super Admin |
+| platform-admin@chartermission.com | Platform Admin |
+| moderator@chartermission.com | Moderator |
+| amb-manager@chartermission.com | Ambassador Manager (Nigeria, Ghana, Kenya) |
+| amara@example.com | Member, Founding Ambassador for Nigeria |
+| kofi@example.com | Member, Ambassador onboarding (Ghana) |
+| owais@, team@, aisha@, kwame@, wanjiru@, leila@, thabo@, fatou@, yohannes@, chinedu@example.com | Members |
+| promo@example.com | Spam account with reported content (the Moderator's demo queue) |
 
-The admin console requires two-step verification. The first admin sign-in walks through setting up an
-authenticator app (scan the QR code); after that every admin sign-in asks for a code. Members can turn on the
-same protection in Settings → Security.
+Two-step verification is mandatory for staff accounts (anyone with an admin-console role or the staff flag), in
+the admin console and the member app, and they can't turn it off. Outside production the seed turns it on for
+the four staff accounts with fixed keys, listed with QR codes in the demo accounts PDF
+(`docs/Charter-Mission-Test-Accounts.pdf`): add them to an authenticator app once and use its codes to sign in.
+In production staff set it up on their first sign-in. Members can turn on the same protection in Settings → Security.
 
 ### Emails in development
 
@@ -87,7 +93,7 @@ PDFs, polls and link previews, comments and replies, reactions, reposts, bookmar
 trending topics, notifications and preferences, reporting, moderation actions, appeals, trending controls and
 the audit log.
 
-Opportunities, events, learning, initiatives, chapters and organisations still use placeholder data
+Opportunities, initiatives, chapter pages and organisations still use placeholder data
 (`apps/web/src/lib/mock*`); they are later phases.
 
 ## Production notes
@@ -105,3 +111,4 @@ Opportunities, events, learning, initiatives, chapters and organisations still u
 - Server components by default; add `"use client"` only to interactive leaves.
 - Server components read data with `apiGet()` from `src/lib/api/server.ts` inside `<Suspense>`; client components mutate with `api()` from `src/lib/api/client.ts`. Types come from `@chartermission/contracts`.
 - Next.js 16 differs from older versions; read `node_modules/next/dist/docs/` before using unfamiliar APIs.
+# chartermission-web
