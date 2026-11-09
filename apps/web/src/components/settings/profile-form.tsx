@@ -13,6 +13,7 @@ import { Button, Icon, Panel, cn, type AvatarTone } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import type { CountryGroup } from "@/lib/taxonomies";
 import { AvatarUploader } from "@/components/account/avatar-uploader";
+import { CoverUploader } from "@/components/account/cover-uploader";
 import { CountrySelect } from "@/components/account/country-select";
 import { RestrictedPrompt } from "@/components/account/verify-prompt";
 import { Field, describedBy, inputClasses } from "@/components/auth/fields";
@@ -257,6 +258,7 @@ export function ProfileForm({
           avatarUrl={profile.avatarUrl}
           onChange={() => router.refresh()}
         />
+        <CoverUploader coverUrl={profile.coverUrl} onChange={() => router.refresh()} />
         {text("name", "Display name", { max: 80, autoComplete: "name" })}
         {text("headline", "Headline", { max: 120, placeholder: "e.g. Renewable energy engineer · Lagos", hint: true })}
         <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">

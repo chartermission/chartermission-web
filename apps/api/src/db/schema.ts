@@ -65,6 +65,8 @@ export const chapters = pgTable(
       .notNull()
       .references(() => countries.code),
     status: text('status').notNull().default('active'),
+    /** Short About text, edited by the chapter's Ambassadors and Chapter Leads. */
+    about: text('about'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -187,6 +189,8 @@ export const memberProfiles = pgTable(
     website: text('website'),
     links: jsonb('links').$type<{ label: string; url: string }[]>().notNull().default([]),
     avatarFileId: uuid('avatar_file_id'),
+    /** Wide banner at the top of the profile (profile_cover upload). */
+    coverFileId: uuid('cover_file_id'),
     avatarTone: text('avatar_tone').notNull().default('tint'),
     profileVisibility: text('profile_visibility').notNull().default('members'),
     fieldVisibility: jsonb('field_visibility').$type<Record<string, string>>().notNull().default({}),
@@ -403,6 +407,9 @@ export const files = pgTable(
     sha256: text('sha256'),
     width: integer('width'),
     height: integer('height'),
+    /** Videos: length after processing, and the storage key of the still frame (poster). */
+    durationMs: integer('duration_ms'),
+    posterKey: text('poster_key'),
     scanStatus: text('scan_status').notNull().default('pending'),
     rejectionReason: text('rejection_reason'),
     isPublic: boolean('is_public').notNull().default(false),
@@ -413,7 +420,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','post_image','post_document','event_cover')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -505,7 +512,7 @@ export const postAttachments = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [primaryKey({ columns: [t.postId, t.fileId] }), check('post_att_kind_ck', sql`${t.kind} in ('image','document')`)],
+  (t) => [primaryKey({ columns: [t.postId, t.fileId] }), check('post_att_kind_ck', sql`${t.kind} in ('image','document','video')`)],
 );
 
 /** "I can help" offers on request ("Looking for…") posts. */
@@ -866,7 +873,7 @@ export const contentReports = pgTable(
     uniqueIndex('reports_one_open_per_reporter_uq')
       .on(t.reporterId, t.targetType, t.targetId)
       .where(sql`${t.status} in ('open','in_review')`),
-    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag')`),
+    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag','story','opportunity')`),
     check(
       'reports_status_ck',
       sql`${t.status} in ('open','in_review','actioned','dismissed','appealed','upheld','overturned')`,
@@ -1309,5 +1316,307 @@ export const learningSyncRuns = pgTable(
     check('learning_sync_runs_kind_ck', sql`${t.kind} in ('sync','link_check')`),
     check('learning_sync_runs_trigger_ck', sql`${t.trigger} in ('schedule','admin')`),
     check('learning_sync_runs_status_ck', sql`${t.status} in ('running','succeeded','failed')`),
+  ],
+);
+
+/**
+ * Members an admin unlocked Learning for, whatever the e-learning access rules say
+ * (Settings → E-learning access). Deleting the row puts them back under the rules.
+ */
+export const learningAccessOverrides = pgTable('learning_access_overrides', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  note: text('note'),
+  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+});
+
+/* ======================= Ambassador programme ======================= */
+
+/**
+ * People being considered for, or onboarded as, a country chapter's Ambassador. Created by
+ * ambassador managers (admin console) from applications, nominations and outreach. One row per
+ * email: someone who reapplies is moved back into the pipeline rather than duplicated.
+ */
+export const ambassadorLeads = pgTable(
+  'ambassador_leads',
+  {
+    id: id(),
+    fullName: text('full_name').notNull(),
+    email: text('email').notNull(),
+    phone: text('phone'),
+    countryCode: text('country_code')
+      .notNull()
+      .references(() => countries.code),
+    city: text('city'),
+    organisation: text('organisation'),
+    jobTitle: text('job_title'),
+    linkedinUrl: text('linkedin_url'),
+    source: text('source').notNull().default('outreach'),
+    referredBy: text('referred_by'),
+    hoursPerWeek: integer('hours_per_week'),
+    motivation: text('motivation'),
+    notes: text('notes'),
+    stage: text('stage').notNull().default('new'),
+    stageChangedAt: ts('stage_changed_at').notNull().defaultNow(),
+    /** Rubric lines (LeadScores); score_total is their sum, null when nothing is scored. */
+    scores: jsonb('scores').$type<Record<string, number | null>>().notNull().default({}),
+    scoreTotal: integer('score_total'),
+    ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The member account with this email, linked automatically when it exists. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    onboardingStartedAt: ts('onboarding_started_at'),
+    invitedAt: ts('invited_at'),
+    certifiedAt: ts('certified_at'),
+    founding: boolean('founding').notNull().default(false),
+    /** Signed in the member app (POST /ambassadors/me/agreement): typed name and the text version. */
+    agreementSignedAt: ts('agreement_signed_at'),
+    agreementSignedName: text('agreement_signed_name'),
+    agreementVersion: text('agreement_version'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('ambassador_leads_email_uq').on(sql`lower(${t.email})`),
+    index('ambassador_leads_stage_idx').on(t.stage, t.stageChangedAt),
+    index('ambassador_leads_country_idx').on(t.countryCode),
+    index('ambassador_leads_owner_idx').on(t.ownerId),
+    index('ambassador_leads_user_idx').on(t.userId),
+    check(
+      'ambassador_leads_stage_ck',
+      sql`${t.stage} in ('new','screening','review','interview','references','decision','onboarding','ambassador','alumni','talent_pool','declined','withdrawn')`,
+    ),
+    check('ambassador_leads_source_ck', sql`${t.source} in ('application','nomination','referral','outreach','event','other')`),
+  ],
+);
+
+/** Timeline of a lead: notes, stage moves, scoring, onboarding ticks, emails, certification. */
+export const ambassadorLeadActivities = pgTable(
+  'ambassador_lead_activities',
+  {
+    id: id(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => ambassadorLeads.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    kind: text('kind').notNull(),
+    body: text('body').notNull(),
+    data: jsonb('data'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('ambassador_lead_activities_lead_idx').on(t.leadId, t.createdAt),
+    check(
+      'ambassador_lead_activities_kind_ck',
+      sql`${t.kind} in ('created','updated','stage','note','scores','onboarding','training','invite','certified','term_ended','applied')`,
+    ),
+  ],
+);
+
+/** Onboarding checklist, one row per step once onboarding starts. */
+export const ambassadorOnboardingSteps = pgTable(
+  'ambassador_onboarding_steps',
+  {
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => ambassadorLeads.id, { onDelete: 'cascade' }),
+    step: text('step').notNull(),
+    status: text('status').notNull().default('pending'),
+    note: text('note'),
+    completedAt: ts('completed_at'),
+    completedBy: uuid('completed_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.leadId, t.step] }),
+    check('ambassador_onboarding_steps_step_ck', sql`${t.step} in ('agreement','account','profile','training','orientation','first_event')`),
+    check('ambassador_onboarding_steps_status_ck', sql`${t.status} in ('pending','done','waived')`),
+  ],
+);
+
+/**
+ * Required training courses marked complete for a lead. Charter Center does not report
+ * completions, so a manager ticks each course once the lead shows their certificate.
+ */
+export const ambassadorTrainingProgress = pgTable(
+  'ambassador_training_progress',
+  {
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => ambassadorLeads.id, { onDelete: 'cascade' }),
+    courseId: uuid('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    completedAt: ts('completed_at').notNull().defaultNow(),
+    markedBy: uuid('marked_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.leadId, t.courseId] })],
+);
+
+
+/* ----------------------------- Stories and highlights ----------------------------- */
+
+/** A photo or short video shown in the feed strip for 24 hours (then archived, or kept by a highlight). */
+export const stories = pgTable(
+  'stories',
+  {
+    id: id(),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    caption: text('caption'),
+    expiresAt: ts('expires_at').notNull(),
+    moderationState: text('moderation_state').notNull().default('visible'),
+    viewCount: integer('view_count').notNull().default(0),
+    deletedAt: ts('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('stories_author_idx').on(t.authorId, t.createdAt),
+    index('stories_expires_idx').on(t.expiresAt),
+    check('stories_mod_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
+  ],
+);
+
+export const storyViews = pgTable(
+  'story_views',
+  {
+    storyId: uuid('story_id')
+      .notNull()
+      .references(() => stories.id, { onDelete: 'cascade' }),
+    viewerId: uuid('viewer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    viewedAt: ts('viewed_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.storyId, t.viewerId] }), index('story_views_viewer_idx').on(t.viewerId)],
+);
+
+/** Named collections of stories on a member's profile. */
+export const storyHighlights = pgTable(
+  'story_highlights',
+  {
+    id: id(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('story_highlights_owner_idx').on(t.ownerId, t.position)],
+);
+
+export const storyHighlightItems = pgTable(
+  'story_highlight_items',
+  {
+    highlightId: uuid('highlight_id')
+      .notNull()
+      .references(() => storyHighlights.id, { onDelete: 'cascade' }),
+    storyId: uuid('story_id')
+      .notNull()
+      .references(() => stories.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.highlightId, t.storyId] }), index('story_highlight_items_story_idx').on(t.storyId)],
+);
+
+/* ============================ Chapter pages ============================ */
+
+/** Posts pinned to the top of a chapter page (at most CHAPTER_PIN_LIMIT per chapter). */
+export const chapterPins = pgTable(
+  'chapter_pins',
+  {
+    chapterId: uuid('chapter_id')
+      .notNull()
+      .references(() => chapters.id, { onDelete: 'cascade' }),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    pinnedBy: uuid('pinned_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.chapterId, t.postId] }), index('chapter_pins_post_idx').on(t.postId)],
+);
+
+/* ============================ Opportunities ============================ */
+
+/** A job, fellowship, grant or other opening posted by a verified member. Live on creation. */
+export const opportunities = pgTable(
+  'opportunities',
+  {
+    id: id(),
+    slug: text('slug').notNull().unique(),
+    posterId: uuid('poster_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    title: text('title').notNull(),
+    organisation: text('organisation').notNull(),
+    summary: text('summary').notNull(),
+    description: text('description').notNull(),
+    remoteMode: text('remote_mode').notNull(),
+    countryCode: text('country_code').references(() => countries.code),
+    city: text('city'),
+    sectorId: uuid('sector_id').references(() => sectors.id, { onDelete: 'set null' }),
+    /** Last day to apply, YYYY-MM-DD. */
+    deadline: text('deadline'),
+    compensation: text('compensation'),
+    moreInfoUrl: text('more_info_url'),
+    status: text('status').notNull().default('open'),
+    moderationState: text('moderation_state').notNull().default('visible'),
+    applicationCount: integer('application_count').notNull().default(0),
+    closedAt: ts('closed_at'),
+    deletedAt: ts('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('opportunities_poster_idx').on(t.posterId, t.createdAt),
+    index('opportunities_list_idx').on(t.status, t.createdAt),
+    index('opportunities_deadline_idx').on(t.deadline),
+    check(
+      'opportunities_type_ck',
+      sql`${t.type} in ('employment','internship','fellowship','scholarship','grant','training','mentorship','volunteering','competition','call_for_proposals')`,
+    ),
+    check('opportunities_remote_ck', sql`${t.remoteMode} in ('remote','in_person','hybrid')`),
+    check('opportunities_status_ck', sql`${t.status} in ('open','closed')`),
+    check('opportunities_mod_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
+  ],
+);
+
+/** A member's application: their profile plus a note. One per member per listing. */
+export const opportunityApplications = pgTable(
+  'opportunity_applications',
+  {
+    id: id(),
+    opportunityId: uuid('opportunity_id')
+      .notNull()
+      .references(() => opportunities.id, { onDelete: 'cascade' }),
+    applicantId: uuid('applicant_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    note: text('note').notNull(),
+    status: text('status').notNull().default('submitted'),
+    decidedAt: ts('decided_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('opportunity_applications_uq').on(t.opportunityId, t.applicantId),
+    index('opportunity_applications_applicant_idx').on(t.applicantId, t.createdAt),
+    check('opportunity_applications_status_ck', sql`${t.status} in ('submitted','shortlisted','accepted','declined','withdrawn')`),
   ],
 );

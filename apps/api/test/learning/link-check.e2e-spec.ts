@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { CourseDetail, CourseSummary, Page } from '@chartermission/contracts';
 import { count, createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { HttpLinkChecker, type RequestFn } from '../../src/learning/link-checker.js';
-import { learning } from './learning-helpers.js';
+import { learning, openLearning } from './learning-helpers.js';
 
 const BROKEN_SLUG = 'cooperative-agribusiness-farm-to-market';
 
@@ -12,6 +12,7 @@ describe('Learning: link checks', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
+    await openLearning(t);
     l = learning(t);
     await l.sync();
   });

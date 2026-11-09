@@ -4,7 +4,9 @@ import {
   ARTICLE_MAX_CHARS,
   ARTICLE_MIN_CHARS,
   POST_MAX_CHARS,
+  parseVideoEmbed,
   type CreatePostInput,
+  type LinkPreview,
   type HelpOfferView,
   type PostView,
   type UpdatePostInput,
@@ -128,8 +130,11 @@ export class PostsService implements OnModuleInit {
     await this.limits.consume(`posts:${user.id}`, POSTS_PER_DAY, 24 * 3600);
 
     const attachments = await this.validateAttachments(user.id, input.attachmentIds);
-    if (input.type === 'article' && attachments.some((f) => f.purpose === 'post_document')) {
+    if (input.type === 'article' && attachments.some((f) => f.purpose !== 'post_image')) {
       throw Errors.validation({ attachmentIds: 'An article’s cover must be an image' });
+    }
+    if (input.poll && attachments.some((f) => f.purpose === 'post_video')) {
+      throw Errors.validation({ poll: 'A post can have a video or a poll, not both' });
     }
     const original = input.repostOfId ? await this.repostTarget(user, input.repostOfId) : null;
     if (input.chapterId) {
@@ -157,6 +162,8 @@ export class PostsService implements OnModuleInit {
           countryCode: user.countryCode,
           repostOfId: original?.id ?? null,
           linkUrl,
+          // Video links get their player straight away; the title and description follow from the preview job.
+          linkPreview: linkUrl ? embedPreview(linkUrl) : null,
           status,
           pinnedAt: input.kind === 'announcement' ? now : null,
         })
@@ -166,7 +173,7 @@ export class PostsService implements OnModuleInit {
           attachments.map((f, position) => ({
             postId: p!.id,
             fileId: f.id,
-            kind: f.purpose === 'post_document' ? 'document' : 'image',
+            kind: f.purpose === 'post_document' ? 'document' : f.purpose === 'post_video' ? 'video' : 'image',
             position,
             alt: f.purpose === 'post_image' ? input.altTexts?.[f.id]?.trim() || null : null,
           })),
@@ -231,7 +238,7 @@ export class PostsService implements OnModuleInit {
         .set({
           body: input.body,
           editedAt: new Date(),
-          ...(newLink ? { linkUrl: newLink } : {}),
+          ...(newLink ? { linkUrl: newLink, linkPreview: embedPreview(newLink) } : {}),
           ...(details ? { details } : {}),
         })
         .where(eq(posts.id, id));
@@ -406,7 +413,7 @@ export class PostsService implements OnModuleInit {
     for (const f of ordered) {
       if (!f || f.ownerId !== userId) throw Errors.validation({ attachmentIds: 'Attachment not found' });
       if (f.attachedAt) throw Errors.validation({ attachmentIds: 'This file is already attached to a post' });
-      if (f.purpose !== 'post_image' && f.purpose !== 'post_document') {
+      if (f.purpose !== 'post_image' && f.purpose !== 'post_document' && f.purpose !== 'post_video') {
         throw Errors.validation({ attachmentIds: 'This file can’t be attached to a post' });
       }
       if (f.scanStatus === 'rejected' || f.scanStatus === 'infected') {
@@ -416,9 +423,10 @@ export class PostsService implements OnModuleInit {
     }
     const files_ = ordered as FileRow[];
     const docs = files_.filter((f) => f.purpose === 'post_document').length;
-    const images = files_.length - docs;
-    if (docs > 1 || (docs > 0 && images > 0) || images > 4) {
-      throw Errors.validation({ attachmentIds: 'Attach up to 4 images or 1 document' });
+    const videos = files_.filter((f) => f.purpose === 'post_video').length;
+    const images = files_.length - docs - videos;
+    if (docs + videos > 1 || ((docs > 0 || videos > 0) && images > 0) || images > 4) {
+      throw Errors.validation({ attachmentIds: 'Attach up to 4 images, 1 video or 1 document' });
     }
     return files_;
   }
@@ -498,6 +506,23 @@ export class PostsService implements OnModuleInit {
     const post = await this.find(postId);
     if (!post?.linkUrl || post.deletedAt) return;
     const preview = await this.previews.safePreview(post.linkUrl);
-    if (preview) await this.db.update(posts).set({ linkPreview: preview }).where(eq(posts.id, postId));
+    const embed = parseVideoEmbed(post.linkUrl);
+    const merged: LinkPreview | null = preview
+      ? { ...preview, imageUrl: preview.imageUrl ?? embed?.thumbnailUrl ?? null, embed }
+      : embedPreview(post.linkUrl);
+    if (merged) await this.db.update(posts).set({ linkPreview: merged }).where(eq(posts.id, postId));
   }
+}
+
+/** A player-only preview for a supported video link (YouTube, Vimeo, Loom, TikTok, Dailymotion); null for other links. */
+function embedPreview(url: string): LinkPreview | null {
+  const embed = parseVideoEmbed(url);
+  if (!embed) return null;
+  let domain = '';
+  try {
+    domain = new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    domain = '';
+  }
+  return { url, domain, title: null, description: null, imageUrl: embed.thumbnailUrl, embed };
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { platformSettings } from '../db/schema.js';
-import type { PolicyVersions, TrendingRules } from '@chartermission/contracts';
+import { LEARNING_ACCESS_DEFAULTS, type LearningAccessRules, type MediaSettings, type PolicyVersions, type TrendingRules } from '@chartermission/contracts';
 
 export const SETTING_DEFAULTS = {
   policy_versions: { terms: '2026-11', privacy: '2026-11', guidelines: '2026-11' } satisfies PolicyVersions,
@@ -12,6 +12,12 @@ export const SETTING_DEFAULTS = {
     baselineDays: 14,
     recomputeMinutes: 5,
   } satisfies TrendingRules,
+  /** Charter Center courses (our course ids) every new Ambassador completes during onboarding. */
+  ambassador_training: { courseIds: [] as string[] },
+  /** Longest uploaded video, in seconds: feed posts and stories (admin console, Media settings). */
+  media_limits: { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60 } satisfies MediaSettings,
+  /** What members must do before Learning opens (admin console, E-learning access). */
+  learning_access: LEARNING_ACCESS_DEFAULTS as LearningAccessRules,
 };
 
 type SettingKey = keyof typeof SETTING_DEFAULTS;

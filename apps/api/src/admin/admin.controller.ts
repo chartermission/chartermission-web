@@ -14,6 +14,7 @@ import {
   RevokeOverrideInput,
   TrendingOverrideInput,
   TrendingRules,
+  MediaSettings,
   type AdminActionView,
   type AdminAppealRow,
   type AdminHiddenRow,
@@ -35,6 +36,8 @@ import { uuidOr404 } from '../moderation/util.js';
 import { AdminQueueService } from './admin-queue.service.js';
 import { AdminTrendingService } from './admin-trending.service.js';
 import { AdminAuditService } from './admin-audit.service.js';
+import { SettingsService } from '../infra/settings.service.js';
+import { AuditService } from '../infra/audit.service.js';
 
 /**
  * Admin console: reports queue, moderation actions, hidden content and appeals
@@ -202,5 +205,38 @@ export class AdminAuditController {
   ): Promise<void> {
     const q = parseOrThrow(AuditExportQuery, query);
     await this.audit.exportCsv(ctx, q, res, clientIp(req));
+  }
+}
+
+/** Platform settings editable in the console: video length limits (Media settings). */
+@Controller('admin/settings')
+export class AdminSettingsController {
+  constructor(
+    private readonly settings: SettingsService,
+    private readonly audit: AuditService,
+  ) {}
+
+  @Get('media')
+  @Access('admin', 'settings.manage')
+  media(): Promise<MediaSettings> {
+    return this.settings.get('media_limits');
+  }
+
+  /** Applies to videos uploaded from now on; videos already processed stay as they are. */
+  @Put('media')
+  @Access('admin', 'settings.manage')
+  async updateMedia(@Auth() ctx: AuthContext, @ZBody(MediaSettings) input: MediaSettings, @Req() req: AppRequest): Promise<MediaSettings> {
+    const before = await this.settings.get('media_limits');
+    await this.settings.set('media_limits', input, ctx.user.id);
+    await this.audit.record({
+      actorId: ctx.user.id,
+      action: 'settings.media.updated',
+      targetType: 'setting',
+      targetId: 'media_limits',
+      before,
+      after: input,
+      ip: clientIp(req),
+    });
+    return this.settings.get('media_limits');
   }
 }

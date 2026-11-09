@@ -56,6 +56,7 @@ const profileColumns = {
   website: memberProfiles.website,
   links: memberProfiles.links,
   avatarFileId: memberProfiles.avatarFileId,
+  coverFileId: memberProfiles.coverFileId,
   avatarTone: memberProfiles.avatarTone,
   profileVisibility: memberProfiles.profileVisibility,
   fieldVisibility: memberProfiles.fieldVisibility,
@@ -79,6 +80,7 @@ export type ProfileRow = {
   website: string | null;
   links: { label: string; url: string }[];
   avatarFileId: string | null;
+  coverFileId: string | null;
   avatarTone: string;
   profileVisibility: string;
   fieldVisibility: Record<string, string>;
@@ -180,6 +182,8 @@ export class ProfilesService {
       counts,
       relationship,
     };
+    const coverUrl = mediaUrl(row.coverFileId);
+    if (coverUrl) out.coverUrl = coverUrl;
     if (show('location')) {
       if (row.countryCode) out.country = { code: row.countryCode, name: countryName ?? row.countryCode };
       if (row.city) out.city = row.city;
@@ -265,6 +269,7 @@ export class ProfilesService {
       name: row.displayName,
       headline: row.headline,
       avatarUrl: mediaUrl(row.avatarFileId),
+      coverUrl: mediaUrl(row.coverFileId),
       tone: (row.avatarTone as OwnProfile['tone']) ?? toneFor(userId),
       countryCode: row.countryCode,
       city: row.city,
@@ -313,6 +318,10 @@ export class ProfilesService {
       if (input.avatarFileId) await this.assertAvatar(userId, input.avatarFileId);
       set.avatarFileId = input.avatarFileId;
     }
+    if (input.coverFileId !== undefined) {
+      if (input.coverFileId) await this.assertOwnImage(userId, input.coverFileId, 'profile_cover', 'coverFileId');
+      set.coverFileId = input.coverFileId;
+    }
 
     const taxonomies = {
       skills: input.skillIds !== undefined ? await this.taxonomy.validate('skills', input.skillIds, 'skillIds') : undefined,
@@ -346,11 +355,12 @@ export class ProfilesService {
             );
           }
         }
-        if (input.avatarFileId) {
+        for (const fileId of [input.avatarFileId, input.coverFileId]) {
+          if (!fileId) continue;
           await tx
             .update(files)
             .set({ attachedAt: new Date() })
-            .where(and(eq(files.id, input.avatarFileId), isNull(files.attachedAt)));
+            .where(and(eq(files.id, fileId), isNull(files.attachedAt)));
         }
       });
     } catch (err) {
@@ -400,13 +410,17 @@ export class ProfilesService {
 
   /** avatarFileId must be the member's own, clean, avatar-purpose upload (CM-PRF-07). */
   private async assertAvatar(userId: string, fileId: string) {
+    await this.assertOwnImage(userId, fileId, 'avatar', 'avatarFileId');
+  }
+
+  private async assertOwnImage(userId: string, fileId: string, purpose: 'avatar' | 'profile_cover', field: string) {
     const [file] = await this.db
       .select({ ownerId: files.ownerId, purpose: files.purpose, scanStatus: files.scanStatus })
       .from(files)
       .where(eq(files.id, fileId))
       .limit(1);
-    if (!file || file.ownerId !== userId || file.purpose !== 'avatar' || file.scanStatus !== 'clean') {
-      throw Errors.validation({ avatarFileId: 'Upload a JPEG, PNG or WebP photo first' });
+    if (!file || file.ownerId !== userId || file.purpose !== purpose || file.scanStatus !== 'clean') {
+      throw Errors.validation({ [field]: 'Upload a JPEG, PNG or WebP photo first' });
     }
   }
 }

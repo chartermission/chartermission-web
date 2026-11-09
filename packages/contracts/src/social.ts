@@ -97,7 +97,7 @@ export type ModerationState = z.infer<typeof ModerationState>;
 
 export const AttachmentView = z.object({
   id: z.string().uuid(),
-  kind: z.enum(["image", "document"]),
+  kind: z.enum(["image", "document", "video"]),
   url: z.string(),
   name: z.string().nullable(),
   mime: z.string(),
@@ -106,6 +106,9 @@ export const AttachmentView = z.object({
   height: z.number().int().nullable(),
   /** Description for screen readers; null when the author left it empty. */
   alt: z.string().nullable(),
+  /** Videos: length in seconds and a still frame for the player before it starts. */
+  durationSeconds: z.number().nullable().optional(),
+  posterUrl: z.string().nullable().optional(),
 });
 export type AttachmentView = z.infer<typeof AttachmentView>;
 
@@ -121,12 +124,122 @@ export const PollView = z.object({
 });
 export type PollView = z.infer<typeof PollView>;
 
+/* ---------- Video links (YouTube, Vimeo, Loom, TikTok, Dailymotion) ---------- */
+
+export const VideoProvider = z.enum(["youtube", "vimeo", "loom", "tiktok", "dailymotion"]);
+export type VideoProvider = z.infer<typeof VideoProvider>;
+
+export const VIDEO_PROVIDER_LABELS: Record<VideoProvider, string> = {
+  youtube: "YouTube",
+  vimeo: "Vimeo",
+  loom: "Loom",
+  tiktok: "TikTok",
+  dailymotion: "Dailymotion",
+};
+
+/** A link that plays in an embedded player. Built only by parseVideoEmbed, never taken from clients. */
+export const VideoEmbed = z.object({
+  provider: VideoProvider,
+  videoId: z.string(),
+  /** The iframe src: privacy-friendly player URLs (youtube-nocookie.com for YouTube). */
+  embedUrl: z.string(),
+  thumbnailUrl: z.string().nullable(),
+  /** Portrait players (YouTube Shorts, TikTok) are shown 9:16. */
+  vertical: z.boolean(),
+});
+export type VideoEmbed = z.infer<typeof VideoEmbed>;
+
+const YT_ID = /^[A-Za-z0-9_-]{11}$/;
+
+function startSeconds(value: string | null): number | null {
+  if (!value) return null;
+  if (/^\d+$/.test(value)) return Number(value);
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(value);
+  if (!m || !m[0]) return null;
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0);
+}
+
+/**
+ * Recognise a video link from a supported platform and build its player. Returns null for
+ * anything else (it stays an ordinary link preview). Shared by the API and the composer.
+ */
+export function parseVideoEmbed(raw: string): VideoEmbed | null {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  const host = url.hostname.toLowerCase().replace(/^(www|m|music)\./, "");
+  const parts = url.pathname.split("/").filter(Boolean);
+
+  if (host === "youtube.com" || host === "youtube-nocookie.com" || host === "youtu.be") {
+    let id: string | null = null;
+    let vertical = false;
+    if (host === "youtu.be") id = parts[0] ?? null;
+    else if (parts[0] === "watch") id = url.searchParams.get("v");
+    else if (parts[0] === "shorts") {
+      id = parts[1] ?? null;
+      vertical = true;
+    } else if (parts[0] === "embed" || parts[0] === "live" || parts[0] === "v") id = parts[1] ?? null;
+    if (!id || !YT_ID.test(id)) return null;
+    const start = startSeconds(url.searchParams.get("t") ?? url.searchParams.get("start"));
+    return {
+      provider: "youtube",
+      videoId: id,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${id}?rel=0${start ? `&start=${start}` : ""}`,
+      thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      vertical,
+    };
+  }
+  if (host === "vimeo.com" || host === "player.vimeo.com") {
+    const idx = parts.findIndex((p) => /^\d{5,12}$/.test(p));
+    if (idx < 0) return null;
+    const id = parts[idx]!;
+    const next = parts[idx + 1];
+    const hash = url.searchParams.get("h") ?? (next && /^[0-9a-f]{6,20}$/i.test(next) ? next : null);
+    return {
+      provider: "vimeo",
+      videoId: id,
+      embedUrl: `https://player.vimeo.com/video/${id}${hash ? `?h=${hash}` : ""}`,
+      thumbnailUrl: null,
+      vertical: false,
+    };
+  }
+  if (host === "loom.com") {
+    const id = (parts[0] === "share" || parts[0] === "embed") && parts[1] && /^[0-9a-f]{32}$/i.test(parts[1]) ? parts[1] : null;
+    if (!id) return null;
+    return { provider: "loom", videoId: id, embedUrl: `https://www.loom.com/embed/${id}`, thumbnailUrl: null, vertical: false };
+  }
+  if (host === "tiktok.com") {
+    const idx = parts.indexOf("video");
+    const id = idx >= 0 ? parts[idx + 1] : null;
+    if (!id || !/^\d{8,25}$/.test(id)) return null;
+    return { provider: "tiktok", videoId: id, embedUrl: `https://www.tiktok.com/embed/v2/${id}`, thumbnailUrl: null, vertical: true };
+  }
+  if (host === "dailymotion.com" || host === "dai.ly") {
+    const id = host === "dai.ly" ? parts[0] : parts[0] === "video" ? parts[1]?.split("_")[0] : null;
+    if (!id || !/^[a-z0-9]{5,12}$/i.test(id)) return null;
+    return {
+      provider: "dailymotion",
+      videoId: id,
+      embedUrl: `https://www.dailymotion.com/embed/video/${id}`,
+      thumbnailUrl: `https://www.dailymotion.com/thumbnail/video/${id}`,
+      vertical: false,
+    };
+  }
+  return null;
+}
+
 export const LinkPreview = z.object({
   url: z.string(),
   domain: z.string(),
   title: z.string().nullable(),
   description: z.string().nullable(),
   imageUrl: z.string().nullable(),
+  /** Set when the link is a supported video: the post shows a player instead of a link card. */
+  embed: VideoEmbed.nullable().optional(),
 });
 export type LinkPreview = z.infer<typeof LinkPreview>;
 
@@ -393,7 +506,7 @@ export const DraftView = z.object({
   lastError: z.string().nullable(),
   /** Short text for lists: article title, request title, or the start of the body. */
   preview: z.string(),
-  attachments: z.array(z.object({ id: z.string().uuid(), url: z.string().nullable(), kind: z.enum(["image", "document"]), name: z.string().nullable() })),
+  attachments: z.array(z.object({ id: z.string().uuid(), url: z.string().nullable(), kind: z.enum(["image", "document", "video"]), name: z.string().nullable() })),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -541,7 +654,7 @@ export type ReactionState = z.infer<typeof ReactionState>;
  * PUT /bookmarks and DELETE /bookmarks. Posts, events (EventSummary.viewer.saved) and courses
  * (CourseSummary.saved). PUT checks the target is visible to the viewer (NOT_FOUND otherwise).
  */
-export const BookmarkTargetType = z.enum(["post", "event", "course"]);
+export const BookmarkTargetType = z.enum(["post", "event", "course", "opportunity"]);
 export type BookmarkTargetType = z.infer<typeof BookmarkTargetType>;
 export const BookmarkInput = z.object({ targetType: BookmarkTargetType, targetId: z.string().uuid() });
 export type BookmarkInput = z.infer<typeof BookmarkInput>;
@@ -639,16 +752,45 @@ export type TrendingResponse = z.infer<typeof TrendingResponse>;
 
 /* ---------- Uploads (CM-FED-02, spec 6.3) ---------- */
 
-export const UploadPurpose = z.enum(["avatar", "post_image", "post_document", "event_cover"]);
+export const UploadPurpose = z.enum(["avatar", "profile_cover", "post_image", "post_document", "post_video", "event_cover", "story_image", "story_video"]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
+
+/** Videos phones and cameras record: MP4 (H.264/HEVC), QuickTime (iPhone .mov) and WebM. All are converted to MP4. */
+export const VIDEO_MIMES = ["video/mp4", "video/quicktime", "video/webm"] as const;
+export const isVideoPurpose = (p: UploadPurpose) => p === "post_video" || p === "story_video";
 
 export const UPLOAD_LIMITS = {
   avatar: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  /** Profile cover photo (shown as a wide 4:1 banner on the profile). */
+  profile_cover: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   post_image: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   post_document: { maxBytes: 10 * 1024 * 1024, mimes: ["application/pdf"] },
+  /** Length is capped separately (MediaSettings.postVideoMaxSeconds, set by admins). */
+  post_video: { maxBytes: 1536 * 1024 * 1024, mimes: VIDEO_MIMES },
   /** Event cover image (shown 16:9 on cards and the event page). */
   event_cover: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  story_image: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  story_video: { maxBytes: 250 * 1024 * 1024, mimes: VIDEO_MIMES },
 } as const;
+
+/**
+ * Video length limits, set by Platform Admins (GET /uploads/limits for members,
+ * GET/PUT /admin/settings/media for admins). Uploaded videos are converted to 720p MP4.
+ */
+export const MediaSettings = z.object({
+  postVideoMaxSeconds: z.number().int().min(10, "At least 10 seconds").max(3600, "At most 60 minutes"),
+  storyVideoMaxSeconds: z.number().int().min(5, "At least 5 seconds").max(180, "At most 3 minutes"),
+});
+export type MediaSettings = z.infer<typeof MediaSettings>;
+
+/** "1:05", "10:00", "1:02:03". */
+export function formatDuration(totalSeconds: number): string {
+  const t = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const sec = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
 
 /** POST /uploads → a short-lived URL to PUT the bytes to. */
 export const CreateUploadInput = z.object({
@@ -679,5 +821,8 @@ export const FileView = z.object({
   sizeBytes: z.number().int(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
+  /** Videos: length after processing, and a still frame. */
+  durationSeconds: z.number().nullable(),
+  posterUrl: z.string().nullable(),
 });
 export type FileView = z.infer<typeof FileView>;

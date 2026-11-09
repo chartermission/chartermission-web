@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { DirectoryMember } from "@chartermission/contracts";
-import { Icon } from "@chartermission/ui";
+import { Icon, RoleBadgeIcon } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import { ConnectControl, FollowControl, useRelationship } from "./relationship";
@@ -19,6 +19,7 @@ export function MemberRow({ member }: { member: DirectoryMember }) {
             {member.name}
           </Link>
           {member.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
+          <RoleBadgeIcon badge={member.badge} size={14} />
         </span>
         {member.headline && <span className="truncate text-xs text-body">{member.headline}</span>}
         {member.location && <span className="truncate text-xs text-secondary">{member.location}</span>}

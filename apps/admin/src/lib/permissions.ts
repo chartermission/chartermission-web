@@ -19,6 +19,10 @@ export const PERM = {
   eventManage: "event.manage",
   /** Learning catalogue curation, link status and sync. Platform Admin and above. */
   courseCurate: "course.curate",
+  /** Ambassador leads, pipeline, onboarding and certification (own countries). Ambassador Managers and Platform Admins. */
+  ambassadorManage: "ambassador.manage",
+  /** Ambassador Manager sub-accounts and required training. Platform Admin and above. */
+  ambassadorManagers: "ambassador.managers",
 } as const;
 
 export type ConsoleViewer = Pick<SessionUser, "id" | "name" | "handle" | "avatarUrl" | "tone" | "roles" | "permissions">;
@@ -32,14 +36,23 @@ const ROLE_LABELS: [role: string, label: string][] = [
   ["super_admin", "Super Admin"],
   ["platform_admin", "Platform Admin"],
   ["moderator", "Moderator"],
+  ["ambassador_manager", "Ambassador Manager"],
 ];
+
+/**
+ * Where an admin lands after sign-in: the first console section their permissions allow
+ * (moderators and admins: the moderation queue; Ambassador Managers: Ambassadors).
+ */
+export function landingPath(viewer: Pick<SessionUser, "permissions">): string {
+  return CONSOLE_NAV.find((item) => can(viewer, item.permission))?.href ?? "/moderation";
+}
 
 /** The highest privileged role, as shown in the admin bar. */
 export function roleLabel(roles: readonly string[]): string {
   return ROLE_LABELS.find(([role]) => roles.includes(role))?.[1] ?? "Staff";
 }
 
-export type NavKey = "moderation" | "hidden" | "appeals" | "trending" | "events" | "courses" | "audit";
+export type NavKey = "moderation" | "hidden" | "appeals" | "trending" | "events" | "courses" | "ambassadors" | "ambassador-team" | "learning-access" | "media" | "audit";
 
 export type ConsoleNavItem = {
   key: NavKey;
@@ -59,6 +72,10 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "trending", href: "/trending", label: "Trending", icon: "trending", permission: PERM.moderationView },
   { key: "events", href: "/events", label: "Events", icon: "calendar", permission: PERM.eventReview },
   { key: "courses", href: "/courses", label: "Courses", icon: "book", permission: PERM.courseCurate },
+  { key: "ambassadors", href: "/ambassadors", label: "Ambassadors", icon: "verified", permission: PERM.ambassadorManage },
+  { key: "ambassador-team", href: "/ambassadors/team", label: "Ambassador team", icon: "users", permission: PERM.ambassadorManagers },
+  { key: "learning-access", href: "/settings/learning", label: "E-learning access", icon: "target", permission: PERM.courseCurate },
+  { key: "media", href: "/settings/media", label: "Media settings", icon: "video", permission: PERM.settingsManage },
   { key: "audit", href: "/audit", label: "Audit log", icon: "clock", permission: PERM.auditView },
 ];
 

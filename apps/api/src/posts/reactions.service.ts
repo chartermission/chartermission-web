@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { BookmarkInput, CursorQuery, Page, PostView, ReactionInput, ReactionKind, ReactionState } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { bookmarks, comments, courses, events, posts, reactions } from '../db/schema.js';
+import { bookmarks, comments, courses, events, opportunities, posts, reactions } from '../db/schema.js';
 import { visibleCourseSql } from '../learning/course-views.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
@@ -83,7 +83,7 @@ export class ReactionsService {
     return this.state(user.id, input.targetType, input.targetId);
   }
 
-  /** PUT /bookmarks — posts, events and courses; the target must be visible to the viewer. */
+  /** PUT /bookmarks — posts, events, courses and opportunities; the target must be visible to the viewer. */
   async bookmark(user: AuthUser, input: BookmarkInput): Promise<void> {
     await this.assertBookmarkable(user, input);
     await this.db.insert(bookmarks).values({ userId: user.id, targetType: input.targetType, targetId: input.targetId }).onConflictDoNothing();
@@ -139,6 +139,15 @@ export class ReactionsService {
           .where(and(eq(courses.id, input.targetId), visibleCourseSql))
           .limit(1);
         if (!row) throw Errors.notFound('Course');
+        return;
+      }
+      case 'opportunity': {
+        const [row] = await this.db
+          .select({ id: opportunities.id })
+          .from(opportunities)
+          .where(and(eq(opportunities.id, input.targetId), eq(opportunities.moderationState, 'visible'), isNull(opportunities.deletedAt)))
+          .limit(1);
+        if (!row) throw Errors.notFound('Opportunity');
         return;
       }
     }

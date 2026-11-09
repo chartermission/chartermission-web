@@ -110,14 +110,14 @@ describe('Trending', () => {
     expect(ng.body.items.map((i: { tag: string }) => i.tag)).not.toContain('AfCFTA');
 
     // Scoped overrides apply only in their scope (chapter given by slug).
-    await override('LagosMeetup', 'pin', admin.id, { scopeType: 'chapter', scopeId: 'lagos' });
+    await override('LagosMeetup', 'pin', admin.id, { scopeType: 'chapter', scopeId: 'nigeria' });
     await trending.run();
     const lagos = await t.http().get('/api/v1/trending?scope=chapter&scopeId=lagos').expect(200);
     expect(lagos.body.items.map((i: { tag: string; pinned: boolean }) => [i.tag, i.pinned])).toEqual([
       ['CharterFellows', true],
       ['LagosMeetup', true],
     ]);
-    expect(lagos.body.items[0].context).toBe('Trending in Lagos Chapter');
+    expect(lagos.body.items[0].context).toBe('Trending in Nigeria Chapter');
     expect((await t.http().get('/api/v1/trending?limit=10').expect(200)).body.items.map((i: { tag: string }) => i.tag)).not.toContain(
       'LagosMeetup',
     );

@@ -8,6 +8,7 @@ import { CaughtUpNote } from "@/components/illustrations";
 import { staggerStyle } from "@/components/motion";
 import { ErrorNotice } from "./errors";
 import { PostCard } from "./post-card";
+import type { MenuItem } from "./menu";
 import { onPostCreated } from "./post-events";
 import { PostSkeleton } from "./skeletons";
 import { toast } from "./toast";
@@ -64,6 +65,8 @@ export function PostStream({
   newPostsPath,
   label,
   interleave,
+  extraMenu,
+  acceptCreated,
 }: {
   path: string;
   query?: Query;
@@ -83,6 +86,10 @@ export function PostStream({
    * posts arriving at the top move them down without remounting.
    */
   interleave?: StreamInterleave;
+  /** Extra overflow-menu items per post (e.g. "Pin to chapter"). */
+  extraMenu?: (post: PostView) => MenuItem[];
+  /** With acceptNew: which newly created posts belong in this list (default: all). */
+  acceptCreated?: (post: PostView) => boolean;
 }) {
   const [posts, setPosts] = useState<PostView[]>(initial?.items ?? []);
   const [cursor, setCursor] = useState<string | null>(initial ? initial.nextCursor : null);
@@ -92,6 +99,10 @@ export function PostStream({
   const [announcement, setAnnouncement] = useState("");
   const [entrances, setEntrances] = useState<Record<string, Entrance>>({});
   const queryRef = useRef(query);
+  const acceptCreatedRef = useRef(acceptCreated);
+  useEffect(() => {
+    acceptCreatedRef.current = acceptCreated;
+  });
   const sectionRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLButtonElement>(null);
@@ -174,6 +185,7 @@ export function PostStream({
   useEffect(() => {
     if (!acceptNew) return;
     return onPostCreated((post) => {
+      if (acceptCreatedRef.current && !acceptCreatedRef.current(post)) return;
       setCreated((current) => [post, ...current.filter((p) => p.id !== post.id)]);
       setEntrances((current) => ({ ...current, [post.id]: { kind: "arrive", order: 0 } }));
     });
@@ -229,6 +241,7 @@ export function PostStream({
               post={post}
               viewer={viewer}
               onRemoved={remove}
+              extraMenu={extraMenu}
               onBookmarkChange={dropUnbookmarked ? (p, saved) => !saved && setPosts((current) => current.filter((x) => x.id !== p.id)) : undefined}
             />
           </div>

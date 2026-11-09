@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
-import { Avatar, Icon, cn } from "@chartermission/ui";
+import { Avatar, Icon, cn, RoleBadgeIcon } from "@chartermission/ui";
 import { TickNumber } from "@/components/motion";
 import { absoluteDateTime, relativeTime } from "./format";
 import { memberHref, postHref } from "./links";
@@ -15,6 +15,7 @@ export function AuthorName({ member, className }: { member: MemberRef; className
         {member.name}
       </Link>
       {member.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}
+      <RoleBadgeIcon badge={member.badge} size={16} />
       {member.staff && <span className="shrink-0 rounded-full bg-primary-tint px-1.5 py-px text-[11px] font-semibold text-primary">Team</span>}
     </span>
   );
@@ -69,13 +70,15 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
     );
   }
   const images = original.attachments.filter((a) => a.kind === "image").length;
-  const docs = original.attachments.length - images;
+  const videos = original.attachments.filter((a) => a.kind === "video").length;
+  const docs = original.attachments.length - images - videos;
   return (
     <div className="relative flex w-full flex-col gap-2 rounded-[10px] border border-line p-4 hover:bg-surface">
       <div className="flex items-center gap-2">
         <MemberAvatar member={original.author} size={24} />
         <span className="truncate text-sm font-medium text-ink">{original.author.name}</span>
         {original.author.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
+        <RoleBadgeIcon badge={original.author.badge} size={14} />
         <span className="text-xs text-secondary">
           · <TimeAgo iso={original.createdAt} />
         </span>
@@ -98,10 +101,16 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
       )}
       {original.body && !original.article && <RichText text={original.body} mentions={original.mentions} className="line-clamp-4 text-sm text-ink" />}
       {original.article?.subtitle && <p className="line-clamp-2 text-sm text-body">{original.article.subtitle}</p>}
-      {(images > 0 || docs > 0 || original.poll) && !original.article && (
+      {(images > 0 || docs > 0 || videos > 0 || original.linkPreview?.embed || original.poll) && !original.article && (
         <p className="flex items-center gap-1.5 text-xs text-secondary">
-          <Icon name={original.poll ? "chart" : "image"} size={14} />
-          {original.poll ? "Poll" : images > 0 ? `${images} image${images === 1 ? "" : "s"}` : "PDF document"}
+          <Icon name={original.poll ? "chart" : videos > 0 || original.linkPreview?.embed ? "video" : "image"} size={14} />
+          {original.poll
+            ? "Poll"
+            : videos > 0 || original.linkPreview?.embed
+              ? "Video"
+              : images > 0
+                ? `${images} image${images === 1 ? "" : "s"}`
+                : "PDF document"}
         </p>
       )}
       <Link href={postHref(original)} className="text-xs font-medium text-primary-light after:absolute after:inset-0 hover:underline">

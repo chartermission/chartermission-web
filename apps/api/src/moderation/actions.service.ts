@@ -11,7 +11,7 @@ import type {
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { appeals, comments, contentReports, moderationActions, posts, trendingOverrides, users } from '../db/schema.js';
+import { appeals, comments, contentReports, moderationActions, opportunities, posts, stories, trendingOverrides, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { MembersService, toneFor } from '../core/members.service.js';
@@ -208,6 +208,12 @@ export class ModerationActionsService {
     } else if (t.type === 'comment') {
       const [c] = await tx.select({ s: comments.moderationState }).from(comments).where(eq(comments.id, t.id));
       out.moderationState = c?.s ?? null;
+    } else if (t.type === 'story') {
+      const [st] = await tx.select({ s: stories.moderationState }).from(stories).where(eq(stories.id, t.id));
+      out.moderationState = st?.s ?? null;
+    } else if (t.type === 'opportunity') {
+      const [o] = await tx.select({ s: opportunities.moderationState }).from(opportunities).where(eq(opportunities.id, t.id));
+      out.moderationState = o?.s ?? null;
     } else if (t.type === 'hashtag' && t.hashtagId) {
       const [o] = await tx
         .select({ id: trendingOverrides.id })
@@ -246,6 +252,8 @@ export class ModerationActionsService {
   private async setContentState(tx: Tx, t: ResolvedTarget, state: 'visible' | 'hidden' | 'removed') {
     if (t.type === 'post') await tx.update(posts).set({ moderationState: state }).where(eq(posts.id, t.id));
     if (t.type === 'comment') await tx.update(comments).set({ moderationState: state }).where(eq(comments.id, t.id));
+    if (t.type === 'story') await tx.update(stories).set({ moderationState: state }).where(eq(stories.id, t.id));
+    if (t.type === 'opportunity') await tx.update(opportunities).set({ moderationState: state }).where(eq(opportunities.id, t.id));
   }
 
   private async applyEffect(
@@ -472,6 +480,10 @@ export class ModerationActionsService {
           await tx.update(posts).set({ moderationState: 'visible' }).where(eq(posts.id, action.targetId));
         } else if (action.targetType === 'comment') {
           await tx.update(comments).set({ moderationState: 'visible' }).where(eq(comments.id, action.targetId));
+        } else if (action.targetType === 'story') {
+          await tx.update(stories).set({ moderationState: 'visible' }).where(eq(stories.id, action.targetId));
+        } else if (action.targetType === 'opportunity') {
+          await tx.update(opportunities).set({ moderationState: 'visible' }).where(eq(opportunities.id, action.targetId));
         }
         return;
       }

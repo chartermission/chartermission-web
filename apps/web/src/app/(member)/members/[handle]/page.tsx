@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { PreviewAs, type MemberProfile, type Page, type PostView } from "@chartermission/contracts";
-import { Chip, Icon, Panel, buttonClasses, type IconName } from "@chartermission/ui";
+import { Chip, Icon, Panel, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { getClientViewer } from "@/components/social/data";
 import { absoluteDate } from "@/components/social/format";
@@ -13,6 +13,7 @@ import { SectionRail } from "@/components/social/section-nav";
 import { EmptyState, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { ProfileActions } from "./profile-actions";
+import { ProfileHighlightsLoader } from "@/components/stories/stories-loader";
 
 export async function generateMetadata({ params }: PageProps<"/members/[handle]">): Promise<Metadata> {
   const { handle } = await params;
@@ -121,7 +122,12 @@ async function ProfileMain(props: Props) {
         </div>
       )}
       <Panel className="flex flex-col overflow-hidden">
-        <div className="h-[132px] w-full bg-gradient-to-r from-primary-dark via-primary-light via-65% to-accent max-sm:h-24" aria-hidden="true" />
+        {member.coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- served by the API's media route
+          <img src={member.coverUrl} alt="" className="h-[132px] w-full object-cover max-sm:h-24" />
+        ) : (
+          <div className="h-[132px] w-full bg-gradient-to-r from-primary-dark via-primary-light via-65% to-accent max-sm:h-24" aria-hidden="true" />
+        )}
         <div className="flex flex-col gap-3 px-6 pb-6 max-sm:px-4">
           <div className="-mt-12 flex flex-wrap items-end justify-between gap-4">
             <span className="rounded-full border-4 border-card bg-card">
@@ -136,6 +142,7 @@ async function ProfileMain(props: Props) {
             {member.relationship.followsYou && !member.relationship.self && <Chip>Follows you</Chip>}
           </div>
           {member.headline && <p className="text-md text-body">{member.headline}</p>}
+          {member.badge && <RoleBadgePill badge={member.badge} />}
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {facts.map((fact, index) => (
               <li key={index} className="flex items-center gap-1.5 text-sm text-secondary">
@@ -152,6 +159,12 @@ async function ProfileMain(props: Props) {
           )}
         </div>
       </Panel>
+
+      {viewer && !preview && !member.relationship.blocked && (
+        <Suspense fallback={null}>
+          <ProfileHighlightsLoader memberId={member.id} name={member.name} own={isSelf} />
+        </Suspense>
+      )}
 
       {member.bio && (
         <Section title="About">

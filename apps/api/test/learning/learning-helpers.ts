@@ -3,6 +3,8 @@ import { s, type TestApp } from '../helpers.js';
 import { CHARTER_CENTER_CLIENT, FixtureCharterCenterClient, loadFixture, type CharterCenterFixture } from '../../src/learning/charter-center.client.js';
 import { FixtureLinkChecker, LINK_CHECKER } from '../../src/learning/link-checker.js';
 import { LearningJobsService } from '../../src/learning/learning-jobs.service.js';
+import { SettingsService } from '../../src/infra/settings.service.js';
+import { LEARNING_ACCESS_DEFAULTS } from '@chartermission/contracts';
 
 /** The shipped fixture, deep-copied so tests can edit it freely. */
 export function fixture(): CharterCenterFixture {
@@ -43,4 +45,9 @@ export function learning(t: TestApp) {
     linkCheck: () => jobs.runJob('link_check'),
     course: async (slug: string) => (await t.db.select().from(s.courses).where(eq(s.courses.slug, slug)))[0]!,
   };
+}
+
+/** Switches the e-learning access gate off, so catalogue tests don't need fully set-up members. */
+export async function openLearning(t: TestApp) {
+  await t.app.get(SettingsService).set('learning_access', { ...LEARNING_ACCESS_DEFAULTS, enabled: false }, null);
 }

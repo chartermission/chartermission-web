@@ -21,6 +21,8 @@ export const TARGET_LABELS: Record<ReportTargetType, string> = {
   comment: "Comment",
   member: "Your account",
   hashtag: "Hashtag",
+  story: "Story",
+  opportunity: "Opportunity",
 };
 
 export const APPEAL_STATUS: Record<NonNullable<MyModerationAction["appeal"]>["status"], { label: string; tone: ChipTone }> = {
@@ -35,6 +37,8 @@ export const REPORTED_LABELS: Record<ReportTargetType, string> = {
   comment: "Comment",
   member: "Member",
   hashtag: "Hashtag",
+  story: "Story",
+  opportunity: "Opportunity",
 };
 
 export const REPORT_STATUS: Record<MyReportStatus, { label: string; tone: ChipTone }> = {

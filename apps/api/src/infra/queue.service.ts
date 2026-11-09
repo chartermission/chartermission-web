@@ -2,7 +2,7 @@ import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { type Job, Queue, Worker } from 'bullmq';
 import { env } from '../config/env.js';
 
-export const QUEUES = ['events', 'email', 'media', 'trending', 'maintenance'] as const;
+export const QUEUES = ['events', 'email', 'media', 'video', 'trending', 'maintenance'] as const;
 export type QueueName = (typeof QUEUES)[number];
 
 type Handler = (name: string, data: any, job?: Job) => Promise<void>;
@@ -61,7 +61,8 @@ export class QueueService implements OnApplicationShutdown {
     await this.queue(name).upsertJobScheduler(`${name}:${jobName}`, { every: everyMs }, { name: jobName, data });
   }
 
-  process(name: QueueName, handler: Handler) {
+  /** `concurrency` applies to the first registration of a queue (video conversion runs one at a time). */
+  process(name: QueueName, handler: Handler, opts: { concurrency?: number } = {}) {
     const list = this.handlers.get(name) ?? [];
     list.push(handler);
     this.handlers.set(name, list);
@@ -72,7 +73,7 @@ export class QueueService implements OnApplicationShutdown {
       async (job) => {
         for (const h of this.handlers.get(name) ?? []) await h(job.name, job.data, job);
       },
-      { connection: this.connection(), concurrency: 5 },
+      { connection: this.connection(), concurrency: opts.concurrency ?? 5 },
     );
     worker.on('failed', (job, err) => this.logger.warn(`${name}/${job?.name} failed: ${err.message}`));
     this.workers.push(worker);

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { events, roles, userRoles } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -9,7 +9,7 @@ import { isPublicStatus } from './event-util.js';
 
 export type EventRow = typeof events.$inferSelect;
 
-/** The signed-in viewer plus the chapters they lead (scoped chapter_lead roles; the session ignores scope). */
+/** The signed-in viewer plus the chapters they lead (chapter-scoped chapter_lead or ambassador roles; the session ignores scope). */
 export interface EventViewer {
   user: AuthUser;
   ledChapters: Set<string>;
@@ -47,7 +47,7 @@ export class EventAccess {
       .select({ scopeId: userRoles.scopeId })
       .from(userRoles)
       .innerJoin(roles, eq(roles.id, userRoles.roleId))
-      .where(and(eq(userRoles.userId, userId), eq(roles.key, 'chapter_lead'), eq(userRoles.scopeType, 'chapter'), isNull(userRoles.revokedAt)));
+      .where(and(eq(userRoles.userId, userId), inArray(roles.key, ['chapter_lead', 'ambassador']), eq(userRoles.scopeType, 'chapter'), isNull(userRoles.revokedAt)));
     return new Set(rows.map((r) => r.scopeId).filter((x): x is string => !!x));
   }
 

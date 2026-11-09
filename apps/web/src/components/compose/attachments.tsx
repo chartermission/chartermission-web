@@ -3,7 +3,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ALT_TEXT_MAX_CHARS, type DraftView, type UploadPurpose } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
-import { uploadFile } from "@/lib/upload";
+import { assertVideoLength, uploadFile } from "@/lib/upload";
+import { getMediaLimits, readVideoDuration } from "@/lib/media-limits";
+import { formatDuration, UPLOAD_LIMITS } from "@chartermission/contracts";
 import { errorMessage } from "@/components/social/errors";
 import { formatBytes } from "@/components/social/format";
 
@@ -13,7 +15,7 @@ export type Attachment = {
   key: string;
   name: string;
   size: number;
-  purpose: Extract<UploadPurpose, "post_image" | "post_document">;
+  purpose: Extract<UploadPurpose, "post_image" | "post_document" | "post_video">;
   previewUrl: string | null;
   progress: number;
   status: "uploading" | "scanning" | "ready" | "rejected";
@@ -33,9 +35,9 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
   const [items, setItems] = useState<Attachment[]>(() =>
     (initial?.files ?? []).map((file) => ({
       key: `att-${++counter}`,
-      name: file.name ?? (file.kind === "image" ? "Image" : "Document"),
+      name: file.name ?? (file.kind === "image" ? "Image" : file.kind === "video" ? "Video" : "Document"),
       size: 0,
-      purpose: file.kind === "image" ? "post_image" : "post_document",
+      purpose: file.kind === "image" ? "post_image" : file.kind === "video" ? "post_video" : "post_document",
       previewUrl: file.kind === "image" ? file.url : null,
       progress: 1,
       status: "ready",
@@ -55,21 +57,28 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
   const patch = (key: string, change: Partial<Attachment>) =>
     setItems((current) => current.map((item) => (item.key === key ? { ...item, ...change } : item)));
 
-  function add(files: File[], kind: "image" | "document", maxImages: number = MAX_IMAGES) {
+  function add(files: File[], kind: "image" | "document" | "video", maxImages: number = MAX_IMAGES) {
     setNotice(null);
     const live = items.filter((item) => item.status !== "rejected");
     const hasDoc = live.some((item) => item.purpose === "post_document");
+    const hasVideo = live.some((item) => item.purpose === "post_video");
     const imageCount = live.filter((item) => item.purpose === "post_image").length;
     let accepted: File[];
-    if (kind === "document") {
-      if (imageCount > 0 || hasDoc) {
-        setNotice("A post can have up to 4 images or 1 PDF, not both. Remove the current files first.");
+    if (kind === "video") {
+      if (live.length > 0) {
+        setNotice("A video goes in a post on its own. Remove the current files first.");
+        return;
+      }
+      accepted = files.slice(0, 1);
+    } else if (kind === "document") {
+      if (imageCount > 0 || hasDoc || hasVideo) {
+        setNotice("A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the current files first.");
         return;
       }
       accepted = files.slice(0, 1);
     } else {
-      if (hasDoc) {
-        setNotice("A post can have up to 4 images or 1 PDF, not both. Remove the PDF first.");
+      if (hasDoc || hasVideo) {
+        setNotice(`A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the ${hasDoc ? "PDF" : "video"} first.`);
         return;
       }
       accepted = files.slice(0, Math.max(0, maxImages - imageCount));
@@ -77,13 +86,14 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
     }
 
     const next: Attachment[] = accepted.map((file) => {
-      const previewUrl = kind === "image" && file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+      const previewable = (kind === "image" && file.type.startsWith("image/")) || (kind === "video" && file.type.startsWith("video/"));
+      const previewUrl = previewable ? URL.createObjectURL(file) : null;
       if (previewUrl) urls.current.add(previewUrl);
       return {
         key: `att-${++counter}`,
         name: file.name,
         size: file.size,
-        purpose: kind === "image" ? "post_image" : "post_document",
+        purpose: kind === "image" ? "post_image" : kind === "video" ? "post_video" : "post_document",
         previewUrl,
         progress: 0,
         status: "uploading",
@@ -96,7 +106,14 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
 
     next.forEach((item, index) => {
       const file = accepted[index]!;
-      uploadFile(file, item.purpose, (fraction) => patch(item.key, fraction >= 1 ? { progress: 1, status: "scanning" } : { progress: fraction }))
+      const lengthCheck =
+        item.purpose === "post_video"
+          ? Promise.all([readVideoDuration(file), getMediaLimits()]).then(([seconds, limits]) => assertVideoLength(seconds, limits.postVideoMaxSeconds))
+          : Promise.resolve();
+      lengthCheck
+        .then(() =>
+          uploadFile(file, item.purpose, (fraction) => patch(item.key, fraction >= 1 ? { progress: 1, status: "scanning" } : { progress: fraction })),
+        )
         .then((view) => patch(item.key, { status: "ready", fileId: view.id, progress: 1 }))
         .catch((e: unknown) => patch(item.key, { status: "rejected", error: errorMessage(e) }));
     });
@@ -127,10 +144,15 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
     setAlt,
     ids: ready.map((item) => item.fileId!),
     /** Ready files with their kind and description, for the post or draft payload. */
-    ready: ready.map((item) => ({ fileId: item.fileId!, kind: item.purpose === "post_image" ? ("image" as const) : ("document" as const), alt: item.alt })),
+    ready: ready.map((item) => ({
+      fileId: item.fileId!,
+      kind: item.purpose === "post_image" ? ("image" as const) : item.purpose === "post_video" ? ("video" as const) : ("document" as const),
+      alt: item.alt,
+    })),
     busy: items.some((item) => item.status === "uploading" || item.status === "scanning"),
     rejected: items.some((item) => item.status === "rejected"),
     hasDocument: items.some((item) => item.purpose === "post_document" && item.status !== "rejected"),
+    hasVideo: items.some((item) => item.purpose === "post_video" && item.status !== "rejected"),
   };
 }
 
@@ -141,7 +163,7 @@ function statusText(item: Attachment) {
     case "uploading":
       return `Uploading ${Math.round(item.progress * 100)}%`;
     case "scanning":
-      return "Checking file…";
+      return item.purpose === "post_video" ? "Processing video… longer videos can take a few minutes" : "Checking file…";
     case "ready":
       return "Ready";
     case "rejected":
@@ -207,26 +229,51 @@ export function AttachmentPicker({
 }: {
   state: AttachmentsState;
   id: string;
-  mode: "image" | "document";
+  mode: "image" | "document" | "video";
   maxImages?: number;
   /** "cover": one article cover image. */
   variant?: "attachments" | "cover";
 }) {
   const { items, notice, add, remove, setAlt } = state;
   const images = items.filter((i) => i.purpose === "post_image" && i.status !== "rejected").length;
-  const full = mode === "image" ? images >= maxImages : items.some((i) => i.purpose === "post_document" && i.status !== "rejected");
+  const full =
+    mode === "image"
+      ? images >= maxImages
+      : items.some((i) => i.purpose === (mode === "video" ? "post_video" : "post_document") && i.status !== "rejected");
   const cover = variant === "cover";
+  const [maxSeconds, setMaxSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    if (mode !== "video") return;
+    let live = true;
+    void getMediaLimits().then((l) => live && setMaxSeconds(l.postVideoMaxSeconds));
+    return () => {
+      live = false;
+    };
+  }, [mode]);
+  const videoGb = (UPLOAD_LIMITS.post_video.maxBytes / 1024 / 1024 / 1024).toFixed(1);
 
   return (
     <div className="flex flex-col gap-3 rounded-card border border-dashed border-line-strong bg-surface p-4">
       {!full && (
         <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md text-sm font-medium text-primary focus-within:ring-2 focus-within:ring-primary-light">
-          <Icon name={mode === "image" ? "image" : "book"} size={18} className={mode === "image" ? "text-info" : "text-error"} />
-          {cover ? "Choose a cover image" : mode === "image" ? (images ? "Add more images" : "Choose images to upload") : "Choose a PDF to upload"}
+          <Icon
+            name={mode === "image" ? "image" : mode === "video" ? "video" : "book"}
+            size={18}
+            className={mode === "image" ? "text-info" : mode === "video" ? "text-warning" : "text-error"}
+          />
+          {cover
+            ? "Choose a cover image"
+            : mode === "image"
+              ? images
+                ? "Add more images"
+                : "Choose images to upload"
+              : mode === "video"
+                ? "Choose a video to upload"
+                : "Choose a PDF to upload"}
           <input
             id={id}
             type="file"
-            accept={mode === "image" ? "image/jpeg,image/png,image/webp" : "application/pdf"}
+            accept={mode === "image" ? "image/jpeg,image/png,image/webp" : mode === "video" ? "video/mp4,video/quicktime,video/webm" : "application/pdf"}
             multiple={mode === "image" && maxImages > 1}
             className="sr-only"
             onChange={(event) => {
@@ -242,7 +289,9 @@ export function AttachmentPicker({
             ? "Optional. One JPEG, PNG or WebP image, 5 MB max. Wide images (2:1) look best."
             : mode === "image"
               ? "Up to 4 images. JPEG, PNG or WebP, 5 MB each."
-              : "One PDF, up to 10 MB."}{" "}
+              : mode === "video"
+                ? `One video${maxSeconds ? ` up to ${formatDuration(maxSeconds)} long` : ""}: MP4, MOV or WebM, ${videoGb} GB max. For longer videos, share a YouTube or Vimeo link instead.`
+                : "One PDF, up to 10 MB."}{" "}
           {!cover && "Files are checked for safety before anyone else sees them."}
         </p>
       )}
@@ -255,9 +304,15 @@ export function AttachmentPicker({
         <ul className="flex flex-col gap-2" aria-live="polite">
           {items.map((item) => (
             <li key={item.key} className="flex items-start gap-3 rounded-lg border border-line bg-card p-2">
-              {item.previewUrl ? (
+              {item.previewUrl && item.purpose === "post_video" ? (
+                <video src={item.previewUrl} muted playsInline preload="metadata" aria-hidden="true" className="h-12 w-20 shrink-0 rounded-md bg-ink object-cover" />
+              ) : item.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- local object URL or draft media preview
                 <img src={item.previewUrl} alt="" className={cn("shrink-0 rounded-md object-cover", cover ? "h-16 w-28" : "size-12")} />
+              ) : item.purpose === "post_video" ? (
+                <span className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-warning-light text-warning">
+                  <Icon name="video" size={20} />
+                </span>
               ) : item.purpose === "post_image" ? (
                 <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-info-light text-info">
                   <Icon name="image" size={20} />

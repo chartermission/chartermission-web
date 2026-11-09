@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { COMMENT_MAX_CHARS, type CommentView, type Page } from "@chartermission/contracts";
-import { Avatar, Button, Icon, Panel, cn } from "@chartermission/ui";
+import { Avatar, Button, Icon, Panel, cn, RoleBadgeIcon } from "@chartermission/ui";
 import { api, ApiError } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
@@ -239,6 +239,7 @@ function CommentItem({
                   {author.name}
                 </Link>
                 {author.verified && <Icon name="verified" size={14} className="text-primary" label="Verified" />}
+                <RoleBadgeIcon badge={author.badge} size={14} />
                 {comment.isPostAuthor && <span className="rounded-full bg-primary-tint px-1.5 py-px text-[11px] font-semibold text-primary">Author</span>}
                 <span className="text-xs text-secondary">
                   · <TimeAgo iso={comment.createdAt} />

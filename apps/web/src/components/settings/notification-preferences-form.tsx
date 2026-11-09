@@ -53,6 +53,16 @@ const groups: {
     ],
   },
   {
+    title: "Opportunities",
+    rows: [
+      {
+        category: "opportunities",
+        label: "Applications",
+        description: "Someone applies to a listing you posted, or a poster shortlists, accepts or declines your application.",
+      },
+    ],
+  },
+  {
     title: "Safety",
     rows: [
       {

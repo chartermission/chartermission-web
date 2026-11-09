@@ -20,6 +20,8 @@ const targetNoun: Record<ReportTargetType, string> = {
   comment: "comment",
   member: "member",
   hashtag: "hashtag",
+  story: "story",
+  opportunity: "listing",
 };
 
 /** Reasons offered per target: trend manipulation only makes sense for hashtags, impersonation for members. */

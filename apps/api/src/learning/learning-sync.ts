@@ -7,6 +7,9 @@ import type { CharterCenterClient } from './charter-center.client.js';
 import { mapCourse, mapPath, MappingError, resolveTopic, type MappedCourse, type MappedPath } from './charter-center.mapper.js';
 import type { LinkChecker } from './link-checker.js';
 
+/** Largest drop in the number of courses one sync may apply (0.3 = 30%). */
+export const MAX_SHRINK = 0.3;
+
 /*
  * Catalogue sync and link check, as plain functions over the database so the API (queue jobs,
  * admin triggers) and the seed script share them. LearningJobsService wraps them for Nest.
@@ -128,6 +131,14 @@ export async function syncCatalogue(db: Db, client: CharterCenterClient): Promis
     if (live.length === 0 && existing.some((c) => !c.removedAt)) {
       // An empty feed is far more likely an upstream fault than the whole catalogue being withdrawn.
       throw new Error('Charter Center returned no published courses; the catalogue was left unchanged');
+    }
+    // A feed that suddenly shrinks by more than 30% is far more likely a partial or faulty response
+    // than courses being withdrawn, so nothing is changed and the run is marked failed for admins.
+    const shown = existing.filter((c) => !c.removedAt).length;
+    if (shown >= 10 && live.length < shown * (1 - MAX_SHRINK)) {
+      throw new Error(
+        `Charter Center returned ${live.length} courses but ${shown} are listed now (more than ${MAX_SHRINK * 100}% fewer); the catalogue was left unchanged`,
+      );
     }
     const counts: SyncCounts = { created: 0, updated: 0, removed: 0, warnings };
     const now = new Date();

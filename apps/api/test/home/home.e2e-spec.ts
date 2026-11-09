@@ -121,18 +121,18 @@ describe('Home: welcome strip and community moments', () => {
       // Everywhere while the viewer has no chapter…
       expect((await welcome(viewer)).stats.newMembers).toBe(2);
       // …then only in their chapter.
-      await followChapter(t, viewer.id, 'lagos');
-      await followChapter(t, newcomer.id, 'lagos');
-      await followChapter(t, elsewhere.id, 'accra');
+      await followChapter(t, viewer.id, 'nigeria');
+      await followChapter(t, newcomer.id, 'nigeria');
+      await followChapter(t, elsewhere.id, 'ghana');
       expect((await welcome(viewer)).stats.newMembers).toBe(1);
     });
 
     it('the main chapter is the first one followed', async () => {
       const m = await createMember(t);
-      await followChapter(t, m.id, 'nairobi', new Date(Date.now() - 5 * DAY));
-      await followChapter(t, m.id, 'accra', new Date(Date.now() - DAY));
+      await followChapter(t, m.id, 'kenya', new Date(Date.now() - 5 * DAY));
+      await followChapter(t, m.id, 'ghana', new Date(Date.now() - DAY));
       const w = await welcome(m);
-      expect(w.chapter).toMatchObject({ slug: 'nairobi', name: 'Nairobi Chapter', countryCode: 'KE' });
+      expect(w.chapter).toMatchObject({ slug: 'kenya', name: 'Kenya Chapter', countryCode: 'KE' });
     });
 
     it('nudges: complete profile, then first post, then chapter, then open questions', async () => {
@@ -145,7 +145,7 @@ describe('Home: welcome strip and community moments', () => {
       expect((await welcome(m)).nudge).toMatchObject({ kind: 'first_post', href: '/feed?compose=1' });
       await addPost(t, m.id, 'Hello network');
       expect((await welcome(m)).nudge).toMatchObject({ kind: 'follow_chapter', href: '/chapters' });
-      await followChapter(t, m.id, 'nairobi');
+      await followChapter(t, m.id, 'kenya');
       expect((await welcome(m)).nudge).toBeNull();
       await addPost(t, other.id, 'Who has run a county budget tracker?', { type: 'question' });
       expect((await welcome(m)).nudge).toEqual({
@@ -163,8 +163,8 @@ describe('Home: welcome strip and community moments', () => {
       const viewer = await createMember(t);
       const star = await seasoned();
       await createMember(t); // a new member
-      await followChapter(t, viewer.id, 'lagos');
-      await addPost(t, star.id, 'Lagos chapter meetup on Saturday', { chapterId: await chapterId(t, 'lagos') });
+      await followChapter(t, viewer.id, 'nigeria');
+      await addPost(t, star.id, 'Lagos chapter meetup on Saturday', { chapterId: await chapterId(t, 'nigeria') });
       const list = await moments(viewer);
       expect(list.map((m) => m.kind)).toEqual(['spotlight', 'prompt', 'new_members', 'chapter_highlight']);
       const day = todayUtc();
@@ -284,16 +284,16 @@ describe('Home: welcome strip and community moments', () => {
         expect(nm.members[0].joinedAt).toBeTruthy();
 
         // A chapter with a new member wins.
-        await followChapter(t, viewer.id, 'accra');
-        await followChapter(t, ghanaian.id, 'accra');
+        await followChapter(t, viewer.id, 'ghana');
+        await followChapter(t, ghanaian.id, 'ghana');
         nm = await moment(viewer, 'new_members');
-        expect(nm.scope).toMatchObject({ type: 'chapter', chapter: { slug: 'accra' } });
+        expect(nm.scope).toMatchObject({ type: 'chapter', chapter: { slug: 'ghana' } });
         expect(nm.members.map((m: { id: string }) => m.id)).toEqual([ghanaian.id]);
 
         // A chapter with no new members falls back to the country; no country match falls back to everyone.
         const far = await createMember(t, { countryCode: 'ZA' });
         await joinedDaysAgo(t, far.id, 300);
-        await followChapter(t, far.id, 'johannesburg');
+        await followChapter(t, far.id, 'south-africa');
         nm = await moment(far, 'new_members');
         expect(nm.scope).toEqual({ type: 'global' });
         expect(nm.members.map((m: { id: string }) => m.id)).toEqual([ghanaian.id, kenyan.id]);
@@ -333,18 +333,18 @@ describe('Home: welcome strip and community moments', () => {
         const b = await createMember(t);
         const blocked = await createMember(t);
         await block(t, viewer.id, blocked.id);
-        const lagos = await chapterId(t, 'lagos');
-        await followChapter(t, viewer.id, 'lagos');
-        await followChapter(t, a.id, 'lagos');
+        const lagos = await chapterId(t, 'nigeria');
+        await followChapter(t, viewer.id, 'nigeria');
+        await followChapter(t, a.id, 'nigeria');
         await addPost(t, a.id, 'Weekly meetup notes', { chapterId: lagos, reactions: 3, comments: 1, ago: DAY });
         const top = await addPost(t, b.id, 'We opened a cold storage hub in Ikeja!', { chapterId: lagos, reactions: 9, comments: 4, ago: 2 * DAY });
         await addPost(t, blocked.id, 'Blocked but popular', { chapterId: lagos, reactions: 50 });
         await addPost(t, a.id, 'Too old', { chapterId: lagos, reactions: 99, ago: 8 * DAY });
-        await addPost(t, a.id, 'Another chapter', { chapterId: await chapterId(t, 'accra'), reactions: 99 });
+        await addPost(t, a.id, 'Another chapter', { chapterId: await chapterId(t, 'ghana'), reactions: 99 });
 
         const h = await moment(viewer, 'chapter_highlight');
         expect(h).toMatchObject({
-          chapter: { slug: 'lagos' },
+          chapter: { slug: 'nigeria' },
           isFollowing: true,
           members: 2,
           postsThisWeek: 2,
@@ -356,19 +356,19 @@ describe('Home: welcome strip and community moments', () => {
         const viewer = await createMember(t);
         const a = await createMember(t);
         expect(await moment(viewer, 'chapter_highlight')).toBeUndefined();
-        await addPost(t, a.id, 'Accra post', { chapterId: await chapterId(t, 'accra') });
-        await addPost(t, a.id, 'Nairobi post 1', { chapterId: await chapterId(t, 'nairobi') });
-        await addPost(t, a.id, 'Nairobi post 2', { chapterId: await chapterId(t, 'nairobi'), reactions: 2 });
+        await addPost(t, a.id, 'Accra post', { chapterId: await chapterId(t, 'ghana') });
+        await addPost(t, a.id, 'Nairobi post 1', { chapterId: await chapterId(t, 'kenya') });
+        await addPost(t, a.id, 'Nairobi post 2', { chapterId: await chapterId(t, 'kenya'), reactions: 2 });
         const h = await moment(viewer, 'chapter_highlight');
-        expect(h).toMatchObject({ chapter: { slug: 'nairobi' }, isFollowing: false, members: 0, postsThisWeek: 2 });
+        expect(h).toMatchObject({ chapter: { slug: 'kenya' }, isFollowing: false, members: 0, postsThisWeek: 2 });
         expect(h.topPost.excerpt).toBe('Nairobi post 2');
       });
 
       it('a followed chapter with no activity still shows its members, with no top post', async () => {
         const viewer = await createMember(t);
-        await followChapter(t, viewer.id, 'dakar');
+        await followChapter(t, viewer.id, 'senegal');
         const h = await moment(viewer, 'chapter_highlight');
-        expect(h).toMatchObject({ chapter: { slug: 'dakar' }, isFollowing: true, members: 1, postsThisWeek: 0, topPost: null });
+        expect(h).toMatchObject({ chapter: { slug: 'senegal' }, isFollowing: true, members: 1, postsThisWeek: 0, topPost: null });
       });
     });
   });

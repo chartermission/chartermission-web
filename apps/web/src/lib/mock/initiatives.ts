@@ -65,7 +65,7 @@ export const initiatives: Initiative[] = [
     theme: "Agriculture",
     status: "recruiting",
     country: "Nigeria",
-    chapter: { slug: "lagos", name: "Lagos chapter" },
+    chapter: { slug: "nigeria", name: "Lagos chapter" },
     summary: "Cold-chain hubs that move smallholder produce from farm gate to Lagos ports in under 48 hours.",
     description:
       "Cold-chain hubs that move smallholder produce from farm gate to Lagos ports in under 48 hours — cutting post-harvest loss and opening export markets under AfCFTA.",
@@ -132,7 +132,7 @@ export const initiatives: Initiative[] = [
     theme: "Climate",
     status: "active",
     country: "Kenya",
-    chapter: { slug: "nairobi", name: "Nairobi chapter" },
+    chapter: { slug: "kenya", name: "Nairobi chapter" },
     summary: "Replacing charcoal stoves with LPG and ethanol in 5,000 Nairobi households, financed by carbon credits.",
     description:
       "Replacing charcoal stoves with LPG and ethanol in 5,000 Nairobi households, financed by verified carbon credits and a pay-as-you-cook model.",

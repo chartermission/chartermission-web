@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type SyntheticEvent } from "react";
-import type { DraftView, PostType, PostView } from "@chartermission/contracts";
+import { VIDEO_PROVIDER_LABELS, parseVideoEmbed, type ChapterRef, type DraftView, type PostType, type PostView } from "@chartermission/contracts";
 import { Avatar, Button, Divider, Icon, cn, type IconName } from "@chartermission/ui";
 import { api, ApiError } from "@/lib/api/client";
 import { ErrorNotice } from "@/components/social/errors";
@@ -32,7 +32,7 @@ import { ScheduleDialog, scheduleLabel } from "./schedule-dialog";
 import { CelebrationForm, FieldError, RequestForm } from "./type-fields";
 import { useDraftSync } from "./use-draft";
 
-export type ComposeTool = "photo" | "document" | "link" | "poll" | "topic" | "mention";
+export type ComposeTool = "photo" | "video" | "document" | "link" | "poll" | "topic" | "mention";
 
 const visibilityOptions: { value: Visibility; label: string; icon: IconName; hint: string }[] = [
   { value: "members", label: "Members", icon: "users", hint: "Signed-in Charter Mission members" },
@@ -41,6 +41,7 @@ const visibilityOptions: { value: Visibility; label: string; icon: IconName; hin
 
 const toolButtons: { tool: ComposeTool; icon: IconName; label: string; color: string; activeBg?: string }[] = [
   { tool: "photo", icon: "image", label: "Add images", color: "text-info", activeBg: "bg-info-light" },
+  { tool: "video", icon: "video", label: "Add a video", color: "text-warning", activeBg: "bg-warning-light" },
   { tool: "document", icon: "book", label: "Add a PDF", color: "text-error", activeBg: "bg-error-light" },
   { tool: "link", icon: "link", label: "Add a link", color: "text-success", activeBg: "bg-success-light" },
   { tool: "poll", icon: "chart", label: "Add a poll", color: "text-accent", activeBg: "bg-accent-light" },
@@ -50,10 +51,10 @@ const toolButtons: { tool: ComposeTool; icon: IconName; label: string; color: st
 
 /** Tools each post type offers (articles keep their cover in the form, links inline). */
 const toolsFor: Record<PostType, ComposeTool[]> = {
-  standard: ["photo", "document", "link", "poll", "topic", "mention"],
-  question: ["photo", "document", "link", "topic", "mention"],
-  celebration: ["photo", "document", "link", "topic", "mention"],
-  request: ["photo", "document", "link", "topic", "mention"],
+  standard: ["photo", "video", "document", "link", "poll", "topic", "mention"],
+  question: ["photo", "video", "document", "link", "topic", "mention"],
+  celebration: ["photo", "video", "document", "link", "topic", "mention"],
+  request: ["photo", "video", "document", "link", "topic", "mention"],
   article: ["topic", "mention"],
 };
 
@@ -92,11 +93,14 @@ export function CreatePostDialog({
   initialType,
   initialBody,
   draft,
+  chapter,
   onClose,
   onPosted,
   onDraftChange,
 }: {
   viewer: Viewer;
+  /** Post into this chapter (the chapter page's composer). */
+  chapter?: Pick<ChapterRef, "id" | "name">;
   initialTool?: ComposeTool;
   initialType?: PostType;
   /** Pre-filled post text (e.g. "\n\n#DailyPrompt"); the cursor starts before it, and it alone is not a draft. */
@@ -120,11 +124,11 @@ export function CreatePostDialog({
   const [fields, setFields] = useState<ComposerFields>(() => {
     if (draft) return fieldsFromDraft(draft.payload);
     const base = initialFields(initialType);
-    return { ...base, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
+    return { ...base, chapterId: chapter?.id, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
   });
   const [caret, setCaret] = useState(initialBody !== undefined ? 0 : fields.text.length);
-  const [fileMode, setFileMode] = useState<"image" | "document" | null>(
-    initialTool === "photo" ? "image" : initialTool === "document" ? "document" : null,
+  const [fileMode, setFileMode] = useState<"image" | "document" | "video" | null>(
+    initialTool === "photo" ? "image" : initialTool === "document" ? "document" : initialTool === "video" ? "video" : null,
   );
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState<"post" | "schedule" | "unschedule" | null>(null);
@@ -233,17 +237,19 @@ export function CreatePostDialog({
     if (tool === "link") patch({ link: fields.link === null ? "" : null });
     if (tool === "photo") setFileMode((current) => (current === "image" && attachments.items.length === 0 ? null : "image"));
     if (tool === "document") setFileMode((current) => (current === "document" && attachments.items.length === 0 ? null : "document"));
+    if (tool === "video") setFileMode((current) => (current === "video" && attachments.items.length === 0 ? null : "video"));
   }
 
   const isActive = (tool: ComposeTool) =>
     (tool === "poll" && fields.poll !== null) ||
     (tool === "link" && fields.link !== null) ||
     (tool === "photo" && fileMode === "image") ||
-    (tool === "document" && fileMode === "document");
+    (tool === "document" && fileMode === "document") ||
+    (tool === "video" && fileMode === "video");
 
   function changeType(next: PostType) {
     patch({ type: next });
-    if (next === "article" && fileMode === "document" && attachments.items.length === 0) setFileMode(null);
+    if (next === "article" && (fileMode === "document" || fileMode === "video") && attachments.items.length === 0) setFileMode(null);
     setNotice(`${postTypeMeta[next].label} selected`);
   }
 
@@ -346,7 +352,9 @@ export function CreatePostDialog({
   const meta = postTypeMeta[type];
   const copy = type === "article" ? null : bodyCopy[type];
   const showFiles = type === "article" || fileMode !== null || attachments.items.length > 0;
-  const fileModeNow = attachments.items.find((i) => i.status !== "rejected")?.purpose === "post_document" ? "document" : (fileMode ?? "image");
+  const livePurpose = attachments.items.find((i) => i.status !== "rejected")?.purpose;
+  const fileModeNow = livePurpose === "post_document" ? "document" : livePurpose === "post_video" ? "video" : livePurpose === "post_image" ? "image" : (fileMode ?? "image");
+  const previewVideo = previewUrl ? parseVideoEmbed(previewUrl) : null;
 
   const statusText =
     sync.status === "saving"
@@ -387,6 +395,13 @@ export function CreatePostDialog({
             <h2 id={titleId} className="truncate text-h3 text-ink">
               {scheduled ? "Edit scheduled post" : meta.title}
             </h2>
+            {chapter && fields.chapterId === chapter.id && (
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary-tint px-2.5 py-0.5 text-xs font-medium text-primary">
+                <Icon name="globe" size={14} />
+                <span className="sr-only">Posting to </span>
+                {chapter.name}
+              </span>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             <p aria-live="polite" className={cn("flex items-center gap-1 text-xs", sync.status === "error" ? "text-error" : "text-secondary")}>
@@ -647,7 +662,10 @@ export function CreatePostDialog({
               )}
               {previewDomain && !errors.link && (
                 <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
-                  <Icon name="link" size={14} className="text-success" />A preview card for {previewDomain} will be added after you post.
+                  <Icon name={previewVideo ? "video" : "link"} size={14} className="text-success" />
+                  {previewVideo
+                    ? `A ${VIDEO_PROVIDER_LABELS[previewVideo.provider]} player will be added to your post.`
+                    : `A preview card for ${previewDomain} will be added after you post.`}
                 </p>
               )}
 

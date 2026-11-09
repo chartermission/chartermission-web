@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import type { AdminReportDetail, AdminReportRow, Page } from "@chartermission/contracts";
 import { ModerationStats } from "@/components/moderation/moderation-stats";
 import { ModerationTabs } from "@/components/moderation/moderation-tabs";
@@ -9,7 +10,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState, NoAccess } from "@/components/states";
 import { ApiError } from "@/lib/api/errors";
 import { apiGet, apiGetOrNull, requireViewer } from "@/lib/api/server";
-import { PERM, can } from "@/lib/permissions";
+import { PERM, can, landingPath } from "@/lib/permissions";
 import { filtersKey, parseQueueFilters, queueApiQuery, queueSearch } from "@/lib/queue-filters";
 
 export const metadata: Metadata = { title: "Moderation" };
@@ -22,7 +23,12 @@ async function ReportsQueue({ searchParams }: Pick<PageProps<"/moderation">, "se
   const filters = parseQueueFilters(params);
   const requested = typeof params.report === "string" && UUID.test(params.report) ? params.report : null;
   const viewer = await requireViewer(`/moderation${queueSearch(filters, requested)}`);
-  if (!can(viewer, PERM.moderationView)) return <NoAccess section="the moderation queue" />;
+  if (!can(viewer, PERM.moderationView)) {
+    // The console's default page: send staff without moderation access to their own section.
+    const home = landingPath(viewer);
+    if (home !== "/moderation") redirect(home);
+    return <NoAccess section="the moderation queue" />;
+  }
 
   let page: Page<AdminReportRow>;
   let detail: AdminReportDetail | null = null;

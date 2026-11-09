@@ -34,6 +34,7 @@ import { ProfilesService } from '../profiles/profiles.service.js';
 import { AuthMailer } from './auth-mail.js';
 import { PasswordService } from './password.service.js';
 import { POLICIES } from './auth.service.js';
+import { mustUseMfa } from '../core/permissions.js';
 
 const CONFIRM_FAILURES = 5;
 const CONFIRM_WINDOW_SEC = 15 * 60;
@@ -77,7 +78,7 @@ export class AccountService {
       roles: [...ctx.user.roles],
       permissions: [...ctx.user.permissions],
       onboarding: { step: profile.onboardingStep, completed: !!profile.onboardingCompletedAt },
-      mfa: { enabled: !!user.mfaEnabledAt, verifiedThisSession: ctx.session.mfaVerified },
+      mfa: { enabled: !!user.mfaEnabledAt, verifiedThisSession: ctx.session.mfaVerified, required: mustUseMfa(ctx.user) },
       needsPolicyReaccept: await this.needsPolicyReaccept(user.id),
       restrictions: { postingUntil: active(user.restrictedPostingUntil), connectingUntil: active(user.restrictedConnectingUntil) },
       sessionAudience: ctx.session.audience,

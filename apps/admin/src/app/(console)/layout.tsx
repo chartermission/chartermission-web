@@ -42,6 +42,16 @@ async function ViewerSidebar() {
   return <AdminSidebar items={items} />;
 }
 
+/** Empty sidebar frame shown while the pathname is not yet known. */
+function SidebarPlaceholder() {
+  return (
+    <nav
+      aria-label="Console sections"
+      className="shrink-0 border-b border-line bg-card px-3 py-2 lg:w-[248px] lg:border-r lg:border-b-0 lg:py-5"
+    />
+  );
+}
+
 /** Admin console shell: admin bar over sidebar + main column (Figma nodes 12:1547 / 12:1569). */
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
   return (
@@ -56,8 +66,11 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         <ViewerAdminBar />
       </Suspense>
       <div className="flex flex-1 flex-col items-stretch lg:flex-row">
-        <Suspense fallback={<AdminSidebar />}>
-          <ViewerSidebar />
+        {/* The sidebar reads the pathname, so its loading state also needs a boundary for dynamic routes to prerender. */}
+        <Suspense fallback={<SidebarPlaceholder />}>
+          <Suspense fallback={<AdminSidebar />}>
+            <ViewerSidebar />
+          </Suspense>
         </Suspense>
         <main id="main" className="flex min-w-0 flex-1 flex-col gap-5 px-4 pt-5 pb-10 sm:px-7 sm:pt-7">
           {children}

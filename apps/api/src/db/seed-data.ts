@@ -56,10 +56,10 @@ export const COURSE_TOPICS: [string, string][] = [
 export type SeedContext = { ids: Record<string, string>; chapters: Record<string, string> };
 
 export const CHAPTERS: [string, string, string][] = [
-  ['lagos', 'Lagos Chapter', 'NG'], ['abuja', 'Abuja Chapter', 'NG'], ['accra', 'Accra Chapter', 'GH'],
-  ['nairobi', 'Nairobi Chapter', 'KE'], ['johannesburg', 'Johannesburg Chapter', 'ZA'], ['dakar', 'Dakar Chapter', 'SN'],
-  ['addis-ababa', 'Addis Ababa Chapter', 'ET'], ['casablanca', 'Casablanca Chapter', 'MA'],
-  ['london-diaspora', 'London Diaspora Chapter', 'GB'], ['dubai-diaspora', 'Dubai Diaspora Chapter', 'AE'],
+  // One chapter per country, in Africa and in diaspora host countries (decided Nov 2026: no city chapters).
+  ['nigeria', 'Nigeria Chapter', 'NG'], ['ghana', 'Ghana Chapter', 'GH'], ['kenya', 'Kenya Chapter', 'KE'],
+  ['south-africa', 'South Africa Chapter', 'ZA'], ['senegal', 'Senegal Chapter', 'SN'], ['ethiopia', 'Ethiopia Chapter', 'ET'],
+  ['morocco', 'Morocco Chapter', 'MA'], ['united-kingdom', 'UK Diaspora Chapter', 'GB'], ['uae', 'UAE Diaspora Chapter', 'AE'],
 ];
 
 export type SeedMember = {
@@ -83,15 +83,24 @@ export type SeedMember = {
 };
 
 /** Demo accounts for development and staging. All share DEMO_PASSWORD. */
-export const DEMO_PASSWORD = 'charter-mission-demo';
+export const DEMO_PASSWORD = 'CharterMission@123';
 
 export const MEMBERS: SeedMember[] = [
-  { key: 'owais', name: 'Owais Iqbal', handle: 'owais-iqbal', email: 'owais@example.com', headline: 'Founder · Dubai, UAE', country: 'AE', city: 'Dubai', tone: 'primary', roles: ['super_admin'], organisation: 'HyseTech Software Design', joinedDaysAgo: 420, sectors: ['Technology'] },
-  { key: 'team', name: 'Charter Mission', handle: 'charter-mission', email: 'team@example.com', headline: 'Official platform team', country: 'GB', city: 'London', tone: 'primary', staff: true, roles: ['platform_admin'], joinedDaysAgo: 480 },
-  { key: 'aisha', name: 'Aisha Mohammed', handle: 'aisha-mohammed', email: 'aisha@example.com', headline: 'Community moderator', country: 'NG', city: 'Abuja', tone: 'info', roles: ['moderator'], joinedDaysAgo: 300 },
+  { key: 'owais', name: 'Owais Iqbal', handle: 'owais-iqbal', email: 'owais@example.com', headline: 'Founder · Dubai, UAE', country: 'AE', city: 'Dubai', tone: 'primary', organisation: 'HyseTech Software Design', joinedDaysAgo: 420, sectors: ['Technology'] },
+  { key: 'team', name: 'Charter Mission', handle: 'charter-mission', email: 'team@example.com', headline: 'Official platform team', country: 'GB', city: 'London', tone: 'primary', verified: true, joinedDaysAgo: 480 },
+  { key: 'aisha', name: 'Aisha Mohammed', handle: 'aisha-mohammed', email: 'aisha@example.com', headline: 'Community organiser', country: 'NG', city: 'Abuja', tone: 'info', joinedDaysAgo: 300 },
+  // A spam account whose posts, comment and story are reported: the Moderator's demo queue (seed-moderation.ts).
+  { key: 'spammer', name: 'Easy Profits Hub', handle: 'easy-profits-hub', email: 'promo@example.com', headline: 'Daily crypto signals', country: 'NG', city: 'Lagos', tone: 'warning', joinedDaysAgo: 20 },
+  // Staff accounts (admin console). Two-step verification is mandatory for them: the seed presets a known
+  // secret outside production (seed-accounts.ts; keys in the demo accounts PDF). The Ambassador Manager's
+  // countries (Nigeria, Ghana, Kenya) are set in seed-ambassadors.ts.
+  { key: 'superAdmin', name: 'Super Admin', handle: 'cm-super-admin', email: 'admin@chartermission.com', headline: 'Charter Mission platform team', country: 'AE', city: 'Dubai', tone: 'primary', staff: true, roles: ['super_admin'], joinedDaysAgo: 500 },
+  { key: 'platformAdmin', name: 'Platform Admin', handle: 'cm-platform-admin', email: 'platform-admin@chartermission.com', headline: 'Charter Mission platform team', country: 'GB', city: 'London', tone: 'primary', staff: true, roles: ['platform_admin'], joinedDaysAgo: 490 },
+  { key: 'moderator', name: 'Moderator', handle: 'cm-moderator', email: 'moderator@chartermission.com', headline: 'Charter Mission moderation team', country: 'NG', city: 'Abuja', tone: 'info', staff: true, roles: ['moderator'], joinedDaysAgo: 320 },
+  { key: 'ambManager', name: 'Ambassador Manager', handle: 'cm-ambassador-manager', email: 'amb-manager@chartermission.com', headline: 'Ambassador programme, Charter Mission', country: 'NG', city: 'Lagos', tone: 'accent', staff: true, joinedDaysAgo: 200 },
   { key: 'amara', name: 'Amara Okafor', handle: 'amara-okafor', email: 'amara@example.com', headline: 'Founder, Lagos AgriHub', country: 'NG', city: 'Lagos', tone: 'accent', verified: true, organisation: 'Lagos AgriHub', bio: 'Agronomist turned founder. Lagos AgriHub connects 4,000+ smallholder farmers to cold storage and export buyers in Ghana, Côte d’Ivoire and the UK.', joinedDaysAgo: 260, sectors: ['Agriculture & food', 'Trade & logistics'] },
   { key: 'kwame', name: 'Kwame Mensah', handle: 'kwame-mensah', email: 'kwame@example.com', headline: 'Product Lead, PayBridge', country: 'GH', city: 'Accra', tone: 'success', verified: true, organisation: 'PayBridge', bio: 'Product lead at PayBridge, building cross-border settlement for small exporters. Ten years in payments across Accra, Lagos and Nairobi; always happy to talk mobile money interoperability.', joinedDaysAgo: 240, sectors: ['Finance & fintech', 'Technology'] },
-  { key: 'wanjiru', name: 'Wanjiru Kamau', handle: 'wanjiru-kamau', email: 'wanjiru@example.com', headline: 'Climate Policy Analyst', country: 'KE', city: 'Nairobi', tone: 'info', bio: 'Climate policy analyst tracking adaptation finance at county level. I co-organise the Nairobi chapter’s clean-cooking work and love a good budget spreadsheet.', joinedDaysAgo: 210, sectors: ['Climate & energy', 'Public policy'] },
+  { key: 'wanjiru', name: 'Wanjiru Kamau', handle: 'wanjiru-kamau', email: 'wanjiru@example.com', headline: 'Climate Policy Analyst', country: 'KE', city: 'Nairobi', tone: 'info', bio: 'Climate policy analyst tracking adaptation finance at county level. I co-organise the Kenya chapter’s clean-cooking work in Nairobi and love a good budget spreadsheet.', joinedDaysAgo: 210, sectors: ['Climate & energy', 'Public policy'] },
   { key: 'leila', name: 'Leila Benali', handle: 'leila-benali', email: 'leila@example.com', headline: 'Trade Economist', country: 'MA', city: 'Casablanca', tone: 'info', verified: true, bio: 'Trade economist specialising in rules of origin. I translate AfCFTA legal texts into checklists exporters can actually use.', joinedDaysAgo: 190, sectors: ['Trade & logistics', 'Public policy'] },
   { key: 'thabo', name: 'Thabo Nkosi', handle: 'thabo-nkosi', email: 'thabo@example.com', headline: 'Renewable energy engineer', country: 'ZA', city: 'Johannesburg', tone: 'warning', organisation: 'GreenGrid Africa', bio: 'Engineer and co-founder at GreenGrid Africa. We design solar micro-grids for villages and clinics, and train young installers along the way.', joinedDaysAgo: 170, sectors: ['Climate & energy', 'Infrastructure'] },
   { key: 'fatou', name: 'Fatou Diallo', handle: 'fatou-diallo', email: 'fatou@example.com', headline: 'Fintech investor', country: 'SN', city: 'Dakar', tone: 'accent', bio: 'Early-stage investor backing West African fintech and women-led funds. Office hours every Thursday for founders raising their first round.', joinedDaysAgo: 150, sectors: ['Finance & fintech', 'Social impact'] },

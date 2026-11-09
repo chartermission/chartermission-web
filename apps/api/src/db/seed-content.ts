@@ -8,7 +8,7 @@ import { attachHashtags } from '../posts/hashtags.js';
 import { parseHashtags, parseMentions } from '../posts/text-parse.js';
 import { computeTrending } from '../topics/trending.js';
 import { createStorage } from '../media/storage.js';
-import { DAILY_PROMPT_TAG } from '@chartermission/contracts';
+import { DAILY_PROMPT_TAG, parseVideoEmbed } from '@chartermission/contracts';
 import { promptFor } from '../home/prompts.js';
 import { ARTICLES, PROMPT_ANSWERS } from './seed-home.js';
 
@@ -161,7 +161,7 @@ Most rejected shipments in the pilot phase failed on documents, not on the rules
 const OWAIS_FOLLOWS = {
   members: ['amara', 'kwame', 'wanjiru', 'leila', 'team'] as Key[],
   hashtags: ['africantech', 'climateaction', 'diasporainvest', 'womeninleadership'],
-  chapters: ['dubai-diaspora'],
+  chapters: ['uae'],
 };
 
 export async function seedContent(db: Db, ids: Record<string, string>): Promise<void> {
@@ -314,12 +314,12 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
       '#AfCFTA #AgriTech #TradeAfrica',
     ].join('\n'),
     2 * H,
-    { chapter: 'lagos' },
+    { chapter: 'nigeria' },
   );
   await attachDemoImage(db, kigali, uid('amara'), 'Kigali Convention Centre · AfCFTA corridor workshop');
 
   const diaspora = await post('kwame', 'Diaspora founders: what is the biggest barrier to investing back home?\n\n#DiasporaInvest #Fintech', 5 * H, {
-    chapter: 'accra',
+    chapter: 'ghana',
   });
   const [poll] = await db
     .insert(s.polls)
@@ -346,9 +346,9 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
 
   const cleanCooking = await post(
     'wanjiru',
-    'Our Nairobi chapter is hosting a clean-cooking hackathon on 28 November. Looking for 3 more mentors with hardware or carbon-finance experience — reply or DM if you can give a Saturday.\n\n#ClimateAction #NairobiChapter',
+    'Our Kenya chapter is hosting a clean-cooking hackathon on 28 November. Looking for 3 more mentors with hardware or carbon-finance experience — reply or DM if you can give a Saturday.\n\n#ClimateAction #NairobiChapter',
     8 * H,
-    { chapter: 'nairobi' },
+    { chapter: 'kenya' },
   );
 
   const rules = await post(
@@ -356,7 +356,7 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
     'New rules-of-origin guidance is out. If you ship textiles between North and West Africa, the cumulation clause is the part to read twice.\n\n#AfCFTA #TradeAfrica',
     4 * H,
     {
-      chapter: 'casablanca',
+      chapter: 'morocco',
       link: {
         url: 'https://au-afcfta.org',
         domain: 'au-afcfta.org',
@@ -506,7 +506,7 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
     10 * H,
     {
       type: 'request',
-      chapter: 'nairobi',
+      chapter: 'kenya',
       details: {
         category: 'volunteers',
         title: 'Mentors for the Clean Cooking Hackathon on 28 November',
@@ -576,11 +576,35 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
     if (fileId) await db.update(s.memberProfiles).set({ avatarFileId: fileId }).where(eq(s.memberProfiles.userId, uid(key)));
   }
 
+  // Video links: the post shows the provider's player (real videos from the UN and AU channels).
+  const videoLink = (url: string, title: string, description: string) => {
+    const embed = parseVideoEmbed(url);
+    return { url, domain: 'youtube.com', title, description, imageUrl: embed?.thumbnailUrl ?? null, embed };
+  };
+  const leilaVideo = await post(
+    'leila',
+    'Twenty minutes well spent if you are new to the AfCFTA: how the agreement is meant to work for small businesses, women traders and young people, not just big exporters. Worth watching before our rules-of-origin session. #AfCFTA #TradeAfrica',
+    26 * H,
+    { link: videoLink('https://www.youtube.com/watch?v=c7uapuKnV5s', 'The AfCFTA: Maximizing opportunities for inclusive, sustainable development', 'UN Office of the Special Adviser on Africa') },
+  );
+  await react('post', leilaVideo, 'kwame', 'insightful');
+  await react('post', leilaVideo, 'amara');
+  await react('post', leilaVideo, 'fatou', 'insightful');
+  await comment(leilaVideo, 'kwame', 'Good primer. The bit on payments is exactly why cross-border settlement matters for small exporters.', 20 * H);
+  const kwameVideo = await post(
+    'kwame',
+    'Digital trade is where the AfCFTA gets real for fintech. This interview with the AfCFTA Secretariat on the digital trade protocol is a good overview of what is coming. #AfricanTech #AfCFTA',
+    50 * H,
+    { link: videoLink('https://www.youtube.com/watch?v=Bf99JWt43m8', 'The AfCFTA Secretariat on the potential of digital trade for Africa', 'UN Office of the Special Adviser on Africa') },
+  );
+  await react('post', kwameVideo, 'leila', 'insightful');
+  await react('post', kwameVideo, 'chinedu');
+
   // Chapter follows (the first one followed is a member's main chapter).
   const chapterFollows: [Key, string, number][] = [
-    ['amara', 'lagos', 200], ['tunde', 'lagos', 2], ['ngozi', 'lagos', 5], ['aisha', 'abuja', 250],
-    ['kwame', 'accra', 180], ['kofi', 'accra', 7], ['wanjiru', 'nairobi', 200], ['zainab', 'nairobi', 9],
-    ['thabo', 'johannesburg', 150], ['fatou', 'dakar', 140], ['yohannes', 'addis-ababa', 100],
+    ['amara', 'nigeria', 200], ['tunde', 'nigeria', 2], ['ngozi', 'nigeria', 5], ['aisha', 'nigeria', 250],
+    ['kwame', 'ghana', 180], ['kofi', 'ghana', 7], ['wanjiru', 'kenya', 200], ['zainab', 'kenya', 9],
+    ['thabo', 'south-africa', 150], ['fatou', 'senegal', 140], ['yohannes', 'ethiopia', 100],
   ];
   await db
     .insert(s.follows)
@@ -597,9 +621,9 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
   // New members introduce themselves in their chapters (Tunde has not posted yet: "Share your first update").
   const ngoziHello = await post(
     'ngozi',
-    'Hello Lagos chapter! I run paid apprenticeships that place young people in agribusiness and logistics roles. If your company could host an apprentice for six months, I would love to talk. #YouthEmployment',
+    'Hello Nigeria chapter! I run paid apprenticeships that place young people in agribusiness and logistics roles. If your company could host an apprentice for six months, I would love to talk. #YouthEmployment',
     22 * H,
-    { chapter: 'lagos' },
+    { chapter: 'nigeria' },
   );
   for (const who of ['amara', 'kwame', 'tunde', 'aisha'] as Key[]) await react('post', ngoziHello, who, 'support');
   await comment(ngoziHello, 'amara', 'Welcome Ngozi! Lagos AgriHub hosts apprentices every quarter — let’s talk this week.', 20 * H);
@@ -607,7 +631,7 @@ export async function seedContent(db: Db, ids: Record<string, string>): Promise<
     'kofi',
     'Hi everyone, just joined from Kumasi. I develop solar mini-grids for market towns and I am keen to meet anyone working on productive-use financing. #CleanEnergy',
     3 * 24 * H,
-    { chapter: 'accra' },
+    { chapter: 'ghana' },
   );
   for (const who of ['thabo', 'kwame'] as Key[]) await react('post', kofiHello, who, 'like');
   await comment(kofiHello, 'thabo', 'Welcome Kofi! Happy to compare notes on tariffs — our village grids use a similar model.', 3 * 24 * H - 2 * H);
@@ -680,10 +704,10 @@ async function attachDemoImage(db: Db, postId: string, ownerId: string, label: s
  * Renders a gradient JPEG (a caption bottom-left, or centred initials for avatars), stores it
  * as a clean file owned by `ownerId` and returns its id (null when image rendering is unavailable).
  */
-async function storeDemoImage(
+export async function storeDemoImage(
   db: Db,
   ownerId: string,
-  purpose: 'post_image' | 'avatar',
+  purpose: 'post_image' | 'avatar' | 'story_image',
   label: string,
   opts: { width: number; height: number; colors: [string, string]; initials?: string },
 ): Promise<string | null> {

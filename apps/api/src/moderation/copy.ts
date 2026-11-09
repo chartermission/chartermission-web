@@ -18,6 +18,8 @@ const NOUN: Record<ReportTargetType, string> = {
   comment: 'comment',
   member: 'profile',
   hashtag: 'topic',
+  story: 'story',
+  opportunity: 'listing',
 };
 
 const date = (d: Date) => d.toISOString().slice(0, 10);
@@ -28,7 +30,7 @@ export function reportNextSteps(reason: ReportReason, targetType: ReportTargetTy
     'Thanks for telling us. A moderator will review this against our Community Guidelines, most urgent reports first.',
     'We’ll let you know when we’ve made a decision. To protect everyone’s privacy we won’t share details of any action taken, and we never tell the other person who reported them.',
   ];
-  if (targetType === 'member' || targetType === 'post' || targetType === 'comment') {
+  if (targetType !== 'hashtag') {
     parts.push(
       'If you don’t want to see this person’s content in the meantime, you can block them from their profile.',
     );

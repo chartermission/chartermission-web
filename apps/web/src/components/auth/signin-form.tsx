@@ -56,10 +56,11 @@ export function SignInForm({ next, notice }: { next: string | null; notice: Sign
     setSubmitting(true);
     try {
       const result = await api<SignInResult>("/auth/login", { method: "POST", body: parsed.data });
-      if (result.status === "mfa_required") {
+      if (result.status === "mfa_required" || result.status === "mfa_setup_required") {
+        const step = result.status === "mfa_required" ? "/signin/mfa" : "/signin/mfa-setup";
         setPassword("");
         setSubmitting(false);
-        router.replace(next ? `/signin/mfa?next=${encodeURIComponent(next)}` : "/signin/mfa");
+        router.replace(next ? `${step}?next=${encodeURIComponent(next)}` : step);
         return;
       }
       const me = await api<SessionUser>("/me");

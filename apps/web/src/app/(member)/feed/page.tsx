@@ -5,6 +5,8 @@ import { FeedQuery, type MomentsResponse, type Page, type PostView } from "@char
 import { buttonClasses } from "@chartermission/ui";
 import { FeedControls } from "@/components/feed-controls";
 import { momentItems } from "@/components/home/moments";
+import { AmbassadorOnboardingNotice } from "@/components/ambassadors/onboarding-notice";
+import { StoriesStripLoader } from "@/components/stories/stories-loader";
 import { Welcome, WelcomeSkeleton } from "@/components/home/welcome";
 import { LeftRail } from "@/components/left-rail";
 import { PageColumns } from "@/components/page-columns";
@@ -183,9 +185,17 @@ async function FeedWelcome({ searchParams }: { searchParams: SearchParams }) {
   const query = parseQuery(await searchParams);
   if (query.type || query.country || query.sector || query.chapter || query.announcements || query.author) return null;
   return (
-    <Suspense fallback={<WelcomeSkeleton />}>
-      <Welcome />
-    </Suspense>
+    <>
+      <Suspense fallback={<PanelSkeleton className="h-[104px]" lines={1} />}>
+        <StoriesStripLoader />
+      </Suspense>
+      <Suspense fallback={<WelcomeSkeleton />}>
+        <Welcome />
+      </Suspense>
+      <Suspense fallback={null}>
+        <AmbassadorOnboardingNotice />
+      </Suspense>
+    </>
   );
 }
 

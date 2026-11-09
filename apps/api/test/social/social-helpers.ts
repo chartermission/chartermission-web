@@ -21,7 +21,7 @@ export async function createPost(m: Member, body: string, extra: Record<string, 
 export async function uploadBytes(
   t: TestApp,
   m: Member,
-  opts: { purpose: 'post_image' | 'post_document' | 'avatar'; fileName: string; mime: string; data: Buffer },
+  opts: { purpose: 'post_image' | 'post_document' | 'post_video' | 'avatar' | 'story_image' | 'story_video'; fileName: string; mime: string; data: Buffer },
 ) {
   const res = await m.post('/uploads', { purpose: opts.purpose, fileName: opts.fileName, mime: opts.mime, sizeBytes: opts.data.length });
   if (res.status !== 201) throw new Error(`upload failed: ${res.status} ${JSON.stringify(res.body)}`);

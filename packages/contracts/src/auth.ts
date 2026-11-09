@@ -37,8 +37,8 @@ export const SignInInput = z.object({
 export type SignInInput = z.infer<typeof SignInInput>;
 
 /**
- * Login result. Member sessions are complete on "ok".
- * Admin sessions return "mfa_required" or "mfa_setup_required" until a TOTP code is verified.
+ * Login result. Member sessions are complete on "ok"; members with two-step verification get "mfa_required".
+ * Admin sessions, and staff accounts on either side, return "mfa_required" or "mfa_setup_required" until a TOTP code is verified.
  */
 export const SignInResult = z.object({
   status: z.enum(["ok", "mfa_required", "mfa_setup_required"]),
@@ -94,7 +94,8 @@ export const SessionUser = z.object({
   roles: z.array(z.string()),
   permissions: z.array(z.string()),
   onboarding: z.object({ step: z.number().int(), completed: z.boolean() }),
-  mfa: z.object({ enabled: z.boolean(), verifiedThisSession: z.boolean() }),
+  /** `required`: staff accounts must use two-step verification in the admin console and the member app. */
+  mfa: z.object({ enabled: z.boolean(), verifiedThisSession: z.boolean(), required: z.boolean() }),
   /** True when a policy version changed since the member last accepted (spec 4.2 rules). */
   needsPolicyReaccept: z.boolean(),
   restrictions: z.object({ postingUntil: z.string().nullable(), connectingUntil: z.string().nullable() }),

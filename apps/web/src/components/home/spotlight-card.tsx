@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { SpotlightMoment } from "@chartermission/contracts";
-import { Icon, buttonClasses, chipClasses } from "@chartermission/ui";
+import { Icon, buttonClasses, chipClasses, RoleBadgeIcon } from "@chartermission/ui";
 import { plural } from "@/components/social/format";
 import { memberHref, postHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
@@ -30,6 +30,7 @@ export function SpotlightCard({ moment, viewer }: { moment: SpotlightMoment; vie
                   {member.name}
                 </Link>
                 {member.verified && <Icon name="verified" size={18} className="shrink-0 text-primary" label="Verified" />}
+                <RoleBadgeIcon badge={member.badge} size={18} />
               </h2>
               {member.headline && <p className="line-clamp-2 text-sm text-body">{member.headline}</p>}
               <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-secondary">

@@ -14,7 +14,7 @@ import {
 import { InjectDb, type Db } from '../db/db.module.js';
 import { consentRecords, memberProfiles, roles, sessions, userRoles, users } from '../db/schema.js';
 import { type AppRequest, type AuthContext, clientIp } from '../core/auth-context.js';
-import { PRIVILEGED_ROLES } from '../core/permissions.js';
+import { ADMIN_SIGNIN_ROLES } from '../core/permissions.js';
 import { SessionService, audienceOf } from '../core/session.service.js';
 import { toneFor } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
@@ -82,7 +82,7 @@ export class AuthService {
       .select({ id: userRoles.id })
       .from(userRoles)
       .innerJoin(roles, eq(roles.id, userRoles.roleId))
-      .where(and(eq(userRoles.userId, userId), isNull(userRoles.revokedAt), inArray(roles.key, PRIVILEGED_ROLES)))
+      .where(and(eq(userRoles.userId, userId), isNull(userRoles.revokedAt), inArray(roles.key, ADMIN_SIGNIN_ROLES)))
       .limit(1);
     return rows.length > 0;
   }
@@ -238,7 +238,10 @@ export class AuthService {
 
     if (audience === 'admin') return { status: user.mfaEnabledAt ? 'mfa_required' : 'mfa_setup_required' };
     // Members who turned on two-step verification enter a code next (POST /auth/mfa/verify).
-    return { status: user.mfaEnabledAt ? 'mfa_required' : 'ok' };
+    if (user.mfaEnabledAt) return { status: 'mfa_required' };
+    // Staff accounts must set it up before using the member app as well.
+    if (user.isStaff || (await this.hasPrivilegedRole(user.id))) return { status: 'mfa_setup_required' };
+    return { status: 'ok' };
   }
 
   /** POST /auth/logout — revokes the current session for the request's audience. */

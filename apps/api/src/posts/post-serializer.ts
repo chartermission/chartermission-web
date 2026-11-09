@@ -33,7 +33,7 @@ import {
   reactions,
   users,
 } from '../db/schema.js';
-import { MembersService, mediaUrl } from '../core/members.service.js';
+import { MembersService, mediaUrl, posterUrl } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { can } from '../core/policy.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -215,6 +215,8 @@ export class PostSerializer {
           sizeBytes: files.sizeBytes,
           width: files.width,
           height: files.height,
+          durationMs: files.durationMs,
+          posterKey: files.posterKey,
         },
       })
       .from(postAttachments)
@@ -233,6 +235,9 @@ export class PostSerializer {
         width: r.file.width,
         height: r.file.height,
         alt: r.alt,
+        ...(r.kind === 'video'
+          ? { durationSeconds: r.file.durationMs !== null ? r.file.durationMs / 1000 : null, posterUrl: posterUrl({ id: r.file.id, posterKey: r.file.posterKey }) }
+          : {}),
       };
       map.set(r.postId, [...(map.get(r.postId) ?? []), view]);
     }

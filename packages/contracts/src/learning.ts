@@ -37,6 +37,92 @@ import { QueryBoolean } from "./common.js";
  * (course_link_broken). A later success sets ok again.
  */
 
+/*
+ * E-learning access (admin-set unlock rules). Learning stays locked until the member meets every
+ * rule that is switched on, unless the gate is off, they are staff, or an admin unlocked them.
+ *  GET  /learning/access                 LearningAccess for the signed-in member (any locked state too).
+ *  Every other member Learning endpoint returns 403 LEARNING_LOCKED while locked.
+ *
+ * Admin API (admin audience):
+ *  GET    /admin/settings/learning-access          LearningAccessRules (settings.manage)
+ *  PUT    /admin/settings/learning-access          LearningAccessRules → LearningAccessRules. Audited.
+ *  GET    /admin/learning/access/members?q=        AdminLearningMember[] (course.curate): search by name,
+ *                                                  handle or email (max 20), or overrides when q is empty.
+ *  PUT    /admin/learning/access/overrides/:userId { note? } → AdminLearningMember. Unlocks. Audited.
+ *  DELETE /admin/learning/access/overrides/:userId → AdminLearningMember. Back to the rules. Audited.
+ */
+
+export const LearningAccessRules = z.object({
+  /** Off = Learning is open to every member and the rules below are ignored. */
+  enabled: z.boolean(),
+  /** Every profile field that counts towards completeness (headline, location, bio, skills, ...). */
+  requireProfileInfo: z.boolean(),
+  requirePhoto: z.boolean(),
+  requireCoverPhoto: z.boolean(),
+  /** Joined (follows) at least one chapter. */
+  requireChapter: z.boolean(),
+  /** Published original posts (reposts don't count); 0 = not required. */
+  minPosts: z.number().int().min(0, "0 or more").max(100, "At most 100"),
+  /** Accepted connections; 0 = not required. */
+  minConnections: z.number().int().min(0, "0 or more").max(5000, "At most 5,000"),
+});
+export type LearningAccessRules = z.infer<typeof LearningAccessRules>;
+
+export const LEARNING_ACCESS_DEFAULTS: LearningAccessRules = {
+  enabled: true,
+  requireProfileInfo: true,
+  requirePhoto: true,
+  requireCoverPhoto: true,
+  requireChapter: true,
+  minPosts: 1,
+  minConnections: 50,
+};
+
+export const LearningRequirementKey = z.enum(["profile_info", "photo", "cover_photo", "chapter", "posts", "connections"]);
+export type LearningRequirementKey = z.infer<typeof LearningRequirementKey>;
+
+export const LearningRequirement = z.object({
+  key: LearningRequirementKey,
+  label: z.string(),
+  done: z.boolean(),
+  /** Progress for counted rules (posts, connections); 0/1 for yes/no rules. */
+  current: z.number().int(),
+  target: z.number().int(),
+  /** Where the member goes to complete it. */
+  href: z.string(),
+  /** profile_info: the completeness fields still empty. */
+  missing: z.array(z.string()).optional(),
+});
+export type LearningRequirement = z.infer<typeof LearningRequirement>;
+
+export const LearningAccess = z.object({
+  unlocked: z.boolean(),
+  /** open: gate switched off · staff · override: unlocked by an admin · met: all rules met · locked. */
+  reason: z.enum(["open", "staff", "override", "met", "locked"]),
+  /** The rules that are switched on, with the member's progress (empty when the gate is off). */
+  requirements: z.array(LearningRequirement),
+});
+export type LearningAccess = z.infer<typeof LearningAccess>;
+
+export const LearningOverrideInput = z.object({ note: z.string().trim().max(300).optional() });
+export type LearningOverrideInput = z.infer<typeof LearningOverrideInput>;
+
+export const AdminLearningMember = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  handle: z.string(),
+  email: z.string(),
+  avatarUrl: z.string().nullable(),
+  access: LearningAccess,
+  override: z
+    .object({ note: z.string().nullable(), grantedAt: z.string(), grantedBy: z.string().nullable() })
+    .nullable(),
+});
+export type AdminLearningMember = z.infer<typeof AdminLearningMember>;
+
+export const AdminLearningMembersQuery = z.object({ q: z.string().trim().max(100).optional() });
+export type AdminLearningMembersQuery = z.infer<typeof AdminLearningMembersQuery>;
+
 /** Permission strings used by Learning (apps/api/src/core/permissions.ts). */
 export const LEARNING_PERMISSIONS = {
   /** Admin Learning section: hide/unhide, feature, sync history, run sync and link checks. platform_admin, super_admin. */

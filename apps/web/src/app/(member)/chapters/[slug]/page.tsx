@@ -2,34 +2,32 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { Avatar, Icon, MemberCard, Panel, chipClasses, type IconName } from "@chartermission/ui";
-import { ChapterComposer, InviteButton, MembershipToggle } from "@/components/chapters/chapter-actions";
+import type { ChapterDetail, EventSummary, MemberRef, Page, PostView } from "@chartermission/contracts";
+import { Icon, Panel, buttonClasses, chipClasses, type IconName } from "@chartermission/ui";
+import { ChapterAbout, ChapterFeed, ChapterMembers, InviteButton, JoinChapterButton } from "@/components/chapters/chapter-actions";
 import { TabList, TabPanel, Tabs } from "@/components/chapters/tabs";
-import { FeedList } from "@/components/feed-list";
-import { InitiativeTile, toInitiativeSummary } from "@/components/initiatives/initiative-tile";
-import { DateBadge } from "@/components/right-rail";
-import { chapters, getChapter, type Chapter } from "@/lib/mock/chapters";
-import { initiatives } from "@/lib/mock/initiatives";
-import { viewer } from "@/lib/mock-data";
-
-export function generateStaticParams() {
-  return chapters.map(({ slug }) => ({ slug }));
-}
+import { EventRow } from "@/components/events/event-cards";
+import { RailEventList } from "@/components/events/rail-events";
+import { requireClientViewer } from "@/components/social/data";
+import { AuthorName, MemberAvatar } from "@/components/social/post-parts";
+import { EmptyState } from "@/components/social/skeletons";
+import { apiGet, apiGetOrNull } from "@/lib/api/server";
 
 export async function generateMetadata({ params }: PageProps<"/chapters/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const chapter = getChapter(slug);
-  return chapter ? { title: chapter.name, description: chapter.about } : {};
+  const chapter = await apiGetOrNull<ChapterDetail>(`/chapters/${encodeURIComponent(slug.toLowerCase())}`).catch(() => null);
+  return chapter ? { title: chapter.name, description: chapter.about ?? undefined } : { title: "Chapter" };
 }
 
 const numberFormat = new Intl.NumberFormat("en-GB");
+const EMPTY: Page<never> = { items: [], nextCursor: null };
 
-/** Chapter page — Figma "Web / Chapter page" (node 18:2157; header 18:2210, body 18:2263). */
+/** Chapter page — Figma "Web / Chapter page" (node 18:2157), on GET /chapters/{slug}. */
 export default function ChapterPage({ params }: PageProps<"/chapters/[slug]">) {
   // params are URL data: read them inside Suspense so the App Shell stays shareable.
   return (
     <Suspense fallback={<ChapterSkeleton />}>
-      <ChapterDetail params={params} />
+      <ChapterView params={params} />
     </Suspense>
   );
 }
@@ -47,22 +45,28 @@ function ChapterSkeleton() {
   );
 }
 
-async function ChapterDetail({ params }: Pick<PageProps<"/chapters/[slug]">, "params">) {
-  const { slug } = await params;
-  const chapter = getChapter(slug);
+async function ChapterView({ params }: Pick<PageProps<"/chapters/[slug]">, "params">) {
+  const slug = (await params).slug.toLowerCase();
+  const viewer = await requireClientViewer(`/chapters/${slug}`);
+  const chapter = await apiGetOrNull<ChapterDetail>(`/chapters/${encodeURIComponent(slug)}`);
   if (!chapter) notFound();
 
-  const chapterInitiatives = initiatives.filter((initiative) => initiative.chapter?.slug === chapter.slug);
+  const [feed, members, events] = await Promise.all([
+    apiGet<Page<PostView>>("/feed", { tab: "latest", chapter: chapter.slug }).catch(() => EMPTY as Page<PostView>),
+    apiGet<Page<MemberRef>>(`/chapters/${chapter.slug}/members`).catch(() => EMPTY as Page<MemberRef>),
+    apiGet<Page<EventSummary>>("/events", { chapter: chapter.slug, when: "upcoming", limit: 12 }).catch(() => EMPTY as Page<EventSummary>),
+  ]);
+  const hostedHere = events.items.filter((e) => e.host.type === "chapter" && e.host.chapter.id === chapter.id);
+
   const meta: { icon: IconName; label: string }[] = [
-    { icon: "map-pin", label: chapter.location },
-    { icon: "users", label: `${numberFormat.format(chapter.members)} members` },
-    { icon: "calendar", label: chapter.meets },
+    { icon: "map-pin", label: chapter.countryName },
+    { icon: "users", label: `${numberFormat.format(chapter.counts.followers)} ${chapter.counts.followers === 1 ? "member" : "members"}` },
+    { icon: "calendar", label: `${chapter.counts.upcomingEvents} upcoming ${chapter.counts.upcomingEvents === 1 ? "event" : "events"}` },
   ];
   const tabs = [
     { value: "feed", label: "Feed" },
-    { value: "events", label: `Events (${chapter.events.length})` },
+    { value: "events", label: `Events (${hostedHere.length})` },
     { value: "members", label: "Members" },
-    { value: "initiatives", label: `Initiatives (${chapter.initiativesCount})` },
     { value: "about", label: "About" },
   ];
 
@@ -88,7 +92,7 @@ async function ChapterDetail({ params }: Pick<PageProps<"/chapters/[slug]">, "pa
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MembershipToggle chapterName={chapter.name} />
+              <JoinChapterButton chapter={chapter} following={chapter.viewer.following} />
               <InviteButton slug={chapter.slug} />
             </div>
           </div>
@@ -99,43 +103,45 @@ async function ChapterDetail({ params }: Pick<PageProps<"/chapters/[slug]">, "pa
       <div className="mx-auto flex w-full max-w-[1240px] flex-col items-start gap-6 px-4 pb-12 pt-6 lg:flex-row">
         <main id="main" className="flex w-full min-w-0 flex-1 flex-col">
           <TabPanel value="feed">
-            <h2 className="sr-only">Chapter feed</h2>
-            <ChapterComposer chapterName={chapter.name} viewerName={viewer.name} />
-            <FeedList posts={chapter.posts} />
+            <ChapterFeed chapter={chapter} viewer={viewer} initial={feed} />
           </TabPanel>
           <TabPanel value="events">
-            <EventsPanel chapter={chapter} />
+            <Panel aria-labelledby="all-events-heading" className="flex flex-col gap-4 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 id="all-events-heading" className="text-h3 text-ink">
+                  Upcoming chapter events
+                </h2>
+                <Link href="/events/new" className={buttonClasses({ variant: chapter.viewer.canHostAsChapter ? "primary" : "secondary", size: "small" })}>
+                  <Icon name="plus" size={16} />
+                  {chapter.viewer.canHostAsChapter ? "Host a chapter event" : "Propose an event"}
+                </Link>
+              </div>
+              {hostedHere.length ? (
+                <ul className="flex flex-col divide-y divide-line">
+                  {hostedHere.map((event) => (
+                    <li key={event.id} className="py-3 first:pt-0 last:pb-0">
+                      <EventRow event={event} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState icon="calendar" title="No upcoming events">
+                  {chapter.viewer.canHostAsChapter
+                    ? "Host one for the chapter: it’s reviewed by the Charter Mission team before it’s listed."
+                    : "Have an idea for a meetup? Propose an event and the team will review it."}
+                </EmptyState>
+              )}
+              <Link href={`/events?chapter=${chapter.slug}`} className="self-start text-sm font-medium text-primary-light hover:underline">
+                See all {chapter.name} events
+              </Link>
+            </Panel>
           </TabPanel>
           <TabPanel value="members">
             <h2 className="sr-only">Members</h2>
-            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {chapter.memberPreview.map((member) => (
-                <li key={member.handle} className="flex">
-                  <MemberCard {...member} href={`/members/${member.handle}`} linkAs={Link} />
-                </li>
-              ))}
-            </ul>
-          </TabPanel>
-          <TabPanel value="initiatives">
-            <h2 className="sr-only">Initiatives</h2>
-            {chapterInitiatives.map((initiative) => (
-              <InitiativeTile key={initiative.slug} initiative={toInitiativeSummary(initiative)} />
-            ))}
-            <Link href="/initiatives" className="self-start text-sm font-medium text-primary-light hover:underline">
-              Browse all initiatives
-            </Link>
+            <ChapterMembers slug={chapter.slug} initial={members} />
           </TabPanel>
           <TabPanel value="about">
-            <Panel aria-labelledby="about-heading" className="flex flex-col gap-3 p-5">
-              <h2 id="about-heading" className="text-h3 text-ink">
-                About {chapter.name}
-              </h2>
-              <p className="text-md text-body">{chapter.about}</p>
-              <p className="flex items-center gap-1.5 text-sm text-secondary">
-                <Icon name="calendar" size={16} />
-                {chapter.meets}
-              </p>
-            </Panel>
+            <ChapterAbout slug={chapter.slug} name={chapter.name} about={chapter.about} canEdit={chapter.viewer.canManage} />
           </TabPanel>
         </main>
 
@@ -144,94 +150,62 @@ async function ChapterDetail({ params }: Pick<PageProps<"/chapters/[slug]">, "pa
             <h2 id="chapter-team-heading" className="text-h3 text-ink">
               Chapter team
             </h2>
-            <ul className="flex flex-col gap-3">
-              {chapter.team.map((member) => (
-                <li key={member.handle} className="flex items-center gap-2.5">
-                  <Avatar name={member.name} size={32} tone={member.tone} />
-                  <Link href={`/members/${member.handle}`} className="group flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm font-medium text-ink group-hover:underline">{member.name}</span>
-                    <span className="text-xs text-secondary">{member.role}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {chapter.team.length ? (
+              <ul className="flex flex-col gap-3">
+                {chapter.team.map(({ member, label }) => (
+                  <li key={member.id} className="flex items-center gap-2.5">
+                    <MemberAvatar member={member} size={32} />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <AuthorName member={member} className="text-sm" />
+                      <span className="text-xs text-secondary">{label}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-secondary">
+                This chapter doesn’t have an Ambassador yet.{" "}
+                <Link href="/ambassadors" className="font-medium text-primary-light hover:underline">
+                  Become one
+                </Link>
+              </p>
+            )}
           </Panel>
 
           <Panel aria-labelledby="chapter-events-heading" className="flex flex-col gap-3 p-5">
             <div className="flex items-center justify-between gap-3">
               <h2 id="chapter-events-heading" className="text-h3 text-ink">
-                Upcoming chapter events
+                Upcoming events
               </h2>
-              <a href="#events" className="text-sm font-medium text-primary-light hover:underline">
+              <Link href={`/events?chapter=${chapter.slug}`} className="text-sm font-medium text-primary-light hover:underline">
                 See all
-              </a>
+              </Link>
             </div>
-            <EventRows events={chapter.events.slice(0, 2)} />
+            {hostedHere.length ? (
+              <RailEventList events={hostedHere.slice(0, 3)} />
+            ) : (
+              <p className="text-sm text-secondary">No events scheduled yet.</p>
+            )}
           </Panel>
 
-          <Panel aria-labelledby="chapter-stats-heading" className="flex flex-col gap-2.5 p-5">
-            <h2 id="chapter-stats-heading" className="text-h3 text-ink">
-              This month
-            </h2>
-            <dl className="flex flex-col gap-2.5">
-              {chapter.stats.map((stat) => (
-                <div key={stat.label} className="flex justify-between gap-3 text-sm">
-                  <dt className="text-secondary">{stat.label}</dt>
-                  <dd className="font-medium text-ink">{stat.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </Panel>
-
-          <Panel aria-labelledby="nearby-heading" className="flex flex-col gap-2.5 p-5">
-            <h2 id="nearby-heading" className="text-h3 text-ink">
-              Nearby chapters
-            </h2>
-            <ul className="flex flex-wrap gap-2">
-              {chapter.nearby.map((nearby) => (
-                <li key={nearby.name}>
-                  {nearby.slug ? (
+          {chapter.nearby.length > 0 && (
+            <Panel aria-labelledby="nearby-heading" className="flex flex-col gap-2.5 p-5">
+              <h2 id="nearby-heading" className="text-h3 text-ink">
+                Nearby chapters
+              </h2>
+              <ul className="flex flex-wrap gap-2">
+                {chapter.nearby.map((nearby) => (
+                  <li key={nearby.id}>
                     <Link href={`/chapters/${nearby.slug}`} className={chipClasses("filter", "hover:border-line-strong hover:text-ink")}>
                       {nearby.name}
                     </Link>
-                  ) : (
-                    <span className={chipClasses("filter")}>{nearby.name}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Panel>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
         </aside>
       </div>
     </Tabs>
-  );
-}
-
-function EventRows({ events }: { events: Chapter["events"] }) {
-  return (
-    <ul className="flex flex-col gap-3">
-      {events.map((event) => (
-        <li key={event.slug}>
-          <Link href={`/events/${event.slug}`} className="group flex items-center gap-3">
-            <DateBadge month={event.month} day={event.day} />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-sm font-medium text-ink group-hover:underline">{event.title}</span>
-              <span className="text-xs text-secondary">{event.meta}</span>
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function EventsPanel({ chapter }: { chapter: Chapter }) {
-  return (
-    <Panel aria-labelledby="all-events-heading" className="flex flex-col gap-3 p-5">
-      <h2 id="all-events-heading" className="text-h3 text-ink">
-        Chapter events
-      </h2>
-      <EventRows events={chapter.events} />
-    </Panel>
   );
 }

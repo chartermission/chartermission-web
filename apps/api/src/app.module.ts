@@ -19,6 +19,10 @@ import { ModerationModule } from './moderation/moderation.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { LearningModule } from './learning/learning.module.js';
 import { EventsModule } from './events/events.module.js';
+import { AmbassadorsModule } from './ambassadors/ambassadors.module.js';
+import { StoriesModule } from './stories/stories.module.js';
+import { ChaptersModule } from './chapters/chapters.module.js';
+import { OpportunitiesModule } from './opportunities/opportunities.module.js';
 
 @Module({
   imports: [
@@ -37,6 +41,10 @@ import { EventsModule } from './events/events.module.js';
     AdminModule,
     LearningModule,
     EventsModule,
+    AmbassadorsModule,
+    StoriesModule,
+    ChaptersModule,
+    OpportunitiesModule,
   ],
   controllers: [AppController],
   providers: [

@@ -75,6 +75,8 @@ export type Relationship = z.infer<typeof Relationship>;
  */
 export const MemberProfile = MemberRef.extend({
   joinedAt: z.string(),
+  /** Profile cover photo; omitted when the member has none. */
+  coverUrl: z.string().optional(),
   country: z.object({ code: z.string(), name: z.string() }).optional(),
   city: z.string().optional(),
   email: z.string().optional(),
@@ -99,6 +101,7 @@ export const OwnProfile = z.object({
   name: z.string(),
   headline: z.string().nullable(),
   avatarUrl: z.string().nullable(),
+  coverUrl: z.string().nullable(),
   tone: AvatarTone,
   countryCode: z.string().nullable(),
   city: z.string().nullable(),
@@ -138,6 +141,8 @@ export const UpdateProfileInput = z
     languageIds: z.array(z.string()).max(10),
     experience: z.array(ExperienceItem).max(20),
     avatarFileId: z.string().uuid().nullable(),
+    /** A clean profile_cover upload of the member's own, or null to remove it. */
+    coverFileId: z.string().uuid().nullable(),
   })
   .partial();
 export type UpdateProfileInput = z.infer<typeof UpdateProfileInput>;

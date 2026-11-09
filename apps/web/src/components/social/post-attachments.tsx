@@ -1,6 +1,7 @@
 import type { AttachmentView } from "@chartermission/contracts";
 import { Icon } from "@chartermission/ui";
 import { ImageGrid } from "@/components/gallery/image-grid";
+import { UploadedVideo } from "@/components/video/video-player";
 import { formatBytes } from "./format";
 
 /**
@@ -10,9 +11,13 @@ import { formatBytes } from "./format";
 export function PostAttachments({ attachments }: { attachments: AttachmentView[] }) {
   const images = attachments.filter((a) => a.kind === "image");
   const documents = attachments.filter((a) => a.kind === "document");
+  const videos = attachments.filter((a) => a.kind === "video");
   return (
     <>
       {images.length > 0 && <ImageGrid images={images} />}
+      {videos.map((video) => (
+        <UploadedVideo key={video.id} video={video} />
+      ))}
       {documents.map((doc) => (
         <a
           key={doc.id}

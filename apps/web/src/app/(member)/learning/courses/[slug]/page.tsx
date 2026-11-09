@@ -222,7 +222,7 @@ async function CourseMain({ params }: { params: Params }) {
                 </span>
                 <div className="flex flex-col gap-0.5">
                   <h3 className="text-sm font-medium text-ink">Eligibility</h3>
-                  <p className="text-sm text-body">{course.eligibility ?? "Open to everyone. Charter Center hasn’t listed any requirements."}</p>
+                  <p className="whitespace-pre-line text-sm text-body">{course.eligibility ?? "Open to everyone. Charter Center hasn’t listed any requirements."}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3 p-5">

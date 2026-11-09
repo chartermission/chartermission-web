@@ -28,13 +28,13 @@ export function eventInput(overrides: Record<string, unknown> = {}, days = 10) {
   };
 }
 
-export async function chapterId(t: TestApp, slug = 'lagos') {
+export async function chapterId(t: TestApp, slug = 'nigeria') {
   const [c] = await t.db.select().from(s.chapters).where(eq(s.chapters.slug, slug));
   return c!.id;
 }
 
-export async function grantChapterLead(t: TestApp, userId: string, chapter: string) {
-  const [role] = await t.db.select().from(s.roles).where(eq(s.roles.key, 'chapter_lead'));
+export async function grantChapterLead(t: TestApp, userId: string, chapter: string, roleKey: 'chapter_lead' | 'ambassador' = 'chapter_lead') {
+  const [role] = await t.db.select().from(s.roles).where(eq(s.roles.key, roleKey));
   await t.db.insert(s.userRoles).values({ userId, roleId: role!.id, scopeType: 'chapter', scopeId: chapter });
 }
 

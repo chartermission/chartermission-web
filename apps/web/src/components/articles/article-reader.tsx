@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import type { MemberProfile, PostView } from "@chartermission/contracts";
-import { Avatar, Icon, buttonClasses, cn } from "@chartermission/ui";
+import { Avatar, Icon, buttonClasses, cn, RoleBadgeIcon } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { pop } from "@/components/motion";
 import { ReportDialog } from "@/components/moderation/report-dialog";
@@ -177,6 +177,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
                       {post.author.name}
                     </Link>
                     {post.author.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}
+                    <RoleBadgeIcon badge={post.author.badge} size={16} />
                   </span>
                   {canFollow && (
                     <>
@@ -289,6 +290,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
                   {author.name}
                 </Link>
                 {author.verified && <Icon name="verified" size={16} className="text-primary" label="Verified" />}
+                <RoleBadgeIcon badge={author.badge} size={16} />
               </h2>
               {author.headline && <p className="text-sm text-body">{author.headline}</p>}
               {author.bio && <p className="line-clamp-3 text-sm text-secondary">{author.bio}</p>}

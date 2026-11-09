@@ -11,7 +11,7 @@ import { Reflector } from '@nestjs/core';
 import { env } from '../config/env.js';
 import { Errors } from '../common/errors.js';
 import type { AppRequest, AuthContext } from './auth-context.js';
-import type { Permission } from './permissions.js';
+import { mustUseMfa, type Permission } from './permissions.js';
 import { isActiveUntil } from './policy.js';
 
 /**
@@ -40,6 +40,11 @@ export function checkAccess(
   // Accounts with two-step verification on must enter a code after signing in (any audience)
   // before using the session, apart from the few routes that finish or end sign-in.
   if (level !== 'admin' && user.mfaEnabled && !session.mfaVerified && !allowPendingMfa) throw Errors.mfaRequired();
+  // Staff accounts must set up two-step verification before using the member app too (only the
+  // session-level routes that show the account and run the setup stay open).
+  if ((level === 'member' || level === 'verified') && !user.mfaEnabled && !allowPendingMfa && mustUseMfa(user)) {
+    throw Errors.mfaSetupRequired();
+  }
   if (level !== 'session') {
     if (user.status === 'suspended' || isActiveUntil(user.suspendedUntil)) throw Errors.suspended(user.suspendedUntil);
     if (user.status === 'deactivated' || user.status === 'deletion_pending') throw Errors.deactivated();

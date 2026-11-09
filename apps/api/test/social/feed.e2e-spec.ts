@@ -46,7 +46,7 @@ describe('Feed and topic pages', () => {
     const followed = await createMember(t);
     const stranger = await createMember(t);
     const admin = await createMember(t, { roles: ['platform_admin'] });
-    const [accra] = await t.db.select().from(s.chapters).where(eq(s.chapters.slug, 'accra'));
+    const [accra] = await t.db.select().from(s.chapters).where(eq(s.chapters.slug, 'ghana'));
     await follow(t, viewer.id, 'member', followed.id);
     await follow(t, viewer.id, 'hashtag', 'cleancooking');
     await follow(t, viewer.id, 'chapter', accra!.id);
@@ -89,7 +89,7 @@ describe('Feed and topic pages', () => {
   it('pinned announcements only lead the page when they match the country, sector and chapter filters', async () => {
     const viewer = await createMember(t, { countryCode: 'NG' });
     const admin = await createMember(t, { roles: ['platform_admin'], countryCode: 'TZ' });
-    const [accra] = await t.db.select().from(s.chapters).where(eq(s.chapters.slug, 'accra'));
+    const [accra] = await t.db.select().from(s.chapters).where(eq(s.chapters.slug, 'ghana'));
     const [sector] = await t.db.select().from(s.sectors).where(eq(s.sectors.slug, 'climate-and-energy'));
     const global = await createPost(admin, 'For everyone', { kind: 'announcement' });
     const forAccra = await createPost(admin, 'Accra chapter news', { kind: 'announcement', chapterId: accra!.id });

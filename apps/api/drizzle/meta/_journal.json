@@ -36,6 +36,41 @@
       "when": 1793962802451,
       "tag": "0004_events_learning",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794151006638,
+      "tag": "0005_ambassadors",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794158640380,
+      "tag": "0006_ambassador_member_flows",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794161586986,
+      "tag": "0007_video_and_stories",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794167241661,
+      "tag": "0008_learning_access_cover",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794170470682,
+      "tag": "0009_chapters_and_opportunities",
+      "breakpoints": true
     }
   ]
 }

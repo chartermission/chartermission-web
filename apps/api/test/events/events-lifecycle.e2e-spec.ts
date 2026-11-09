@@ -45,9 +45,10 @@ describe('Events: hosting, review and visibility', () => {
     expect(cross.body.error.fields).toMatchObject({ venue: expect.any(String), online: expect.any(String) });
   });
 
-  it('members without event.create cannot create; unverified emails are blocked from writes', async () => {
-    await member.post('/events', eventInput()).expect(403);
-    const unverified = await createMember(t, { verified: false, roles: ['event_host'] });
+  it('every verified member can propose an event; unverified emails are blocked from writes', async () => {
+    const proposed = await member.post('/events', eventInput()).expect(201);
+    expect(proposed.body.status).toBe('draft');
+    const unverified = await createMember(t, { verified: false });
     const res = await unverified.post('/events', eventInput()).expect(403);
     expect(res.body.error.code).toBe('EMAIL_NOT_VERIFIED');
     const ev = await publishedEvent(staff);
@@ -101,18 +102,18 @@ describe('Events: hosting, review and visibility', () => {
   });
 
   it('chapter leads host only for the chapter they lead', async () => {
-    const lagos = await chapterId(t, 'lagos');
-    const accra = await chapterId(t, 'accra');
+    const lagos = await chapterId(t, 'nigeria');
+    const accra = await chapterId(t, 'ghana');
     const lead = await createMember(t, { name: 'Lagos Lead' });
     await grantChapterLead(t, lead.id, lagos);
     // The scoped role still carries event.create (hosting as themselves works).
     const options = await lead.get('/events/host-options').expect(200);
     expect(options.body).toMatchObject({ canHostAsMember: true, canPublishDirectly: false });
-    expect(options.body.chapters.map((c: { slug: string }) => c.slug)).toEqual(['lagos']);
-    expect((await member.get('/events/host-options').expect(200)).body).toEqual({ canHostAsMember: false, chapters: [], canPublishDirectly: false });
+    expect(options.body.chapters.map((c: { slug: string }) => c.slug)).toEqual(['nigeria']);
+    expect((await member.get('/events/host-options').expect(200)).body).toEqual({ canHostAsMember: true, chapters: [], canPublishDirectly: false });
 
     const ok = await lead.post('/events', eventInput({ host: { type: 'chapter', chapterId: lagos } })).expect(201);
-    expect(ok.body.host).toMatchObject({ type: 'chapter', chapter: { slug: 'lagos' } });
+    expect(ok.body.host).toMatchObject({ type: 'chapter', chapter: { slug: 'nigeria' } });
     await lead.post('/events', eventInput({ host: { type: 'chapter', chapterId: accra } })).expect(403);
     await host.post('/events', eventInput({ host: { type: 'chapter', chapterId: lagos } })).expect(403);
     await lead.patch(`/events/${ok.body.id}`, { host: { type: 'chapter', chapterId: accra } }).expect(403);
@@ -125,6 +126,14 @@ describe('Events: hosting, review and visibility', () => {
     await host.patch(`/events/${ok.body.id}`, { title: 'Edited by outsider' }).expect(404);
     const mine = await coLead.get('/me/events?role=hosting').expect(200);
     expect(mine.body.items.map((e: { id: string }) => e.id)).toContain(ok.body.id);
+
+    // A certified Ambassador hosts as their chapter too.
+    const ambassador = await createMember(t, { name: 'Lagos Ambassador' });
+    await grantChapterLead(t, ambassador.id, lagos, 'ambassador');
+    const ambOptions = await ambassador.get('/events/host-options').expect(200);
+    expect(ambOptions.body.chapters.map((c: { slug: string }) => c.slug)).toEqual(['nigeria']);
+    await ambassador.post('/events', eventInput({ host: { type: 'chapter', chapterId: lagos } })).expect(201);
+    await ambassador.post('/events', eventInput({ host: { type: 'chapter', chapterId: accra } })).expect(403);
   });
 
   it('editing a published event’s time notifies registrants and resets reminders; title edits do not', async () => {
@@ -192,7 +201,7 @@ describe('Events: hosting, review and visibility', () => {
   });
 
   it('lists with filters, tabs, cursor and a month calendar in the viewer’s zone', async () => {
-    const lagos = await chapterId(t, 'lagos');
+    const lagos = await chapterId(t, 'nigeria');
     const lead = await createMember(t, { roles: ['platform_admin'] });
     await grantChapterLead(t, lead.id, lagos);
     const [cat] = await t.db.select().from(s.eventCategories).where(eq(s.eventCategories.slug, 'workshop'));

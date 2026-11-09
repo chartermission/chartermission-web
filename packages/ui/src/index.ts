@@ -23,3 +23,4 @@ export {
 } from "./components/cards";
 export { SegmentedControl } from "./components/segmented";
 export { FilterSelect } from "./components/select";
+export { RoleBadgeIcon, RoleBadgePill, type RoleBadgeData } from "./components/role-badge";

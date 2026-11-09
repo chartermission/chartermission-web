@@ -36,7 +36,7 @@ const Env = z.object({
   /** "log" writes emails to the outbox and the console; "resend" sends through Resend. */
   MAIL_DRIVER: z.enum(['log', 'resend']).default('log'),
   RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().default('Charter Mission <no-reply@chartermission.org>'),
+  MAIL_FROM: z.string().default('Charter Mission <no-reply@chartermission.com>'),
   /** "local" stores uploads on disk (dev); "s3" uses any S3-compatible bucket (R2, Railway, AWS). */
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('.uploads'),
@@ -48,6 +48,9 @@ const Env = z.object({
   /** clamd host for malware scanning; when unset a built-in signature check runs (dev only). */
   CLAMAV_HOST: z.string().optional(),
   CLAMAV_PORT: z.coerce.number().int().default(3310),
+  /** ffmpeg / ffprobe binaries for video; default to the bundled @ffmpeg-installer packages, then the PATH. */
+  FFMPEG_PATH: z.string().optional(),
+  FFPROBE_PATH: z.string().optional(),
   /** Check new passwords against Have I Been Pwned (k-anonymity range API). */
   HIBP_ENABLED: flag(false),
   /** Run BullMQ workers in this process (true for dev and a single Railway service). */
@@ -55,12 +58,18 @@ const Env = z.object({
   /** Expose /api/v1/dev/* helpers (mailbox) outside production. */
   DEV_TOOLS: flag(true),
   /**
-   * Charter Center catalogue API (Learning, spec 4.10), e.g. https://api.chartercenter.org/v1.
-   * Unset: the catalogue comes from the JSON fixture in src/learning/fixtures (dev, tests, demo).
+   * Charter Center partner API (Learning, spec 4.10): https://charter-center.com/api/partner
+   * (we read GET {url}/courses?page=n). Unset: the catalogue comes from the JSON fixture in
+   * src/learning/fixtures (dev, tests, demo).
    */
   CHARTER_CENTER_API_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
-  /** Sent as Authorization: Bearer <key>. */
-  CHARTER_CENTER_API_KEY: z.string().optional(),
+  /** Charter Center partner API key, sent as Authorization: Bearer <key>. Set it in the environment, never in code. */
+  CHARTER_CENTER_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+  /**
+   * Course page members are sent to ("Start learning"); {id} is the Charter Center course id. The
+   * partner API doesn't return a link, so confirm this pattern with Charter Center.
+   */
+  CHARTER_CENTER_COURSE_URL: z.string().default('https://charter-center.com/courses/{id}'),
 });
 
 export type Env = z.infer<typeof Env>;

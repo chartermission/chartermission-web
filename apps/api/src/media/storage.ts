@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -33,8 +33,12 @@ export interface Storage {
   remove(key: string): Promise<void>;
   /** s3: a signed GET URL; local: null (the API streams the file itself). */
   presignDownload(key: string, opts: { mime: string; disposition: string }): Promise<string | null>;
-  /** local only: a stream of the object. */
-  open(key: string): Readable;
+  /** local only: a stream of the object, or of a byte range of it (inclusive). */
+  open(key: string, range?: { start: number; end: number }): Readable;
+  /** Copies the object to a local file (video processing). False when nothing was uploaded. */
+  downloadTo(key: string, file: string): Promise<boolean>;
+  /** Stores a local file under the key, streaming (large videos). */
+  uploadFrom(key: string, file: string, mime: string): Promise<void>;
 }
 
 /* ---------------- local driver ---------------- */
@@ -122,12 +126,35 @@ export class LocalStorage implements Storage {
     return Promise.resolve(null);
   }
 
-  open(key: string): Readable {
-    return createReadStream(this.pathFor(key));
+  open(key: string, range?: { start: number; end: number }): Readable {
+    return createReadStream(this.pathFor(key), range);
+  }
+
+  async downloadTo(key: string, file: string) {
+    try {
+      await copyFile(this.pathFor(key), file);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async uploadFrom(key: string, file: string) {
+    const target = this.pathFor(key);
+    await mkdir(path.dirname(target), { recursive: true });
+    await copyFile(file, target);
   }
 }
 
 /* ---------------- s3 driver ---------------- */
+
+/**
+ * Only send and check checksums when an operation requires them. Since @aws-sdk/client-s3 3.729 the
+ * default ("WHEN_SUPPORTED") signs a CRC32 of an *empty* body into presigned PUT URLs and adds
+ * x-amz-checksum-mode to presigned GETs, so R2 rejected every browser upload. Cloudflare's R2 guide
+ * for this SDK sets both options to WHEN_REQUIRED.
+ */
+export const S3_COMPAT = { requestChecksumCalculation: 'WHEN_REQUIRED', responseChecksumValidation: 'WHEN_REQUIRED' } as const;
 
 /** Any S3-compatible bucket (Cloudflare R2, Railway buckets, AWS S3) via S3_ENDPOINT. Private bucket. */
 export class S3Storage implements Storage {
@@ -143,6 +170,7 @@ export class S3Storage implements Storage {
       region: e.S3_REGION,
       endpoint: e.S3_ENDPOINT,
       forcePathStyle: !!e.S3_ENDPOINT,
+      ...S3_COMPAT,
       credentials:
         e.S3_ACCESS_KEY_ID && e.S3_SECRET_ACCESS_KEY
           ? { accessKeyId: e.S3_ACCESS_KEY_ID, secretAccessKey: e.S3_SECRET_ACCESS_KEY }
@@ -197,6 +225,28 @@ export class S3Storage implements Storage {
 
   open(): Readable {
     throw new Error('S3 objects are served through signed URLs');
+  }
+
+  async downloadTo(key: string, file: string) {
+    let obj;
+    try {
+      obj = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    } catch (err) {
+      // Only a missing object means "not uploaded"; network or permission errors retry the job.
+      const name = (err as { name?: string; $metadata?: { httpStatusCode?: number } }).name;
+      if (name === 'NoSuchKey' || (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return false;
+      throw err;
+    }
+    if (!obj.Body) return false;
+    await pipeline(obj.Body as Readable, createWriteStream(file));
+    return true;
+  }
+
+  async uploadFrom(key: string, file: string, mime: string) {
+    const { size } = await stat(file);
+    await this.client.send(
+      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: createReadStream(file), ContentType: mime, ContentLength: size }),
+    );
   }
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { NEW_MEMBER_DAYS, type NewMembersMoment } from "@chartermission/contracts";
-import { Icon } from "@chartermission/ui";
+import { Icon, RoleBadgeIcon } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import type { Viewer } from "@/components/social/viewer";
@@ -61,6 +61,7 @@ export function NewMembersCard({ moment, viewer }: { moment: NewMembersMoment; v
                   <Link href={memberHref(member.handle)} className="flex min-w-0 items-center justify-center gap-1 text-sm font-medium text-ink hover:underline">
                     <span className="truncate">{member.name}</span>
                     {member.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
+                    <RoleBadgeIcon badge={member.badge} size={14} />
                   </Link>
                   <p className="line-clamp-2 min-h-8 text-xs text-secondary">{member.headline ?? "New member"}</p>
                   <p className="text-xs text-success">

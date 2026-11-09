@@ -27,6 +27,8 @@ export const ErrorCode = z.enum([
   "PAYLOAD_TOO_LARGE",
   "UNSUPPORTED_MEDIA",
   "BLOCKED",
+  /** Learning is locked until the member meets the admin-set requirements (GET /learning/access). */
+  "LEARNING_LOCKED",
   "INTERNAL",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
@@ -62,6 +64,20 @@ export const AvatarTone = z.enum(["tint", "primary", "accent", "success", "warni
 export type AvatarTone = z.infer<typeof AvatarTone>;
 
 /**
+ * Role badge beside a member's name (Ambassador programme). Shown with the verified tick.
+ *  - ambassador / founding_ambassador: serving Ambassador of a country chapter (shield)
+ *  - alumni_ambassador: term ended in good standing (grey shield)
+ */
+export const MemberBadge = z.object({
+  kind: z.enum(["ambassador", "founding_ambassador", "alumni_ambassador"]),
+  /** "Ambassador", "Founding Ambassador" or "Alumni Ambassador". */
+  label: z.string(),
+  /** Chapter or country, e.g. "Nigeria Chapter". */
+  place: z.string(),
+});
+export type MemberBadge = z.infer<typeof MemberBadge>;
+
+/**
  * The compact member shape used everywhere a person is shown
  * (post author, comment author, notification actor, suggestion).
  */
@@ -76,6 +92,8 @@ export const MemberRef = z.object({
   verified: z.boolean(),
   /** Official Charter Mission staff account. */
   staff: z.boolean(),
+  /** Ambassador programme badge, when they hold one. */
+  badge: MemberBadge.nullable().optional(),
 });
 export type MemberRef = z.infer<typeof MemberRef>;
 

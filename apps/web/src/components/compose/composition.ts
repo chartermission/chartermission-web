@@ -46,7 +46,7 @@ export type ComposerFields = {
 };
 
 /** Ready uploads with their descriptions, in order. */
-export type ReadyFile = { fileId: string; kind: "image" | "document"; alt: string };
+export type ReadyFile = { fileId: string; kind: "image" | "document" | "video"; alt: string };
 
 export const MAX_SKILLS = 8;
 export const MAX_SKILL_LENGTH = 40;

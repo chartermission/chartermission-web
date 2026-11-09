@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ArticlesHub } from "@chartermission/contracts";
-import { Avatar, Icon, Panel } from "@chartermission/ui";
+import { Avatar, Icon, Panel, RoleBadgeIcon } from "@chartermission/ui";
 import { FollowControl, useRelationship } from "@/components/network/relationship";
 import { memberHref } from "@/components/social/links";
 import { staggerStyle } from "@/components/motion";
@@ -26,6 +26,7 @@ function WriterCard({ writer, viewer, index }: { writer: Writer; viewer: Viewer;
             {member.name}
           </Link>
           {member.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}
+          <RoleBadgeIcon badge={member.badge} size={16} />
         </p>
         <p className="line-clamp-1 min-h-4 text-xs text-secondary">{member.headline ?? " "}</p>
       </div>

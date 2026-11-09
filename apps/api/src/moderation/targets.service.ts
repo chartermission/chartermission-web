@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { ReportTargetType } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { comments, hashtags, memberProfiles, posts, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
+import { comments, hashtags, memberProfiles, opportunities, posts, stories, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { PRIVILEGED_ROLES } from '../core/permissions.js';
@@ -35,7 +35,7 @@ export const targetKey = (type: string, id: string) => `${type}:${id}`;
 export function hrefFor(
   type: ReportTargetType,
   id: string,
-  extra: { postId?: string | null; handle?: string | null; tag?: string | null },
+  extra: { postId?: string | null; handle?: string | null; tag?: string | null; slug?: string | null },
 ) {
   switch (type) {
     case 'post':
@@ -46,6 +46,10 @@ export function hrefFor(
       return `/members/${extra.handle ?? id}`;
     case 'hashtag':
       return `/topics/${extra.tag ?? id}`;
+    case 'story':
+      return `/stories/${id}`;
+    case 'opportunity':
+      return `/opportunities/${extra.slug ?? id}`;
   }
 }
 
@@ -151,6 +155,44 @@ export class TargetsService {
           href: hrefFor('member', m.id, { handle: m.handle }),
         };
       }
+      case 'story': {
+        if (!isUuid(rawId)) throw Errors.notFound('That story');
+        const [st] = await this.db.select().from(stories).where(eq(stories.id, rawId)).limit(1);
+        if (!st) throw Errors.notFound('That story');
+        const state: ContentState = st.deletedAt ? 'deleted' : (st.moderationState as ContentState);
+        return {
+          type,
+          id: st.id,
+          userId: st.authorId,
+          state,
+          visibleToMembers: state === 'visible',
+          hashtagId: null,
+          postId: null,
+          body: st.caption,
+          createdAt: st.createdAt,
+          preview: truncate(st.caption ?? '') || 'Story',
+          href: hrefFor('story', st.id, {}),
+        };
+      }
+      case 'opportunity': {
+        if (!isUuid(rawId)) throw Errors.notFound('That opportunity');
+        const [o] = await this.db.select().from(opportunities).where(eq(opportunities.id, rawId)).limit(1);
+        if (!o) throw Errors.notFound('That opportunity');
+        const state: ContentState = o.deletedAt ? 'deleted' : (o.moderationState as ContentState);
+        return {
+          type,
+          id: o.id,
+          userId: o.posterId,
+          state,
+          visibleToMembers: state === 'visible',
+          hashtagId: null,
+          postId: null,
+          body: `${o.title} · ${o.organisation}\n\n${o.summary}\n\n${o.description}`,
+          createdAt: o.createdAt,
+          preview: truncate(`${o.title} · ${o.organisation}`),
+          href: hrefFor('opportunity', o.id, { slug: o.slug }),
+        };
+      }
       case 'hashtag': {
         const tag = rawId.replace(/^#/, '').toLowerCase();
         const [h] = await this.db.select().from(hashtags).where(eq(hashtags.tag, tag)).limit(1);
@@ -199,6 +241,34 @@ export class TargetsService {
     const commentIds = ids('comment').filter(isUuid);
     const memberIds = ids('member').filter(isUuid);
     const tags = ids('hashtag');
+    const opportunityIds = ids('opportunity').filter(isUuid);
+    if (opportunityIds.length) {
+      const rows = await this.db
+        .select({ id: opportunities.id, title: opportunities.title, organisation: opportunities.organisation, posterId: opportunities.posterId, slug: opportunities.slug })
+        .from(opportunities)
+        .where(inArray(opportunities.id, opportunityIds));
+      for (const r of rows)
+        out.set(targetKey('opportunity', r.id), {
+          preview: truncate(`${r.title} · ${r.organisation}`),
+          userId: r.posterId,
+          href: hrefFor('opportunity', r.id, { slug: r.slug }),
+          postId: null,
+        });
+    }
+    const storyIds = ids('story').filter(isUuid);
+    if (storyIds.length) {
+      const rows = await this.db
+        .select({ id: stories.id, caption: stories.caption, authorId: stories.authorId })
+        .from(stories)
+        .where(inArray(stories.id, storyIds));
+      for (const r of rows)
+        out.set(targetKey('story', r.id), {
+          preview: truncate(r.caption ?? '') || 'Story',
+          userId: r.authorId,
+          href: hrefFor('story', r.id, {}),
+          postId: null,
+        });
+    }
     if (postIds.length) {
       const rows = await this.db
         .select({ id: posts.id, body: posts.body, authorId: posts.authorId })

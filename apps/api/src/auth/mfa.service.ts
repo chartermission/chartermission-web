@@ -95,7 +95,7 @@ export class MfaService {
 
   /** POST /auth/mfa/disable — members only; privileged roles must keep MFA (CM-AUTH-09). */
   async disable(ctx: AuthContext, password: string, ip?: string): Promise<void> {
-    if (await this.auth.hasPrivilegedRole(ctx.user.id)) {
+    if (ctx.user.isStaff || (await this.auth.hasPrivilegedRole(ctx.user.id))) {
       throw Errors.forbidden('Your role requires two-step verification');
     }
     await this.account.confirmPassword(ctx.user.id, password);

@@ -80,7 +80,7 @@ export function PostCard({
       {image && (
         <div
           className="flex h-[300px] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-[10px] text-inverse"
-          style={{ backgroundImage: "linear-gradient(151.74deg, #233465 0%, #e94e1d 71.43%)" }}
+          style={{ backgroundImage: "linear-gradient(151.74deg, #047942 0%, #e31a20 71.43%)" }}
         >
           <Icon name="image" size={32} />
           <span className="text-sm font-medium">{image.label ?? "Photo"}</span>

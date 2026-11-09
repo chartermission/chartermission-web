@@ -7,7 +7,7 @@ import { ApiError } from "./errors";
 import { signInUrl } from "@/lib/navigation";
 
 /** Where the Next server reaches the API (internal network address in production). */
-export const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000/api/v1";
+export const API_INTERNAL_URL = process.env.API_INTERNAL_URL || "http://localhost:4000/api/v1";
 
 type Query = Record<string, string | number | boolean | undefined | null>;
 

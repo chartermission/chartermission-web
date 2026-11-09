@@ -26,5 +26,7 @@ export const config = {
     "/learning/:path*",
     "/initiatives/:path*",
     "/chapters/:path*",
+    "/ambassadors/:path*",
+    "/stories/:path*",
   ],
 };

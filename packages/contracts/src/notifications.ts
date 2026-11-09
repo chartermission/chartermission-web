@@ -43,6 +43,11 @@ export const NotificationType = z.enum([
   /* Learning (spec 4.10) */
   /** To admins with course.curate: a Charter Center course link failed its checks. Icon alert. */
   "course_link_broken",
+  /* Opportunities */
+  /** To the poster: someone applied. Icon briefcase. */
+  "opportunity_application_received",
+  /** To the applicant: the poster shortlisted, accepted or declined them. Icon briefcase. */
+  "opportunity_application_updated",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -57,6 +62,8 @@ export const NotificationCategory = z.enum([
   "moderation",
   /** Event reminders and changes to events you registered for (confirmations and cancellations are always sent). */
   "events",
+  /** Applications to your listings and decisions on your applications. */
+  "opportunities",
   "digest",
 ]);
 export type NotificationCategory = z.infer<typeof NotificationCategory>;

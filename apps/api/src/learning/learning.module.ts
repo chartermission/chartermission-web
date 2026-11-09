@@ -5,20 +5,23 @@ import { FixtureLinkChecker, HttpLinkChecker, LINK_CHECKER } from './link-checke
 import { CoursesService } from './courses.service.js';
 import { AdminCoursesService } from './admin-courses.service.js';
 import { LearningJobsService } from './learning-jobs.service.js';
-import { AdminLearningController, LearningController } from './learning.controller.js';
+import { AdminLearningAccessController, AdminLearningController, LearningController } from './learning.controller.js';
+import { LearningAccessService } from './learning-access.service.js';
+import { ProfilesModule } from '../profiles/profiles.module.js';
 
 /**
  * Learning (spec 4.10). CHARTER_CENTER_API_URL set → the real API and real HTTP link checks;
  * unset → the bundled fixture catalogue and a deterministic fixture link checker (no network).
  */
 @Module({
-  controllers: [LearningController, AdminLearningController],
+  imports: [ProfilesModule],
+  controllers: [LearningController, AdminLearningController, AdminLearningAccessController],
   providers: [
     {
       provide: CHARTER_CENTER_CLIENT,
       useFactory: (): CharterCenterClient => {
-        const { CHARTER_CENTER_API_URL: url, CHARTER_CENTER_API_KEY: apiKey } = env();
-        if (url) return new HttpCharterCenterClient({ baseUrl: url, apiKey });
+        const { CHARTER_CENTER_API_URL: url, CHARTER_CENTER_API_KEY: apiKey, CHARTER_CENTER_COURSE_URL: courseUrlTemplate } = env();
+        if (url) return new HttpCharterCenterClient({ baseUrl: url, apiKey, courseUrlTemplate });
         new Logger('Learning').log('CHARTER_CENTER_API_URL is not set; using the fixture catalogue');
         return new FixtureCharterCenterClient();
       },
@@ -32,7 +35,8 @@ import { AdminLearningController, LearningController } from './learning.controll
     CoursesService,
     AdminCoursesService,
     LearningJobsService,
+    LearningAccessService,
   ],
-  exports: [CoursesService, LearningJobsService],
+  exports: [CoursesService, LearningJobsService, LearningAccessService],
 })
 export class LearningModule {}

@@ -3,10 +3,12 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { CharterCenterCourseRecord, CharterCenterPathRecord } from '@chartermission/contracts';
 import { parseCoursesPage, parsePathsPage } from './charter-center.mapper.js';
+import { parsePartnerCourseDetail, parsePartnerCoursesPage } from './charter-center.partner.js';
 
 /**
  * Source of the Learning catalogue. Course content is managed on Charter Center; we only read it.
- *  - HttpCharterCenterClient: the real API (CHARTER_CENTER_API_URL + CHARTER_CENTER_API_KEY).
+ *  - HttpCharterCenterClient: the real partner API (CHARTER_CENTER_API_URL, e.g.
+ *    https://charter-center.com/api/partner; see charter-center.partner.ts for its shape).
  *  - FixtureCharterCenterClient: the JSON fixture in ./fixtures (dev, tests, demo).
  */
 export interface CharterCenterClient {
@@ -42,6 +44,10 @@ export interface HttpClientOptions {
   backoffMs?: number;
   /** Safety stop for runaway pagination. */
   maxPages?: number;
+  /** Course page link; "{id}" is replaced with the Charter Center course id (when the API sends none). */
+  courseUrlTemplate?: string;
+  /** Parallel GET /courses/{id} calls during a sync. */
+  detailConcurrency?: number;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -64,26 +70,46 @@ export class HttpCharterCenterClient implements CharterCenterClient {
     this.maxPages = opts.maxPages ?? 500;
   }
 
-  async listCourses(opts: { updatedSince?: Date } = {}): Promise<CharterCenterCourseRecord[]> {
+  /**
+   * Every course, page by page (current_page / last_page). The partner API has no "changed since"
+   * filter, so updatedSince is ignored and each sync reads the whole catalogue (about 100 courses).
+   */
+  async listCourses(_opts: { updatedSince?: Date } = {}): Promise<CharterCenterCourseRecord[]> {
     const out: CharterCenterCourseRecord[] = [];
+    const template = this.opts.courseUrlTemplate ?? 'https://charter-center.com/courses/{id}';
+    const courseUrl = (id: string) => template.replace('{id}', encodeURIComponent(id));
     let page: number | null = 1;
     let fetched = 0;
     while (page !== null) {
       if (++fetched > this.maxPages) throw new CharterCenterError(`Charter Center returned more than ${this.maxPages} pages of courses`);
-      const qs = new URLSearchParams({ page: String(page) });
-      if (opts.updatedSince) qs.set('updated_since', opts.updatedSince.toISOString());
-      const body = parseCoursesPage(await this.getJson(`/courses?${qs.toString()}`));
-      out.push(...body.data);
-      if (body.next_page !== null && body.next_page <= page) {
-        throw new CharterCenterError(`Charter Center pagination did not advance (page ${page} → ${body.next_page})`);
-      }
-      page = body.next_page;
+      const body = parsePartnerCoursesPage(await this.getJson(`/courses?page=${page}`), courseUrl);
+      out.push(...body.records);
+      if (body.page !== page) throw new CharterCenterError(`Charter Center pagination did not advance (asked for page ${page}, got ${body.page})`);
+      page = body.page < body.lastPage ? body.page + 1 : null;
     }
+    await this.addDetails(out);
     return out;
   }
 
+  /**
+   * Fills outcomes and requirements from GET /courses/{id}, a few at a time. Any failure (after
+   * retries) fails the whole sync, so a half-read catalogue never overwrites good data.
+   */
+  private async addDetails(records: CharterCenterCourseRecord[]): Promise<void> {
+    const queue = [...records];
+    const workers = Array.from({ length: Math.min(this.opts.detailConcurrency ?? 4, queue.length) }, async () => {
+      for (let r = queue.shift(); r; r = queue.shift()) {
+        const detail = parsePartnerCourseDetail(await this.getJson(`/courses/${encodeURIComponent(r.id)}`));
+        r.outcomes = detail.outcomes;
+        r.eligibility = detail.eligibility;
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  /** The partner API has no learning paths yet. */
   async listPaths(): Promise<CharterCenterPathRecord[]> {
-    return parsePathsPage(await this.getJson('/paths')).data;
+    return [];
   }
 
   /** GET with Bearer auth, timeout and retries with exponential backoff. */

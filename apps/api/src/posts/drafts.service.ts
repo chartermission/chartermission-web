@@ -293,7 +293,7 @@ export class DraftsService implements OnModuleInit {
           .map((f) => ({
             id: f.id,
             url: f.scanStatus === 'clean' ? mediaUrl(f.id) : null,
-            kind: f.purpose === 'post_document' ? ('document' as const) : ('image' as const),
+            kind: f.purpose === 'post_document' ? ('document' as const) : f.purpose === 'post_video' ? ('video' as const) : ('image' as const),
             name: f.name,
           })),
         createdAt: r.createdAt.toISOString(),

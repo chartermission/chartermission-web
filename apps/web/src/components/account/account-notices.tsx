@@ -143,9 +143,12 @@ export function AccountGate({ viewer }: { viewer: AccountNoticeViewer }) {
   const router = useRouter();
   const canOnboard = viewer.status === "active" || viewer.status === "unverified";
   const mfaPending = viewer.mfa.enabled && !viewer.mfa.verifiedThisSession;
+  const mfaSetup = viewer.mfa.required && !viewer.mfa.enabled;
   const target = mfaPending
     ? "/signin/mfa"
-    : viewer.needsPolicyReaccept && !under(pathname, policyExempt)
+    : mfaSetup
+      ? "/signin/mfa-setup"
+      : viewer.needsPolicyReaccept && !under(pathname, policyExempt)
       ? "/policies/accept"
       : canOnboard && !viewer.onboarding.completed && !under(pathname, onboardingExempt)
         ? "/onboarding"
@@ -153,7 +156,7 @@ export function AccountGate({ viewer }: { viewer: AccountNoticeViewer }) {
 
   useEffect(() => {
     if (!target) return;
-    if (target === "/policies/accept" || target === "/signin/mfa") {
+    if (target === "/policies/accept" || target === "/signin/mfa" || target === "/signin/mfa-setup") {
       const here = pathname + window.location.search;
       router.replace(`${target}?next=${encodeURIComponent(here)}`);
     } else {
@@ -169,7 +172,9 @@ export function AccountGate({ viewer }: { viewer: AccountNoticeViewer }) {
           ? "Taking you to finish setting up your profile…"
           : target === "/signin/mfa"
             ? "Enter your verification code to continue…"
-            : "Our policies have changed. Taking you to review them…"}
+            : target === "/signin/mfa-setup"
+              ? "Staff accounts need two-step verification. Taking you to set it up…"
+              : "Our policies have changed. Taking you to review them…"}
       </p>
     </div>
   );

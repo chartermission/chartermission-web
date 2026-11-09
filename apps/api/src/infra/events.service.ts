@@ -24,7 +24,9 @@ export type DomainEvent =
   | { type: 'answer.accepted'; postId: string; commentId: string; commentAuthorId: string; actorId: string }
   | { type: 'help.offered'; postId: string; authorId: string; helperId: string }
   | { type: 'scheduled.published'; draftId: string; postId: string; authorId: string }
-  | { type: 'scheduled.failed'; draftId: string; authorId: string; reason: string };
+  | { type: 'scheduled.failed'; draftId: string; authorId: string; reason: string }
+  | { type: 'opportunity.applied'; applicationId: string }
+  | { type: 'opportunity.application_decided'; applicationId: string; status: 'shortlisted' | 'accepted' | 'declined'; message: string | null };
 
 @Injectable()
 export class EventsService {

@@ -15,6 +15,6 @@ import { AuthEvents } from './auth.events.js';
   imports: [ProfilesModule],
   controllers: [AuthController, AccountController, TaxonomiesController, PoliciesController, DevController],
   providers: [AuthService, PasswordService, TokensService, AuthMailer, MfaService, AccountService, OnboardingService, AuthEvents],
-  exports: [AuthService, PasswordService],
+  exports: [AuthService, PasswordService, TokensService],
 })
 export class AuthModule {}

@@ -11,7 +11,6 @@ import { apiGet, requireViewer } from "@/lib/api/server";
 
 export const metadata: Metadata = { title: "Security & sign-in" };
 
-const PRIVILEGED = ["moderator", "platform_admin", "super_admin"];
 
 async function Sessions() {
   const result = await settle(apiGet<SessionView[]>("/me/sessions"));
@@ -24,7 +23,7 @@ async function AccountSecurity() {
   return (
     <>
       <ChangePasswordForm name={viewer.name} email={viewer.email} />
-      <MfaCard enabled={viewer.mfa.enabled} required={viewer.roles.some((role) => PRIVILEGED.includes(role))} />
+      <MfaCard enabled={viewer.mfa.enabled} required={viewer.mfa.required} />
     </>
   );
 }

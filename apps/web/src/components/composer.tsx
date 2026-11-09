@@ -18,6 +18,7 @@ export type ComposeStart = { tool?: ComposeTool; type?: PostType };
 
 const starts: { start: ComposeStart; icon: IconName; label: string; color: string }[] = [
   { start: { tool: "photo" }, icon: "image", label: "Photo", color: "text-info" },
+  { start: { tool: "video" }, icon: "video", label: "Video", color: "text-warning" },
   { start: { tool: "poll" }, icon: "chart", label: "Poll", color: "text-accent" },
   { start: { type: "question" }, icon: postTypeMeta.question.icon, label: postTypeMeta.question.label, color: "text-warning" },
   { start: { type: "celebration" }, icon: postTypeMeta.celebration.icon, label: postTypeMeta.celebration.label, color: "text-accent-hover" },

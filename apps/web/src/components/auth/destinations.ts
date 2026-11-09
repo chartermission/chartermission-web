@@ -23,8 +23,10 @@ export function safeNext(next: string | null | undefined): string | null {
  * Where a member goes after signing in or verifying: unfinished onboarding first, then changed
  * policies, then the requested page or the feed.
  */
-export function destinationFor(viewer: Pick<SessionUser, "onboarding" | "needsPolicyReaccept" | "status">, next?: string | null) {
+export function destinationFor(viewer: Pick<SessionUser, "onboarding" | "needsPolicyReaccept" | "status" | "mfa">, next?: string | null) {
   const target = safeNext(next) ?? "/feed";
+  // Staff accounts set up two-step verification before anything else.
+  if (viewer.mfa.required && !viewer.mfa.enabled) return `/signin/mfa-setup?next=${encodeURIComponent(target)}`;
   const canOnboard = viewer.status === "active" || viewer.status === "unverified";
   if (canOnboard && !viewer.onboarding.completed) return "/onboarding";
   if (viewer.needsPolicyReaccept) return `/policies/accept?next=${encodeURIComponent(target)}`;

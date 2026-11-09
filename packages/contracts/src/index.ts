@@ -15,3 +15,7 @@ export * from "./home.js";
 export * from "./analytics.js";
 export * from "./events.js";
 export * from "./learning.js";
+export * from "./ambassadors.js";
+export * from "./stories.js";
+export * from "./chapters.js";
+export * from "./opportunities.js";

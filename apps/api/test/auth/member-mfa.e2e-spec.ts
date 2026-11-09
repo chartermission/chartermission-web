@@ -24,7 +24,7 @@ describe('Auth: member two-step sign-in, policy versions, onboarding avatar uplo
     expect(login.body).toEqual({ status: 'mfa_required' });
 
     const me = await fresh.get('/me').expect(200);
-    expect(me.body.mfa).toEqual({ enabled: true, verifiedThisSession: false });
+    expect(me.body.mfa).toEqual({ enabled: true, verifiedThisSession: false, required: false });
     const blocked = await fresh.get('/feed').expect(403);
     expect(blocked.body.error.code).toBe('MFA_REQUIRED');
     await fresh.post('/posts', { body: 'Hello' }).expect(403);

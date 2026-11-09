@@ -17,6 +17,7 @@ export const DEFAULT_PREFERENCES: Record<NotificationCategory, { in_app: boolean
   trending: { in_app: true, email: false, push: false },
   moderation: { in_app: true, email: true, push: true },
   events: { in_app: true, email: true, push: true },
+  opportunities: { in_app: true, email: true, push: true },
   digest: { in_app: false, email: false, push: false },
 };
 
@@ -50,6 +51,8 @@ export const CATEGORY_OF: Record<NotificationType, NotificationCategory | 'alway
   event_review_changes_requested: 'always',
   event_review_rejected: 'always',
   course_link_broken: 'always',
+  opportunity_application_received: 'opportunities',
+  opportunity_application_updated: 'opportunities',
 };
 
 export interface NotifyInput {

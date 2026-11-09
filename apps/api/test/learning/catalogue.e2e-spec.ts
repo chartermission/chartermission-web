@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { CourseDetail, CourseSummary, LearningHub, LearningPath, Page } from '@chartermission/contracts';
 import { count, createMember, createTestApp, s, type TestApp } from '../helpers.js';
-import { learning } from './learning-helpers.js';
+import { learning, openLearning } from './learning-helpers.js';
 
 type Member = Awaited<ReturnType<typeof createMember>>;
 
@@ -30,6 +30,7 @@ describe('Learning: member catalogue', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
+    await openLearning(t);
     l = learning(t);
     await l.sync();
     amara = await createMember(t, { name: 'Amara Okafor' });

@@ -22,7 +22,7 @@ const SAVED: Record<string, string[]> = {
  * is broken after two failed checks) so one course shows as broken, with the curator alert.
  */
 export async function seedLearning(db: Db, ctx: SeedContext): Promise<void> {
-  const admin = ctx.ids.owais ?? ctx.ids.team ?? null;
+  const admin = ctx.ids.platformAdmin ?? ctx.ids.superAdmin ?? null;
   const client = new FixtureCharterCenterClient();
   const sync = await executeSync(db, client, (await startRun(db, 'sync', 'admin', admin)).id);
   if (sync.status !== 'succeeded') throw new Error(`Learning seed sync failed: ${sync.error}`);

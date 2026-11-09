@@ -13,6 +13,7 @@ import { absoluteUrl, postHref } from "./links";
 import { Menu, type MenuItem } from "./menu";
 import { PostAttachments } from "./post-attachments";
 import { AuthorName, LinkPreviewCard, MemberAvatar, PostCounts, PostTypeChip, RepostEmbed, TimeAgo } from "./post-parts";
+import { VideoEmbedPlayer } from "@/components/video/video-player";
 import { PostPoll } from "./post-poll";
 import { ArticleCover, ArticlePreview } from "./post-types/article";
 import { CelebrationBand } from "./post-types/celebration";
@@ -52,6 +53,7 @@ export function PostCard({
   detail = false,
   onRemoved,
   onBookmarkChange,
+  extraMenu,
 }: {
   post: PostView;
   viewer: Viewer;
@@ -60,6 +62,8 @@ export function PostCard({
   /** Called after delete, mute or block so lists can drop the card. */
   onRemoved?: (post: PostView, scope: "post" | "author") => void;
   onBookmarkChange?: (post: PostView, bookmarked: boolean) => void;
+  /** Extra overflow-menu items supplied by the list (e.g. chapter pin controls). */
+  extraMenu?: (post: PostView) => MenuItem[];
 }) {
   const router = useRouter();
   const id = useId();
@@ -128,7 +132,7 @@ export function PostCard({
     onRemoved?.(post, scope);
   }
 
-  const menu: MenuItem[] = [{ label: "Copy link", icon: "link", onSelect: () => copyLink(post) }];
+  const menu: MenuItem[] = [{ label: "Copy link", icon: "link", onSelect: () => copyLink(post) }, ...(extraMenu?.(post) ?? [])];
   if (post.viewer.canEdit && !post.isRepost) {
     menu.push({
       label: "Edit post",
@@ -311,7 +315,11 @@ export function PostCard({
 
           {post.attachments.length > 0 && !post.article && <PostAttachments attachments={post.attachments} />}
           {post.poll && <PostPoll postId={post.id} poll={post.poll} onUpdated={update} />}
-          {post.linkPreview && !post.isRepost && !post.article && <LinkPreviewCard preview={post.linkPreview} />}
+          {post.linkPreview && !post.isRepost && !post.article && post.attachments.length === 0 && post.linkPreview.embed ? (
+            <VideoEmbedPlayer preview={post.linkPreview} embed={post.linkPreview.embed} />
+          ) : (
+            post.linkPreview && !post.isRepost && !post.article && <LinkPreviewCard preview={post.linkPreview} />
+          )}
           {post.isRepost && <RepostEmbed original={post.repostOf} />}
           {post.question && !editing && <QuestionFooterNote post={post} detail={detail} />}
         </>

@@ -106,7 +106,7 @@ export function DraftCard({ draft, busy, onAction }: { draft: DraftView; busy: D
               </li>
             ) : (
               <li key={file.id} className="flex h-16 max-w-[220px] items-center gap-2 rounded-lg border border-line bg-muted px-3">
-                <Icon name="book" size={18} className="shrink-0 text-error" />
+                <Icon name={file.kind === "video" ? "video" : "book"} size={18} className={cn("shrink-0", file.kind === "video" ? "text-warning" : "text-error")} />
                 <span className="truncate text-sm text-ink">{file.name ?? "Document"}</span>
               </li>
             ),

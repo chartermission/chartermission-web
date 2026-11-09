@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { MemberRef, PostView } from "@chartermission/contracts";
-import { Avatar, Icon, cn } from "@chartermission/ui";
+import { Avatar, Icon, cn, RoleBadgeIcon } from "@chartermission/ui";
 import { BrandCover } from "@/components/illustrations";
 import { absoluteDate } from "@/components/social/format";
 import { articleHref, memberHref } from "@/components/social/links";
@@ -52,6 +52,7 @@ export function ArticleMeta({ author, post, size = 24, className }: { author: Me
           {author.name}
         </Link>
         {author.verified && <Icon name="verified" size={14} className="relative z-10 shrink-0 text-primary" label="Verified" />}
+        <RoleBadgeIcon badge={author.badge} size={14} className="relative z-10" />
         <span aria-hidden="true">·</span>
         <ArticleDate iso={post.createdAt} className="whitespace-nowrap" />
       </p>

@@ -1,10 +1,23 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
-import { fileTypeFromBuffer } from 'file-type';
+import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type';
 import type { Readable } from 'node:stream';
-import { UPLOAD_LIMITS, type CreateUploadInput, type CreateUploadResponse, type FileView, type UploadPurpose } from '@chartermission/contracts';
+import {
+  UPLOAD_LIMITS,
+  VIDEO_MIMES,
+  formatDuration,
+  isVideoPurpose,
+  type CreateUploadInput,
+  type CreateUploadResponse,
+  type FileView,
+  type MediaSettings,
+  type UploadPurpose,
+} from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { files } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
@@ -12,10 +25,12 @@ import { RateLimitService } from '../infra/rate-limit.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { QueueService } from '../infra/queue.service.js';
 import { AuditService } from '../infra/audit.service.js';
-import { mediaUrl } from '../core/members.service.js';
+import { SettingsService } from '../infra/settings.service.js';
+import { mediaUrl, posterUrl } from '../core/members.service.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { createStorage, LocalStorage, URL_TTL_SECONDS, verifyUploadSignature, type Storage } from './storage.js';
 import { scanBuffer } from './scanner.js';
+import { VideoToolMissingError, extractPoster, probeVideo, sha256File, transcodeVideo, type VideoProbe } from './video.js';
 
 export type FileRow = typeof files.$inferSelect;
 
@@ -25,6 +40,9 @@ const EXTENSIONS: Record<string, string[]> = {
   'image/png': ['png'],
   'image/webp': ['webp'],
   'application/pdf': ['pdf'],
+  'video/mp4': ['mp4', 'm4v'],
+  'video/quicktime': ['mov', 'qt'],
+  'video/webm': ['webm'],
 };
 
 /** Images are re-encoded to at most this many pixels on the longest side. */
@@ -51,12 +69,36 @@ export class MediaService implements OnModuleInit {
     private readonly events: EventsService,
     private readonly queue: QueueService,
     private readonly audit: AuditService,
+    private readonly settings: SettingsService,
   ) {}
 
   onModuleInit() {
     this.queue.process('media', async (name, data: { fileId: string }) => {
       if (name === 'process-upload') await this.processUpload(data.fileId);
     });
+    // Video conversion is CPU-heavy: its own queue, one at a time, so image checks never wait behind it.
+    this.queue.process(
+      'video',
+      async (name, data: { fileId: string }, job) => {
+        if (name !== 'process-video') return;
+        try {
+          await this.processUpload(data.fileId);
+        } catch (err) {
+          if (err instanceof VideoToolMissingError) {
+            this.logger.error(
+              `Video processing needs ffmpeg and ffprobe (${err.message}). Run "pnpm install" for the bundled binaries, or install ffmpeg (brew install ffmpeg / apt install ffmpeg) or set FFMPEG_PATH and FFPROBE_PATH, then restart the API.`,
+            );
+          } else {
+            this.logger.error(`Video ${data.fileId} failed: ${String(err)}`);
+          }
+          // After the last retry, tell the member instead of leaving the upload "processing" forever.
+          const lastAttempt = !job || job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+          if (lastAttempt) await this.failPending(data.fileId, 'We couldn’t process this video right now. Try uploading it again in a little while.');
+          throw err;
+        }
+      },
+      { concurrency: 1 },
+    );
   }
 
   /** Called after a file becomes clean or is rejected (posts publish or detach attachments). */
@@ -66,7 +108,8 @@ export class MediaService implements OnModuleInit {
 
   async createUpload(user: AuthUser, input: CreateUploadInput): Promise<CreateUploadResponse> {
     // Unverified members may add a profile photo during onboarding; post media needs a verified email.
-    if (input.purpose !== 'avatar' && !user.emailVerified) throw Errors.emailNotVerified();
+    // Profile photos can be set before the email is verified (onboarding); everything else needs it.
+    if (input.purpose !== 'avatar' && input.purpose !== 'profile_cover' && !user.emailVerified) throw Errors.emailNotVerified();
     const limit = UPLOAD_LIMITS[input.purpose];
     const mime = input.mime.toLowerCase();
     if (!(limit.mimes as readonly string[]).includes(mime)) {
@@ -122,7 +165,11 @@ export class MediaService implements OnModuleInit {
       await this.db.update(files).set({ scanStatus: 'pending', sizeBytes: size }).where(eq(files.id, fileId));
     }
     if (file.scanStatus === 'awaiting_upload' || file.scanStatus === 'pending') {
-      await this.queue.add('media', 'process-upload', { fileId }, { jobId: `upload-${fileId}` });
+      if (isVideoPurpose(file.purpose as UploadPurpose)) {
+        await this.queue.add('video', 'process-video', { fileId }, { jobId: `video-${fileId}` });
+      } else {
+        await this.queue.add('media', 'process-upload', { fileId }, { jobId: `upload-${fileId}` });
+      }
       file = (await this.find(fileId))!;
     }
     return this.view(file);
@@ -146,6 +193,7 @@ export class MediaService implements OnModuleInit {
     const size = await this.storage.size(file.storageKey);
     if (size === null || size === 0) return this.reject(file, 'rejected', 'The file was not uploaded');
     if (size > limit.maxBytes) return this.reject(file, 'rejected', 'The file is larger than allowed');
+    if (isVideoPurpose(file.purpose as UploadPurpose)) return this.processVideo(file);
     const data = await this.storage.read(file.storageKey);
     if (!data) return this.reject(file, 'rejected', 'The file was not uploaded');
 
@@ -200,6 +248,84 @@ export class MediaService implements OnModuleInit {
     await this.settled(updated!);
   }
 
+  /** GET /uploads/limits: the video length limits members upload against. */
+  mediaLimits(): Promise<MediaSettings> {
+    return this.settings.get('media_limits');
+  }
+
+  /**
+   * Videos: signature check, length limit (admin setting), conversion to the web rendition and a poster.
+   * Re-encoding plays the part the malware scan plays for other files: only frames and audio decoded by
+   * ffmpeg reach the stored file, nothing else from the upload survives.
+   */
+  private async processVideo(file: FileRow): Promise<void> {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'cm-video-'));
+    try {
+      const input = path.join(dir, 'source');
+      if (!(await this.storage.downloadTo(file.storageKey, input))) return await this.reject(file, 'rejected', 'The file was not uploaded');
+      const detected = await fileTypeFromFile(input);
+      if (!detected || !(VIDEO_MIMES as readonly string[]).includes(detected.mime)) {
+        return await this.reject(file, 'rejected', 'The file’s contents don’t match its type');
+      }
+      const limits = await this.settings.get('media_limits');
+      const maxSeconds = file.purpose === 'story_video' ? limits.storyVideoMaxSeconds : limits.postVideoMaxSeconds;
+      let source: VideoProbe;
+      try {
+        source = await probeVideo(input);
+      } catch (err) {
+        if (err instanceof VideoToolMissingError) throw err;
+        return await this.reject(file, 'rejected', 'We couldn’t read this video. Try exporting it as an MP4.');
+      }
+      if (source.durationSeconds > maxSeconds + 0.5) {
+        return await this.reject(
+          file,
+          'rejected',
+          `Videos can be up to ${formatDuration(maxSeconds)} long. This one is ${formatDuration(source.durationSeconds)}.`,
+        );
+      }
+      const output = path.join(dir, 'web.mp4');
+      const poster = path.join(dir, 'poster.jpg');
+      let result: VideoProbe;
+      try {
+        await transcodeVideo(input, output, source.durationSeconds);
+        result = await probeVideo(output);
+        await extractPoster(output, poster, result.durationSeconds);
+      } catch (err) {
+        if (err instanceof VideoToolMissingError) throw err;
+        this.logger.warn(`Video ${file.id} could not be converted: ${String(err)}`);
+        return await this.reject(file, 'rejected', 'We couldn’t process this video. Try exporting it as an MP4.');
+      }
+      const posterKey = `${file.storageKey}-poster`;
+      await this.storage.uploadFrom(file.storageKey, output, 'video/mp4');
+      await this.storage.uploadFrom(posterKey, poster, 'image/jpeg');
+      const { size } = await stat(output);
+      const [updated] = await this.db
+        .update(files)
+        .set({
+          scanStatus: 'clean',
+          rejectionReason: null,
+          mime: 'video/mp4',
+          sizeBytes: size,
+          sha256: await sha256File(output),
+          width: result.width,
+          height: result.height,
+          durationMs: Math.round(result.durationSeconds * 1000),
+          posterKey,
+        })
+        .where(eq(files.id, file.id))
+        .returning();
+      await this.settled(updated!);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  /** Rejects a file that is still waiting for processing (used when processing keeps failing). */
+  private async failPending(fileId: string, reason: string) {
+    const [file] = await this.db.select().from(files).where(eq(files.id, fileId)).limit(1);
+    if (file?.scanStatus === 'pending') await this.reject(file, 'rejected', reason).catch(() => undefined);
+  }
+
   private async reject(file: FileRow, status: 'rejected' | 'infected', reason: string) {
     const [updated] = await this.db
       .update(files)
@@ -230,11 +356,20 @@ export class MediaService implements OnModuleInit {
     const file = await this.find(fileId);
     if (!file || file.scanStatus !== 'clean') throw Errors.notFound('File');
     if (!file.isPublic && !viewer) throw Errors.unauthenticated();
-    const inline = file.mime.startsWith('image/');
+    const inline = file.mime.startsWith('image/') || file.mime.startsWith('video/');
     const name = safeFileName(file.originalName ?? 'file', file.mime);
     const disposition = `${inline ? 'inline' : 'attachment'}; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
     const redirect = await this.storage.presignDownload(file.storageKey, { mime: file.mime, disposition });
     return { file, disposition, redirect };
+  }
+
+  /** GET /media/{fileId}/poster: a video's still frame, with the same access rules as the video. */
+  async resolvePoster(viewer: AuthUser | undefined, fileId: string) {
+    const file = await this.find(fileId);
+    if (!file || file.scanStatus !== 'clean' || !file.posterKey) throw Errors.notFound('File');
+    if (!file.isPublic && !viewer) throw Errors.unauthenticated();
+    const redirect = await this.storage.presignDownload(file.posterKey, { mime: 'image/jpeg', disposition: 'inline; filename="poster.jpg"' });
+    return { key: file.posterKey, redirect };
   }
 
   async find(fileId: string): Promise<FileRow | undefined> {
@@ -255,6 +390,8 @@ export class MediaService implements OnModuleInit {
       sizeBytes: file.sizeBytes,
       width: file.width,
       height: file.height,
+      durationSeconds: file.durationMs !== null ? file.durationMs / 1000 : null,
+      posterUrl: status === 'clean' ? posterUrl(file) : null,
     };
   }
 }
@@ -271,7 +408,9 @@ export async function reencodeImage(data: Buffer, mime: string) {
 }
 
 function describeMimes(purpose: UploadPurpose): string {
-  return purpose === 'post_document' ? 'a PDF up to 10 MB' : 'JPEG, PNG or WebP up to 5 MB';
+  if (purpose === 'post_document') return 'a PDF up to 10 MB';
+  if (isVideoPurpose(purpose)) return `an MP4, MOV or WebM video up to ${Math.round(UPLOAD_LIMITS[purpose].maxBytes / 1024 / 1024)} MB`;
+  return `JPEG, PNG or WebP up to ${Math.round(UPLOAD_LIMITS[purpose].maxBytes / 1024 / 1024)} MB`;
 }
 
 function safeFileName(name: string, mime: string): string {

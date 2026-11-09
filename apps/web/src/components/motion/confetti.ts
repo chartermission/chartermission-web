@@ -3,7 +3,7 @@
 import { cleanUp, createLayer, piece, random } from "./layer";
 import { canAnimate } from "./reduced-motion";
 
-/** Charter Mission brand confetti: orange, navy, blue, amber, green. */
+/** Charter Mission brand confetti: red, green, light green, amber, deep red. */
 export const BRAND_CONFETTI = [
   "var(--color-accent)",
   "var(--color-primary)",

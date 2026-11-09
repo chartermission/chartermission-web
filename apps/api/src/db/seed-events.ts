@@ -17,7 +17,7 @@ import { zonedMidnight, dayKey } from '../events/event-util.js';
  * What the demo accounts see:
  *  - amara@ (event_host, chapter_lead of Lagos): registered for the Diaspora Investment Forum, the
  *    AfCFTA workshop and the Export Readiness Q&A starting in ~2 hours (join link visible); hosts the
- *    Lagos chapter's events (Women in Leadership Circle, Founders Breakfast, past Demo Day with
+ *    Nigeria chapter's events (Women in Leadership Circle, Founders Breakfast, past Demo Day with
  *    attendance marked) and has a draft.
  *  - kwame@ (event_host): hosts Founders' Office Hours (published), one event pending review
  *    (admin queue) and one with changes requested.
@@ -98,7 +98,7 @@ function demoEvents(now: Date): DemoEvent[] {
         'The Diaspora Investment Forum brings together founders, angel investors, fund managers and policymakers from across Africa and the diaspora for a day on one question: how do we make it easier to invest back home?\n\n## What to expect\n\nMorning keynotes on remittance-backed funds and diaspora bonds, an afternoon of curated deal rooms, and chapter meet-ups to close the day.\n\n## Who should come\n\nFounders raising pre-seed to Series A, diaspora professionals who want to invest, and anyone working on investment policy.',
       category: 'Conference',
       format: 'hybrid',
-      host: { chapter: 'accra' },
+      host: { chapter: 'ghana' },
       createdBy: 'team',
       tz: 'Africa/Accra',
       start: { days: 15, at: '14:00' },
@@ -120,7 +120,7 @@ function demoEvents(now: Date): DemoEvent[] {
         { offset: 240, minutes: 60, title: 'Chapter meet-ups and networking' },
       ],
       registrations: regs(['amara', 'kwame', 'fatou', 'chinedu', 'kofi', 'efua', 'sefa', 'kojo']),
-      cover: ['#233465', '#E94E1D'],
+      cover: ['#047942', '#E31A20'],
     },
     {
       slug: 'founders-office-hours-fundraising-2027',
@@ -151,7 +151,7 @@ function demoEvents(now: Date): DemoEvent[] {
         'Over 70% of households in East Africa still cook with charcoal or firewood. Join engineers, designers and policy people for two days of building.\n\n## Tracks\n\nPay-as-you-go financing, LPG distribution logistics and household air-quality data.\n\n## Practical details\n\nLunch is provided both days. Bring a laptop. Teams form on the morning of day one.',
       category: 'Hackathon',
       format: 'in_person',
-      host: { chapter: 'nairobi' },
+      host: { chapter: 'kenya' },
       createdBy: 'team',
       tz: 'Africa/Nairobi',
       start: { days: 22, at: '09:00' },
@@ -182,7 +182,7 @@ function demoEvents(now: Date): DemoEvent[] {
         'A candid conversation about leadership, from first management role to the boardroom. After the panel we break into small circles, in the room and online.',
       category: 'Panel',
       format: 'hybrid',
-      host: { chapter: 'lagos' },
+      host: { chapter: 'nigeria' },
       createdBy: 'amara',
       tz: 'Africa/Lagos',
       start: { days: 27, at: '18:00' },
@@ -234,10 +234,10 @@ function demoEvents(now: Date): DemoEvent[] {
       slug: 'lagos-founders-breakfast',
       title: 'Lagos Founders Breakfast',
       summary: 'Coffee, akara and honest conversation with Lagos founders. Informal, small and early — done by 10.',
-      description: 'A monthly breakfast for founders in the Lagos chapter. No talks, no slides: just a table and good company.',
+      description: 'A monthly breakfast for founders in the Nigeria chapter. No talks, no slides: just a table and good company.',
       category: 'Meet-up',
       format: 'in_person',
-      host: { chapter: 'lagos' },
+      host: { chapter: 'nigeria' },
       createdBy: 'amara',
       tz: 'Africa/Lagos',
       start: { days: 9, at: '08:00' },
@@ -286,12 +286,12 @@ function demoEvents(now: Date): DemoEvent[] {
     {
       slug: 'lagos-agritech-demo-day',
       title: 'Lagos AgriTech Demo Day',
-      summary: 'Eight agritech start-ups from the Lagos chapter demoed to buyers, cooperatives and investors.',
+      summary: 'Eight agritech start-ups from the Nigeria chapter demoed to buyers, cooperatives and investors.',
       description:
         'Eight start-ups working on cold storage, input financing and farm-gate pricing presented to an audience of buyers, cooperatives and investors.\n\n## Recording\n\nSlides from each team are available from the chapter page.',
       category: 'Conference',
       format: 'in_person',
-      host: { chapter: 'lagos' },
+      host: { chapter: 'nigeria' },
       createdBy: 'amara',
       tz: 'Africa/Lagos',
       start: { days: -20, at: '10:00' },
@@ -316,7 +316,7 @@ function demoEvents(now: Date): DemoEvent[] {
       description: 'A roundtable on county-level adaptation finance in Kenya: what is flowing, what is stuck, and what would unblock it.',
       category: 'Panel',
       format: 'hybrid',
-      host: { chapter: 'nairobi' },
+      host: { chapter: 'kenya' },
       createdBy: 'team',
       tz: 'Africa/Nairobi',
       start: { days: -5, at: '15:00' },
@@ -394,11 +394,11 @@ function demoEvents(now: Date): DemoEvent[] {
     {
       slug: 'accra-trade-policy-breakfast',
       title: 'Accra Trade Policy Breakfast',
-      summary: 'Breakfast briefing on the new ECOWAS trade measures with the Accra chapter.',
+      summary: 'Breakfast briefing on the new ECOWAS trade measures with the Ghana chapter.',
       description: 'A short briefing over breakfast on the latest ECOWAS trade measures and what they mean for exporters.',
       category: 'Networking',
       format: 'in_person',
-      host: { chapter: 'accra' },
+      host: { chapter: 'ghana' },
       createdBy: 'team',
       tz: 'Africa/Accra',
       start: { days: 12, at: '07:30' },
@@ -411,12 +411,12 @@ function demoEvents(now: Date): DemoEvent[] {
     },
     {
       slug: 'lagos-chapter-volunteer-onboarding',
-      title: 'Lagos Chapter Volunteer Onboarding',
-      summary: 'Welcome session for new Lagos chapter volunteers: how the chapter runs and where you can help.',
+      title: 'Nigeria Chapter Volunteer Onboarding',
+      summary: 'Welcome session for new Nigeria chapter volunteers: how the chapter runs and where you can help.',
       description: 'Draft — agenda to follow.',
       category: 'Training',
       format: 'online',
-      host: { chapter: 'lagos' },
+      host: { chapter: 'nigeria' },
       createdBy: 'amara',
       tz: 'Africa/Lagos',
       start: { days: 45, at: '17:00' },
@@ -528,7 +528,7 @@ export async function seedEvents(db: Db, ctx: SeedContext): Promise<void> {
   const people = { ...ids, ...(await seedAttendees(db)) };
   const categories = new Map((await db.select().from(s.eventCategories)).map((c) => [c.name, c.id]));
   const now = new Date();
-  const reviewer = ids.aisha ?? ids.team;
+  const reviewer = ids.moderator ?? ids.platformAdmin ?? ids.team;
   let count = 0;
 
   for (const e of demoEvents(now)) {

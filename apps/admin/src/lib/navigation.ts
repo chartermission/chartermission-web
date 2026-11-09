@@ -20,7 +20,7 @@ export function signInUrl({ next, expired, signedOut }: { next?: string | null; 
 }
 
 /** Base URL of the member web app, for "View on site" links. */
-export const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+export const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL || "http://localhost:3000").replace(/\/+$/, "");
 
 export function webHref(path: string) {
   return `${WEB_URL}${path.startsWith("/") ? path : `/${path}`}`;

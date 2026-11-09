@@ -30,6 +30,9 @@ export const PERMISSIONS = {
   'event.feature': 'Feature events',
   'event.manage': 'Manage any event as its host (edit, cancel, registrations, attendance)',
   'course.curate': 'Hide and feature Charter Center courses; run catalogue syncs and link checks',
+  'ambassador.manage': 'Create ambassador leads, move them through the pipeline, run onboarding and certify (own countries)',
+  'ambassador.managers': 'Create and revoke ambassador manager accounts; choose the required training courses',
+  'chapter.manage': 'Pin posts and edit the About text on any chapter page',
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -42,6 +45,7 @@ const MEMBER: Permission[] = [
   'follow.create',
   'report.create',
   'appeal.create',
+  'event.create',
 ];
 
 const MODERATOR: Permission[] = [
@@ -54,7 +58,7 @@ const MODERATOR: Permission[] = [
   'event.review',
 ];
 
-/** Members trusted to run events; their events go through review. */
+/** Every member can now propose events (they go through review); kept for existing role grants. */
 const EVENT_HOST: Permission[] = ['event.create'];
 
 const PLATFORM_ADMIN: Permission[] = [
@@ -65,6 +69,9 @@ const PLATFORM_ADMIN: Permission[] = [
   'event.feature',
   'event.manage',
   'course.curate',
+  'ambassador.manage',
+  'ambassador.managers',
+  'chapter.manage',
   'audit.export',
   'members.manage',
   'roles.manage',
@@ -80,6 +87,17 @@ export const ROLES: Record<string, { name: string; requiresMfa: boolean; permiss
    * chapter_lead row scoped to that chapter (Events API checks user_roles directly).
    */
   chapter_lead: { name: 'Chapter Lead', requiresMfa: false, permissions: EVENT_HOST },
+  /**
+   * Certified Ambassador (badge on the member profile). Scoped to the chapter: scope_type =
+   * 'chapter', scope_id = the chapter id, or scope_type = 'country' when the country has no chapter
+   * yet. No extra permissions: Ambassadors use the normal member app.
+   */
+  ambassador: { name: 'Ambassador', requiresMfa: false, permissions: [] },
+  /**
+   * Ambassador programme staff (admin console sub-account). One row per country they cover:
+   * scope_type = 'country', scope_id = the ISO code; a row with no scope covers every country.
+   */
+  ambassador_manager: { name: 'Ambassador Manager', requiresMfa: true, permissions: ['admin.console', 'ambassador.manage'] },
   moderator: { name: 'Moderator', requiresMfa: true, permissions: MODERATOR },
   platform_admin: { name: 'Platform Admin', requiresMfa: true, permissions: PLATFORM_ADMIN },
   super_admin: {
@@ -91,3 +109,19 @@ export const ROLES: Record<string, { name: string; requiresMfa: boolean; permiss
 
 /** Roles that may open an admin session; all require MFA (CM-AUTH-09). */
 export const PRIVILEGED_ROLES = ['moderator', 'platform_admin', 'super_admin'];
+
+/**
+ * Roles that may sign in to the admin console (all require MFA). Ambassador Managers are console
+ * staff but rank as members for moderation (PRIVILEGED_ROLES order is the moderation rank).
+ */
+export const ADMIN_SIGNIN_ROLES = [...PRIVILEGED_ROLES, 'ambassador_manager'];
+
+/**
+ * Staff accounts must use two-step verification everywhere (admin console and member app): anyone
+ * flagged as staff or holding a role that can open the admin console. They can't turn it off.
+ */
+export function mustUseMfa(user: { isStaff: boolean; roles: Iterable<string> }): boolean {
+  if (user.isStaff) return true;
+  for (const role of user.roles) if (ADMIN_SIGNIN_ROLES.includes(role)) return true;
+  return false;
+}

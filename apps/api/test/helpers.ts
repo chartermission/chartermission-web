@@ -108,6 +108,11 @@ export async function createMember(
     roles?: string[];
     /** Sign in to the admin console (admin-audience session with MFA enabled and verified). */
     admin?: boolean;
+    /**
+     * Two-step verification on and verified for this session. Defaults to on for admin sessions and for
+     * staff roles (they must use it everywhere); pass false to test the setup flow.
+     */
+    mfa?: boolean;
     countryCode?: string;
     status?: 'unverified' | 'active' | 'suspended' | 'deactivated';
   } = {},
@@ -120,6 +125,8 @@ export async function createMember(
   const handle = opts.handle ?? `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${seq}`;
   const email = opts.email ?? `${handle}@example.test`;
   const verified = opts.verified ?? true;
+  const { ADMIN_SIGNIN_ROLES } = await import('../src/core/permissions.js');
+  const mfa = opts.mfa ?? (!!opts.admin || (opts.roles ?? []).some((r) => ADMIN_SIGNIN_ROLES.includes(r)));
   const [user] = await t.db
     .insert(s.users)
     .values({
@@ -127,8 +134,8 @@ export async function createMember(
       passwordHash: await hash(PASSWORD),
       status: opts.status ?? (verified ? 'active' : 'unverified'),
       emailVerifiedAt: verified ? new Date() : null,
-      mfaSecretEnc: opts.admin ? encrypt('JBSWY3DPEHPK3PXP') : null,
-      mfaEnabledAt: opts.admin ? new Date() : null,
+      mfaSecretEnc: mfa ? encrypt('JBSWY3DPEHPK3PXP') : null,
+      mfaEnabledAt: mfa ? new Date() : null,
     })
     .returning();
   await t.db.insert(s.memberProfiles).values({
@@ -147,7 +154,7 @@ export async function createMember(
   const audience = opts.admin ? 'admin' : 'member';
   const sessions = t.app.get(SessionService);
   const fakeReq = { ip: '127.0.0.1', headers: { 'user-agent': 'vitest' } } as any;
-  const { token } = await sessions.create(user!.id, audience, fakeReq, { mfaVerified: !!opts.admin });
+  const { token } = await sessions.create(user!.id, audience, fakeReq, { mfaVerified: mfa });
   const c = client(t, audience);
   c.agent.jar.setCookie(`${COOKIE_NAMES[audience]}=${token}; Path=/`, '127.0.0.1');
   return { ...c, user: user!, id: user!.id, handle, email, name };

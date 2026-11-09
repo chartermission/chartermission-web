@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ChapterHighlightMoment } from "@chartermission/contracts";
-import { Icon, buttonClasses } from "@chartermission/ui";
+import { Icon, buttonClasses, RoleBadgeIcon } from "@chartermission/ui";
 import { plural } from "@/components/social/format";
 import { memberHref, postHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
@@ -59,6 +59,7 @@ export function ChapterCard({ moment }: { moment: ChapterHighlightMoment }) {
                   {topPost.author.name}
                 </Link>
                 {topPost.author.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
+                <RoleBadgeIcon badge={topPost.author.badge} size={14} />
               </div>
               <Link href={postHref(topPost.id)} className="line-clamp-3 text-sm text-body after:absolute after:inset-0 after:rounded-[10px]">
                 {topPost.excerpt}

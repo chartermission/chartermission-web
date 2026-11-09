@@ -17,6 +17,11 @@ import {
 } from './seed-data.js';
 import { seedEvents } from './seed-events.js';
 import { seedLearning } from './seed-learning.js';
+import { seedAmbassadors } from './seed-ambassadors.js';
+import { seedStories } from './seed-stories.js';
+import { seedModeration } from './seed-moderation.js';
+import { seedChaptersAndOpportunities } from './seed-opportunities.js';
+import { seedDemoMfa } from './seed-accounts.js';
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
 import { DEFAULT_FIELD_VISIBILITY } from '@chartermission/contracts';
@@ -56,6 +61,7 @@ export async function seedReference(db: Db) {
       .values({ key, name: role.name, requiresMfa: role.requiresMfa })
       .onConflictDoUpdate({ target: s.roles.key, set: { name: role.name, requiresMfa: role.requiresMfa } })
       .returning({ id: s.roles.id });
+    if (!role.permissions.length) continue;
     await db
       .insert(s.rolePermissions)
       .values(role.permissions.map((permissionKey) => ({ roleId: row!.id, permissionKey })))
@@ -157,7 +163,13 @@ async function main() {
     const ctx: SeedContext = { ids, chapters: Object.fromEntries(chapterRows.map((c) => [c.slug, c.id])) };
     await seedEvents(db, ctx);
     await seedLearning(db, ctx);
+    await seedAmbassadors(db, ctx);
+    await seedStories(db, ctx);
+    await seedModeration(db, ctx);
+    await seedChaptersAndOpportunities(db, ctx);
+    const mfa = await seedDemoMfa(db);
     console.log(`Seeded ${Object.keys(ids).length} demo members (password: ${DEMO_PASSWORD})`);
+    if (mfa.length) console.log(`Two-step verification preset for ${mfa.length} staff accounts: ${mfa.join(', ')} (see the demo accounts PDF)`);
   } finally {
     await pool.end();
   }

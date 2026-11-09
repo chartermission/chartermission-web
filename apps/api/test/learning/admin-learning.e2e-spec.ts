@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type { AdminCourseView, Page, SyncRunView } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
-import { learning } from './learning-helpers.js';
+import { learning, openLearning } from './learning-helpers.js';
 
 type Member = Awaited<ReturnType<typeof createMember>>;
 
@@ -12,6 +12,7 @@ describe('Learning: admin', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
+    await openLearning(t);
     l = learning(t);
     admin = await createMember(t, { name: 'Ada Admin', roles: ['platform_admin'], admin: true });
   });

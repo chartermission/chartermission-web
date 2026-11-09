@@ -138,6 +138,27 @@ describe('Learning: catalogue sync', () => {
     expect(await count(t.db, s.courses, and(isNull(s.courses.removedAt), eq(s.courses.externalId, '1004')))).toBe(1);
   });
 
+  it('refuses a feed that is more than 30% smaller than the catalogue, then accepts a normal one', async () => {
+    l.setCatalogue(fixture());
+    expect((await l.sync())!.status).toBe('succeeded');
+    const shown = await count(t.db, s.courses, isNull(s.courses.removedAt));
+    expect(shown).toBeGreaterThanOrEqual(10);
+    const small = fixture();
+    small.courses = small.courses.slice(0, Math.floor(shown * 0.6));
+    l.setCatalogue(small);
+    const run = await l.sync();
+    expect(run).toMatchObject({ status: 'failed', removedCount: 0 });
+    expect(run!.error).toMatch(/more than 30% fewer.*left unchanged/);
+    expect(await count(t.db, s.courses, isNull(s.courses.removedAt))).toBe(shown);
+    // Losing a couple of courses is normal and goes through.
+    const most = fixture();
+    most.courses = most.courses.slice(0, shown - 2);
+    l.setCatalogue(most);
+    expect(await l.sync()).toMatchObject({ status: 'succeeded', removedCount: 2 });
+    l.setCatalogue(fixture());
+    await l.sync();
+  });
+
   it('records a failed run when Charter Center sends an unexpected payload', async () => {
     l.setCatalogue({ courses: [{ nope: true }], paths: [] });
     const run = await l.sync();

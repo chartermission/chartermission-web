@@ -119,7 +119,7 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
     const [tag] = await t.db.select().from(s.hashtags).where(eq(s.hashtags.tag, 'cleancooking'));
     expect(tag).toMatchObject({ display: 'CleanCooking', followerCount: 1 });
     await a.post('/follows', { targetType: 'hashtag', targetId: 'bad tag!' }).expect(422);
-    await a.post('/follows', { targetType: 'chapter', targetId: 'lagos' }).expect(201);
+    await a.post('/follows', { targetType: 'chapter', targetId: 'nigeria' }).expect(201);
     await a.post('/follows', { targetType: 'chapter', targetId: 'atlantis' }).expect(404);
 
     const all = await a.get('/me/follows').expect(200);
@@ -135,7 +135,7 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
     const [after] = await t.db.select().from(s.hashtags).where(eq(s.hashtags.tag, 'cleancooking'));
     expect(after!.followerCount).toBe(0);
     await a.delete('/follows', { targetType: 'member', targetId: b.id }).expect(200);
-    await a.delete('/follows', { targetType: 'chapter', targetId: 'lagos' }).expect(200);
+    await a.delete('/follows', { targetType: 'chapter', targetId: 'nigeria' }).expect(200);
     expect((await a.get('/me/follows').expect(200)).body.items).toHaveLength(0);
 
     // Unverified members cannot follow (spec 6.2: verified member).
