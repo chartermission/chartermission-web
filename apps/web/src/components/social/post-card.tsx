@@ -313,7 +313,10 @@ export function PostCard({
             )
           )}
 
-          {post.attachments.length > 0 && !post.article && <PostAttachments attachments={post.attachments} />}
+          {post.attachments.length > 0 && !post.article && (
+            // Photos run edge to edge across the card (its padding is p-5, px-4 on small screens).
+            <PostAttachments attachments={post.attachments} bleedClassName="-mx-5 max-sm:-mx-4" />
+          )}
           {post.poll && <PostPoll postId={post.id} poll={post.poll} onUpdated={update} />}
           {post.linkPreview && !post.isRepost && !post.article && post.attachments.length === 0 && post.linkPreview.embed ? (
             <VideoEmbedPlayer preview={post.linkPreview} embed={post.linkPreview.embed} />

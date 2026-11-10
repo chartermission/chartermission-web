@@ -6,18 +6,14 @@ import { cn } from "@chartermission/ui";
 import { imageAlt } from "./image-alt";
 import { Lightbox } from "./lightbox";
 
-/** Tallest a single image may be in a post; portrait images narrow instead of growing. */
-const SINGLE_MAX_HEIGHT = 520;
-/** Aspect limits for a single image (width / height): 4:5 portrait up to 2:1 panorama. */
+/** Aspect limits for a single image (width / height): 4:5 portrait up to 2:1 panorama; beyond that it's cropped. */
 const MIN_RATIO = 4 / 5;
 const MAX_RATIO = 2;
 
+/** A single image always fills the post's width; its height follows the photo's shape within the limits. */
 function singleFrame(image: AttachmentView): CSSProperties {
   const natural = image.width && image.height ? image.width / image.height : 16 / 9;
-  const ratio = Math.min(MAX_RATIO, Math.max(MIN_RATIO, natural));
-  return ratio < 1
-    ? { aspectRatio: String(ratio), width: `min(100%, ${Math.round(SINGLE_MAX_HEIGHT * ratio)}px)` }
-    : { aspectRatio: String(ratio), maxHeight: SINGLE_MAX_HEIGHT };
+  return { aspectRatio: String(Math.min(MAX_RATIO, Math.max(MIN_RATIO, natural))) };
 }
 
 /** Grid placement per count: 2 side by side, 3 = one large + two stacked, 4 = 2×2. */
@@ -30,7 +26,7 @@ function tileClass(count: number, index: number) {
  * Post photos (1–4) in a fixed-ratio frame so nothing shifts while they load. Each tile is a
  * button that opens the full-screen lightbox at that image; focus comes back to the tile.
  */
-export function ImageGrid({ images }: { images: AttachmentView[] }) {
+export function ImageGrid({ images, bleedClassName }: { images: AttachmentView[]; /** Edge to edge inside a padded card: negative margins matching the card's padding (corners go square). */ bleedClassName?: string }) {
   const shown = images.slice(0, 4);
   const count = shown.length;
   const [open, setOpen] = useState<number | null>(null);
@@ -42,7 +38,8 @@ export function ImageGrid({ images }: { images: AttachmentView[] }) {
     <>
       <div
         className={cn(
-          "w-full overflow-hidden rounded-[10px]",
+          "overflow-hidden",
+          bleedClassName ?? "w-full rounded-[10px]",
           count === 1 ? "flex" : "grid aspect-video grid-cols-2 gap-1",
           count >= 3 && "grid-rows-2",
         )}
@@ -59,7 +56,7 @@ export function ImageGrid({ images }: { images: AttachmentView[] }) {
             className={cn(
               "group relative block min-h-0 cursor-zoom-in overflow-hidden bg-muted outline-none",
               "focus-visible:after:absolute focus-visible:after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-inset focus-visible:after:ring-primary-light",
-              count === 1 ? "w-full rounded-[10px]" : "size-full",
+              count === 1 ? cn("w-full", !bleedClassName && "rounded-[10px]") : "size-full",
               tileClass(count, index),
             )}
           >
