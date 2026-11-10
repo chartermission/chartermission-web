@@ -11,6 +11,7 @@ import {
 import { cn } from "@chartermission/ui";
 import { PageHeader, PageShell } from "@/components/discover/page-shell";
 import { ConnectionList } from "@/components/network/connection-list";
+import { InvitePeopleButton } from "@/components/invite/invite-dialog";
 import { Directory } from "@/components/network/directory";
 import { DirectoryMemberCard } from "@/components/network/member-card";
 import { requireClientViewer, settle } from "@/components/social/data";
@@ -180,11 +181,25 @@ async function NetworkMain({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
+/** Invite people who aren't on Charter Mission yet. */
+async function InviteAction() {
+  const viewer = await requireClientViewer("/network");
+  return <InvitePeopleButton inviterHandle={viewer.handle} />;
+}
+
 /** Network — connections, invitations, directory and suggestions (Figma "Web / Network directory", node 17:1602). */
 export default function NetworkPage({ searchParams }: PageProps<"/[locale]/network">) {
   return (
     <PageShell>
-      <PageHeader title="Network" description="Find people by country, sector and skill. Connections see more of each other’s profiles." />
+      <PageHeader
+        title="Network"
+        description="Find people by country, sector and skill. Connections see more of each other’s profiles."
+        actions={
+          <Suspense>
+            <InviteAction />
+          </Suspense>
+        }
+      />
       <Suspense
         fallback={
           <>

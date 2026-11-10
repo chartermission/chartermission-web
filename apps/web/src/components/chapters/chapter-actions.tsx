@@ -12,7 +12,7 @@ import {
   type PostView,
 } from "@chartermission/contracts";
 import Link from "next/link";
-import { Button, Chip, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
+import { Button, Chip, Icon, Panel, cn } from "@chartermission/ui";
 import { Composer, blockedReason, type ComposeStart } from "@/components/composer";
 import { CreatePostDialog } from "@/components/compose/create-post-dialog";
 import { announceDraftsChanged } from "@/components/drafts/drafts-events";
@@ -83,32 +83,6 @@ export function JoinChapterButton({ chapter, following: initial, banned = false 
   );
 }
 
-/** "Invite people" — copies the chapter link. */
-export function InviteButton({ slug }: { slug: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function invite() {
-    const url = `${window.location.origin}/chapters/${slug}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2500);
-    } catch {
-      window.prompt("Copy this chapter link", url);
-    }
-  }
-
-  return (
-    <>
-      <button type="button" onClick={invite} className={buttonClasses({ variant: "accent" })}>
-        {copied ? "Link copied" : "Invite people"}
-      </button>
-      <span className="sr-only" role="status">
-        {copied ? "Chapter link copied to clipboard" : ""}
-      </span>
-    </>
-  );
-}
 
 type Session = { key: number } & ComposeStart;
 

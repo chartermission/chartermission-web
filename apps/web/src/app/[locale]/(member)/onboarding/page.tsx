@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { INVITE_COOKIE } from "@/lib/invite";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -56,6 +58,9 @@ async function Wizard() {
   }
   const [state, profile, taxonomies] = result.data;
   if (state.completed) redirect("/feed");
+  // Invited to a chapter (/invite?chapter=…): pick it in "Find your people" for them.
+  const invited = (await cookies()).get(INVITE_COOKIE)?.value;
+  const invitedChapterId = taxonomies.chapters.find((c) => c.slug === invited)?.id ?? null;
   return (
     <OnboardingWizard
       initial={state}
@@ -63,6 +68,7 @@ async function Wizard() {
       taxonomies={taxonomies}
       countryGroups={groupCountries(taxonomies.countries)}
       viewer={{ name: viewer.name, tone: viewer.tone, emailVerified: viewer.emailVerified }}
+      invitedChapterId={invitedChapterId}
     />
   );
 }

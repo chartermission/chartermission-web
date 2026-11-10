@@ -50,4 +50,6 @@ export const en: Dict = {
   "Connect with {count} members": { one: "Connect with {count} member", other: "Connect with {count} members" },
   "Help answer {count} open questions": { one: "Help answer {count} open question", other: "Help answer {count} open questions" },
   "{count} going": { one: "{count} going", other: "{count} going" },
+  "Up to {count} addresses at a time": { one: "Up to {count} address at a time", other: "Up to {count} addresses at a time" },
+  "Invitation sent to {count} people": { one: "Invitation sent to {count} person", other: "Invitation sent to {count} people" },
 };

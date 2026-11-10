@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import type { ChapterDetail, EventSummary, MemberRef, Page, PostView } from "@chartermission/contracts";
 import { ChapterAvatar, ChapterCover, Icon, Panel, buttonClasses, chipClasses, type IconName } from "@chartermission/ui";
-import { ChapterAbout, ChapterFeed, ChapterMembers, InviteButton, JoinChapterButton } from "@/components/chapters/chapter-actions";
+import { ChapterAbout, ChapterFeed, ChapterMembers, JoinChapterButton } from "@/components/chapters/chapter-actions";
+import { InvitePeopleButton } from "@/components/invite/invite-dialog";
 import { ChapterReview } from "@/components/chapters/chapter-moderation";
 import { TabList, TabPanel, Tabs } from "@/components/chapters/tabs";
 import { EventRow } from "@/components/events/event-cards";
@@ -117,7 +118,7 @@ async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]
             </div>
             <div className="flex items-center gap-2">
               <JoinChapterButton chapter={chapter} following={chapter.viewer.following} banned={chapter.viewer.banned} />
-              <InviteButton slug={chapter.slug} />
+              <InvitePeopleButton inviterHandle={viewer.handle} chapter={{ slug: chapter.slug, name: chapter.name }} />
             </div>
           </div>
           <TabList label={t("{name} sections", { name: chapter.name })} tabs={tabs} />

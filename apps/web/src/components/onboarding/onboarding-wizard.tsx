@@ -105,6 +105,7 @@ export function OnboardingWizard({
   taxonomies,
   countryGroups,
   viewer,
+  invitedChapterId = null,
 }: {
   initial: OnboardingState;
   profile: Pick<OwnProfile, "organisation" | "languages" | "avatarUrl">;
@@ -114,6 +115,8 @@ export function OnboardingWizard({
   >;
   countryGroups: CountryGroup[];
   viewer: { name: string; tone: AvatarTone; emailVerified: boolean };
+  /** The chapter they were invited to, picked for them unless they already chose chapters. */
+  invitedChapterId?: string | null;
 }) {
   const t = useT();
   const id = useId();
@@ -121,7 +124,11 @@ export function OnboardingWizard({
   const heading = useRef<HTMLHeadingElement>(null);
   const firstRender = useRef(true);
   const [index, setIndex] = useState(Math.min(initial.step, LAST));
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(initial, profile));
+  const [draft, setDraft] = useState<Draft>(() => {
+    const start = draftFrom(initial, profile);
+    if (invitedChapterId && !start.followedChapterIds.includes(invitedChapterId)) start.followedChapterIds = [...start.followedChapterIds, invitedChapterId];
+    return start;
+  });
   // What the server last confirmed, to diff follows and profile fields.
   const [saved, setSaved] = useState<Draft>(() => draftFrom(initial, profile));
   const [suggestions] = useState(initial.suggestions);

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { INVITE_COOKIE } from "@/lib/invite";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, localeFromHeader, type Locale } from "@/i18n/config";
 
 /** Member-only areas: without a session cookie the visitor is sent to sign in with a return path. */
@@ -75,6 +76,31 @@ export function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = `/${oldProfile[1]}`;
     return NextResponse.redirect(url, 308);
+  }
+
+  // Invitation links (/invite?chapter={slug}&from={handle}).
+  if (pathname === "/invite") {
+    const chapter = request.nextUrl.searchParams.get("chapter");
+    const slug = chapter && /^[a-z0-9-]{1,80}$/.test(chapter) ? chapter : null;
+    const url = request.nextUrl.clone();
+    url.search = "";
+    if (PREVIEW_BOT.test(request.headers.get("user-agent") ?? "")) {
+      // The preview is the chapter's own (cover photo), or the landing page's.
+      const saved = request.cookies.get(LOCALE_COOKIE)?.value;
+      if (!slug) return NextResponse.redirect(new URL("/", request.url));
+      url.pathname = `/${isLocale(saved) ? saved : DEFAULT_LOCALE}/link-preview`;
+      url.search = `?path=${encodeURIComponent(`/chapters/${slug}`)}`;
+      return NextResponse.rewrite(url);
+    }
+    if (request.cookies.has("cm_session")) {
+      url.pathname = slug ? `/chapters/${slug}` : "/feed";
+      return NextResponse.redirect(url);
+    }
+    // Someone new: sign up, with the chapter already picked in "Find your people".
+    url.pathname = "/signup";
+    const response = NextResponse.redirect(url);
+    if (slug) response.cookies.set(INVITE_COOKIE, slug, { path: "/", maxAge: 60 * 60 * 24 * 30, sameSite: "lax" });
+    return response;
   }
 
   // Link-preview bots get a page with that link's title, summary and picture (app/[locale]/link-preview).

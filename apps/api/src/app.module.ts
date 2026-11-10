@@ -27,6 +27,7 @@ import { PagesModule } from './pages/pages.module.js';
 import { PeopleModule } from './people/people.module.js';
 import { MessagesModule } from './messages/messages.module.js';
 import { PreviewModule } from './preview/preview.module.js';
+import { InvitesModule } from './invites/invites.module.js';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { PreviewModule } from './preview/preview.module.js';
     PeopleModule,
     MessagesModule,
     PreviewModule,
+    InvitesModule,
   ],
   controllers: [AppController],
   providers: [
