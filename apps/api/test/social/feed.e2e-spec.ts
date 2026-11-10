@@ -41,6 +41,30 @@ describe('Feed and topic pages', () => {
     await viewer.get('/feed?cursor=not-a-cursor').expect(400);
   });
 
+  it('posts from official accounts and official pages reach every member, followed or not', async () => {
+    const viewer = await createMember(t);
+    const official = await createMember(t);
+    const stranger = await createMember(t);
+    await t.db.update(s.users).set({ isOfficial: true }).where(eq(s.users.id, official.id));
+    const [page] = await t.db
+      .insert(s.pages)
+      .values({ slug: `official-${Date.now()}`, name: 'Charter Mission', status: 'active', official: true, createdBy: official.id })
+      .returning();
+    const fromOfficial = await insertPost(t, official.id, 'Platform update from the official account');
+    const fromPage = await insertPost(t, official.id, 'News from the official page');
+    await t.db.update(s.posts).set({ pageId: page!.id }).where(eq(s.posts.id, fromPage.id));
+    const unrelated = await insertPost(t, stranger.id, 'Someone I do not follow');
+
+    const following = ids((await viewer.get('/feed?tab=following').expect(200)).body);
+    expect(following).toEqual(expect.arrayContaining([fromOfficial.id, fromPage.id]));
+    expect(following).not.toContain(unrelated.id);
+    const forYou = ids((await viewer.get('/feed?tab=for_you').expect(200)).body);
+    expect(forYou).toEqual(expect.arrayContaining([fromOfficial.id, fromPage.id]));
+    const pill = await viewer.get(`/feed/new?tab=following&since=${encodeURIComponent(new Date(Date.now() - 3600_000).toISOString())}`).expect(200);
+    expect(pill.body.count).toBeGreaterThanOrEqual(2);
+
+  });
+
   it('following = own posts, followed members, hashtags and chapters, plus announcements', async () => {
     const viewer = await createMember(t, { countryCode: 'GH' });
     const followed = await createMember(t);

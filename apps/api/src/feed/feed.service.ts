@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, desc, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type { FeedNewQuery, FeedNewResponse, FeedQuery, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, follows, hashtags, memberProfiles, pageAdmins, pages, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
+import { chapters, follows, users, hashtags, memberProfiles, pageAdmins, pages, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -23,7 +23,7 @@ const FOR_YOU_DAYS = 7;
  *         × (1 + 1·followed + 0.25·sameCountry)                    followed source / same country boost
  *         ÷ (1 + ageHours / 12) ^ 1.2                              recency decay
  *
- * "followed" = the viewer's own post, or a followed member, chapter or hashtag.
+ * "followed" = the viewer's own post, a followed member, chapter or hashtag, or an official account or page.
  * The reference time is fixed in the cursor so scores stay stable across pages.
  */
 export const FOR_YOU_WEIGHTS = { followed: 1, sameCountry: 0.25, halfLifeHours: 12, decayExponent: 1.2 } as const;
@@ -61,7 +61,7 @@ export class FeedService {
     let page: { ids: string[]; nextCursor: string | null };
     if (q.tab === 'for_you') page = await this.forYou(viewer, q, base, limit);
     else {
-      const conds = q.tab === 'following' ? [...base, sql`(${this.followedSql(viewer.id)} or ${posts.kind} = 'announcement')`] : base;
+      const conds = q.tab === 'following' ? [...base, sql`(${this.followedSql(viewer.id)} or ${this.officialSql()} or ${posts.kind} = 'announcement')`] : base;
       page = await this.newest(q, conds, limit);
     }
     const ids = [...pinned, ...page.ids.filter((id) => !pinned.includes(id))];
@@ -82,7 +82,7 @@ export class FeedService {
       sql`${posts.status} = 'published'`,
       sql`${posts.createdAt} > ${q.since}::timestamptz`,
     ];
-    if (q.tab === 'following') conds.push(sql`(${this.followedSql(viewer.id)} or ${posts.kind} = 'announcement')`);
+    if (q.tab === 'following') conds.push(sql`(${this.followedSql(viewer.id)} or ${this.officialSql()} or ${posts.kind} = 'announcement')`);
     if (q.tab === 'for_you') conds.push(sql`${posts.createdAt} > now() - make_interval(days => ${FOR_YOU_DAYS}::int)`);
     const [counted] = await this.db
       .select({ n: sql<number>`count(*)::int` })
@@ -136,7 +136,7 @@ export class FeedService {
     const w = FOR_YOU_WEIGHTS;
     const score = sql<string>`round((
       (1 + ln(1 + ${engagementSql}))
-      * (1 + (case when ${this.followedSql(viewer.id)} then ${w.followed}::float8 else 0 end)
+      * (1 + (case when ${this.followedSql(viewer.id)} or ${this.officialSql()} then ${w.followed}::float8 else 0 end)
            + (case when ${posts.countryCode} = ${viewer.countryCode}::text then ${w.sameCountry}::float8 else 0 end))
       / power(1 + greatest(extract(epoch from (${asOf}::timestamptz - ${posts.createdAt})), 0) / ${w.halfLifeHours * 3600}::float8, ${w.decayExponent}::float8)
     )::numeric, 9)`;
@@ -159,6 +159,16 @@ export class FeedService {
       .limit(limit + 1);
     const page = paginate(rows, limit, (last) => ({ s: last.score, id: last.id, at: asOf }));
     return { ids: page.items.map((r) => r.id), nextCursor: page.nextCursor };
+  }
+
+  /**
+   * Posts from Charter Mission's official accounts and official pages. Every member sees them in
+   * Following and they get the followed-source boost in For you, whether or not the member follows
+   * them (mutes and blocks still apply through listablePostsSql).
+   */
+  private officialSql(): SQL {
+    return sql`((${posts.pageId} is null and exists (select 1 from ${users} ou where ou.id = ${posts.authorId} and ou.is_official))
+      or (${posts.pageId} is not null and exists (select 1 from ${pages} op where op.id = ${posts.pageId} and op.official)))`;
   }
 
   /** The viewer's own posts, followed members, followed and managed pages, followed chapters and followed hashtags (CM-FED-05). */
