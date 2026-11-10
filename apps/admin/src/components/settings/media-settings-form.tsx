@@ -5,6 +5,7 @@ import { formatDuration, type MediaSettings } from "@chartermission/contracts";
 import { Button } from "@chartermission/ui";
 import { FormNotice, TextField } from "@/components/form-field";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
 
 type Field = { key: keyof MediaSettings; label: string; note: string; min: number; max: number };
 
@@ -19,6 +20,7 @@ const FIELDS: Field[] = [
  * from now on: videos already processed keep their length. Links to YouTube and other platforms have no limit.
  */
 export function MediaSettingsForm({ initial }: { initial: MediaSettings }) {
+  const t = useT();
   const [values, setValues] = useState(initial);
   const [draft, setDraft] = useState<Record<keyof MediaSettings, string>>({
     postVideoMaxSeconds: String(initial.postVideoMaxSeconds),
@@ -36,7 +38,7 @@ export function MediaSettingsForm({ initial }: { initial: MediaSettings }) {
     const errors: Partial<Record<keyof MediaSettings, string>> = {};
     for (const f of FIELDS) {
       const value = Number(draft[f.key]);
-      if (!Number.isInteger(value) || value < f.min || value > f.max) errors[f.key] = `Enter whole seconds from ${f.min} to ${f.max}`;
+      if (!Number.isInteger(value) || value < f.min || value > f.max) errors[f.key] = t("Enter whole seconds from {min} to {max}", { min: f.min, max: f.max });
       next[f.key] = value;
     }
     setFieldErrors(errors);
@@ -84,7 +86,7 @@ export function MediaSettingsForm({ initial }: { initial: MediaSettings }) {
                 step={1}
                 value={draft[f.key]}
                 onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-                hint={`${f.note} Seconds, ${f.min}–${f.max}${Number.isFinite(seconds) && seconds > 0 ? ` (${formatDuration(seconds)})` : ""}. Now: ${formatDuration(values[f.key])}.`}
+                hint={t("{note} Seconds, {min}–{max}{duration}. Now: {now}.", { note: t(f.note), min: f.min, max: f.max, duration: Number.isFinite(seconds) && seconds > 0 ? ` (${formatDuration(seconds)})` : "", now: formatDuration(values[f.key]) })}
                 error={fieldErrors[f.key]}
               />
             );

@@ -2,6 +2,7 @@ import type { QueueStats } from "@chartermission/contracts";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { ApiError } from "@/lib/api/errors";
 import { formatCount, formatMinutes } from "@/lib/format";
+import { getT } from "@/i18n/server";
 import { PERM, can } from "@/lib/permissions";
 import { ErrorState } from "@/components/states";
 import { StatCard, type ModerationStat } from "./stat-card";
@@ -9,6 +10,7 @@ import { StatCard, type ModerationStat } from "./stat-card";
 /** Summary cards (Figma node 12:1648) from GET /admin/queue/stats. */
 export async function ModerationStats({ next }: { next: string }) {
   const viewer = await requireViewer(next);
+  const t = await getT();
   if (!can(viewer, PERM.moderationView)) return null;
   let stats: QueueStats;
   try {
@@ -24,7 +26,7 @@ export async function ModerationStats({ next }: { next: string }) {
     {
       label: "Open reports",
       value: formatCount(stats.openReports),
-      note: stats.highPriority ? `${formatCount(stats.highPriority)} high priority` : "None high priority",
+      note: stats.highPriority ? t("{count} high priority", { count: stats.highPriority }) : "None high priority",
       tone: stats.highPriority ? "error" : "success",
     },
     {
@@ -48,7 +50,7 @@ export async function ModerationStats({ next }: { next: string }) {
       label: "Hidden content",
       value: formatCount(stats.hiddenContent),
       note: stats.blockedUploads
-        ? `${formatCount(stats.blockedUploads)} upload${stats.blockedUploads === 1 ? "" : "s"} blocked by scanning`
+        ? t("{count} uploads blocked by scanning", { count: stats.blockedUploads })
         : "Posts and comments hidden or removed",
       tone: "neutral",
     },

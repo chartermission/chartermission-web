@@ -22,12 +22,14 @@ import { queueApiQuery, queueSearch, type QueueFilters } from "@/lib/queue-filte
 import { actionDef } from "./moderation-actions";
 import { QueueFilterBar } from "./queue-filter-bar";
 import { ReportDetail } from "./report-detail";
+import { useT } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 type More = { base: string | null; rows: AdminReportRow[]; cursor: string | null };
 
-function statusChip(row: AdminReportRow) {
+function statusChip(t: Translate, row: AdminReportRow) {
   if (row.status === "open") return PRIORITY_CHIP[row.priority];
-  if (row.status === "in_review") return { label: `In review · ${PRIORITY_CHIP[row.priority].label}`, tone: PRIORITY_CHIP[row.priority].tone };
+  if (row.status === "in_review") return { label: t("In review · {label}", { label: t(PRIORITY_CHIP[row.priority].label) }), tone: PRIORITY_CHIP[row.priority].tone };
   return STATUS_CHIP[row.status];
 }
 
@@ -55,6 +57,7 @@ export function ModerationWorkspace({
   viewerId: string;
   canAct: boolean;
 }) {
+  const t = useT();
   const router = useRouter();
   const ids = useId();
   const [navigating, startNavigation] = useTransition();
@@ -157,9 +160,11 @@ export function ModerationWorkspace({
     setPending(null);
     setNotice({
       tone: "success",
-      text: `${ACTION_LABELS[pending]}${durationLabel ? ` (${durationLabel.toLowerCase()})` : ""}: ${TARGET_LABELS[detail.target.type].toLowerCase()} by ${
-        detail.author?.name ?? "unknown author"
-      }. Reason recorded in the audit log.`,
+      text: t("{action}: {target} by {name}. Reason recorded in the audit log.", {
+        action: `${t(ACTION_LABELS[pending])}${durationLabel ? ` (${t(durationLabel).toLowerCase()})` : ""}`,
+        target: t(TARGET_LABELS[detail.target.type]).toLowerCase(),
+        name: detail.author?.name ?? t("unknown author"),
+      }),
     });
     refresh(detail.id);
   }
@@ -222,7 +227,7 @@ export function ModerationWorkspace({
                   <tbody>
                     {rows.map((row) => {
                       const isSelected = row.id === optimisticSelected;
-                      const chip = statusChip(row);
+                      const chip = statusChip(t, row);
                       return (
                         <tr
                           key={row.id}
@@ -256,7 +261,7 @@ export function ModerationWorkspace({
                           </td>
                           <td className="py-3 pr-3">
                             {row.assignedTo ? (
-                              <span title={`Assigned to ${row.assignedTo.name}`}>
+                              <span title={t("Assigned to {name}", { name: row.assignedTo.name })}>
                                 <Avatar
                                   name={row.assignedTo.id === viewerId ? "You" : row.assignedTo.name}
                                   size={24}
@@ -280,7 +285,7 @@ export function ModerationWorkspace({
                 <ul className="flex flex-col md:hidden" aria-label="Reports">
                   {rows.map((row) => {
                     const isSelected = row.id === optimisticSelected;
-                    const chip = statusChip(row);
+                    const chip = statusChip(t, row);
                     return (
                       <li key={row.id} className="border-t border-line first:border-t-0">
                         <button
@@ -307,7 +312,7 @@ export function ModerationWorkspace({
                             </Chip>
                             {row.assignedTo && (
                               <span className="text-xs text-secondary">
-                                {row.assignedTo.id === viewerId ? "Assigned to you" : `Assigned to ${row.assignedTo.name}`}
+                                {row.assignedTo.id === viewerId ? "Assigned to you" : t("Assigned to {name}", { name: row.assignedTo.name })}
                               </span>
                             )}
                           </span>

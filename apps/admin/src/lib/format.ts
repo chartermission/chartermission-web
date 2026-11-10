@@ -1,6 +1,6 @@
 /** Absolute console dates, e.g. "3 Nov 2026, 14:05". `timeZone` undefined = the browser's zone. */
-export function formatDateTime(iso: string, timeZone?: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
+export function formatDateTime(iso: string, timeZone?: string, tag = "en-GB"): string {
+  return new Intl.DateTimeFormat(tag, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -12,26 +12,35 @@ export function formatDateTime(iso: string, timeZone?: string): string {
 }
 
 /** "3 Nov 2026" */
-export function formatDate(iso: string, timeZone?: string): string {
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone }).format(new Date(iso));
+export function formatDate(iso: string, timeZone?: string, tag = "en-GB"): string {
+  return new Intl.DateTimeFormat(tag, { day: "numeric", month: "short", year: "numeric", timeZone }).format(new Date(iso));
 }
 
 /** Compact age for queues: "now", "12m", "3h", "2d", "5w". */
-export function relativeAge(iso: string, now: number): string {
+export function relativeAge(iso: string, now: number, tag = "en-GB"): string {
   const diff = Math.max(0, now - new Date(iso).getTime());
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
+  const unit = (value: number, name: "minute" | "hour" | "day" | "week") =>
+    new Intl.NumberFormat(tag, { style: "unit", unit: name, unitDisplay: "narrow" }).format(value).replace(/\s+/g, tag.startsWith("en") ? "" : "\u00a0");
+  if (minutes < 1) return tag.startsWith("en") ? "now" : new Intl.RelativeTimeFormat(tag, { numeric: "auto" }).format(0, "second");
+  if (minutes < 60) return unit(minutes, "minute");
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
+  if (hours < 24) return unit(hours, "hour");
   const days = Math.floor(hours / 24);
-  if (days < 14) return `${days}d`;
-  return `${Math.floor(days / 7)}w`;
+  if (days < 14) return unit(days, "day");
+  return unit(Math.floor(days / 7), "week");
 }
 
 /** "2 min ago", "3 h ago", "in 4 days" — for status lines. */
-export function relativePhrase(iso: string, now: number): string {
+export function relativePhrase(iso: string, now: number, tag = "en-GB"): string {
   const diff = new Date(iso).getTime() - now;
+  if (!tag.startsWith("en")) {
+    const minutes = Math.round(diff / 60_000);
+    const rtf = new Intl.RelativeTimeFormat(tag, { numeric: "auto" });
+    if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+    if (Math.abs(minutes) < 60 * 48) return rtf.format(Math.round(minutes / 60), "hour");
+    return rtf.format(Math.round(minutes / 1440), "day");
+  }
   const future = diff > 0;
   const abs = Math.abs(diff);
   const minutes = Math.round(abs / 60_000);

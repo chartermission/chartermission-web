@@ -13,6 +13,8 @@ import { Button, Chip, Icon, cn } from "@chartermission/ui";
 import { DateTime, Relative } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage, isApiError } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 const POLL_MS = 2000;
 /** Stop polling after this long; the run carries on in the background and shows on the next visit. */
@@ -20,9 +22,9 @@ const POLL_LIMIT_MS = 3 * 60_000;
 
 const KIND_LABEL: Record<SyncRunKind, string> = { sync: "Catalogue sync", link_check: "Link check" };
 
-function runCounts(run: SyncRunView): string {
-  if (run.kind === "link_check") return `${run.checked} checked · ${run.broken} broken`;
-  return `${run.created} new · ${run.updated} updated · ${run.removed} removed`;
+function runCounts(t: Translate, run: SyncRunView): string {
+  if (run.kind === "link_check") return t("{checked} checked · {broken} broken", { checked: run.checked, broken: run.broken });
+  return t("{created} new · {updated} updated · {removed} removed", { created: run.created, updated: run.updated, removed: run.removed });
 }
 
 function statusChip(run: SyncRunView) {
@@ -31,12 +33,13 @@ function statusChip(run: SyncRunView) {
   return <Chip tone="success" className="px-2! py-0.5! text-xs!">Succeeded</Chip>;
 }
 
-function doneMessage(run: SyncRunView) {
-  if (run.status === "failed") return `${KIND_LABEL[run.kind]} failed${run.error ? `: ${run.error}` : "."}`;
-  return `${KIND_LABEL[run.kind]} finished: ${runCounts(run)}.`;
+function doneMessage(t: Translate, run: SyncRunView) {
+  if (run.status === "failed") return run.error ? t("{label} failed: {error}", { label: t(KIND_LABEL[run.kind]), error: run.error }) : t("{label} failed.", { label: t(KIND_LABEL[run.kind]) });
+  return t("{label} finished: {counts}.", { label: t(KIND_LABEL[run.kind]), counts: runCounts(t, run) });
 }
 
 function LastRun({ kind, run, schedule }: { kind: SyncRunKind; run: SyncRunView | undefined; schedule: string }) {
+  const t = useT();
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-[10px] border border-line p-3.5">
       <div className="flex items-center justify-between gap-2">
@@ -49,9 +52,9 @@ function LastRun({ kind, run, schedule }: { kind: SyncRunKind; run: SyncRunView 
             {run.status === "running" ? "Started " : "Last run "}
             <Relative iso={run.finishedAt ?? run.startedAt} />
             {" · "}
-            {run.trigger === "admin" ? `by ${run.triggeredBy ?? "an admin"}` : "scheduled"}
+            {run.trigger === "admin" ? t("by {name}", { name: run.triggeredBy ?? t("an admin") }) : "scheduled"}
           </p>
-          <p className="text-sm text-body">{run.status === "running" ? "In progress…" : runCounts(run)}</p>
+          <p className="text-sm text-body">{run.status === "running" ? "In progress…" : runCounts(t, run)}</p>
           {run.error && <p className="text-xs break-words text-error">{run.error}</p>}
         </>
       ) : (
@@ -68,6 +71,7 @@ function LastRun({ kind, run, schedule }: { kind: SyncRunKind; run: SyncRunView 
  * polls the history, then refreshes the catalogue below.
  */
 export function SyncPanel({ initialRuns }: { initialRuns: SyncRunView[] }) {
+  const t = useT();
   const router = useRouter();
   const [runs, setRuns] = useState(initialRuns);
   const [starting, setStarting] = useState<SyncRunKind | null>(null);
@@ -88,7 +92,7 @@ export function SyncPanel({ initialRuns }: { initialRuns: SyncRunView[] }) {
         if (watched.current.has(run.id) && run.status !== "running") {
           watched.current.delete(run.id);
           finished = true;
-          toast(doneMessage(run), run.status === "failed" ? "error" : "success");
+          toast(doneMessage(t, run), run.status === "failed" ? "error" : "success");
         }
       }
       if (finished) startRefresh(() => router.refresh());
@@ -100,7 +104,7 @@ export function SyncPanel({ initialRuns }: { initialRuns: SyncRunView[] }) {
       }
     } catch (e) {
       setPolling(false);
-      toast(`Couldn’t check the run’s progress. ${errorMessage(e)}`, "error");
+      toast(t("Couldn’t check the run’s progress. {errorMessage}", { errorMessage: errorMessage(e) }), "error");
     }
   }, [router]);
 
@@ -116,16 +120,16 @@ export function SyncPanel({ initialRuns }: { initialRuns: SyncRunView[] }) {
       const run = await api<SyncRunView>(kind === "sync" ? "/admin/learning/sync" : "/admin/learning/link-check", { method: "POST" });
       watched.current.add(run.id);
       setRuns((prev) => [run, ...prev.filter((r) => r.id !== run.id)]);
-      toast(`${KIND_LABEL[kind]} started.`, "info");
+      toast(t("{label} started.", { label: KIND_LABEL[kind] }), "info");
     } catch (e) {
       if (!isApiError(e, "CONFLICT")) {
         toast(
-          isApiError(e, "FORBIDDEN") ? "Your role can’t run syncs. Ask a Platform Admin." : `${KIND_LABEL[kind]} didn’t start. ${errorMessage(e)}`,
+          isApiError(e, "FORBIDDEN") ? "Your role can’t run syncs. Ask a Platform Admin." : t("{label} didn’t start. {errorMessage}", { label: KIND_LABEL[kind], errorMessage: errorMessage(e) }),
           "error",
         );
         return;
       }
-      toast(`${errorMessage(e)} Showing its progress.`, "info");
+      toast(t("{errorMessage} Showing its progress.", { errorMessage: errorMessage(e) }), "info");
       // Watch whatever is running now.
       const page = await api<Page<SyncRunView>>("/admin/learning/sync-runs", { query: { limit: 20 } }).catch(() => null);
       if (page) {
@@ -184,11 +188,11 @@ export function SyncPanel({ initialRuns }: { initialRuns: SyncRunView[] }) {
       </p>
 
       <div className="flex flex-col gap-3 md:flex-row">
-        <LastRun kind="sync" run={latest("sync")} schedule={`Runs automatically every ${LEARNING_SYNC_INTERVAL_HOURS} hours.`} />
+        <LastRun kind="sync" run={latest("sync")} schedule={t("Runs automatically every {LEARNINGSYNCINTERVALHOURS} hours.", { LEARNINGSYNCINTERVALHOURS: LEARNING_SYNC_INTERVAL_HOURS })} />
         <LastRun
           kind="link_check"
           run={latest("link_check")}
-          schedule={`Checks every course link every ${LEARNING_LINK_CHECK_INTERVAL_DAYS} days.`}
+          schedule={t("Checks every course link every {LEARNINGLINKCHECKINTERVALDAYS} days.", { LEARNINGLINKCHECKINTERVALDAYS: LEARNING_LINK_CHECK_INTERVAL_DAYS })}
         />
       </div>
 
@@ -216,7 +220,7 @@ export function SyncPanel({ initialRuns }: { initialRuns: SyncRunView[] }) {
                   <td className="py-2 pr-3 pl-3.5">
                     <span className="block text-ink">{KIND_LABEL[run.kind]}</span>
                     <span className="block text-xs text-secondary">
-                      {run.trigger === "admin" ? `by ${run.triggeredBy ?? "an admin"}` : "Scheduled"}
+                      {run.trigger === "admin" ? t("by {name}", { name: run.triggeredBy ?? t("an admin") }) : "Scheduled"}
                     </span>
                   </td>
                   <td className="py-2 pr-3 text-body">
@@ -224,7 +228,7 @@ export function SyncPanel({ initialRuns }: { initialRuns: SyncRunView[] }) {
                   </td>
                   <td className="py-2 pr-3">{statusChip(run)}</td>
                   <td className="py-2 pr-3.5 text-body">
-                    {run.status === "running" ? "—" : runCounts(run)}
+                    {run.status === "running" ? "—" : runCounts(t, run)}
                     {run.error && <span className="block text-xs break-words text-error">{run.error}</span>}
                   </td>
                 </tr>

@@ -28,11 +28,13 @@ import { STAGE_TONE } from "@/lib/ambassadors";
 import { Journey, type JourneyAction } from "./journey";
 import { LeadFields, leadInputFromForm } from "./lead-fields";
 import { Progress } from "./leads-workspace";
+import { T, useT } from "@/i18n/client";
 
 type Dialog = "certify" | "end" | null;
 
 /** One lead: pipeline actions, onboarding checklist, rubric, details and activity. */
 export function LeadDetailView({ initial, team, countries }: { initial: AdminLeadDetail; team: TeamMember[]; countries: CountryRef[] }) {
+  const t = useT();
   const [lead, setLead] = useState(initial);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -150,7 +152,7 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
                   <span className="text-secondary">None with this email yet</span>
                 )}
               </Row>
-              <Row label="Chapter">{lead.chapter?.name ?? <span className="text-secondary">No chapter yet for {lead.country.name}</span>}</Row>
+              <Row label="Chapter">{lead.chapter?.name ?? <span className="text-secondary"><T vars={{ name: lead.country.name }}>{"No chapter yet for {name}"}</T></span>}</Row>
               {lead.linkedinUrl && (
                 <Row label="LinkedIn">
                   <a href={lead.linkedinUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
@@ -178,7 +180,7 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
       {action && <JourneyDialog lead={lead} action={action} onClose={() => setAction(null)} onMove={move} />}
       {dialog === "end" && (
         <ReasonDialog
-          title={`End ${lead.fullName}’s term?`}
+          title={t("End {fullName}’s term?", { fullName: lead.fullName })}
           description="The Ambassador badge comes off their profile straight away. In good standing they keep a grey Alumni Ambassador badge."
           confirmLabel="End term"
           tone="danger"
@@ -207,7 +209,7 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
       )}
       {dialog === "certify" && (
         <ReasonDialog
-          title={`Certify ${lead.fullName}?`}
+          title={t("Certify {fullName}?", { fullName: lead.fullName })}
           description={
             <>
               They become the Ambassador for <strong>{lead.chapter?.name ?? lead.country.name}</strong>. The Ambassador badge appears on their profile at once, and they get a confirmation email.
@@ -251,6 +253,7 @@ function JourneyDialog({
   onClose: () => void;
   onMove: (stage: LeadStage, opts: { waive?: boolean; note?: string; done: string }) => Promise<void>;
 }) {
+  const t = useT();
   const here = LEAD_STAGE_LABELS[lead.stage];
   const order = lead.journey.map((s) => s.stage);
   const audit = "Recorded in the lead’s activity and the audit log.";
@@ -261,20 +264,20 @@ function JourneyDialog({
     const waive = action.kind === "waive";
     return (
       <ReasonDialog
-        title={waive ? `Waive ${here}?` : `Complete ${here}?`}
+        title={waive ? t("Waive {here}?", { here }) : t("Complete {here}?", { here })}
         description={
           waive
-            ? `${here} is recorded as waived (not needed for ${lead.fullName}) and they move to ${to}.${emailNote(action.to)} You can go back to it later.`
-            : `${here} is recorded as completed and ${lead.fullName} moves to ${to}.${emailNote(action.to)}`
+            ? t("{here} is recorded as waived (not needed for {fullName}) and they move to {to}.{emailNote} You can go back to it later.", { here, fullName: lead.fullName, to, emailNote: emailNote(action.to) })
+            : t("{here} is recorded as completed and {fullName} moves to {to}.{emailNote}", { here, fullName: lead.fullName, to, emailNote: emailNote(action.to) })
         }
-        confirmLabel={waive ? `Waive and move to ${to}` : `Move to ${to}`}
+        confirmLabel={waive ? t("Waive and move to {to}", { to }) : t("Move to {to}", { to })}
         reasonField={waive ? "required" : "optional"}
         reasonLabel={waive ? "Why is this stage waived?" : "Note"}
         reasonPlaceholder={waive ? "For example: already interviewed for the 2025 intake" : "What was decided, or what happens next"}
         minReasonLength={waive ? 3 : 1}
         requiredMessage="Say why the stage is waived. It is shown on the journey."
         reasonHint={audit}
-        onConfirm={(note) => onMove(action.to, { waive, note, done: waive ? `${here} waived. Now in ${to}.` : `Moved to ${to}` })}
+        onConfirm={(note) => onMove(action.to, { waive, note, done: waive ? t("{here} waived. Now in {to}.", { here, to }) : t("Moved to {to}", { to }) })}
         onClose={onClose}
       />
     );
@@ -285,20 +288,20 @@ function JourneyDialog({
     const reopened = order.slice(order.indexOf(action.to)).filter((s) => lead.journey.find((j) => j.stage === s)?.state !== "upcoming");
     return (
       <ReasonDialog
-        title={`Go back to ${to}?`}
+        title={t("Go back to {to}?", { to })}
         description={
           <>
-            {lead.fullName} returns to <strong>{to}</strong>. {reopened.length > 1 ? `${reopened.map((s) => LEAD_STAGE_LABELS[s]).join(", ")} are reopened` : `${to} is reopened`}, so each can be
+            {lead.fullName} returns to <strong>{to}</strong>. {reopened.length > 1 ? `${reopened.map((s) => LEAD_STAGE_LABELS[s]).join(", ")} are reopened` : t("{to} is reopened", { to })}, so each can be
             completed or waived again. {lead.checklist ? "Onboarding steps already ticked are kept." : ""}
           </>
         }
-        confirmLabel={`Go back to ${to}`}
+        confirmLabel={t("Go back to {to}", { to })}
         reasonField="optional"
         reasonLabel="Note"
         reasonPlaceholder="Why they are going back"
         minReasonLength={1}
         reasonHint={audit}
-        onConfirm={(note) => onMove(action.to, { note, done: `Back in ${to}` })}
+        onConfirm={(note) => onMove(action.to, { note, done: t("Back in {to}", { to }) })}
         onClose={onClose}
       />
     );
@@ -309,15 +312,15 @@ function JourneyDialog({
     const skipped = order.slice(order.indexOf(lead.stage) + 1, order.indexOf(action.to)).map((s) => LEAD_STAGE_LABELS[s]);
     return (
       <ReasonDialog
-        title={`Skip ahead to ${to}?`}
-        description={`${here} is recorded as completed and ${skipped.join(", ")} as waived.${emailNote(action.to)} You can go back to any of them later.`}
-        confirmLabel={`Skip to ${to}`}
+        title={t("Skip ahead to {to}?", { to })}
+        description={t("{here} is recorded as completed and {join} as waived.{emailNote} You can go back to any of them later.", { here, join: skipped.join(", "), emailNote: emailNote(action.to) })}
+        confirmLabel={t("Skip to {to}", { to })}
         reasonField="required"
         reasonLabel="Why are these stages skipped?"
         minReasonLength={3}
         requiredMessage="Say why the stages are skipped. It is shown on the journey."
         reasonHint={audit}
-        onConfirm={(note) => onMove(action.to, { note, done: `Moved to ${to}` })}
+        onConfirm={(note) => onMove(action.to, { note, done: t("Moved to {to}", { to }) })}
         onClose={onClose}
       />
     );
@@ -326,7 +329,7 @@ function JourneyDialog({
   if (action.kind === "close") {
     return (
       <ReasonDialog
-        title={`Close ${lead.fullName}’s lead?`}
+        title={t("Close {fullName}’s lead?", { fullName: lead.fullName })}
         description="The lead leaves the pipeline. The stages they finished are kept, and you can reopen the lead later."
         confirmLabel="Close lead"
         reasonField="optional"
@@ -336,7 +339,7 @@ function JourneyDialog({
         reasonHint={audit}
         onConfirm={(note, data) => {
           const stage = String(data.get("stage")) as LeadStage;
-          return onMove(stage, { note, done: `Closed as ${LEAD_STAGE_LABELS[stage]}` });
+          return onMove(stage, { note, done: t("Closed as {label}", { label: LEAD_STAGE_LABELS[stage] }) });
         }}
         onClose={onClose}
       >
@@ -358,7 +361,7 @@ function JourneyDialog({
   const stopped = lead.journey.find((s) => s.state === "upcoming")?.stage ?? "screening";
   return (
     <ReasonDialog
-      title={`Reopen ${lead.fullName}’s lead?`}
+      title={t("Reopen {fullName}’s lead?", { fullName: lead.fullName })}
       description="They come back into the pipeline at the stage you choose. That stage and the ones after it start fresh; earlier stages keep their record."
       confirmLabel="Reopen"
       reasonField="optional"
@@ -367,7 +370,7 @@ function JourneyDialog({
       reasonHint={audit}
       onConfirm={(note, data) => {
         const stage = String(data.get("stage")) as LeadStage;
-        return onMove(stage, { note, done: `Reopened in ${LEAD_STAGE_LABELS[stage]}` });
+        return onMove(stage, { note, done: t("Reopened in {label}", { label: LEAD_STAGE_LABELS[stage] }) });
       }}
       onClose={onClose}
     >
@@ -416,6 +419,7 @@ function Checklist({
   run: (key: string, call: () => Promise<AdminLeadDetail>, done?: string) => Promise<boolean>;
   base: string;
 }) {
+  const t = useT();
   const checklist = lead.checklist!;
   const locked = lead.stage !== "onboarding";
   const setStep = (key: AmbassadorStepKey, status: AmbassadorStepStatus) =>
@@ -514,7 +518,7 @@ function Checklist({
                         checked={!!c.completedAt}
                         disabled={locked || !!busy}
                         onChange={(e) => void setCourse(c.courseId, e.target.checked)}
-                        aria-label={`${c.title} completed`}
+                        aria-label={t("{title} completed", { title: c.title })}
                         className="size-4 accent-primary"
                       />
                       <a href={c.startUrl} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-ink hover:text-primary hover:underline">
@@ -599,7 +603,7 @@ function Scores({ lead, disabled, onSave }: { lead: AdminLeadDetail; disabled: b
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
         <p className="text-xs text-secondary">
-          Total {total}/100. {LEAD_INTERVIEW_THRESHOLD}+ goes to interview, {LEAD_TALENT_POOL_THRESHOLD}–{LEAD_INTERVIEW_THRESHOLD - 1} to the talent pool.
+          <T vars={{ count: total, LEADINTERVIEWTHRESHOLD: LEAD_INTERVIEW_THRESHOLD, LEADTALENTPOOLTHRESHOLD: LEAD_TALENT_POOL_THRESHOLD, count2: LEAD_INTERVIEW_THRESHOLD - 1 }}>{"Total {count}/100. {LEADINTERVIEWTHRESHOLD}+ goes to interview, {LEADTALENTPOOLTHRESHOLD}–{count2} to the talent pool."}</T>
         </p>
         {!disabled && (
           <button type="submit" disabled={!dirty || invalid || saving} className={buttonClasses({ variant: "primary", size: "small" })}>

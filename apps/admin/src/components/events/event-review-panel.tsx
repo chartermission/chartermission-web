@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useState, type ReactNode } from "react";
 import {
   EVENT_FORMAT_LABELS,
@@ -14,6 +15,8 @@ import { eventStatusChip, isPublic, type EventRegistrationsPreview } from "@/lib
 import { formatCount } from "@/lib/format";
 import { formatClock, formatInZone, sameDay } from "@/lib/zoned-time";
 import { webHref } from "@/lib/navigation";
+import { T, useT } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 export type EventAction = "approve" | "request_changes" | "reject" | "unpublish" | "feature" | "unfeature";
 
@@ -25,7 +28,7 @@ export function hostName(host: EventHost): string {
 
 const HOST_KIND: Record<EventHost["type"], string> = { member: "Member host", chapter: "Chapter host", organisation: "Organisation host" };
 
-function SectionLabel({ children }: { children: string }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return <h3 className="text-label text-secondary uppercase">{children}</h3>;
 }
 
@@ -56,10 +59,10 @@ function rangeInZone(startsAt: string, endsAt: string, zone: string | undefined,
 type HistoryItem = { at: string; icon: IconName; title: string; by?: MemberRef | null; note?: string | null; tone?: "error" | "success" };
 
 /** Submission and review history from what the API keeps (latest submission and latest decision). */
-function historyItems(detail: EventDetail, row: AdminEventRow | null): HistoryItem[] {
+function historyItems(t: Translate, detail: EventDetail, row: AdminEventRow | null): HistoryItem[] {
   const items: HistoryItem[] = [{ at: detail.createdAt, icon: "plus", title: "Created as a draft", by: row?.createdBy }];
   const submittedAt = row?.submittedAt ?? detail.review?.submittedAt;
-  if (submittedAt) items.push({ at: submittedAt, icon: "send", title: "Submitted for review", note: row?.submitNote ? `Host’s note: ${row.submitNote}` : null });
+  if (submittedAt) items.push({ at: submittedAt, icon: "send", title: "Submitted for review", note: row?.submitNote ? t("Host’s note: {submitNote}", { submitNote: row.submitNote }) : null });
   const reviewedAt = row?.reviewedAt ?? detail.review?.reviewedAt;
   const note = row?.reviewNote ?? detail.review?.note ?? null;
   if (reviewedAt) {
@@ -138,11 +141,12 @@ export function EventReviewPanel({
   hydrated: boolean;
   onAction: (action: EventAction) => void;
 }) {
+  const t = useT();
   const [showJoinLink, setShowJoinLink] = useState(false);
   const status = eventStatusChip(detail);
   const live = detail.status === "published" && !detail.cancelledAt;
   const pendingReview = detail.status === "pending_review";
-  const history = historyItems(detail, row);
+  const history = historyItems(t, detail, row);
   const host = detail.host;
 
   const actions: { action: EventAction; label: string; style: keyof typeof actionClasses }[] = [];
@@ -163,7 +167,7 @@ export function EventReviewPanel({
   return (
     <section
       id={id}
-      aria-label={`Review: ${detail.title}`}
+      aria-label={t("Review: {title}", { title: detail.title })}
       aria-busy={busy}
       className={cn("flex min-w-0 flex-col gap-4 rounded-card border border-line bg-card p-4 transition-opacity sm:p-5", busy && "opacity-60")}
     >
@@ -234,7 +238,7 @@ export function EventReviewPanel({
       </div>
 
       <dl className="flex flex-col gap-3">
-        <Fact icon="clock" label={`When · event time (${detail.timezone})`}>
+        <Fact icon="clock" label={t("When · event time ({timezone})", { timezone: detail.timezone })}>
           {rangeInZone(detail.startsAt, detail.endsAt, detail.timezone, hydrated)}
           <span className="mt-0.5 block text-xs text-secondary">
             UTC: {rangeInZone(detail.startsAt, detail.endsAt, "UTC", false)} UTC
@@ -316,7 +320,7 @@ export function EventReviewPanel({
           <span className="block text-xs text-secondary">
             {detail.deadline ? (
               <>
-                Closes {formatInZone(detail.deadline, detail.timezone, { weekday: false, zoneName: false })} ({detail.timezone})
+                <T vars={{ inZone: formatInZone(detail.deadline, detail.timezone, { weekday: false, zoneName: false }), timezone: detail.timezone }}>{"Closes {inZone} ({timezone})"}</T>
               </>
             ) : (
               "Open until the event starts"
@@ -347,7 +351,7 @@ export function EventReviewPanel({
                   <Avatar name={r.member.name} size={24} tone={r.member.tone} src={r.member.avatarUrl ?? undefined} />
                   <span className="min-w-0 flex-1 truncate text-ink">{r.member.name}</span>
                   <span className="text-xs text-secondary">
-                    {r.status === "waitlisted" ? `Waitlist #${r.position}` : r.status === "attended" ? "Attended" : "Registered"}
+                    {r.status === "waitlisted" ? t("Waitlist #{position}", { position: r.position }) : r.status === "attended" ? "Attended" : "Registered"}
                   </span>
                 </li>
               ))}
@@ -371,7 +375,7 @@ export function EventReviewPanel({
 
       {detail.speakers.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <SectionLabel>{`Speakers (${detail.speakers.length})`}</SectionLabel>
+          <SectionLabel><T vars={{ count: detail.speakers.length }}>{"Speakers ({count})"}</T></SectionLabel>
           <ul className="flex flex-col gap-2">
             {detail.speakers.map((s, i) => (
               <li key={`${s.name}-${i}`} className="flex items-center gap-2.5">
@@ -412,7 +416,7 @@ export function EventReviewPanel({
             ))}
           </ol>
         )}
-        {detail.agenda.length > 0 && <p className="text-xs text-secondary">Times in {detail.timezone}.</p>}
+        {detail.agenda.length > 0 && <p className="text-xs text-secondary"><T vars={{ timezone: detail.timezone }}>{"Times in {timezone}."}</T></p>}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -431,7 +435,7 @@ export function EventReviewPanel({
               <div className="flex min-w-0 flex-col gap-0.5">
                 <p className="text-sm text-ink">
                   {h.title}
-                  {h.by && <span className="text-secondary"> by {h.by.name}</span>}
+                  {h.by && <span className="text-secondary"> <T vars={{ name: h.by.name }}>{"by {name}"}</T></span>}
                 </p>
                 <p className="text-xs text-secondary">
                   <DateTime iso={h.at} />

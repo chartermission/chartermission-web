@@ -3,6 +3,7 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { Button, Icon } from "@chartermission/ui";
 import { inputClasses } from "@/components/form-field";
+import { useT } from "@/i18n/client";
 import { ApiError, errorMessage, retryText } from "@/lib/api/client";
 
 /**
@@ -18,6 +19,7 @@ export function CodeForm({
   busyLabel: string;
   onSubmit: (code: string) => Promise<void>;
 }) {
+  const t = useT();
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
@@ -42,7 +44,7 @@ export function CodeForm({
       setCode("");
       if (e instanceof ApiError && e.status === 429) {
         setLockedFor(e.retryAfter ?? null);
-        setError(`Too many wrong codes. ${e.retryAfter ? retryText(e.retryAfter) : "Try again later."}`);
+        setError(t("Too many wrong codes. {retry}", { retry: e.retryAfter ? retryText(e.retryAfter, t) : t("Try again later.") }));
       } else if (e instanceof ApiError && e.code === "INVALID_MFA_CODE") {
         setError("That code didn’t work. Codes change every 30 seconds — enter the latest one.");
       } else {

@@ -5,6 +5,7 @@ import type { LearningAccessRules } from "@chartermission/contracts";
 import { Button, cn } from "@chartermission/ui";
 import { FormNotice, TextField } from "@/components/form-field";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
 
 type Toggle = { key: "requireProfileInfo" | "requirePhoto" | "requireCoverPhoto" | "requireChapter"; label: string; note: string };
 type Count = { key: "minPosts" | "minConnections"; label: string; note: string; max: number };
@@ -42,6 +43,7 @@ function Checkbox({ checked, onChange, label, note, disabled }: { checked: boole
  * Learning stays locked for a member until they meet every rule switched on here.
  */
 export function LearningAccessForm({ initial }: { initial: LearningAccessRules }) {
+  const t = useT();
   const [rules, setRules] = useState(initial);
   const [counts, setCounts] = useState({ minPosts: String(initial.minPosts), minConnections: String(initial.minConnections) });
   const [busy, setBusy] = useState(false);
@@ -56,7 +58,7 @@ export function LearningAccessForm({ initial }: { initial: LearningAccessRules }
     const next: LearningAccessRules = { ...rules };
     for (const c of COUNTS) {
       const value = Number(counts[c.key]);
-      if (counts[c.key].trim() === "" || !Number.isInteger(value) || value < 0 || value > c.max) errors[c.key] = `Enter a whole number from 0 to ${c.max.toLocaleString("en-US")}`;
+      if (counts[c.key].trim() === "" || !Number.isInteger(value) || value < 0 || value > c.max) errors[c.key] = t("Enter a whole number from 0 to {count}", { count: c.max.toLocaleString("en-US") });
       next[c.key] = value;
     }
     setFieldErrors(errors);
@@ -119,7 +121,7 @@ export function LearningAccessForm({ initial }: { initial: LearningAccessRules }
                 step={1}
                 value={counts[c.key]}
                 onChange={(e) => setCounts((d) => ({ ...d, [c.key]: e.target.value }))}
-                hint={`${c.note} At least this many.`}
+                hint={t("{note} At least this many.", { note: t(c.note) })}
                 error={fieldErrors[c.key]}
               />
             ))}

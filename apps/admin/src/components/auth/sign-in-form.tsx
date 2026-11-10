@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { SignInResult } from "@chartermission/contracts";
 import { Button } from "@chartermission/ui";
 import { FormNotice, TextField } from "@/components/form-field";
+import { useT } from "@/i18n/client";
 import { ApiError, api, errorMessage, retryText } from "@/lib/api/client";
 import { HOME_PATH, safeNext } from "@/lib/navigation";
 import { SingleSignOn } from "./sso";
@@ -13,6 +14,7 @@ type FieldErrors = { email?: string; password?: string };
 
 /** Admin sign-in (email + password, admin audience). The API answers with the MFA step to take next. */
 export function SignInForm() {
+  const t = useT();
   const router = useRouter();
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
@@ -56,7 +58,9 @@ export function SignInForm() {
       setBusy(false);
       if (e instanceof ApiError && e.status === 429) {
         setError(
-          `Too many sign-in attempts. ${e.retryAfter ? retryText(e.retryAfter) : "Try again later."} You can reset your password from the member site.`,
+          t("Too many sign-in attempts. {retry} You can reset your password from the member site.", {
+            retry: e.retryAfter ? retryText(e.retryAfter, t) : t("Try again later."),
+          }),
         );
       } else if (e instanceof ApiError && e.code === "VALIDATION_FAILED" && e.fields) {
         setFields({ email: e.fields.email, password: e.fields.password });

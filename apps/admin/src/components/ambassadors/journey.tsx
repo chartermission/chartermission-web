@@ -3,6 +3,7 @@
 import { LEAD_STAGE_LABELS, type AdminLeadDetail, type LeadJourneyStage, type LeadStage } from "@chartermission/contracts";
 import { Button, Icon, cn } from "@chartermission/ui";
 import { Age, DateTime } from "@/components/time";
+import { T, useT } from "@/i18n/client";
 
 export type JourneyAction =
   | { kind: "complete"; to: LeadStage }
@@ -21,6 +22,7 @@ const STATE_LABEL: Record<LeadJourneyStage["state"], string> = { done: "Complete
  * records the ones in between as waived.
  */
 export function Journey({ lead, busy, onAction }: { lead: AdminLeadDetail; busy: boolean; onAction: (action: JourneyAction) => void }) {
+  const t = useT();
   const stages = lead.journey;
   const at = stages.findIndex((s) => s.state === "current");
   const current = at >= 0 ? stages[at]! : null;
@@ -39,8 +41,8 @@ export function Journey({ lead, busy, onAction }: { lead: AdminLeadDetail; busy:
           {certified
             ? "All stages finished"
             : current
-              ? `Stage ${at + 1} of ${stages.length}`
-              : `Stopped after ${reached} of ${stages.length} stages`}
+              ? t("Stage {count} of {count2}", { count: at + 1, count2: stages.length })
+              : t("Stopped after {reached} of {count} stages", { reached, count: stages.length })}
         </p>
       </div>
 
@@ -118,7 +120,7 @@ export function Journey({ lead, busy, onAction }: { lead: AdminLeadDetail; busy:
         {current ? (
           <>
             <div className="min-w-0 flex-1 basis-72">
-              <p className="text-sm font-medium text-ink">Now: {current.label}</p>
+              <p className="text-sm font-medium text-ink"><T vars={{ label: current.label }}>{"Now: {label}"}</T></p>
               <p className="text-xs text-secondary">{current.hint}</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -150,7 +152,7 @@ export function Journey({ lead, busy, onAction }: { lead: AdminLeadDetail; busy:
         ) : closedEarly ? (
           <>
             <div className="min-w-0 flex-1 basis-72">
-              <p className="text-sm font-medium text-ink">Closed: {LEAD_STAGE_LABELS[lead.stage]}</p>
+              <p className="text-sm font-medium text-ink"><T vars={{ label: LEAD_STAGE_LABELS[lead.stage] }}>{"Closed: {label}"}</T></p>
               <p className="text-xs text-secondary">The stages they finished are kept. Reopen the lead to carry on from any stage.</p>
             </div>
             <Button size="small" variant="secondary" disabled={busy} onClick={() => onAction({ kind: "reopen" })}>

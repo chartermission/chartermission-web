@@ -19,6 +19,7 @@ import { DateTime } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage, isApiError } from "@/lib/api/client";
 import { SyncPanel } from "./sync-panel";
+import { T, useT } from "@/i18n/client";
 
 type Patch = Partial<Pick<AdminCourseView, "hidden" | "featured">>;
 type Filters = { q: string; link: "" | LinkStatus; visibility: "" | "visible" | "hidden" | "removed"; featured: "" | "yes" | "no"; topic: string };
@@ -97,7 +98,7 @@ function CharterCenterLink({ course, label = "Charter Center" }: { course: Admin
     >
       {label}
       <Icon name="external" size={12} />
-      <span className="sr-only">: {course.title} (opens in a new tab)</span>
+      <span className="sr-only"><T vars={{ title: course.title }}>{": {title} (opens in a new tab)"}</T></span>
     </a>
   );
 }
@@ -108,6 +109,7 @@ function CharterCenterLink({ course, label = "Charter Center" }: { course: Admin
  * optimistically and roll back if the API refuses.
  */
 export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminCourseView[]; truncated: boolean; runs: SyncRunView[] }) {
+  const t = useT();
   const router = useRouter();
   const ids = useId();
   const [, startRefresh] = useTransition();
@@ -157,7 +159,7 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
         return next;
       });
       const message = isApiError(e, "FORBIDDEN") ? "Your role can’t curate courses." : errorMessage(e);
-      toast(`“${course.title}” wasn’t changed. ${message}`, "error");
+      toast(t("“{title}” wasn’t changed. {message}", { title: course.title, message }), "error");
     } finally {
       setSaving((s) => {
         const next = new Set(s);
@@ -174,13 +176,13 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
       course,
       { featured },
       featured
-        ? `“${course.title}” featured.${overLimit ? ` The Learning page shows the ${LEARNING_FEATURED_LIMIT} newest featured courses.` : ""}`
-        : `“${course.title}” no longer featured.`,
+        ? `${t("“{title}” featured.", { title: course.title })}${overLimit ? ` ${t("The Learning page shows the {LEARNINGFEATUREDLIMIT} newest featured courses.", { LEARNINGFEATUREDLIMIT: LEARNING_FEATURED_LIMIT })}` : ""}`
+        : t("“{title}” no longer featured.", { title: course.title }),
     );
   }
 
   function toggleHidden(course: AdminCourseView) {
-    if (course.hidden) void curate(course, { hidden: false }, `“${course.title}” is visible to members again.`);
+    if (course.hidden) void curate(course, { hidden: false }, t("“{title}” is visible to members again.", { title: course.title }));
     else setConfirmHide(course);
   }
 
@@ -235,7 +237,7 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
                     {c.title}
                   </span>
                   <span className="truncate text-xs text-secondary">
-                    {c.httpStatus !== null ? `HTTP ${c.httpStatus}` : "No response"} ·{" "}
+                    {c.httpStatus !== null ? t("HTTP {httpStatus}", { httpStatus: c.httpStatus }) : "No response"} ·{" "}
                     {c.lastCheckedAt ? (
                       <>
                         last checked <DateTime iso={c.lastCheckedAt} />
@@ -302,7 +304,7 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
       </div>
 
       <p className="-mt-2 text-xs text-secondary" aria-live="polite">
-        Showing {shown.length} of {rows.length} courses · {featuredVisible} featured (the Learning page shows up to {LEARNING_FEATURED_LIMIT})
+        <T vars={{ count: shown.length, count2: rows.length, featuredVisible, LEARNINGFEATUREDLIMIT: LEARNING_FEATURED_LIMIT }}>{"Showing {count} of {count2} courses · {featuredVisible} featured (the Learning page shows up to {LEARNINGFEATUREDLIMIT})"}</T>
       </p>
       {truncated && <FormNotice tone="warning">Only the first 1,000 courses are listed. Use search to find others.</FormNotice>}
 
@@ -443,7 +445,7 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
           onConfirm={() => {
             const course = confirmHide;
             setConfirmHide(null);
-            void curate(course, { hidden: true }, `“${course.title}” hidden from members.`);
+            void curate(course, { hidden: true }, t("“{title}” hidden from members.", { title: course.title }));
           }}
           onClose={() => setConfirmHide(null)}
         />

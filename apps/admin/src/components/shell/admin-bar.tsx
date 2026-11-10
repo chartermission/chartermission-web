@@ -4,6 +4,7 @@ import { Avatar, Logo, LogoMark } from "@chartermission/ui";
 import type { AvatarTone } from "@chartermission/ui";
 import { SessionTimer } from "./session-timer";
 import { SignOutButton } from "./sign-out-button";
+import { LanguageSwitcher } from "@/i18n/language-menu";
 
 export type AdminBarViewer = { name: string; role: string; avatarUrl: string | null; tone: AvatarTone };
 
@@ -24,6 +25,7 @@ export function AdminBar({ viewer }: { viewer?: AdminBarViewer | null }) {
       </Link>
       <span className="hidden shrink-0 rounded-md bg-white/12 px-2.5 py-1 text-label text-inverse min-[400px]:inline">Admin console</span>
       <div className="min-w-0 flex-1" />
+      <LanguageSwitcher dark />
       {viewer && (
         <Suspense fallback={null}>
           <SessionTimer />

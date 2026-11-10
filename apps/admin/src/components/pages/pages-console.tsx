@@ -21,6 +21,7 @@ import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
 import { formatCount } from "@/lib/format";
 import { webHref } from "@/lib/navigation";
+import { T, useT } from "@/i18n/client";
 
 type Filter = "all" | PageStatus;
 
@@ -45,17 +46,17 @@ const POLICY: { value: PageCreationPolicy; label: string; hint: string }[] = [
   { value: "closed", label: "Only the team creates pages", hint: "Members see no Create a page button." },
 ];
 
-const ACTION_COPY: Record<AdminPageStatusInput["action"], { title: (name: string) => string; description: string; confirm: string; done: string; needsNote: boolean }> = {
-  approve: { title: (n) => `Approve ${n}?`, description: "The page goes live, its admins are told, and it can start posting.", confirm: "Approve page", done: "approved and live.", needsNote: false },
+const ACTION_COPY: Record<AdminPageStatusInput["action"], { title: string; description: string; confirm: string; done: string; needsNote: boolean }> = {
+  approve: { title: "Approve {name}?", description: "The page goes live, its admins are told, and it can start posting.", confirm: "Approve page", done: "{name} approved and live.", needsNote: false },
   reject: {
-    title: (n) => `Don’t approve ${n}?`,
+    title: "Don’t approve {name}?",
     description: "The page stays hidden. Its admins see your note and can edit the page to send it back for review.",
     confirm: "Don’t approve",
-    done: "sent back to its admins.",
+    done: "{name} sent back to its admins.",
     needsNote: true,
   },
-  suspend: { title: (n) => `Suspend ${n}?`, description: "The page and its posts are hidden from members straight away. Its admins see your note.", confirm: "Suspend page", done: "suspended.", needsNote: true },
-  restore: { title: (n) => `Restore ${n}?`, description: "The page and its posts become visible again.", confirm: "Restore page", done: "restored.", needsNote: false },
+  suspend: { title: "Suspend {name}?", description: "The page and its posts are hidden from members straight away. Its admins see your note.", confirm: "Suspend page", done: "{name} suspended.", needsNote: true },
+  restore: { title: "Restore {name}?", description: "The page and its posts become visible again.", confirm: "Restore page", done: "{name} restored.", needsNote: false },
 };
 
 function Logo({ page }: { page: AdminPageRow }) {
@@ -72,6 +73,7 @@ function Logo({ page }: { page: AdminPageRow }) {
 
 /** Pages (GET /admin/pages): the review queue first, then every page, with the creation setting above. */
 export function PagesConsole({ initial, settings: initialSettings, canChangeSettings }: { initial: Page<AdminPageRow>; settings: PagesSettings; canChangeSettings: boolean }) {
+  const t = useT();
   const [pages, setPages] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [filter, setFilter] = useState<Filter>("all");
@@ -144,7 +146,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
     setBusyId(page.id);
     try {
       upsert(await api<AdminPageRow>(`/admin/pages/${page.id}`, { method: "PATCH", body: { verified } }));
-      toast(verified ? `${page.name} is verified.` : `Verified tick removed from ${page.name}.`);
+      toast(verified ? t("{name} is verified.", { name: page.name }) : t("Verified tick removed from {name}.", { name: page.name }));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -269,7 +271,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
                         {page.website.replace(/^https?:\/\//, "")}
                       </a>
                     )}
-                    {page.reviewNote && page.status !== "active" && <p className="text-sm text-body">Note to admins: “{page.reviewNote}”</p>}
+                    {page.reviewNote && page.status !== "active" && <p className="text-sm text-body"><T vars={{ reviewNote: page.reviewNote }}>{"Note to admins: “{reviewNote}”"}</T></p>}
                     <p className="text-xs text-secondary">
                       Owner:{" "}
                       {page.owner ? (
@@ -313,7 +315,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
                       Edit
                     </Button>
                     <button type="button" disabled={busy} onClick={() => setRemoving(page)} className="rounded-md p-1.5 text-secondary hover:bg-error-light hover:text-error disabled:opacity-50">
-                      <Icon name="x" size={16} label={`Remove ${page.name}`} />
+                      <Icon name="x" size={16} label={t("Remove {name}", { name: page.name })} />
                     </button>
                   </div>
                 </li>
@@ -335,13 +337,13 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
           onSaved={(page) => {
             upsert(page);
             setEditing(null);
-            toast(`${page.name} saved.`);
+            toast(t("{name} saved.", { name: page.name }));
           }}
         />
       )}
       {acting && (
         <ReasonDialog
-          title={ACTION_COPY[acting.action].title(acting.page.name)}
+          title={t(ACTION_COPY[acting.action].title, { name: acting.page.name })}
           description={ACTION_COPY[acting.action].description}
           confirmLabel={ACTION_COPY[acting.action].confirm}
           tone={acting.action === "approve" || acting.action === "restore" ? "primary" : "danger"}
@@ -355,15 +357,15 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
           onConfirm={async (note) => {
             const { page, action } = acting;
             upsert(await api<AdminPageRow>(`/admin/pages/${page.id}/status`, { method: "POST", body: { action, note: note || undefined } }));
-            toast(`${page.name} ${ACTION_COPY[action].done}`);
+            toast(t(ACTION_COPY[action].done, { name: page.name }));
             setActing(null);
           }}
         />
       )}
       {removing && (
         <ReasonDialog
-          title={`Remove ${removing.name}?`}
-          description={`This deletes the page with its ${formatCount(removing.posts)} post${removing.posts === 1 ? "" : "s"} and ${formatCount(removing.followers)} follower${removing.followers === 1 ? "" : "s"}. It can’t be undone. To hide a page and keep its content, suspend it instead.`}
+          title={t("Remove {name}?", { name: removing.name })}
+          description={t("This deletes the page with its {count} posts and {followers} followers. It can’t be undone. To hide a page and keep its content, suspend it instead.", { count: removing.posts, followers: formatCount(removing.followers) })}
           confirmLabel="Remove page"
           tone="danger"
           reasonField="none"
@@ -371,7 +373,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
           onConfirm={async () => {
             await api(`/admin/pages/${removing.id}`, { method: "DELETE" });
             setPages((list) => list.filter((x) => x.id !== removing.id));
-            toast(`${removing.name} removed.`);
+            toast(t("{name} removed.", { name: removing.name }));
             setRemoving(null);
           }}
         />
@@ -381,11 +383,12 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
 }
 
 function PageFormModal({ page, onSaved, onClose }: { page: AdminPageRow | null; onSaved: (page: AdminPageRow) => void; onClose: () => void }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
     <FormModal
-      title={page ? `Edit ${page.name}` : "New page"}
+      title={page ? t("Edit {name}", { name: page.name }) : "New page"}
       description={page ? "The logo and cover are changed from the page itself, on the member site." : "The page goes live straight away. Its owner can add a logo, a cover and more admins from the member site."}
       submitLabel={page ? "Save" : "Create page"}
       busy={busy}

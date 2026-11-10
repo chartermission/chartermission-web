@@ -6,6 +6,7 @@ import type { TrendingRules } from "@chartermission/contracts";
 import { Button } from "@chartermission/ui";
 import { FormNotice, TextField } from "@/components/form-field";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
 
 type Field = { key: keyof TrendingRules; label: string; note: string; min: number; max: number; unit: string };
 
@@ -21,6 +22,7 @@ const FIELDS: Field[] = [
  * (PUT /admin/trending/rules); the change is audited and triggers a recompute.
  */
 export function TrendingRulesPanel({ rules, canEdit }: { rules: TrendingRules; canEdit: boolean }) {
+  const t = useT();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,7 +38,7 @@ export function TrendingRulesPanel({ rules, canEdit }: { rules: TrendingRules; c
     const errors: Partial<Record<keyof TrendingRules, string>> = {};
     for (const f of FIELDS) {
       const value = Number(data.get(f.key));
-      if (!Number.isInteger(value) || value < f.min || value > f.max) errors[f.key] = `Enter a whole number from ${f.min} to ${f.max}`;
+      if (!Number.isInteger(value) || value < f.min || value > f.max) errors[f.key] = t("Enter a whole number from {min} to {max}", { min: f.min, max: f.max });
       next[f.key] = value;
     }
     setFieldErrors(errors);

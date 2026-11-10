@@ -3,6 +3,7 @@
 import { useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Icon, cn, type IconName } from "@chartermission/ui";
+import { useT } from "@/i18n/client";
 
 /** Section that loaded fine but has nothing to show. */
 export function EmptyState({
@@ -52,9 +53,10 @@ export function ErrorState({ message, className }: { message: string; className?
 
 /** Shown when the signed-in admin's role does not include a section's permission. */
 export function NoAccess({ section }: { section: string }) {
+  const t = useT();
   return (
     <div className="rounded-card border border-line bg-card">
-      <EmptyState icon="shield" title={`You don’t have access to ${section}`}>
+      <EmptyState icon="shield" title={t("You don’t have access to {section}", { section })}>
         Your role doesn’t include this part of the console. Ask a Platform Admin if you need it.
       </EmptyState>
     </div>

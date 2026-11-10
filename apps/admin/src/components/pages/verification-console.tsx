@@ -10,6 +10,7 @@ import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
 import { formatCount } from "@/lib/format";
 import { webHref } from "@/lib/navigation";
+import { useT } from "@/i18n/client";
 
 type Filter = VerificationRequestStatus | "all";
 
@@ -37,6 +38,7 @@ function Fact({ label, value, warn = false }: { label: string; value: ReactNode;
 
 /** Verification requests (GET /admin/verification): oldest first while they wait, with what the reviewer needs to decide. */
 export function VerificationConsole({ initial }: { initial: Page<AdminVerificationRow> }) {
+  const t = useT();
   const [rows, setRows] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [filter, setFilter] = useState<Filter>("pending");
@@ -188,7 +190,7 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
 
       {deciding && (
         <ReasonDialog
-          title={deciding.decision === "approve" ? `Verify ${deciding.row.page?.name ?? deciding.row.applicant.name}?` : `Decline the request from ${deciding.row.page?.name ?? deciding.row.applicant.name}?`}
+          title={deciding.decision === "approve" ? t("Verify {count}?", { count: deciding.row.page?.name ?? deciding.row.applicant.name }) : t("Decline the request from {count}?", { count: deciding.row.page?.name ?? deciding.row.applicant.name })}
           description={
             deciding.decision === "approve"
               ? "The verified tick appears beside the name everywhere, and the applicant is told."
@@ -207,7 +209,7 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
             const { row, decision } = deciding;
             const updated = await api<AdminVerificationRow>(`/admin/verification/${row.id}/decision`, { method: "POST", body: { decision, note: note || undefined } });
             setRows((list) => (filter === "pending" ? list.filter((r) => r.id !== row.id) : list.map((r) => (r.id === row.id ? updated : r))));
-            toast(decision === "approve" ? `${row.page?.name ?? row.applicant.name} is verified.` : "Request declined. The applicant has been told.");
+            toast(decision === "approve" ? t("{count} is verified.", { count: row.page?.name ?? row.applicant.name }) : "Request declined. The applicant has been told.");
             setDeciding(null);
           }}
         />

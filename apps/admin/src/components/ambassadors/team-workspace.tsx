@@ -10,6 +10,7 @@ import { DateTime } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage, isApiError } from "@/lib/api/client";
 import { FormModal } from "./modal";
+import { T, useT } from "@/i18n/client";
 
 type Editing = { mode: "add" } | { mode: "countries"; manager: ManagerView } | { mode: "revoke"; manager: ManagerView } | null;
 
@@ -28,6 +29,7 @@ export function TeamWorkspace({
   catalogue: AdminCourseView[] | null;
   viewerId: string;
 }) {
+  const t = useT();
   const [managers, setManagers] = useState(initialManagers);
   const [editing, setEditing] = useState<Editing>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export function TeamWorkspace({
     setBusy(m.userId);
     try {
       upsert(await api<ManagerView>(`/admin/ambassadors/managers/${m.userId}/invite`, { method: "POST" }));
-      toast(`A new set-password link was sent to ${m.email}`);
+      toast(t("A new set-password link was sent to {email}", { email: m.email }));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -135,7 +137,7 @@ export function TeamWorkspace({
       )}
       {editing?.mode === "revoke" && (
         <ReasonDialog
-          title={`Remove ${editing.manager.name}?`}
+          title={t("Remove {name}?", { name: editing.manager.name })}
           description="They lose access to the Ambassadors section straight away. Their leads keep them as owner until you reassign them. Their member account is not affected."
           confirmLabel="Remove access"
           tone="danger"
@@ -143,7 +145,7 @@ export function TeamWorkspace({
           onConfirm={async () => {
             await api(`/admin/ambassadors/managers/${editing.manager.userId}`, { method: "DELETE" });
             setManagers((list) => list.filter((m) => m.userId !== editing.manager.userId));
-            toast(`${editing.manager.name} no longer has manager access`);
+            toast(t("{name} no longer has manager access", { name: editing.manager.name }));
             setEditing(null);
           }}
           onClose={() => setEditing(null)}
@@ -166,6 +168,7 @@ function ManagerModal({
   onClose: () => void;
   onSaved: (m: ManagerView) => void;
 }) {
+  const t = useT();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(manager?.countries.map((c) => c.code) ?? []));
   const [all, setAll] = useState(manager?.allCountries ?? false);
   const [busy, setBusy] = useState(false);
@@ -187,7 +190,7 @@ function ManagerModal({
         : await api<ManagerView>("/admin/ambassadors/managers", {
             body: { name: String(data.get("name") ?? "").trim(), email: String(data.get("email") ?? "").trim(), countryCodes },
           });
-      toast(manager ? "Countries updated" : view.status === "invited" ? `Invitation sent to ${view.email}` : `${view.name} can now manage ambassadors`);
+      toast(manager ? "Countries updated" : view.status === "invited" ? t("Invitation sent to {email}", { email: view.email }) : t("{name} can now manage ambassadors", { name: view.name }));
       onSaved(view);
     } catch (e) {
       if (isApiError(e) && e.fields) setFields(e.fields);
@@ -198,7 +201,7 @@ function ManagerModal({
 
   return (
     <FormModal
-      title={manager ? `Countries for ${manager.name}` : "Add an Ambassador Manager"}
+      title={manager ? t("Countries for {name}", { name: manager.name }) : "Add an Ambassador Manager"}
       description={
         manager
           ? "They see and work only the leads in these countries."
@@ -274,10 +277,10 @@ function CountryPicker({
                   {c.name}
                 </label>
               ))}
-              {shown.length === 0 && <p className="px-2 py-1 text-sm text-secondary">No country matches “{filter}”.</p>}
+              {shown.length === 0 && <p className="px-2 py-1 text-sm text-secondary"><T vars={{ filter }}>{"No country matches “{filter}”."}</T></p>}
             </div>
           </div>
-          <p className="text-xs text-secondary">{selected.size} selected</p>
+          <p className="text-xs text-secondary"><T vars={{ count: selected.size }}>{"{count} selected"}</T></p>
         </>
       )}
       {error && <p className="text-xs text-error">{error}</p>}
@@ -288,6 +291,7 @@ function CountryPicker({
 /* ----------------------------- Training ----------------------------- */
 
 function TrainingSection({ initial, catalogue }: { initial: AmbassadorTrainingView; catalogue: AdminCourseView[] | null }) {
+  const t = useT();
   const [courses, setCourses] = useState(initial.courses);
   const [choice, setChoice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -334,7 +338,7 @@ function TrainingSection({ initial, catalogue }: { initial: AmbassadorTrainingVi
                   onClick={() => void save(courses.filter((x) => x.id !== c.id).map((x) => x.id), "Course removed from the training")}
                   className="rounded-md p-1 text-secondary hover:bg-muted hover:text-ink"
                 >
-                  <Icon name="x" size={16} label={`Remove ${c.title}`} />
+                  <Icon name="x" size={16} label={t("Remove {title}", { title: c.title })} />
                 </button>
               </li>
             ))}

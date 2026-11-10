@@ -90,10 +90,10 @@ export function errorMessage(e: unknown): string {
 }
 
 /** "Try again in 12 minutes" from a Retry-After value in seconds. */
-export function retryText(seconds: number): string {
-  if (seconds < 60) return `Try again in ${seconds} second${seconds === 1 ? "" : "s"}.`;
-  const minutes = Math.ceil(seconds / 60);
-  return `Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+export function retryText(seconds: number, t?: (key: string, vars?: Record<string, string | number>) => string): string {
+  const say = t ?? ((key: string, vars?: Record<string, string | number>) => key.replace("{count}", String(vars?.count)).replace(/s\.$/, vars?.count === 1 ? "." : "s."));
+  if (seconds < 60) return say("Try again in {count} seconds.", { count: seconds });
+  return say("Try again in {count} minutes.", { count: Math.ceil(seconds / 60) });
 }
 
 export { ApiError, isApiError } from "./errors";

@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button, Icon, buttonClasses, cn } from "@chartermission/ui";
 import { ApiError, errorMessage } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
 
 export const MIN_REASON_LENGTH = 10;
 
@@ -46,6 +47,7 @@ export function ReasonDialog({
   onConfirm: (reason: string, data: FormData) => void | Promise<void>;
   onClose: () => void;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export function ReasonDialog({
       setError(
         reason.length === 0
           ? requiredMessage
-          : `Add a little more detail (at least ${minReasonLength} characters).`,
+          : t("Add a little more detail (at least {minReasonLength} characters).", { minReasonLength }),
       );
       reasonRef.current?.focus();
       return;

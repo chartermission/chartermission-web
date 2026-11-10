@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { formatDate, formatDateTime, relativeAge, relativePhrase } from "@/lib/format";
+import { useIntlTag } from "@/i18n/client";
 
 const TICK_MS = 30_000;
 
@@ -26,10 +27,11 @@ export function useNow(): number | null {
  */
 export function DateTime({ iso, dateOnly = false, className }: { iso: string; dateOnly?: boolean; className?: string }) {
   const now = useNow();
+  const tag = useIntlTag();
   const zone = now === null ? "UTC" : undefined;
-  const text = dateOnly ? formatDate(iso, zone) : formatDateTime(iso, zone);
+  const text = dateOnly ? formatDate(iso, zone, tag) : formatDateTime(iso, zone, tag);
   return (
-    <time dateTime={iso} className={className} title={formatDateTime(iso, zone)}>
+    <time dateTime={iso} className={className} title={formatDateTime(iso, zone, tag)}>
       {text}
     </time>
   );
@@ -38,9 +40,10 @@ export function DateTime({ iso, dateOnly = false, className }: { iso: string; da
 /** Compact age ("12m", "3h", "2d") with the absolute time as a tooltip. */
 export function Age({ iso, className }: { iso: string; className?: string }) {
   const now = useNow();
+  const tag = useIntlTag();
   return (
-    <time dateTime={iso} className={className} title={formatDateTime(iso, now === null ? "UTC" : undefined)}>
-      {now === null ? formatDate(iso, "UTC") : relativeAge(iso, now)}
+    <time dateTime={iso} className={className} title={formatDateTime(iso, now === null ? "UTC" : undefined, tag)}>
+      {now === null ? formatDate(iso, "UTC", tag) : relativeAge(iso, now, tag)}
     </time>
   );
 }
@@ -48,9 +51,10 @@ export function Age({ iso, className }: { iso: string; className?: string }) {
 /** "2 min ago" / "in 3 days". */
 export function Relative({ iso, className }: { iso: string; className?: string }) {
   const now = useNow();
+  const tag = useIntlTag();
   return (
-    <time dateTime={iso} className={className} title={formatDateTime(iso, now === null ? "UTC" : undefined)}>
-      {now === null ? formatDateTime(iso, "UTC") : relativePhrase(iso, now)}
+    <time dateTime={iso} className={className} title={formatDateTime(iso, now === null ? "UTC" : undefined, tag)}>
+      {now === null ? formatDateTime(iso, "UTC", tag) : relativePhrase(iso, now, tag)}
     </time>
   );
 }

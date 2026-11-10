@@ -9,12 +9,14 @@ import { ReasonDialog } from "@/components/reason-dialog";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
 
 type Filter = "all" | "featured" | "active" | "disabled";
 const numberFormat = new Intl.NumberFormat("en-US");
 
 /** Topic catalogue (GET /admin/topics): add, feature, activate / deactivate, edit, remove unused. */
 export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
+  const t = useT();
   const [rows, setRows] = useState(initial);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -61,7 +63,7 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
       upsert(row);
       setNewTag("");
       setNewDescription("");
-      toast(`#${row.display} added as a featured topic.`);
+      toast(t("#{display} added as a featured topic.", { display: row.display }));
     } catch (e) {
       setAddError(errorMessage(e));
     } finally {
@@ -98,10 +100,10 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
           value={filter}
           onChange={setFilter}
           items={[
-            { value: "all", label: `All (${rows.length})` },
-            { value: "featured", label: `Featured (${rows.filter((r) => r.featured).length})` },
+            { value: "all", label: t("All ({count})", { count: rows.length }) },
+            { value: "featured", label: t("Featured ({count})", { count: rows.filter((r) => r.featured).length }) },
             { value: "active", label: "Active" },
-            { value: "disabled", label: `Inactive (${rows.filter((r) => r.status === "disabled").length})` },
+            { value: "disabled", label: t("Inactive ({count})", { count: rows.filter((r) => r.status === "disabled").length }) },
           ]}
         />
       </div>
@@ -149,7 +151,7 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
                           variant="ghost"
                           size="small"
                           disabled={busy}
-                          onClick={() => void patch(row, { featured: !row.featured }, row.featured ? `#${row.display} is no longer featured.` : `#${row.display} featured.`)}
+                          onClick={() => void patch(row, { featured: !row.featured }, row.featured ? t("#{display} is no longer featured.", { display: row.display }) : t("#{display} featured.", { display: row.display }))}
                         >
                           {row.featured ? "Unfeature" : "Feature"}
                         </Button>
@@ -158,7 +160,7 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
                           size="small"
                           disabled={busy}
                           onClick={() =>
-                            void patch(row, { status: active ? "disabled" : "active" }, active ? `#${row.display} deactivated.` : `#${row.display} activated.`)
+                            void patch(row, { status: active ? "disabled" : "active" }, active ? t("#{display} deactivated.", { display: row.display }) : t("#{display} activated.", { display: row.display }))
                           }
                         >
                           {active ? "Deactivate" : "Activate"}
@@ -172,7 +174,7 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
                           onClick={() => setRemoving(row)}
                           className="rounded-md p-1.5 text-secondary hover:bg-error-light hover:text-error disabled:opacity-50"
                         >
-                          <Icon name="x" size={16} label={`Remove #${row.display}`} />
+                          <Icon name="x" size={16} label={t("Remove #{display}", { display: row.display })} />
                         </button>
                       </div>
                     </td>
@@ -184,10 +186,10 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
         )}
       </div>
 
-      {editing && <EditTopic row={editing} onSaved={(row) => { upsert(row); setEditing(null); toast(`#${row.display} saved.`); }} onClose={() => setEditing(null)} />}
+      {editing && <EditTopic row={editing} onSaved={(row) => { upsert(row); setEditing(null); toast(t("#{display} saved.", { display: row.display })); }} onClose={() => setEditing(null)} />}
       {removing && (
         <ReasonDialog
-          title={`Remove #${removing.display}?`}
+          title={t("Remove #{display}?", { display: removing.display })}
           description="Only topics no post uses can be removed; members who follow it stop following it. To hide a topic that’s in use, deactivate it."
           confirmLabel="Remove topic"
           tone="danger"
@@ -196,7 +198,7 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
           onConfirm={async () => {
             await api(`/admin/topics/${removing.id}`, { method: "DELETE" });
             setRows((list) => list.filter((r) => r.id !== removing.id));
-            toast(`#${removing.display} removed.`);
+            toast(t("#{display} removed.", { display: removing.display }));
             setRemoving(null);
           }}
         />
@@ -206,11 +208,12 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
 }
 
 function EditTopic({ row, onSaved, onClose }: { row: AdminTopicRow; onSaved: (row: AdminTopicRow) => void; onClose: () => void }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
     <FormModal
-      title={`Edit #${row.display}`}
+      title={t("Edit #{display}", { display: row.display })}
       submitLabel="Save"
       busy={busy}
       error={error}

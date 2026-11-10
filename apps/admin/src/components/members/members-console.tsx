@@ -11,6 +11,7 @@ import { ReasonDialog } from "@/components/reason-dialog";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
 import { WEB_URL } from "@/lib/navigation";
+import { useT } from "@/i18n/client";
 
 type Filter = Exclude<AdminMembersQuery["filter"], "badge"> | `badge:${string}`;
 
@@ -36,6 +37,7 @@ export function MembersConsole({
   canManageBadges: boolean;
   access: AccessRights;
 }) {
+  const t = useT();
   const [page, setPage] = useState(initial);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -99,15 +101,15 @@ export function MembersConsole({
       toast(
         what === "official"
           ? value
-            ? `${row.name} is now an official account. Members follow it; its connections became followers.`
-            : `${row.name} is an ordinary account again and can connect with members.`
+            ? t("{name} is now an official account. Members follow it; its connections became followers.", { name: row.name })
+            : t("{name} is an ordinary account again and can connect with members.", { name: row.name })
           : what === "verified"
           ? value
-            ? `${row.name} is verified.`
-            : `${row.name}’s verified tick was removed.`
+            ? t("{name} is verified.", { name: row.name })
+            : t("{name}’s verified tick was removed.", { name: row.name })
           : value
-            ? `${row.name} will be suggested to new members.`
-            : `${row.name} is no longer suggested to new members.`,
+            ? t("{name} will be suggested to new members.", { name: row.name })
+            : t("{name} is no longer suggested to new members.", { name: row.name }),
       );
     } catch (e) {
       toast(errorMessage(e), "error");
@@ -275,7 +277,7 @@ export function MembersConsole({
 
       {officialFor && (
         <ReasonDialog
-          title={officialFor.official ? `Make ${officialFor.name} an ordinary account?` : `Make ${officialFor.name} an official account?`}
+          title={officialFor.official ? t("Make {name} an ordinary account?", { name: officialFor.name }) : t("Make {name} an official account?", { name: officialFor.name })}
           description={
             officialFor.official ? (
               "It will be able to send and receive connection requests like any member. Its followers stay; nobody is reconnected automatically."
@@ -304,7 +306,7 @@ export function MembersConsole({
           onSaved={(row) => {
             replace(row);
             setAccessFor(null);
-            toast(`Access updated for ${row.name}.`);
+            toast(t("Access updated for {name}.", { name: row.name }));
           }}
           onClose={() => setAccessFor(null)}
         />
@@ -317,7 +319,7 @@ export function MembersConsole({
           onSaved={(row) => {
             replace(row);
             setBadgeFor(null);
-            toast(`Badges updated for ${row.name}.`);
+            toast(t("Badges updated for {name}.", { name: row.name }));
           }}
           onClose={() => setBadgeFor(null)}
         />
@@ -339,6 +341,7 @@ function AwardBadges({
   onSaved: (row: AdminMemberRow) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const held = new Set(member.badges.map((b) => b.id));
@@ -346,7 +349,7 @@ function AwardBadges({
   const offHeld = member.badges.filter((b) => !badges.some((a) => a.id === b.id));
   return (
     <FormModal
-      title={`Badges for ${member.name}`}
+      title={t("Badges for {name}", { name: member.name })}
       description="Badges show on the member’s profile."
       submitLabel="Save badges"
       busy={busy}
@@ -417,12 +420,13 @@ function MemberAccess({
   onSaved: (row: AdminMemberRow) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const held = new Set(member.roles);
   return (
     <FormModal
-      title={`Access for ${member.name}`}
+      title={t("Access for {name}", { name: member.name })}
       description="Console roles let them sign in to this admin console; they will set up two-step verification at their first sign-in, and we email them. Every change is in the audit log."
       submitLabel="Save access"
       busy={busy}

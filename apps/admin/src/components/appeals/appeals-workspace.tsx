@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminAppealRow, AppealDecisionInput, Page } from "@chartermission/contracts";
@@ -13,6 +14,7 @@ import { Age, DateTime } from "@/components/time";
 import { api, errorMessage } from "@/lib/api/client";
 import { ACTION_LABELS, APPEAL_STATUS_CHIP, TARGET_LABELS } from "@/lib/labels";
 import { webHref } from "@/lib/navigation";
+import { T, useT } from "@/i18n/client";
 
 export type AppealsTab = "open" | "decided";
 type Decision = AppealDecisionInput["decision"];
@@ -25,7 +27,7 @@ const TABS: { value: AppealsTab; label: string }[] = [
 
 const isDecided = (a: AdminAppealRow) => a.status === "upheld" || a.status === "overturned";
 
-function SectionLabel({ children }: { children: string }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return <h3 className="text-label text-secondary uppercase">{children}</h3>;
 }
 
@@ -57,6 +59,7 @@ export function AppealsWorkspace({
   viewerId: string;
   canDecidePermission: boolean;
 }) {
+  const t = useT();
   const router = useRouter();
   const ids = useId();
   const [navigating, startNavigation] = useTransition();
@@ -101,8 +104,8 @@ export function AppealsWorkspace({
     setDecided((prev) => ({ ...prev, [row.id]: row }));
     setNotice(
       deciding === "upheld"
-        ? `Appeal upheld. The original action stays in place and ${current.appellant.name} has been told.`
-        : `Appeal overturned. The original action was reversed and ${current.appellant.name} has been told.`,
+        ? t("Appeal upheld. The original action stays in place and {name} has been told.", { name: current.appellant.name })
+        : t("Appeal overturned. The original action was reversed and {name} has been told.", { name: current.appellant.name }),
     );
     setDeciding(null);
     startNavigation(() => router.refresh());
@@ -202,7 +205,7 @@ export function AppealsWorkspace({
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="flex flex-col gap-0.5">
-                <h2 className="text-h3 text-ink">Appeal from {current.appellant.name}</h2>
+                <h2 className="text-h3 text-ink"><T vars={{ name: current.appellant.name }}>{"Appeal from {name}"}</T></h2>
                 <p className="text-xs text-secondary">
                   @{current.appellant.handle} · submitted <DateTime iso={current.createdAt} />
                 </p>
@@ -225,7 +228,7 @@ export function AppealsWorkspace({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <SectionLabel>{`Affected ${TARGET_LABELS[current.target.type].toLowerCase()}`}</SectionLabel>
+              <SectionLabel><T vars={{ lowerCase: TARGET_LABELS[current.target.type].toLowerCase() }}>{"Affected {lowerCase}"}</T></SectionLabel>
               <p className="text-sm break-words text-body">{current.target.preview ?? "This content is no longer available."}</p>
               {postHref && (
                 <a

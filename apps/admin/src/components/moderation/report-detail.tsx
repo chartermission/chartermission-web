@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import type { AdminActionView, AdminReportDetail, ModerationActionKind } from "@chartermission/contracts";
 import { Avatar, Chip, Divider, Icon, buttonClasses, cn } from "@chartermission/ui";
 import { Age, DateTime } from "@/components/time";
@@ -16,6 +17,8 @@ import {
 import { webHref } from "@/lib/navigation";
 import { formatCount } from "@/lib/format";
 import { actionDef, availableActions, type ActionStyle } from "./moderation-actions";
+import { T, useT } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 const actionClasses: Record<ActionStyle, string> = {
   primary: buttonClasses({ variant: "primary", size: "small" }),
@@ -25,17 +28,17 @@ const actionClasses: Record<ActionStyle, string> = {
   ghost: buttonClasses({ variant: "ghost", size: "small" }),
 };
 
-function SectionLabel({ children }: { children: string }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return <h3 className="text-label text-secondary uppercase">{children}</h3>;
 }
 
 /** One moderation action in a history list. */
 /** What an action was about, e.g. "On another post: “Send me $20…”" or "On the member’s account". */
-function actionSubject(action: AdminActionView, current?: { type: string; id: string }): string | null {
+function actionSubject(t: Translate, action: AdminActionView, current?: { type: string; id: string }): string | null {
   if (current && action.targetType === current.type && action.targetId === current.id) return null;
-  const kind = TARGET_LABELS[action.targetType].toLowerCase();
-  if (action.targetType === "member") return "On the member’s account";
-  const where = current ? `On another ${kind}` : `On a ${kind}`;
+  const kind = t(TARGET_LABELS[action.targetType]).toLowerCase();
+  if (action.targetType === "member") return t("On the member’s account");
+  const where = current ? t("On another {kind}", { kind }) : t("On a {kind}", { kind });
   return action.targetPreview ? `${where}: “${action.targetPreview}”` : where;
 }
 
@@ -44,7 +47,8 @@ function actionSubject(action: AdminActionView, current?: { type: string; id: st
  * what they were about; actions on the same item stay unlabelled.
  */
 export function ActionHistoryItem({ action, current }: { action: AdminActionView; current?: { type: string; id: string } }) {
-  const subject = actionSubject(action, current);
+  const t = useT();
+  const subject = actionSubject(t, action, current);
   return (
     <li className="flex flex-col gap-1 rounded-[10px] border border-line p-3">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-secondary">
@@ -60,7 +64,7 @@ export function ActionHistoryItem({ action, current }: { action: AdminActionView
       {subject && <p className="line-clamp-2 text-xs break-words text-body">{subject}</p>}
       <p className="text-sm text-ink">“{action.reason}”</p>
       <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-secondary">
-        {action.policyRef && <span>Policy: {POLICY_REF_LABELS[action.policyRef]}</span>}
+        {action.policyRef && <span><T vars={{ label: POLICY_REF_LABELS[action.policyRef] }}>{"Policy: {label}"}</T></span>}
         {action.expiresAt && (
           <span>
             Until <DateTime iso={action.expiresAt} />
@@ -97,6 +101,7 @@ export function ReportDetail({
   onAction: (kind: ModerationActionKind) => void;
   onAssign: (assignee: "me" | "none") => void;
 }) {
+  const t = useT();
   const priority = PRIORITY_CHIP[detail.priority];
   const status = STATUS_CHIP[detail.status];
   const open = detail.status === "open" || detail.status === "in_review";
@@ -111,7 +116,7 @@ export function ReportDetail({
   return (
     <section
       id={id}
-      aria-label={`${TARGET_LABELS[detail.target.type]} report detail`}
+      aria-label={t("{label} report detail", { label: TARGET_LABELS[detail.target.type] })}
       aria-busy={busy}
       className={cn(
         "flex min-w-0 flex-col gap-4 rounded-card border border-line bg-card p-4 transition-opacity sm:p-5",
@@ -121,10 +126,10 @@ export function ReportDetail({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h2 className="text-h3 text-ink">
-            {TARGET_LABELS[detail.target.type]} report
+            {t("{kind} report", { kind: t(TARGET_LABELS[detail.target.type]) })}
             <span className="font-normal text-secondary">
               {" "}
-              · {formatCount(detail.reportCount)} {detail.reportCount === 1 ? "report" : "reports"}
+              · {t("{count} reports", { count: detail.reportCount })}
             </span>
           </h2>
           <p className="text-xs text-secondary">
@@ -192,7 +197,7 @@ export function ReportDetail({
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-secondary">
             <span>
               {detail.content.attachmentCount > 0 &&
-                `${detail.content.attachmentCount} attachment${detail.content.attachmentCount === 1 ? "" : "s"}`}
+                t("{count} attachments", { count: detail.content.attachmentCount })}
             </span>
             {detail.content.href && (
               <a
@@ -216,8 +221,7 @@ export function ReportDetail({
           {detail.reasons.map((r, i) => (
             <li key={`${r.reason}-${i}`} className="flex flex-col">
               <span>
-                <span className="font-medium text-ink">{REPORT_REASON_LABELS[r.reason]}</span> · {r.count}{" "}
-                {r.count === 1 ? "report" : "reports"}
+                <span className="font-medium text-ink">{REPORT_REASON_LABELS[r.reason]}</span> · {t("{count} reports", { count: r.count })}
               </span>
               {r.detail && <span className="text-secondary">“{r.detail}”</span>}
             </li>
@@ -237,13 +241,13 @@ export function ReportDetail({
               />
               {history.previousReports === 0
                 ? "No previous reports"
-                : `${history.previousReports} previous ${history.previousReports === 1 ? "report" : "reports"} · ${history.previousActioned} actioned`}
+                : t("{count} previous reports · {actioned} actioned", { count: history.previousReports, actioned: history.previousActioned })}
             </li>
             <li className="flex items-center gap-2">
               <Icon name="eye-off" size={16} className={cn("shrink-0", history.hiddenItems > 0 ? "text-error" : "text-secondary")} />
               {history.hiddenItems === 0
                 ? "No hidden content"
-                : `${history.hiddenItems} ${history.hiddenItems === 1 ? "item" : "items"} hidden or removed`}
+                : t("{count} items hidden or removed", { count: history.hiddenItems })}
             </li>
             <li className="flex items-center gap-2">
               <Icon name="mail" size={16} className="shrink-0 text-secondary" />
@@ -298,8 +302,7 @@ export function ReportDetail({
           <>
             {!open && (
               <p className="text-xs text-secondary">
-                This report is resolved. Actions you take now apply directly to the {TARGET_LABELS[detail.target.type].toLowerCase()} and
-                are recorded without reopening the report.
+                <T vars={{ lowerCase: TARGET_LABELS[detail.target.type].toLowerCase() }}>{"This report is resolved. Actions you take now apply directly to the {lowerCase} and are recorded without reopening the report."}</T>
               </p>
             )}
             <div className="flex flex-wrap gap-2">

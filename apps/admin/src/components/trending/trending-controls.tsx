@@ -20,6 +20,7 @@ import { formatCount } from "@/lib/format";
 import { trendingSearch, type TrendingView } from "@/lib/trending-view";
 import { TrendingRulesPanel } from "./trending-rules";
 import { TrendingRunStatus } from "./trending-run-status";
+import { useT } from "@/i18n/client";
 
 type Status = AdminTrendingRow["status"];
 type Pending =
@@ -56,24 +57,22 @@ const DIALOG_COPY = {
   pin: {
     title: "Pin this topic?",
     confirm: "Pin topic",
-    describe: (tag: string, scope: string) =>
-      `#${tag} stays in the ${scope} trending list whatever its score until the pin is revoked or expires.`,
+    describe: "#{tag} stays in the {scope} trending list whatever its score until the pin is revoked or expires.",
   },
   suppress: {
     title: "Suppress this topic?",
     confirm: "Suppress topic",
-    describe: (tag: string, scope: string) =>
-      `#${tag} leaves the ${scope} trending list at the next run and can’t re-enter until the suppression ends. Posts using it stay visible in feeds.`,
+    describe: "#{tag} leaves the {scope} trending list at the next run and can’t re-enter until the suppression ends. Posts using it stay visible in feeds.",
   },
   unpin: {
     title: "Unpin this topic?",
     confirm: "Unpin topic",
-    describe: (tag: string, scope: string) => `#${tag} returns to its computed position in ${scope} at the next run.`,
+    describe: "#{tag} returns to its computed position in {scope} at the next run.",
   },
   restore: {
     title: "Restore this topic?",
     confirm: "Restore topic",
-    describe: (tag: string, scope: string) => `#${tag} can trend in ${scope} again at the next run if it meets the rules.`,
+    describe: "#{tag} can trend in {scope} again at the next run if it meets the rules.",
   },
 } as const;
 
@@ -102,6 +101,7 @@ export function TrendingConsole({
   canEditRules: boolean;
   viewerId: string;
 }) {
+  const t = useT();
   const router = useRouter();
   const ids = useId();
   const [navigating, startNavigation] = useTransition();
@@ -142,8 +142,13 @@ export function TrendingConsole({
     } else if ("overrideId" in pending) {
       await api(`/admin/trending/overrides/${pending.overrideId}`, { method: "DELETE", body: { reason } });
     }
-    const verb = { pin: "pinned", suppress: "suppressed", unpin: "unpinned", restore: "restored" }[pending.kind];
-    setNotice(`#${tag} ${verb} in ${scopeName === "global" ? "global trending" : scopeName}. Reason recorded in the audit log.`);
+    const done = {
+      pin: "#{tag} pinned in {scope}. Reason recorded in the audit log.",
+      suppress: "#{tag} suppressed in {scope}. Reason recorded in the audit log.",
+      unpin: "#{tag} unpinned in {scope}. Reason recorded in the audit log.",
+      restore: "#{tag} restored in {scope}. Reason recorded in the audit log.",
+    }[pending.kind];
+    setNotice(t(done, { tag, scope: scopeName === "global" ? t("global trending") : scopeName }));
     setPending(null);
     if (tagRef.current && cleanTag(tagRef.current.value).toLowerCase() === tag.toLowerCase()) tagRef.current.value = "";
     startNavigation(() => router.refresh());
@@ -207,7 +212,7 @@ export function TrendingConsole({
             </Chip>
           </div>
           {!data ? (
-            <EmptyState icon="globe" title={`Choose a ${view.scope} to see its ranking`} className="border-t border-line" />
+            <EmptyState icon="globe" title={t("Choose a {scope} to see its ranking", { scope: view.scope })} className="border-t border-line" />
           ) : rows.length === 0 ? (
             <EmptyState icon="trending" title="Nothing is trending here yet" className="border-t border-line">
               Topics appear once enough distinct members post about them in this window.
@@ -390,7 +395,7 @@ export function TrendingConsole({
       {pending && (
         <ReasonDialog
           title={DIALOG_COPY[pending.kind].title}
-          description={DIALOG_COPY[pending.kind].describe(pending.tag, scopeName === "global" ? "global" : scopeName)}
+          description={t(DIALOG_COPY[pending.kind].describe, { tag: pending.tag, scope: scopeName === "global" ? t("global") : scopeName })}
           confirmLabel={DIALOG_COPY[pending.kind].confirm}
           tone={pending.kind === "suppress" ? "danger" : "primary"}
           reasonPlaceholder={

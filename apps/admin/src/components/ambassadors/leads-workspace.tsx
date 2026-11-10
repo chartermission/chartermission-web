@@ -14,6 +14,7 @@ import { api, errorMessage, isApiError } from "@/lib/api/client";
 import { STAGE_TABS, STAGE_TONE, leadsSearch, type LeadsView } from "@/lib/ambassadors";
 import { LeadFields, leadInputFromForm } from "./lead-fields";
 import { FormModal } from "./modal";
+import { useT } from "@/i18n/client";
 
 /** Ambassador leads board: stage tabs with counts, filters, the list and "Add lead". */
 export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: AdminLeadsPage; team: TeamMember[] }) {
@@ -185,6 +186,7 @@ export function Progress({ done, total }: { done: number; total: number }) {
 }
 
 function NewLeadModal({ countries, team, onClose }: { countries: AdminLeadsPage["countries"]; team: TeamMember[]; onClose: () => void }) {
+  const t = useT();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +198,7 @@ function NewLeadModal({ countries, team, onClose }: { countries: AdminLeadsPage[
     setFields({});
     try {
       const lead = await api<AdminLeadDetail>("/admin/ambassadors/leads", { body: leadInputFromForm(data, "create") });
-      toast(`${lead.fullName} added to the pipeline`);
+      toast(t("{fullName} added to the pipeline", { fullName: lead.fullName }));
       router.push(`/ambassadors/leads/${lead.id}`);
     } catch (e) {
       if (isApiError(e) && e.fields) setFields(e.fields);

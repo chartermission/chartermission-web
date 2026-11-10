@@ -12,6 +12,7 @@ import { DateTime } from "@/components/time";
 import { api, errorMessage } from "@/lib/api/client";
 import { ACTION_LABELS, APPEAL_STATUS_CHIP, POLICY_REF_LABELS } from "@/lib/labels";
 import { webHref } from "@/lib/navigation";
+import { T, useT } from "@/i18n/client";
 
 export type HiddenType = "all" | "post" | "comment";
 
@@ -37,6 +38,7 @@ export function HiddenList({
   viewerId: string;
   canAct: boolean;
 }) {
+  const t = useT();
   const router = useRouter();
   const [navigating, startNavigation] = useTransition();
   const [more, setMore] = useState<More | null>(null);
@@ -81,7 +83,9 @@ export function HiddenList({
     await api("/admin/moderation-actions", { method: "POST", body });
     setRestored((prev) => new Set(prev).add(restoring.target.id));
     setNotice(
-      `${restoring.target.type === "post" ? "Post" : "Comment"} by ${restoring.author?.name ?? "unknown author"} restored. It returns to feeds within 60 seconds.`,
+      t(restoring.target.type === "post" ? "Post by {name} restored. It returns to feeds within 60 seconds." : "Comment by {name} restored. It returns to feeds within 60 seconds.", {
+        name: restoring.author?.name ?? t("unknown author"),
+      }),
     );
     setRestoring(null);
     startNavigation(() => router.refresh());
@@ -164,7 +168,7 @@ export function HiddenList({
                       onClick={() => setRestoring(row)}
                     >
                       Restore
-                      <span className="sr-only"> {row.target.type} by {row.author?.name ?? "unknown author"}</span>
+                      <span className="sr-only"> <T vars={{ type: row.target.type, count: row.author?.name ?? "unknown author" }}>{"{type} by {count}"}</T></span>
                     </button>
                   )}
                 </div>
@@ -185,7 +189,7 @@ export function HiddenList({
 
       {restoring && (
         <ReasonDialog
-          title={`Restore this ${restoring.target.type}?`}
+          title={t("Restore this {type}?", { type: restoring.target.type })}
           description={
             <>
               <p className="mb-1 line-clamp-2 font-medium text-ink">{restoring.target.preview}</p>

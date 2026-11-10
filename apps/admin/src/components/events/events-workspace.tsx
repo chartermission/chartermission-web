@@ -33,6 +33,7 @@ import {
 } from "@/lib/events-view";
 import { formatInZone } from "@/lib/zoned-time";
 import { EventReviewPanel, hostName, type EventAction } from "./event-review-panel";
+import { T, useT } from "@/i18n/client";
 
 type More = { base: string | null; rows: AdminEventRow[]; cursor: string | null };
 
@@ -193,6 +194,7 @@ export function EventsWorkspace({
   canReview: boolean;
   canFeature: boolean;
 }) {
+  const t = useT();
   const router = useRouter();
   const ids = useId();
   const [navigating, startNavigation] = useTransition();
@@ -306,9 +308,9 @@ export function EventsWorkspace({
       const message = isApiError(e, "FORBIDDEN")
         ? "Your role can’t do that. Ask a Platform Admin if you need it."
         : isApiError(e, "CONFLICT")
-          ? `${errorMessage(e)} The list has been refreshed.`
+          ? t("{errorMessage} The list has been refreshed.", { errorMessage: errorMessage(e) })
           : errorMessage(e);
-      toast(`“${event.title}” wasn’t changed. ${message}`, "error");
+      toast(t("“{title}” wasn’t changed. {message}", { title: event.title, message }), "error");
       if (isApiError(e, "CONFLICT") || isApiError(e, "NOT_FOUND")) startNavigation(() => router.refresh());
     } finally {
       setSaving(null);
@@ -397,7 +399,7 @@ export function EventsWorkspace({
         <div className="flex min-w-0 flex-col gap-3">
           <div className={cn("relative overflow-hidden rounded-card border border-line bg-card transition-opacity", navigating && "opacity-80")}>
             {rows.length === 0 ? (
-              <EmptyState icon={view.tab === "queue" && !filtered ? "check" : "calendar"} title={view.tab === "queue" && !filtered ? "Nothing waiting for review" : `No ${tabLabel.toLowerCase()} events${filtered ? " match these filters" : ""}`}>
+              <EmptyState icon={view.tab === "queue" && !filtered ? "check" : "calendar"} title={view.tab === "queue" && !filtered ? "Nothing waiting for review" : (filtered ? t("No {tab} events match these filters", { tab: t(tabLabel).toLowerCase() }) : t("No {tab} events", { tab: t(tabLabel).toLowerCase() }))}>
                 {view.tab === "queue" && !filtered
                   ? "Events submitted by hosts and chapters appear here, oldest first."
                   : filtered
@@ -407,7 +409,7 @@ export function EventsWorkspace({
             ) : (
               <>
                 <table className="hidden w-full table-fixed border-collapse text-left md:table">
-                  <caption className="sr-only">{tabLabel} events. Select a row to review it.</caption>
+                  <caption className="sr-only"><T vars={{ tabLabel }}>{"{tabLabel} events. Select a row to review it."}</T></caption>
                   <colgroup>
                     <col />
                     <col className="w-[168px]" />
@@ -493,7 +495,7 @@ export function EventsWorkspace({
                   </tbody>
                 </table>
 
-                <ul className="flex flex-col md:hidden" aria-label={`${tabLabel} events`}>
+                <ul className="flex flex-col md:hidden" aria-label={t("{tabLabel} events", { tabLabel })}>
                   {rows.map((row) => {
                     const isSelected = row.id === optimisticSelected;
                     const chip = eventStatusChip(row);

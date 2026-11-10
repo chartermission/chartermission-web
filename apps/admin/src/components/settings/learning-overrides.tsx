@@ -7,6 +7,7 @@ import { FormNotice, inputClasses } from "@/components/form-field";
 import { DateTime } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
+import { T, useT } from "@/i18n/client";
 
 function accessChip(m: AdminLearningMember) {
   const a = m.access;
@@ -15,10 +16,11 @@ function accessChip(m: AdminLearningMember) {
   if (a.reason === "open") return <Chip>Open to all</Chip>;
   if (a.reason === "met") return <Chip tone="success">Rules met</Chip>;
   const done = a.requirements.filter((r) => r.done).length;
-  return <Chip tone="warning">{`Locked · ${done} of ${a.requirements.length} done`}</Chip>;
+  return <Chip tone="warning"><T vars={{ done, count: a.requirements.length }}>{"Locked · {done} of {count} done"}</T></Chip>;
 }
 
 function MemberRow({ member, onChange }: { member: AdminLearningMember; onChange: (m: AdminLearningMember) => void }) {
+  const t = useT();
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ function MemberRow({ member, onChange }: { member: AdminLearningMember; onChange
       onChange(next);
       setAsking(false);
       setNote("");
-      toast(`Learning unlocked for ${member.name}.`);
+      toast(t("Learning unlocked for {name}.", { name: member.name }));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -48,7 +50,7 @@ function MemberRow({ member, onChange }: { member: AdminLearningMember; onChange
     try {
       const next = await api<AdminLearningMember>(`/admin/learning/access/overrides/${member.id}`, { method: "DELETE" });
       onChange(next);
-      toast(`${member.name} is back under the unlock rules.`);
+      toast(t("{name} is back under the unlock rules.", { name: member.name }));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -126,6 +128,7 @@ function MemberRow({ member, onChange }: { member: AdminLearningMember; onChange
  * for them regardless of the rules. With no search, lists everyone currently unlocked by an admin.
  */
 export function LearningOverrides() {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [members, setMembers] = useState<AdminLearningMember[] | null>(null);
@@ -209,7 +212,7 @@ export function LearningOverrides() {
         </ul>
       ) : (
         <p className="px-5 py-6 text-sm text-secondary">
-          {submitted ? `No members match “${submitted}”.` : "No members have been unlocked by an admin yet. Search for a member to unlock them."}
+          {submitted ? t("No members match “{submitted}”.", { submitted }) : "No members have been unlocked by an admin yet. Search for a member to unlock them."}
         </p>
       )}
     </section>

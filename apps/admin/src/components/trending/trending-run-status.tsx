@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Chip } from "@chartermission/ui";
 import { useNow } from "@/components/time";
 import { formatDateTime, relativePhrase } from "@/lib/format";
+import { T } from "@/i18n/client";
 
 /**
  * When the ranking shown was computed (Figma node 20:3590). The API recomputes on its schedule and
@@ -32,7 +33,7 @@ export function TrendingRunStatus({ computedAt, recomputeMinutes }: { computedAt
           </Chip>
         )}
       </p>
-      <span className="text-xs text-secondary">Recomputes every {recomputeMinutes} min</span>
+      <span className="text-xs text-secondary"><T vars={{ recomputeMinutes }}>{"Recomputes every {recomputeMinutes} min"}</T></span>
       <Button variant="secondary" size="small" onClick={() => startRefresh(() => router.refresh())} disabled={refreshing} aria-busy={refreshing}>
         Refresh
       </Button>

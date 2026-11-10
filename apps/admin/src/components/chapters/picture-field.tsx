@@ -5,6 +5,7 @@ import { UPLOAD_LIMITS, type UploadPurpose } from "@chartermission/contracts";
 import { Button, Icon } from "@chartermission/ui";
 import { errorMessage } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
+import { useT } from "@/i18n/client";
 
 /** Image picker for a chapter picture or cover: uploads right away, the parent saves the file id with the form. */
 export function PictureField({
@@ -27,6 +28,7 @@ export function PictureField({
   onUploaded: (fileId: string, url: string | null) => void;
   onReset: () => void;
 }) {
+  const t = useT();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<{ kind: "idle" } | { kind: "uploading"; progress: number } | { kind: "error"; text: string }>({ kind: "idle" });
@@ -69,7 +71,7 @@ export function PictureField({
             />
             <Button variant="secondary" size="small" disabled={disabled || uploading} onClick={() => input.current?.click()}>
               <Icon name="image" size={14} />
-              {uploading ? `Uploading… ${Math.round(state.progress * 100)}%` : "Upload"}
+              {uploading ? t("Uploading… {number}%", { number: Math.round(state.progress * 100) }) : "Upload"}
             </Button>
             {custom && (
               <Button variant="ghost" size="small" disabled={disabled || uploading} onClick={onReset}>

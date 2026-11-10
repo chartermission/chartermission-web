@@ -9,6 +9,7 @@ import { ReasonDialog } from "@/components/reason-dialog";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
 
 const TONES: { value: BadgeTone; label: string }[] = [
   { value: "primary", label: "Green" },
@@ -38,6 +39,7 @@ const ICON_LABELS: Record<(typeof BADGE_ICONS)[number], string> = {
 
 /** Badge catalogue (GET /admin/badges): create, edit, turn on / off, remove. */
 export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
+  const t = useT();
   const [badges, setBadges] = useState(initial);
   const [editing, setEditing] = useState<AdminBadge | "new" | null>(null);
   const [removing, setRemoving] = useState<AdminBadge | null>(null);
@@ -49,7 +51,7 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
     setBusyId(b.id);
     try {
       upsert(await api<AdminBadge>(`/admin/badges/${b.id}`, { method: "PATCH", body: { status: b.status === "active" ? "disabled" : "active" } }));
-      toast(b.status === "active" ? `${b.name} turned off.` : `${b.name} turned on.`);
+      toast(b.status === "active" ? t("{name} turned off.", { name: b.name }) : t("{name} turned on.", { name: b.name }));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -95,7 +97,7 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
                     onClick={() => setRemoving(b)}
                     className="rounded-md p-1.5 text-secondary hover:bg-error-light hover:text-error disabled:opacity-50"
                   >
-                    <Icon name="x" size={16} label={`Remove ${b.name}`} />
+                    <Icon name="x" size={16} label={t("Remove {name}", { name: b.name })} />
                   </button>
                 </div>
               </li>
@@ -109,15 +111,15 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
           onSaved={(b) => {
             upsert(b);
             setEditing(null);
-            toast(`${b.name} saved.`);
+            toast(t("{name} saved.", { name: b.name }));
           }}
           onClose={() => setEditing(null)}
         />
       )}
       {removing && (
         <ReasonDialog
-          title={`Remove ${removing.name}?`}
-          description={`This also takes it off ${removing.holders} ${removing.holders === 1 ? "member" : "members"}. To hide it but keep who holds it, turn it off instead.`}
+          title={t("Remove {name}?", { name: removing.name })}
+          description={t("This also takes it off {count} members. To hide it but keep who holds it, turn it off instead.", { count: removing.holders })}
           confirmLabel="Remove badge"
           tone="danger"
           reasonField="none"
@@ -125,7 +127,7 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
           onConfirm={async () => {
             await api(`/admin/badges/${removing.id}`, { method: "DELETE" });
             setBadges((list) => list.filter((x) => x.id !== removing.id));
-            toast(`${removing.name} removed.`);
+            toast(t("{name} removed.", { name: removing.name }));
             setRemoving(null);
           }}
         />
@@ -135,6 +137,7 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
 }
 
 function BadgeForm({ badge, onSaved, onClose }: { badge: AdminBadge | null; onSaved: (b: AdminBadge) => void; onClose: () => void }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState({
@@ -145,7 +148,7 @@ function BadgeForm({ badge, onSaved, onClose }: { badge: AdminBadge | null; onSa
   });
   return (
     <FormModal
-      title={badge ? `Edit ${badge.name}` : "New badge"}
+      title={badge ? t("Edit {name}", { name: badge.name }) : "New badge"}
       submitLabel={badge ? "Save" : "Create badge"}
       busy={busy}
       error={error}

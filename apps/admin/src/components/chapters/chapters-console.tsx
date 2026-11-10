@@ -12,6 +12,7 @@ import { api, errorMessage } from "@/lib/api/client";
 import { WEB_URL } from "@/lib/navigation";
 import { BulkPictureUpload } from "./bulk-upload";
 import { PictureField } from "./picture-field";
+import { T, useT } from "@/i18n/client";
 
 type StatusFilter = "all" | "active" | "dormant";
 
@@ -22,6 +23,7 @@ const numberFormat = new Intl.NumberFormat("en-US");
  * allowed for chapters nobody has used yet; otherwise the API asks to deactivate instead.
  */
 export function ChaptersConsole({ initial, countries, postRule }: { initial: AdminChapterRow[]; countries: Country[]; postRule: ChapterPostsSettings }) {
+  const t = useT();
   const [rows, setRows] = useState(initial);
   const [rule, setRule] = useState<ChapterPostApproval>(postRule.approval);
   const [ruleBusy, setRuleBusy] = useState(false);
@@ -88,7 +90,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
               ? "A member’s post is seen only by them until the chapter’s Ambassadors, Chapter Leads or the Charter Mission team approve it."
               : "A member’s post appears in the chapter as soon as it is posted. The chapter’s team can still send it back for review or remove it."}{" "}
             Ambassadors, Chapter Leads and the team always post directly. A chapter can have its own rule: open it with Edit.
-            {waiting > 0 && ` ${numberFormat.format(waiting)} ${waiting === 1 ? "post is" : "posts are"} waiting for approval.`}
+            {waiting > 0 && ` ${t("{count} posts are waiting for approval.", { count: waiting })}`}
           </p>
         </div>
         <SegmentedControl
@@ -120,9 +122,9 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
           value={status}
           onChange={setStatus}
           items={[
-            { value: "all", label: `All (${rows.length})` },
-            { value: "active", label: `Active (${counts.active})` },
-            { value: "dormant", label: `Inactive (${counts.dormant})` },
+            { value: "all", label: t("All ({count})", { count: rows.length }) },
+            { value: "active", label: t("Active ({active})", { active: counts.active }) },
+            { value: "dormant", label: t("Inactive ({dormant})", { dormant: counts.dormant }) },
           ]}
         />
         <Button variant="secondary" size="small" onClick={() => setBulk(true)}>
@@ -193,7 +195,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
                           rel="noopener noreferrer"
                           className="block text-xs font-medium text-accent-hover hover:underline"
                         >
-                          {numberFormat.format(row.pendingPosts)} to review
+                          <T vars={{ count: numberFormat.format(row.pendingPosts) }}>{"{count} to review"}</T>
                         </a>
                       )}
                       {row.postApproval && <span className="block text-xs text-secondary">{row.postApproval === "review" ? "Approval on" : "Approval off"}</span>}
@@ -211,7 +213,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
                           size="small"
                           disabled={busyId === row.id}
                           onClick={() =>
-                            void patch(row, { status: active ? "dormant" : "active" }, active ? `${row.name} deactivated.` : `${row.name} activated.`)
+                            void patch(row, { status: active ? "dormant" : "active" }, active ? t("{name} deactivated.", { name: row.name }) : t("{name} activated.", { name: row.name }))
                           }
                         >
                           {active ? "Deactivate" : "Activate"}
@@ -222,7 +224,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
                           onClick={() => setRemoving(row)}
                           className="rounded-md p-1.5 text-secondary hover:bg-error-light hover:text-error disabled:opacity-50"
                         >
-                          <Icon name="x" size={16} label={`Remove ${row.name}`} />
+                          <Icon name="x" size={16} label={t("Remove {name}", { name: row.name })} />
                         </button>
                       </div>
                     </td>
@@ -240,7 +242,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
           onSaved={(row) => {
             replace(row);
             setEditing(null);
-            toast(`${row.name} saved.`);
+            toast(t("{name} saved.", { name: row.name }));
           }}
           onClose={() => setEditing(null)}
         />
@@ -251,7 +253,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
           onSaved={(row) => {
             setRows((list) => [...list, row].sort((a, b) => a.name.localeCompare(b.name)));
             setAdding(false);
-            toast(`${row.name} added.`);
+            toast(t("{name} added.", { name: row.name }));
           }}
           onClose={() => setAdding(false)}
         />
@@ -259,7 +261,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
       {bulk && <BulkPictureUpload chapters={rows} onUpdated={replace} onClose={() => setBulk(false)} />}
       {removing && (
         <ReasonDialog
-          title={`Remove ${removing.name}?`}
+          title={t("Remove {name}?", { name: removing.name })}
           description="Only chapters nobody has joined or posted in can be removed. It won’t come back when the platform restarts. To hide a chapter that’s in use, deactivate it."
           confirmLabel="Remove chapter"
           tone="danger"
@@ -268,7 +270,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
           onConfirm={async () => {
             await api(`/admin/chapters/${removing.id}`, { method: "DELETE" });
             setRows((list) => list.filter((r) => r.id !== removing.id));
-            toast(`${removing.name} removed.`);
+            toast(t("{name} removed.", { name: removing.name }));
             setRemoving(null);
           }}
         />
@@ -326,6 +328,7 @@ function AddChapter({ countries, onSaved, onClose }: { countries: Country[]; onS
 }
 
 function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved: (row: AdminChapterRow) => void; onClose: () => void }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [image, setImage] = useState<{ fileId: string | null; url: string | null } | undefined>(undefined);
@@ -335,7 +338,7 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
   const coverUrl = cover === undefined ? row.coverUrl : cover.url;
   return (
     <FormModal
-      title={`Edit ${row.name}`}
+      title={t("Edit {name}", { name: row.name })}
       submitLabel="Save changes"
       wide
       busy={busy}

@@ -6,6 +6,7 @@ import { Button, Icon, buttonClasses, chapterLabel, cn } from "@chartermission/u
 import { selectClasses } from "@/components/ambassadors/modal";
 import { api, errorMessage } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
+import { T, useT } from "@/i18n/client";
 
 type Kind = "picture" | "cover";
 type Item = {
@@ -68,6 +69,7 @@ export function BulkPictureUpload({
   onUpdated: (row: AdminChapterRow) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const id = useId();
@@ -206,7 +208,7 @@ export function BulkPictureUpload({
           </Button>
           <p className="text-xs text-secondary">JPEG, PNG or WebP. Pictures up to 8 MB, covers up to 10 MB.</p>
         </div>
-        {rejected.length > 0 && <p className="text-xs text-error">Skipped (not JPEG, PNG or WebP): {rejected.join(", ")}</p>}
+        {rejected.length > 0 && <p className="text-xs text-error"><T vars={{ join: rejected.join(", ") }}>{"Skipped (not JPEG, PNG or WebP): {join}"}</T></p>}
 
         {items.length > 0 && (
           <div className="max-h-[46dvh] overflow-y-auto rounded-lg border border-line">
@@ -238,7 +240,7 @@ export function BulkPictureUpload({
                       <td className="py-2 pr-2">
                         <span className="relative block">
                           <select
-                            aria-label={`Chapter for ${item.file.name}`}
+                            aria-label={t("Chapter for {name}", { name: item.file.name })}
                             value={item.chapterId}
                             disabled={locked}
                             onChange={(e) => update(item.key, { chapterId: e.target.value })}
@@ -258,7 +260,7 @@ export function BulkPictureUpload({
                       <td className="py-2 pr-2">
                         <span className="relative block w-[130px]">
                           <select
-                            aria-label={`Use ${item.file.name} as`}
+                            aria-label={t("Use {name} as", { name: item.file.name })}
                             value={item.kind}
                             disabled={locked}
                             onChange={(e) => update(item.key, { kind: e.target.value as Kind })}
@@ -281,7 +283,7 @@ export function BulkPictureUpload({
                             Remove
                           </button>
                         )}
-                        {item.state.kind === "uploading" && <span className="text-secondary">Uploading… {Math.round(item.state.progress * 100)}%</span>}
+                        {item.state.kind === "uploading" && <span className="text-secondary"><T vars={{ number: Math.round(item.state.progress * 100) }}>{"Uploading… {number}%"}</T></span>}
                         {item.state.kind === "done" && (
                           <span className="flex items-center gap-1 text-primary-light">
                             <Icon name="check" size={14} />
@@ -306,7 +308,7 @@ export function BulkPictureUpload({
           <p className="text-sm text-secondary" aria-live="polite">
             {items.length === 0
               ? "No files yet."
-              : `${items.length} ${items.length === 1 ? "file" : "files"} · ${done} uploaded${unmatched ? ` · ${unmatched} without a chapter (skipped)` : ""}`}
+              : `${t("{count} files · {done} uploaded", { count: items.length, done })}${unmatched ? ` · ${t("{unmatched} without a chapter (skipped)", { unmatched })}` : ""}`}
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" size="small" disabled={running} onClick={() => ref.current?.close()}>
@@ -318,7 +320,7 @@ export function BulkPictureUpload({
               onClick={() => void run()}
               className={buttonClasses({ variant: "primary", size: "small" })}
             >
-              {running ? "Uploading…" : `Upload ${ready.length || ""}`.trim()}
+              {running ? "Uploading…" : ready.length ? t("Upload {count}", { count: ready.length }) : t("Upload")}
             </button>
           </div>
         </div>
