@@ -94,7 +94,7 @@ export function AgendaTimeline({ agenda, timezone }: { agenda: AgendaItem[]; tim
           <li key={`${item.startsAt}-${index}`} className="flex flex-col">
             {showDay && <p className="mb-3 text-label uppercase text-secondary">{formatLongDay(item.startsAt, timezone)}</p>}
             <div className="flex gap-4 max-sm:gap-3">
-              <div className="flex w-[104px] shrink-0 flex-col items-end pt-0.5 text-right max-sm:w-[76px]">
+              <div className="flex w-[104px] shrink-0 flex-col items-end pt-0.5 text-end max-sm:w-[76px]">
                 <time dateTime={item.startsAt} className="text-sm font-semibold text-ink">
                   {formatClock(item.startsAt, timezone)}
                   {item.endsAt && <span className="font-normal text-secondary">–{formatClock(item.endsAt, timezone)}</span>}

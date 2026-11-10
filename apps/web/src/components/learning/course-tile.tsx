@@ -41,7 +41,7 @@ export function CourseTile({ course, headingLevel = 3, eager = false }: { course
   return (
     <article className="group relative flex w-full flex-col overflow-hidden max-sm:flex-row rounded-card border border-line bg-card transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-[0px_8px_20px_-8px_rgba(25,37,80,0.18)] has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-primary-light">
       <CourseThumbnail course={course} eager={eager} className="h-[140px] shrink-0 max-sm:h-auto max-sm:min-h-[132px] max-sm:w-[104px]" />
-      <div className="absolute right-3 top-3 z-10 max-sm:left-2 max-sm:right-auto max-sm:top-2">
+      <div className="absolute end-3 top-3 z-10 max-sm:start-2 max-sm:end-auto max-sm:top-2">
         <SaveCourseButton course={course} variant="overlay" />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-4 max-sm:p-3.5">

@@ -35,14 +35,14 @@ describe('Official accounts, pages, verification and post analytics', () => {
   describe('official (staff) accounts are follow-only', () => {
     it('refuses connection requests to and from a staff account, and says so in the relationship', async () => {
       const official = await createMember(t, { name: 'Charter Mission', mfa: true });
-      await t.db.update(s.users).set({ isStaff: true }).where(eq(s.users.id, official.id));
+      await t.db.update(s.users).set({ isStaff: true, isOfficial: true }).where(eq(s.users.id, official.id));
 
       const to = await amara.post('/connections', { memberId: official.id }).expect(403);
       expect(to.body.error.message).toMatch(/official Charter Mission account/i);
       await official.post('/connections', { memberId: amara.id }).expect(403);
 
       const profile = await amara.get(`/members/${official.handle}`).expect(200);
-      expect(profile.body).toMatchObject({ staff: true, relationship: { canConnect: false, connection: 'none' } });
+      expect(profile.body).toMatchObject({ staff: true, official: true, relationship: { canConnect: false, connection: 'none' } });
       // Between two ordinary members connecting is still offered.
       expect((await amara.get(`/members/${kwame.handle}`).expect(200)).body.relationship.canConnect).toBe(true);
       // Seen from the official account, nobody can be connected with either.
@@ -61,7 +61,7 @@ describe('Official accounts, pages, verification and post analytics', () => {
       await soon.post(`/connections/${req.body.id}/accept`).expect(200);
       await asker.post('/connections', { memberId: soon.id }).expect(201);
 
-      await t.db.update(s.users).set({ isStaff: true }).where(eq(s.users.id, soon.id));
+      await t.db.update(s.users).set({ isStaff: true, isOfficial: true }).where(eq(s.users.id, soon.id));
       await closeStaffConnections(t.db, soon.id);
 
       const open = await t.db

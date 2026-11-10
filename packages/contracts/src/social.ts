@@ -832,6 +832,14 @@ export const CreateUploadInput = z.object({
   fileName: z.string().trim().min(1).max(200),
   mime: z.string().max(100),
   sizeBytes: z.number().int().positive(),
+  /**
+   * Videos only: the part of the file to keep, chosen in the trim window. The kept part must fit
+   * the length limit; the file itself can be longer. Left out, the whole video is used.
+   */
+  trim: z
+    .object({ startMs: z.number().int().min(0), endMs: z.number().int().positive() })
+    .refine((t) => t.endMs - t.startMs >= 1000, "Keep at least one second")
+    .optional(),
 });
 export type CreateUploadInput = z.infer<typeof CreateUploadInput>;
 

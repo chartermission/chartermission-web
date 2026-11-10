@@ -17,6 +17,7 @@ export function Dialog({
   width = 520,
   initialFocus,
   className,
+  flush = false,
 }: {
   title: string;
   description?: ReactNode;
@@ -27,6 +28,8 @@ export function Dialog({
   /** CSS selector inside the dialog to focus first (default: first focusable). */
   initialFocus?: string;
   className?: string;
+  /** No padding around the body: for lists that run edge to edge. */
+  flush?: boolean;
 }) {
   const id = useId();
   const ref = useRef<HTMLDialogElement>(null);
@@ -88,7 +91,7 @@ export function Dialog({
         </button>
       </div>
       <Divider />
-      {children && <div className="flex flex-col gap-4 p-5">{children}</div>}
+      {children && <div className={flush ? "flex flex-col" : "flex flex-col gap-4 p-5"}>{children}</div>}
       {footer && (
         <>
           <Divider />

@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useT } from "@/i18n/client";
+import type { NavKey } from "@/components/nav-items";
 import { Icon, Logo, LogoMark, cn, type AvatarTone, type IconName } from "@chartermission/ui";
 import { UserMenu } from "@/components/account/user-menu";
 
-const links: { href: string; label: string; icon: IconName }[] = [
-  { href: "/feed", label: "Home", icon: "home" },
-  { href: "/articles", label: "Articles", icon: "dashboard" },
-  { href: "/network", label: "Network", icon: "users" },
-  { href: "/opportunities", label: "Opportunities", icon: "briefcase" },
-  { href: "/events", label: "Events", icon: "calendar" },
-  { href: "/learning", label: "Learning", icon: "book" },
-  { href: "/notifications", label: "Alerts", icon: "bell" },
+const links: { href: string; key: NavKey; icon: IconName }[] = [
+  { href: "/feed", key: "home", icon: "home" },
+  { href: "/articles", key: "articles", icon: "dashboard" },
+  { href: "/network", key: "network", icon: "users" },
+  { href: "/opportunities", key: "opportunities", icon: "briefcase" },
+  { href: "/events", key: "events", icon: "calendar" },
+  { href: "/learning", key: "learning", icon: "book" },
+  { href: "/notifications", key: "alerts", icon: "bell" },
 ];
 
 /** Member top navigation (Figma "Top nav / Web", node 7:157). */
@@ -21,6 +22,7 @@ export interface TopNavViewer {
   handle: string;
   avatarUrl: string | null;
   tone: AvatarTone;
+  adminUrl?: string | null;
 }
 
 /** Screens where the member should finish a task first: logo and account menu only. */
@@ -44,6 +46,7 @@ export function TopNavBar({
   unread?: number;
   pathname: string | null;
 }) {
+  const t = useT();
   const under = (path: string) => pathname !== null && (pathname === path || pathname.startsWith(`${path}/`));
   const focused = focusedPaths.some(under);
   return (
@@ -61,7 +64,7 @@ export function TopNavBar({
               <input
                 name="q"
                 type="search"
-                placeholder="Search members, opportunities, #topics"
+                placeholder={t("nav.searchPlaceholder")}
                 className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-disabled"
               />
             </label>
@@ -69,10 +72,10 @@ export function TopNavBar({
         )}
         <div className="flex-1" />
         {!focused && (
-          <nav aria-label="Main" className="flex min-w-0 items-center gap-1 overflow-x-auto max-md:gap-0">
+          <nav aria-label={t("nav.main")} className="flex min-w-0 items-center gap-1 overflow-x-auto max-md:gap-0">
             <Link
               href="/search"
-              aria-label="Search"
+              aria-label={t("nav.search")}
               className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs text-secondary hover:bg-primary-tint-2 lg:hidden"
             >
               <Icon name="search" size={20} />
@@ -95,13 +98,13 @@ export function TopNavBar({
                   <span className="relative">
                     <Icon name={link.icon} size={20} />
                     {link.href === "/notifications" && unread > 0 ? (
-                      <span className="absolute -top-1.5 -right-2 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 font-semibold text-inverse">
+                      <span className="absolute -top-1.5 -end-2 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 font-semibold text-inverse">
                         {unread > 99 ? "99+" : unread}
-                        <span className="sr-only"> unread</span>
+                        <span className="sr-only"> {t("nav.unread")}</span>
                       </span>
                     ) : null}
                   </span>
-                  <span className="max-md:sr-only">{link.label}</span>
+                  <span className="max-md:sr-only">{t(`nav.${link.key}`)}</span>
                 </Link>
               );
             })}

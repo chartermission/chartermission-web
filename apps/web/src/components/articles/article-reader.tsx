@@ -168,7 +168,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
                 </Link>
               )}
             </p>
-            <h1 id="article-title" className="text-display text-ink max-md:text-h1 max-sm:text-[28px] max-sm:leading-9">
+            <h1 id="article-title" dir="auto" className="bidi-auto text-display text-ink max-md:text-h1 max-sm:text-[28px] max-sm:leading-9">
               {article.title}
             </h1>
             {article.subtitle && <p className="text-[20px] leading-[30px] text-body max-sm:text-[17px] max-sm:leading-7">{article.subtitle}</p>}

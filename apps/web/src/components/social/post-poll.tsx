@@ -40,7 +40,7 @@ export function PostPoll({ postId, poll, onUpdated }: { postId: string; poll: Po
               )}
             >
               <span
-                className={cn("absolute inset-y-0 left-0", chosen ? "bg-primary-tint" : "bg-muted")}
+                className={cn("absolute inset-y-0 start-0", chosen ? "bg-primary-tint" : "bg-muted")}
                 style={{ width: `${option.percent}%` }}
                 aria-hidden="true"
               />

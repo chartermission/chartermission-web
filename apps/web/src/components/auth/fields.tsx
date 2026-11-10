@@ -72,7 +72,7 @@ export function PasswordInput({
     <div
       className={cn(
         boxClasses(invalid),
-        "flex items-center gap-2 pr-1.5 pl-3.5 focus-within:ring-[0.5px]",
+        "flex items-center gap-2 pe-1.5 ps-3.5 focus-within:ring-[0.5px]",
         invalid ? "focus-within:ring-error" : "focus-within:border-primary focus-within:ring-primary",
         className,
       )}

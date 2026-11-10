@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from "@/i18n/language-menu";
 import type { ReactNode, Ref } from "react";
 import Link from "next/link";
 import { Icon, Logo, type IconName } from "@chartermission/ui";
@@ -52,6 +53,7 @@ export function AuthShell({
           <Logo />
         </Link>
         <div className="flex w-full max-w-[420px] flex-col">{children}</div>
+        <LanguageSwitcher className="mt-8 self-center" />
       </main>
     </div>
   );

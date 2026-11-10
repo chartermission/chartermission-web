@@ -91,7 +91,7 @@ export function AudienceSplit({ connections, followers, others, forPage }: { con
             <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: part.color }} />
             <span className="flex-1 text-body">{part.key === "followers" && forPage ? "Followers of the page" : part.label}</span>
             <span className="font-medium text-ink tabular-nums">{number.format(values[part.key])}</span>
-            <span className="w-10 text-right text-secondary tabular-nums">{Math.round((values[part.key] / total) * 100)}%</span>
+            <span className="w-10 text-end text-secondary tabular-nums">{Math.round((values[part.key] / total) * 100)}%</span>
           </li>
         ))}
       </ul>

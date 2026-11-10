@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { usePathname } from "@/i18n/client";
 import { useState, useTransition, type FormEvent } from "react";
 import { OPPORTUNITY_TYPE_LABELS, OpportunityType, type OpportunitiesQuery } from "@chartermission/contracts";
 import { Button, Divider } from "@chartermission/ui";

@@ -19,6 +19,8 @@ export const ProfileField = z.enum([
   "interests",
   "languages",
   "experience",
+  /** Who can open the lists of this member's connections, followers and the members they follow. */
+  "network",
 ]);
 export type ProfileField = z.infer<typeof ProfileField>;
 
@@ -38,6 +40,7 @@ export const DEFAULT_FIELD_VISIBILITY: Record<ProfileField, FieldVisibility> = {
   interests: "members",
   languages: "members",
   experience: "members",
+  network: "members",
 };
 
 export const ProfileLink = z.object({ label: z.string().max(40), url: z.string().url().max(300) });
@@ -123,12 +126,21 @@ export const OwnProfile = z.object({
   experience: z.array(ExperienceItem),
   profileVisibility: ProfileVisibility,
   fieldVisibility: FieldVisibilityMap,
+  /** Usernames can be changed once every 30 days: when the next change is allowed, or null if now. */
+  handleChangeAvailableAt: z.string().nullable(),
   discoverable: z.boolean(),
   findableByEmail: z.boolean(),
   connectionRequestsFrom: z.enum(["members", "nobody"]),
   completeness: z.object({ percent: z.number().int(), missing: z.array(z.string()) }),
 });
 export type OwnProfile = z.infer<typeof OwnProfile>;
+
+export const HANDLE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
+
+/** GET /me/handle-availability?handle= */
+export const HandleAvailabilityQuery = z.object({ handle: z.string().trim().toLowerCase().regex(HANDLE_PATTERN, "Use 3–30 letters, numbers or hyphens") });
+export type HandleAvailabilityQuery = z.infer<typeof HandleAvailabilityQuery>;
+export type HandleAvailability = { handle: string; available: boolean; reason: string | null };
 
 /** PATCH /me/profile — any subset. Taxonomy fields take ids. */
 export const UpdateProfileInput = z
@@ -341,3 +353,35 @@ export const AccountExport = z.object({
   consents: z.array(z.object({ policyType: z.string(), policyVersion: z.string(), acceptedAt: z.string() })),
 });
 export type AccountExport = z.infer<typeof AccountExport>;
+
+/*
+ * Member lists behind the counts: who reacted, commented or reposted, and a member's
+ * connections and followers.
+ *   GET /posts/{id}/reactions?kind=      GET /comments/{id}/reactions?kind=
+ *   GET /posts/{id}/commenters           GET /posts/{id}/reposts
+ *   GET /members/{handle}/connections    GET /members/{handle}/followers    GET /members/{handle}/following
+ *   GET /pages/{slug}/followers          (the page's admins and platform admins)
+ * All need a signed-in member, leave out anyone blocked either way, and return PeoplePage.
+ */
+export const PeopleQuery = z.object({
+  kind: z.enum(["like", "insightful", "support"]).optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type PeopleQuery = z.infer<typeof PeopleQuery>;
+
+export const PersonEntry = DirectoryMember.extend({
+  /** Their reaction, in reaction lists. */
+  reaction: z.enum(["like", "insightful", "support"]).nullable(),
+  at: z.string(),
+});
+export type PersonEntry = z.infer<typeof PersonEntry>;
+
+export type PeoplePage = {
+  items: PersonEntry[];
+  nextCursor: string | null;
+  /** Everyone in the list, before filtering by reaction. */
+  total: number;
+  /** Reaction lists: how many of each (the tabs). */
+  byReaction?: { like: number; insightful: number; support: number };
+};

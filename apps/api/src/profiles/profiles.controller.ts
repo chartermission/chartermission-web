@@ -9,6 +9,8 @@ import {
   PrivacySettingsInput,
   ProfilePreviewQuery,
   UpdateProfileInput,
+  HandleAvailabilityQuery,
+  type HandleAvailability,
   type BlockView,
   type ConnectionView,
   type DirectoryMember,
@@ -81,6 +83,12 @@ export class ProfilesController {
   @Access('member')
   update(@Auth() ctx: AuthContext, @ZBody(UpdateProfileInput) input: UpdateProfileInput): Promise<OwnProfile> {
     return this.profiles.update(ctx.user.id, input);
+  }
+
+  @Get('me/handle-availability')
+  @Access('session')
+  handleAvailability(@Auth() ctx: AuthContext, @ZQuery(HandleAvailabilityQuery) query: HandleAvailabilityQuery): Promise<HandleAvailability> {
+    return this.profiles.handleAvailability(ctx.user.id, query.handle);
   }
 
   @Put('me/privacy')

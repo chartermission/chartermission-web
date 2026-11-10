@@ -352,7 +352,7 @@ function CropEditor({
             Reset
           </Button>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ms-auto flex gap-2">
           <Button variant="ghost" onClick={onCancel} disabled={saving}>
             Cancel
           </Button>

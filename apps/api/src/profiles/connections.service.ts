@@ -50,8 +50,8 @@ export class ConnectionsService {
     // Blocked either way: behave as if the member does not exist (spec 4.6; the blocked member is not told).
     if (await this.relations.isBlockedEitherWay(me.id, target.userId)) throw Errors.notFound('Member');
     // Official Charter Mission accounts are follow-only: they neither receive nor send requests.
-    if (target.isStaff) throw Errors.forbidden('This is an official Charter Mission account. Follow it to see its posts.');
-    if (me.isStaff) throw Errors.forbidden('Official Charter Mission accounts can’t send connection requests. Members follow this account instead.');
+    if (target.isOfficial) throw Errors.forbidden('This is an official Charter Mission account. Follow it to see its posts.');
+    if (me.isOfficial) throw Errors.forbidden('Official Charter Mission accounts can’t send connection requests. Members follow this account instead.');
     if (target.connectionRequestsFrom === 'nobody') throw Errors.forbidden('This member isn’t accepting connection requests');
 
     const dailyKey = `connections:day:${me.id}`;

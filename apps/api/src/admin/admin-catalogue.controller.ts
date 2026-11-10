@@ -8,6 +8,7 @@ import {
   AdminChapterUpdateInput,
   AdminMembersQuery,
   AdminSetFeaturedInput,
+  AdminSetOfficialInput,
   AdminSetVerifiedInput,
   AdminTopicCreateInput,
   AdminTopicsQuery,
@@ -161,6 +162,17 @@ export class AdminMembersController {
     @Req() req: AppRequest,
   ): Promise<AdminMemberRow> {
     return this.members.setVerified(ctx, id, input.verified, clientIp(req));
+  }
+
+  @Put(':id/official')
+  @Access('admin', 'members.manage')
+  official(
+    @Auth() ctx: AuthContext,
+    @Param('id') id: string,
+    @ZBody(AdminSetOfficialInput) input: AdminSetOfficialInput,
+    @Req() req: AppRequest,
+  ): Promise<AdminMemberRow> {
+    return this.members.setOfficial(ctx, id, input.official, clientIp(req));
   }
 
   @Put(':id/featured')

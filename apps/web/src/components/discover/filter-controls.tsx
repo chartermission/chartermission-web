@@ -54,7 +54,7 @@ export function CheckRow({
           <Icon
             name="check"
             size={12}
-            className="pointer-events-none absolute left-0.5 top-0.5 hidden text-inverse peer-checked:block"
+            className="pointer-events-none absolute start-0.5 top-0.5 hidden text-inverse peer-checked:block"
           />
         </span>
         <span className="text-sm text-body group-has-checked:text-ink">{label}</span>
@@ -80,7 +80,7 @@ export function SelectField({
     <label className={cn("relative flex items-center gap-2", className)}>
       <span className={hideLabel ? "sr-only" : "whitespace-nowrap text-sm text-secondary"}>{label}</span>
       <select
-        className="w-full cursor-pointer appearance-none rounded-lg border border-line bg-card py-[9px] pl-3 pr-9 text-sm text-body hover:border-line-strong"
+        className="w-full cursor-pointer appearance-none rounded-lg border border-line bg-card py-[9px] ps-3 pe-9 text-sm text-body hover:border-line-strong"
         {...rest}
       >
         {options.map((option) => (
@@ -89,7 +89,7 @@ export function SelectField({
           </option>
         ))}
       </select>
-      <Icon name="chevron-down" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary" />
+      <Icon name="chevron-down" size={16} className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-secondary" />
     </label>
   );
 }
@@ -145,7 +145,7 @@ export function ToggleChip({
 /** Removable active-filter pill ("Jobs ✕"). */
 export function RemovableChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-tint py-[5px] pl-3 pr-2 text-sm font-medium text-primary">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-tint py-[5px] ps-3 pe-2 text-sm font-medium text-primary">
       {label}
       <button type="button" onClick={onRemove} aria-label={`Remove filter: ${label}`} className="rounded-full hover:bg-primary/10">
         <Icon name="x" size={14} />

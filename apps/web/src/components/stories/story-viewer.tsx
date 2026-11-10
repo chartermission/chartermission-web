@@ -253,8 +253,8 @@ export function StoryViewer({
               />
             )}
 
-            <button type="button" onClick={prev} className="absolute inset-y-0 left-0 z-10 w-1/3 cursor-w-resize focus-visible:outline-none" aria-label="Previous story" />
-            <button type="button" onClick={next} className="absolute inset-y-0 right-0 z-10 w-2/3 cursor-e-resize focus-visible:outline-none" aria-label="Next story" />
+            <button type="button" onClick={prev} className="absolute inset-y-0 start-0 z-10 w-1/3 cursor-w-resize focus-visible:outline-none" aria-label="Previous story" />
+            <button type="button" onClick={next} className="absolute inset-y-0 end-0 z-10 w-2/3 cursor-e-resize focus-visible:outline-none" aria-label="Next story" />
 
             <div className="pointer-events-none relative z-20 flex flex-col gap-3 bg-gradient-to-b from-ink/70 to-transparent px-3 pb-8 pt-3">
               <div className="flex gap-1" aria-hidden="true">
@@ -280,7 +280,7 @@ export function StoryViewer({
                 <time dateTime={story.createdAt} className="shrink-0 text-xs text-inverse/75" suppressHydrationWarning>
                   {relativeTime(story.createdAt)}
                 </time>
-                <span className="ml-auto flex shrink-0 items-center gap-1">
+                <span className="ms-auto flex shrink-0 items-center gap-1">
                   {story.media.kind === "video" && (
                     <button type="button" onClick={() => setMuted((m) => !m)} className="rounded-md p-1.5 hover:bg-inverse/15" aria-label={muted ? "Unmute" : "Mute"} aria-pressed={!muted}>
                       <SoundIcon muted={muted} />
@@ -333,7 +333,7 @@ export function StoryViewer({
                     </>
                   )}
                   {story.viewer.canDelete && !highlightActions && (
-                    <button type="button" onClick={() => setSub("delete")} className="ml-auto flex items-center gap-1.5 rounded-full bg-inverse/15 px-3 py-1.5 text-xs font-medium hover:bg-error">
+                    <button type="button" onClick={() => setSub("delete")} className="ms-auto flex items-center gap-1.5 rounded-full bg-inverse/15 px-3 py-1.5 text-xs font-medium hover:bg-error">
                       Delete
                     </button>
                   )}

@@ -140,10 +140,10 @@ const fallbackArt = { gradients: ["from-primary to-primary-light"], icon: "book"
 
 const directions = ["bg-linear-to-br", "bg-linear-to-tr", "bg-linear-to-r", "bg-linear-to-bl"] as const;
 const rings = [
-  "-right-10 -bottom-14",
-  "-left-12 -bottom-16",
-  "-right-14 -top-16",
-  "-left-10 -top-14",
+  "-end-10 -bottom-14",
+  "-start-12 -bottom-16",
+  "-end-14 -top-16",
+  "-start-10 -top-14",
 ] as const;
 
 function hash(value: string) {

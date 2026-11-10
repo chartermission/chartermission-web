@@ -8,6 +8,9 @@ export interface AuthUser {
   status: 'unverified' | 'active' | 'deactivated' | 'suspended' | 'deletion_pending' | 'deleted';
   emailVerified: boolean;
   isStaff: boolean;
+  /** Follow-only organisation account. */
+  isOfficial: boolean;
+  locale: string | null;
   roles: string[];
   permissions: Set<Permission>;
   mfaEnabled: boolean;
@@ -21,6 +24,7 @@ export interface AuthSession {
   id: string;
   audience: 'member' | 'admin';
   mfaVerified: boolean;
+  mfaVerifiedAt: Date | null;
   createdAt: Date;
 }
 

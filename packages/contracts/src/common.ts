@@ -90,8 +90,10 @@ export const MemberRef = z.object({
   tone: AvatarTone,
   /** Admin-verified member or official account. Email verification alone never sets this (decision D2). */
   verified: z.boolean(),
-  /** Official Charter Mission staff account. */
+  /** Works for Charter Mission (a person on the team). Connects like any member. */
   staff: z.boolean(),
+  /** An official organisation account: follow-only, no connection requests either way. */
+  official: z.boolean(),
   /** Ambassador programme badge, when they hold one. */
   badge: MemberBadge.nullable().optional(),
 });

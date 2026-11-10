@@ -27,6 +27,8 @@ const shownFields: { key: ProfileField; label: string }[] = [
 
 function valueOf(profile: MemberProfile, key: ProfileField): string | string[] | null {
   switch (key) {
+    case "network":
+      return null;
     case "location":
       return profile.country || profile.city ? [profile.city, profile.country?.name].filter(Boolean).join(", ") : null;
     case "links":

@@ -8,12 +8,12 @@ import { toast } from "@/components/social/toast";
 
 export type RelationshipState = Pick<Relationship, "connection" | "connectionId" | "following">;
 
-/** `staff`: an official Charter Mission account, which members follow instead of connecting with. */
-type Member = { id: string; name: string; staff?: boolean };
+/** `official`: an organisation account, which members follow instead of connecting with. Team members connect like anyone. */
+type Member = { id: string; name: string; official?: boolean };
 
 /** Official accounts are follow-only, in both directions (the API refuses requests either way). */
 export function canConnectWith(member: Member, relationship?: Pick<Relationship, "canConnect">): boolean {
-  return !member.staff && relationship?.canConnect !== false;
+  return !member.official && relationship?.canConnect !== false;
 }
 
 /** Connection and follow mutations shared by profile headers, directory cards and suggestions. */
@@ -115,7 +115,7 @@ export function ConnectControl({
   onConnectWithNote?: () => void;
 }) {
   const { state, busy } = controls;
-  if (member.staff) return null;
+  if (member.official) return null;
   if (state.connection === "connected") {
     return (
       <Button variant="secondary" size={size} block={block} disabled title="Messaging arrives in a later release">
@@ -172,7 +172,7 @@ export function FollowControl({
   controls,
   size = "small",
   block = false,
-  prominent = member.staff ?? false,
+  prominent = member.official ?? false,
 }: {
   member: Member;
   controls: RelationshipControls;

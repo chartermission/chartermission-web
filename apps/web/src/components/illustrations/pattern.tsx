@@ -132,7 +132,7 @@ export function BrandCover({
       )}
     >
       <BrandPattern tone={navy ? "text-inverse" : "text-primary"} opacity={navy ? 0.1 : 0.08} />
-      <span aria-hidden="true" className={cn("pointer-events-none absolute -right-10 -bottom-12 size-40 rounded-full border-[14px]", navy ? "border-accent/40" : "border-accent/15")} />
+      <span aria-hidden="true" className={cn("pointer-events-none absolute -end-10 -bottom-12 size-40 rounded-full border-[14px]", navy ? "border-accent/40" : "border-accent/15")} />
       {children && <div className="relative">{children}</div>}
     </div>
   );

@@ -275,7 +275,7 @@ export function PostCard({
             </p>
             {!editing && (
               <>
-                <h1 className="text-h1 text-ink max-sm:text-h2">{articleDetail.title}</h1>
+                <h1 dir="auto" className="bidi-auto text-h1 text-ink max-sm:text-h2">{articleDetail.title}</h1>
                 {articleDetail.subtitle && <p className="text-h3 font-normal text-body max-sm:text-md">{articleDetail.subtitle}</p>}
               </>
             )}

@@ -69,7 +69,7 @@ export function MomentCard({
 
   return (
     <article aria-labelledby={headingId} className={cn("motion-fade-up overflow-hidden rounded-card border border-line bg-card", className)} style={style}>
-      <header className="relative flex items-center gap-2 overflow-hidden border-b border-line bg-primary-tint-2 py-1.5 pr-2 pl-5 max-sm:pl-4">
+      <header className="relative flex items-center gap-2 overflow-hidden border-b border-line bg-primary-tint-2 py-1.5 pe-2 ps-5 max-sm:ps-4">
         <BrandPattern fade="left" opacity={0.09} size={72} />
         <span className={cn("relative flex size-6 shrink-0 items-center justify-center rounded-full bg-card", iconTone)} aria-hidden="true">
           <Icon name={icon} size={14} />

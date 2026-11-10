@@ -206,13 +206,13 @@ export function Markdown({
             );
           case "quote":
             return (
-              <blockquote key={index} className="whitespace-pre-wrap border-l-[3px] border-accent bg-accent-light/50 py-2 pl-4 pr-3 italic text-ink">
+              <blockquote key={index} className="whitespace-pre-wrap border-s-[3px] border-accent bg-accent-light/50 py-2 ps-4 pe-3 italic text-ink">
                 <Inline text={block.text} mentions={known} />
               </blockquote>
             );
           case "ul":
             return (
-              <ul key={index} className="flex list-disc flex-col gap-1.5 pl-6 marker:text-accent">
+              <ul key={index} className="flex list-disc flex-col gap-1.5 ps-6 marker:text-accent">
                 {block.items.map((item, i) => (
                   <li key={i}>
                     <Inline text={item} mentions={known} />
@@ -222,7 +222,7 @@ export function Markdown({
             );
           case "ol":
             return (
-              <ol key={index} start={block.start} className="flex list-decimal flex-col gap-1.5 pl-6 marker:font-semibold marker:text-secondary">
+              <ol key={index} start={block.start} className="flex list-decimal flex-col gap-1.5 ps-6 marker:font-semibold marker:text-secondary">
                 {block.items.map((item, i) => (
                   <li key={i}>
                     <Inline text={item} mentions={known} />

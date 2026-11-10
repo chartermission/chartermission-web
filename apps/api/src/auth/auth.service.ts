@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -15,14 +16,16 @@ import { InjectDb, type Db } from '../db/db.module.js';
 import { consentRecords, memberProfiles, roles, sessions, userRoles, users } from '../db/schema.js';
 import { type AppRequest, type AuthContext, clientIp } from '../core/auth-context.js';
 import { ADMIN_SIGNIN_ROLES } from '../core/permissions.js';
-import { SessionService, audienceOf } from '../core/session.service.js';
+import { SESSION_POLICY, SessionService, audienceOf } from '../core/session.service.js';
 import { toneFor } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 import { SettingsService } from '../infra/settings.service.js';
-import { hashIp, sha256 } from '../common/crypto.js';
+import { hashIp, randomToken, sha256 } from '../common/crypto.js';
+import { env } from '../config/env.js';
+import { InjectRedis } from '../infra/redis.js';
 import { Errors } from '../common/errors.js';
 import { HandleService } from '../profiles/handles.js';
 import { TaxonomyService } from '../profiles/taxonomy.service.js';
@@ -66,6 +69,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly analytics: AnalyticsService,
     private readonly events: EventsService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async findByEmail(email: string) {
@@ -242,6 +246,56 @@ export class AuthService {
     // Staff accounts must set it up before using the member app as well.
     if (user.isStaff || (await this.hasPrivilegedRole(user.id))) return { status: 'mfa_setup_required' };
     return { status: 'ok' };
+  }
+
+  /*
+   * Single sign-on from the member site into the admin console.
+   *
+   * The two sites are on different hosts and each keeps its own session cookie, so the member
+   * session is never visible to the console. Instead:
+   *   1. GET /auth/admin/sso/start, on the member site's host: if the visitor is signed in there
+   *      and holds a console role, a one-time code is made (60 seconds, single use) and the
+   *      browser is sent to {ADMIN_URL}/sso?code=…. Otherwise it is sent to the console's
+   *      ordinary sign-in form.
+   *   2. POST /auth/admin/sso { code }, from the console: the code is exchanged for a console
+   *      session. No password is typed.
+   * Two-step verification still guards the console: the authenticator code is skipped only when
+   * the member session passed it within the console's idle time-out (30 minutes), so an unattended
+   * browser that is signed in on the member site does not open the console by itself. After that
+   * the console asks for the code, never the password.
+   */
+
+  /** GET /auth/admin/sso/start?next= — answers with the address to send the browser to. */
+  async adminSsoStart(req: AppRequest, next: string | undefined): Promise<string> {
+    const admin = env().ADMIN_URL.replace(/\/+$/, '');
+    const safe = next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') && next.length < 500 ? next : null;
+    const q = safe ? `&next=${encodeURIComponent(safe)}` : '';
+    const ctx = req.auth && req.auth.session.audience === 'member' ? req.auth : null;
+    if (!ctx || ctx.user.status !== 'active' || !(await this.hasPrivilegedRole(ctx.user.id))) return `${admin}/signin?sso=unavailable${q}`;
+    await this.limits.consume(`admin-sso:${ctx.user.id}`, 30, 3600);
+    const verifiedAt = ctx.session.mfaVerifiedAt;
+    const fresh = ctx.user.mfaEnabled && !!verifiedAt && Date.now() - verifiedAt.getTime() < SESSION_POLICY.admin.idleMs;
+    const code = randomToken(32);
+    await this.redis.set(`admin-sso:${sha256(code)}`, JSON.stringify({ userId: ctx.user.id, fresh }), 'EX', 60);
+    return `${admin}/sso?code=${code}${q}`;
+  }
+
+  /** POST /auth/admin/sso { code } — exchanges the one-time code for a console session. */
+  async adminSso(code: string, req: AppRequest, res: Response): Promise<SignInResult> {
+    const ip = clientIp(req) ?? 'unknown';
+    await this.limits.consume(`admin-sso:ip:${ip}`, 30, 3600);
+    const stored = await this.redis.getdel(`admin-sso:${sha256(code)}`);
+    if (!stored) throw Errors.forbidden('That sign-in link has expired. Sign in with your email and password.');
+    const { userId, fresh } = JSON.parse(stored) as { userId: string; fresh: boolean };
+    const [user] = await this.db.select().from(users).where(eq(users.id, userId));
+    if (!user || user.status !== 'active' || !(await this.hasPrivilegedRole(user.id))) throw Errors.forbidden('Sign in with your email and password to open the console.');
+    if (req.auth && req.auth.session.audience === 'admin') await this.sessions.revoke(req.auth.session.id);
+    const carried = fresh && !!user.mfaEnabledAt;
+    const { token, expiresAt } = await this.sessions.create(user.id, 'admin', req, { mfaVerified: carried });
+    this.sessions.setCookie(res, 'admin', token, expiresAt);
+    await this.audit.record({ actorId: user.id, action: 'auth.login.sso', targetType: 'user', targetId: user.id, after: { audience: 'admin', mfa: carried ? 'carried' : 'required' }, ip });
+    if (carried) return { status: 'ok' };
+    return { status: user.mfaEnabledAt ? 'mfa_required' : 'mfa_setup_required' };
   }
 
   /** POST /auth/logout — revokes the current session for the request's audience. */

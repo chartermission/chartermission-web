@@ -32,6 +32,9 @@ type ChapterRow = {
   status: string;
   about: string | null;
   hashtag: string | null;
+  photoUrl: string | null;
+  photoCredit: string | null;
+  photoCreditUrl: string | null;
   countryName: string;
   region: string;
   imageFileId: string | null;
@@ -189,6 +192,9 @@ export class ChaptersService {
         region: countries.region,
         imageFileId: chapters.imageFileId,
         coverFileId: chapters.coverFileId,
+        photoUrl: chapters.photoUrl,
+        photoCredit: chapters.photoCredit,
+        photoCreditUrl: chapters.photoCreditUrl,
       })
       .from(chapters)
       .innerJoin(countries, eq(countries.code, chapters.countryCode))
@@ -216,6 +222,7 @@ export class ChaptersService {
       coverUrl: mediaUrl(r.coverFileId),
       about: r.about,
       hashtag: r.hashtag,
+      photo: r.photoUrl ? { url: r.photoUrl, credit: r.photoCredit, creditUrl: r.photoCreditUrl } : null,
       followers,
       viewer: { following },
     };

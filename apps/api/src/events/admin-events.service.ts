@@ -45,6 +45,7 @@ export class AdminEventsService {
         tone: 'tint',
         verified: false,
         staff: false,
+        official: false,
       },
       submittedAt: r.submittedAt?.toISOString() ?? null,
       reviewedAt: r.reviewedAt?.toISOString() ?? null,

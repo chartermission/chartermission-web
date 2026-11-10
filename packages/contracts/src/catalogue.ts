@@ -33,6 +33,10 @@ export type AdminChapterRow = {
   hashtag: string | null;
   imageUrl: string | null;
   coverUrl: string | null;
+  /** Country photograph behind the generated cover (an image address), and who to credit. */
+  photoUrl: string | null;
+  photoCredit: string | null;
+  photoCreditUrl: string | null;
   followers: number;
   posts: number;
   createdAt: string;
@@ -69,6 +73,10 @@ export const AdminChapterUpdateInput = z
       .nullable(),
     imageFileId: z.string().uuid().nullable(),
     coverFileId: z.string().uuid().nullable(),
+    /** Country photograph: a full https image address (Unsplash or the platform's own storage). Null removes it. */
+    photoUrl: z.string().trim().url().max(600).regex(/^https:\/\//, "Use an https:// image address").nullable(),
+    photoCredit: z.string().trim().max(120).nullable(),
+    photoCreditUrl: z.string().trim().url().max(600).nullable(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "Nothing to update");
@@ -195,7 +203,10 @@ export type AdminMemberRow = {
   status: string;
   /** Verified tick (admin-granted). */
   verified: boolean;
+  /** Works for Charter Mission: set when they are given an admin role. */
   staff: boolean;
+  /** Official organisation account: follow-only. */
+  official: boolean;
   /** Suggested first to new members during sign-up. */
   featured: boolean;
   badges: ProfileBadge[];
@@ -207,6 +218,10 @@ export const AdminSetVerifiedInput = z.object({ verified: z.boolean() });
 export type AdminSetVerifiedInput = z.infer<typeof AdminSetVerifiedInput>;
 
 /** PUT /admin/members/{id}/featured (members.manage) */
+/** PUT /admin/members/{id}/official — an official account is follow-only (members can't connect with it). */
+export const AdminSetOfficialInput = z.object({ official: z.boolean() });
+export type AdminSetOfficialInput = z.infer<typeof AdminSetOfficialInput>;
+
 export const AdminSetFeaturedInput = z.object({ featured: z.boolean() });
 export type AdminSetFeaturedInput = z.infer<typeof AdminSetFeaturedInput>;
 

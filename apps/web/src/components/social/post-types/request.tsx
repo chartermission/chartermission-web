@@ -210,7 +210,7 @@ export function RequestBlock({
           </Button>
         )}
         {!isOwn && !request.closed && request.helpOffers > 0 && (
-          <span className="ml-auto text-xs text-secondary">
+          <span className="ms-auto text-xs text-secondary">
             {request.helpOffers} {request.helpOffers === 1 ? "member has" : "members have"} offered
           </span>
         )}

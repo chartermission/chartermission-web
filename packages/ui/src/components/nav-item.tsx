@@ -13,7 +13,7 @@ export function NavItem({
   className,
 }: {
   icon: IconName;
-  label: string;
+  label: ReactNode;
   href: string;
   active?: boolean;
   linkAs?: ElementType;

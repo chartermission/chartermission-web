@@ -5,16 +5,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { Avatar, Icon, cn, type AvatarTone, type IconName } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
+import { LanguageMenuItems } from "@/i18n/language-menu";
 
 export interface UserMenuViewer {
   name: string;
   handle: string;
   avatarUrl: string | null;
   tone: AvatarTone;
+  /** Team members only: the admin console's address. */
+  adminUrl?: string | null;
 }
 
 const itemClasses =
-  "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-body outline-none hover:bg-primary-tint-2 focus-visible:bg-primary-tint-2 focus-visible:text-ink";
+  "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start text-sm text-body outline-none hover:bg-primary-tint-2 focus-visible:bg-primary-tint-2 focus-visible:text-ink";
 
 /**
  * Avatar menu in the top nav (WAI-ARIA menu button): Enter/Space/ArrowDown open it on the first
@@ -23,6 +27,7 @@ const itemClasses =
 export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
   const id = useId();
   const router = useRouter();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
@@ -93,10 +98,10 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
   }
 
   const links: { href: string; label: string; icon: IconName }[] = [
-    { href: `/members/${viewer.handle}`, label: "View profile", icon: "user" },
-    { href: "/analytics", label: "Analytics", icon: "chart" },
-    { href: "/pages", label: "Pages", icon: "building" },
-    { href: "/settings", label: "Settings", icon: "shield" },
+    { href: `/members/${viewer.handle}`, label: t("menu.viewProfile"), icon: "user" },
+    { href: "/analytics", label: t("menu.analytics"), icon: "chart" },
+    { href: "/pages", label: t("menu.pages"), icon: "building" },
+    { href: "/settings", label: t("menu.settings"), icon: "shield" },
   ];
 
   return (
@@ -108,7 +113,7 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? `${id}-menu` : undefined}
-        aria-label={`Account menu for ${viewer.name}`}
+        aria-label={t("menu.accountMenuFor", { name: viewer.name })}
         onClick={() => (open ? close(false) : openMenu("first"))}
         onKeyDown={onButtonKeyDown}
         className="flex items-center gap-1 rounded-full p-0.5 text-secondary hover:bg-primary-tint-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-light"
@@ -123,7 +128,7 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
           role="menu"
           aria-labelledby={`${id}-button`}
           onKeyDown={onMenuKeyDown}
-          className="absolute top-[calc(100%+8px)] right-0 z-40 flex w-64 flex-col gap-0.5 rounded-card border border-line bg-card p-1.5 shadow-[0px_12px_32px_0px_rgba(26,32,44,0.14)]"
+          className="absolute top-[calc(100%+8px)] end-0 z-40 flex w-64 flex-col gap-0.5 rounded-card border border-line bg-card p-1.5 shadow-[0px_12px_32px_0px_rgba(26,32,44,0.14)]"
         >
           <div className="flex items-center gap-3 px-3 py-2.5" role="none">
             <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} size={40} />
@@ -146,6 +151,16 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
               {link.label}
             </Link>
           ))}
+          {viewer.adminUrl && (
+            // An API address that answers with a redirect to the console, so it has to be a full page load, not a <Link>.
+            // eslint-disable-next-line @next/next/no-html-link-for-pages
+            <a href="/api/v1/auth/admin/sso/start" role="menuitem" tabIndex={-1} onClick={() => setOpen(false)} className={itemClasses}>
+              <Icon name="shield" size={18} className="text-secondary" />
+              <span className="flex-1">{t("menu.adminConsole")}</span>
+              <Icon name="external" size={14} className="text-secondary" />
+            </a>
+          )}
+          <LanguageMenuItems itemClasses={itemClasses} />
           <div role="separator" className="my-1 h-px bg-line" />
           <button
             type="button"
@@ -156,7 +171,7 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
             className={itemClasses}
           >
             <Icon name="arrow-up-right" size={18} className="text-secondary" />
-            {signingOut ? "Signing out…" : "Sign out"}
+            {signingOut ? t("menu.signingOut") : t("menu.signOut")}
           </button>
         </div>
       )}

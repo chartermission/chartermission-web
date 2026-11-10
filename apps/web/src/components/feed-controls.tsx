@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { usePathname } from "@/i18n/client";
 import { useEffect, useId, useOptimistic, useRef, useState, useTransition } from "react";
 import type { FeedQuery, PostType, Taxonomies } from "@chartermission/contracts";
 import { FilterSelect, Icon, SegmentedControl, chipClasses, cn } from "@chartermission/ui";
@@ -136,7 +137,7 @@ export function FeedControls({ query: serverQuery, taxonomies }: { query: FeedQu
             id={panelId}
             role="group"
             aria-label="Feed filters"
-            className="absolute right-0 top-full z-30 mt-2 flex w-[300px] max-w-[calc(100vw-24px)] flex-col gap-3.5 rounded-card border border-line bg-card p-4 shadow-[0px_8px_24px_0px_rgba(26,32,44,0.12)]"
+            className="absolute end-0 top-full z-30 mt-2 flex w-[300px] max-w-[calc(100vw-24px)] flex-col gap-3.5 rounded-card border border-line bg-card p-4 shadow-[0px_8px_24px_0px_rgba(26,32,44,0.12)]"
           >
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-ink">Filter posts</p>
@@ -178,7 +179,7 @@ export function FeedControls({ query: serverQuery, taxonomies }: { query: FeedQu
               />
               <span
                 aria-hidden="true"
-                className="relative h-5 w-9 shrink-0 rounded-full bg-line-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-card after:shadow-sm after:transition-transform peer-checked:bg-primary peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-light"
+                className="relative h-5 w-9 shrink-0 rounded-full bg-line-strong transition-colors after:absolute after:start-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-card after:shadow-sm after:transition-transform peer-checked:bg-primary peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-light"
               />
             </label>
             <button
@@ -195,7 +196,7 @@ export function FeedControls({ query: serverQuery, taxonomies }: { query: FeedQu
         )}
       </div>
 
-      <div role="group" aria-label="Post type" className="-mx-1 flex gap-2 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] max-sm:-mr-3 max-sm:pr-6 max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] [&::-webkit-scrollbar]:hidden">
+      <div role="group" aria-label="Post type" className="-mx-1 flex gap-2 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] max-sm:-me-3 max-sm:pe-6 max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] [&::-webkit-scrollbar]:hidden">
         {types.map((item) => {
           const selected = item.value === selectedType;
           return (

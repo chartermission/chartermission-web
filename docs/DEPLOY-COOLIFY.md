@@ -132,6 +132,13 @@ names it (`--confirm-database=<name>`), wherever they are run from.
    ```
 3. Sign in at https://admin.chartermission.com; two-step verification enrolment is required.
 
+That account is a team member: it keeps connecting with members like anyone. For the organisation's own account (the one
+members should only follow), either add `--official` to the command, or use Members → Make official in the console.
+
+Team members who are signed in on chartermission.com open the console from their account menu without the password
+(single sign-on). It needs `WEB_URL` and `ADMIN_URL` on the api, and `NEXT_PUBLIC_WEB_URL` on admin, to be the public
+addresses, as above. No shared cookie domain is needed.
+
 ## 8. Checks after the first deploy
 
 - `https://chartermission.com/api/v1/health` returns `{"status":"ok"}` (web → api proxy works).

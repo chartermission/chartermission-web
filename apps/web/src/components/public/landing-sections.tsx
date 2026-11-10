@@ -204,7 +204,7 @@ export function LandingLearnAndMeet({ overview }: { overview: PublicOverview }) 
     <section aria-label="Learning and events" className="bg-card py-24 max-sm:py-16">
       <Container className="grid grid-cols-2 gap-6 max-lg:grid-cols-1">
         <article id="learning" className="relative flex scroll-mt-6 flex-col gap-5 overflow-hidden rounded-[20px] bg-primary-dark p-9 max-sm:p-6">
-          <span aria-hidden="true" className="absolute -top-16 -right-16 size-56 rounded-full bg-white/5" />
+          <span aria-hidden="true" className="absolute -top-16 -end-16 size-56 rounded-full bg-white/5" />
           <span className="flex size-12 items-center justify-center rounded-[12px] bg-white/10 text-accent-on-dark">
             <Icon name="book" size={24} />
           </span>

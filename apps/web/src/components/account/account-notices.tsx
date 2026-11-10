@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { usePathname } from "@/i18n/client";
 import { useEffect, useState, type ReactNode } from "react";
 import type { SessionUser } from "@chartermission/contracts";
 import { Button, Icon, cn, type IconName } from "@chartermission/ui";

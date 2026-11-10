@@ -99,7 +99,7 @@ export function PostCard({
               )}
             >
               <span
-                className={cn("absolute inset-y-0 left-0", option.chosen ? "bg-primary-tint" : "bg-muted")}
+                className={cn("absolute inset-y-0 start-0", option.chosen ? "bg-primary-tint" : "bg-muted")}
                 style={{ width: `${option.percent}%` }}
                 aria-hidden="true"
               />

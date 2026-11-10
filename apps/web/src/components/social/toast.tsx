@@ -47,7 +47,7 @@ function ToastItem({ item }: { item: Toast }) {
   return (
     <div
       className={cn(
-        "pointer-events-auto flex max-w-[min(480px,calc(100vw-2rem))] items-start gap-3 rounded-card py-3 pl-4 pr-3 text-sm shadow-[0px_12px_24px_0px_rgba(0,0,0,0.2)]",
+        "pointer-events-auto flex max-w-[min(480px,calc(100vw-2rem))] items-start gap-3 rounded-card py-3 ps-4 pe-3 text-sm shadow-[0px_12px_24px_0px_rgba(0,0,0,0.2)]",
         item.tone === "success" ? "bg-primary-dark text-inverse" : "border border-line bg-card text-ink",
       )}
     >

@@ -211,7 +211,7 @@ export function Lightbox({
                 type="button"
                 onClick={() => step(-1)}
                 aria-label={`Previous photo (${((index - 1 + count) % count) + 1} of ${count})`}
-                className={cn(roundButton, "absolute left-4 top-1/2 -translate-y-1/2 max-sm:left-2")}
+                className={cn(roundButton, "absolute start-4 top-1/2 -translate-y-1/2 max-sm:start-2")}
               >
                 <Icon name="chevron-left" size={24} />
               </button>
@@ -219,7 +219,7 @@ export function Lightbox({
                 type="button"
                 onClick={() => step(1)}
                 aria-label={`Next photo (${((index + 1) % count) + 1} of ${count})`}
-                className={cn(roundButton, "absolute right-4 top-1/2 -translate-y-1/2 max-sm:right-2")}
+                className={cn(roundButton, "absolute end-4 top-1/2 -translate-y-1/2 max-sm:end-2")}
               >
                 <Icon name="chevron-right" size={24} />
               </button>

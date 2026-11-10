@@ -3,8 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ALT_TEXT_MAX_CHARS, type DraftView, type UploadPurpose } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
-import { assertVideoLength, uploadFile } from "@/lib/upload";
-import { getMediaLimits, readVideoDuration } from "@/lib/media-limits";
+import { UploadCancelled, chooseVideoPart, uploadFile } from "@/lib/upload";
+import { getMediaLimits } from "@/lib/media-limits";
 import { formatDuration, UPLOAD_LIMITS } from "@chartermission/contracts";
 import { errorMessage } from "@/components/social/errors";
 import { formatBytes } from "@/components/social/format";
@@ -106,16 +106,18 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
 
     next.forEach((item, index) => {
       const file = accepted[index]!;
-      const lengthCheck =
-        item.purpose === "post_video"
-          ? Promise.all([readVideoDuration(file), getMediaLimits()]).then(([seconds, limits]) => assertVideoLength(seconds, limits.postVideoMaxSeconds))
-          : Promise.resolve();
-      lengthCheck
-        .then(() =>
-          uploadFile(file, item.purpose, (fraction) => patch(item.key, fraction >= 1 ? { progress: 1, status: "scanning" } : { progress: fraction })),
+      // Videos first open the trim window, where the member picks the part to post.
+      const part = item.purpose === "post_video" ? getMediaLimits().then((limits) => chooseVideoPart(file, limits.postVideoMaxSeconds)) : Promise.resolve(null);
+      part
+        .then((trim) =>
+          uploadFile(file, item.purpose, (fraction) => patch(item.key, fraction >= 1 ? { progress: 1, status: "scanning" } : { progress: fraction }), trim),
         )
         .then((view) => patch(item.key, { status: "ready", fileId: view.id, progress: 1 }))
-        .catch((e: unknown) => patch(item.key, { status: "rejected", error: errorMessage(e) }));
+        .catch((e: unknown) => {
+          // Closed the trim window without choosing: drop the file as if it was never picked.
+          if (e instanceof UploadCancelled) remove(item.key);
+          else patch(item.key, { status: "rejected", error: errorMessage(e) });
+        });
     });
   }
 
@@ -206,9 +208,9 @@ function AltTextField({ item, onChange }: { item: Attachment; onChange: (alt: st
           onChange={(event) => onChange(event.target.value)}
           placeholder="e.g. Three founders cutting a ribbon outside a solar plant"
           aria-describedby={`${id}-count`}
-          className="h-8 w-full rounded-md border border-line bg-card pl-2.5 pr-16 text-xs text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
+          className="h-8 w-full rounded-md border border-line bg-card ps-2.5 pe-16 text-xs text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
         />
-        <span id={`${id}-count`} className={cn("pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px]", near ? "text-warning" : "text-disabled")}>
+        <span id={`${id}-count`} className={cn("pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-[11px]", near ? "text-warning" : "text-disabled")}>
           <span aria-hidden="true">
             {item.alt.length}/{ALT_TEXT_MAX_CHARS}
           </span>
@@ -290,7 +292,7 @@ export function AttachmentPicker({
             : mode === "image"
               ? "Up to 4 images. JPEG, PNG or WebP, 5 MB each."
               : mode === "video"
-                ? `One video${maxSeconds ? ` up to ${formatDuration(maxSeconds)} long` : ""}: MP4, MOV or WebM, ${videoGb} GB max. For longer videos, share a YouTube or Vimeo link instead.`
+                ? `One video: MP4, MOV or WebM, ${videoGb} GB max.${maxSeconds ? ` Posts show up to ${formatDuration(maxSeconds)}: if yours is longer, you choose which part to post.` : ""}`
                 : "One PDF, up to 10 MB."}{" "}
           {!cover && "Files are checked for safety before anyone else sees them."}
         </p>

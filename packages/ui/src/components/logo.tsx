@@ -48,7 +48,7 @@ export function Logo({ theme = "light", className }: { theme?: Theme; className?
   return (
     <span className={cn("inline-flex items-center gap-[10px]", className)}>
       <LogoMark theme={theme} />
-      <span className="inline-flex gap-1 text-h3 whitespace-nowrap">
+      <span dir="ltr" className="inline-flex gap-1 text-h3 whitespace-nowrap">
         <span className={theme === "light" ? "text-primary" : "text-inverse"}>Charter</span>
         <span className={theme === "light" ? "text-accent" : "text-accent-on-dark"}>Mission</span>
       </span>

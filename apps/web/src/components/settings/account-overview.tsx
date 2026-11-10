@@ -3,6 +3,7 @@ import type { AccountStatus } from "@chartermission/contracts";
 import { Chip } from "@chartermission/ui";
 import { ResendVerification } from "@/components/auth/resend-verification";
 import { SettingsCard } from "./settings-card";
+import { UsernameEditor } from "./username-editor";
 
 const statusCopy: Record<AccountStatus, { label: string; tone: "success" | "warning" | "error" | "neutral"; text: string }> = {
   unverified: { label: "Unverified", tone: "warning", text: "Verify your email to post, comment and connect." },
@@ -22,12 +23,15 @@ export function AccountOverview({
   emailVerified,
   status,
   handle,
+  handleChangeAvailableAt,
   mfaEnabled,
 }: {
   email: string;
   emailVerified: boolean;
   status: AccountStatus;
   handle: string;
+  /** When the username can next be changed; null when it can be changed now. */
+  handleChangeAvailableAt: string | null;
   mfaEnabled: boolean;
 }) {
   const state = statusCopy[status];
@@ -55,15 +59,7 @@ export function AccountOverview({
         </div>
         <Chip tone={state.tone}>{state.label}</Chip>
       </li>
-      <li className="flex flex-wrap items-center justify-between gap-3 py-3.5">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className={rowLabel}>Profile address</span>
-          <span className={rowValue}>/members/{handle}</span>
-        </div>
-        <Link href={`/members/${handle}`} className="text-sm font-medium text-primary-light hover:underline">
-          View profile
-        </Link>
-      </li>
+      <UsernameEditor handle={handle} availableAt={handleChangeAvailableAt} />
       <li className="flex flex-wrap items-center justify-between gap-3 py-3.5">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className={rowLabel}>Two-step verification</span>

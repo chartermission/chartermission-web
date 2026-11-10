@@ -107,14 +107,14 @@ export function PollBuilder({
             onChange={(event) => setOption(index, event.target.value)}
             placeholder={`Option ${index + 1}`}
             aria-invalid={error && !option.trim() && index < MIN_POLL_OPTIONS ? true : undefined}
-            className={cn(inputClasses, index >= MIN_POLL_OPTIONS && "pr-9")}
+            className={cn(inputClasses, index >= MIN_POLL_OPTIONS && "pe-9")}
           />
           {index >= MIN_POLL_OPTIONS && (
             <button
               type="button"
               onClick={() => removeOption(index)}
               aria-label={`Remove option ${index + 1}`}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-secondary hover:bg-muted hover:text-ink"
+              className="absolute end-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-secondary hover:bg-muted hover:text-ink"
             >
               <Icon name="x" size={14} />
             </button>
@@ -147,7 +147,7 @@ export function PollBuilder({
             id={`${id}-duration`}
             value={poll.duration}
             onChange={(event) => onChange({ ...poll, duration: Number(event.target.value) as PollDuration })}
-            className="appearance-none rounded-lg border border-line bg-card py-1.5 pl-2.5 pr-7 text-sm text-body hover:border-line-strong"
+            className="appearance-none rounded-lg border border-line bg-card py-1.5 ps-2.5 pe-7 text-sm text-body hover:border-line-strong"
           >
             {pollDurations.map((duration) => (
               <option key={duration.value} value={duration.value}>
@@ -155,7 +155,7 @@ export function PollBuilder({
               </option>
             ))}
           </select>
-          <Icon name="chevron-down" size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary" />
+          <Icon name="chevron-down" size={14} className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary" />
         </span>
       </div>
 

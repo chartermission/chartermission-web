@@ -141,6 +141,8 @@ export class MediaService implements OnModuleInit {
       declaredMime: mime,
       mime,
       sizeBytes: input.sizeBytes,
+      trimStartMs: isVideoPurpose(input.purpose) ? (input.trim?.startMs ?? null) : null,
+      trimEndMs: isVideoPurpose(input.purpose) ? (input.trim?.endMs ?? null) : null,
       scanStatus: 'awaiting_upload',
       uploadExpiresAt: expiresAt,
     });
@@ -281,18 +283,27 @@ export class MediaService implements OnModuleInit {
         if (err instanceof VideoToolMissingError) throw err;
         return await this.reject(file, 'rejected', 'We couldn’t read this video. Try exporting it as an MP4.');
       }
-      if (source.durationSeconds > maxSeconds + 0.5) {
+      // The member may have chosen a part of the video to keep (the trim window). Only that part
+      // is converted and stored, and only that part counts towards the length limit.
+      let clip: { startSeconds: number; durationSeconds: number } | undefined;
+      if (file.trimStartMs !== null && file.trimEndMs !== null) {
+        const start = Math.min(Math.max(0, file.trimStartMs / 1000), Math.max(0, source.durationSeconds - 1));
+        const end = Math.min(file.trimEndMs / 1000, source.durationSeconds);
+        if (end - start >= 1 && (start > 0.05 || end < source.durationSeconds - 0.05)) clip = { startSeconds: start, durationSeconds: end - start };
+      }
+      const keptSeconds = clip?.durationSeconds ?? source.durationSeconds;
+      if (keptSeconds > maxSeconds + 0.5) {
         return await this.reject(
           file,
           'rejected',
-          `Videos can be up to ${formatDuration(maxSeconds)} long. This one is ${formatDuration(source.durationSeconds)}.`,
+          `Videos can be up to ${formatDuration(maxSeconds)} long. This one is ${formatDuration(keptSeconds)}. Choose a shorter part of it.`,
         );
       }
       const output = path.join(dir, 'web.mp4');
       const poster = path.join(dir, 'poster.jpg');
       let result: VideoProbe;
       try {
-        await transcodeVideo(input, output, source.durationSeconds);
+        await transcodeVideo(input, output, keptSeconds, clip);
         result = await probeVideo(output);
         await extractPoster(output, poster, result.durationSeconds);
       } catch (err) {

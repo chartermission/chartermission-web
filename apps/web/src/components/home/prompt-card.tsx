@@ -27,7 +27,7 @@ export function PromptCard({ moment, viewer }: { moment: PromptMoment; viewer: V
             : {
                 answered: true,
                 responses: current.responses + 1,
-                responders: [{ ...viewer, verified: false, staff: false }, ...current.responders.filter((r) => r.id !== viewer.id)],
+                responders: [{ ...viewer, verified: false, staff: false, official: false }, ...current.responders.filter((r) => r.id !== viewer.id)],
               },
         );
       }),
@@ -40,7 +40,7 @@ export function PromptCard({ moment, viewer }: { moment: PromptMoment; viewer: V
     <MomentCard id={moment.id} label="Daily prompt" icon="message" iconTone="text-info">
       {(headingId) => (
         <div className="relative flex flex-col gap-4">
-          <span aria-hidden="true" className="pointer-events-none absolute -right-16 -bottom-24 size-44 rounded-full border-[16px] border-accent/10" />
+          <span aria-hidden="true" className="pointer-events-none absolute -end-16 -bottom-24 size-44 rounded-full border-[16px] border-accent/10" />
           <span className={chipClasses("hashtag", "relative self-start px-2.5 py-1 text-xs")}>#{tag}</span>
           <h2 id={headingId} className="relative max-w-[30ch] text-h2 text-balance text-ink max-sm:text-h3">
             {moment.prompt}

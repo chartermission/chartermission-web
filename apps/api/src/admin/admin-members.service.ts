@@ -16,6 +16,7 @@ import { badges, featuredMembers, memberBadges, memberProfiles, users } from '..
 import type { AuthContext } from '../core/auth-context.js';
 import { mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
+import { closeStaffConnections } from '../profiles/staff-connections.js';
 import { Errors } from '../common/errors.js';
 import { isUniqueViolation, likePrefix, uuidOr404 } from '../moderation/util.js';
 
@@ -169,6 +170,32 @@ export class AdminMembersService {
     return this.row(before.id);
   }
 
+  /**
+   * PUT /admin/members/{id}/official. An official account stands for an organisation, so it is
+   * follow-only: members connected to it (or waiting on a request) follow it instead. Turning it
+   * off lets the account connect like any member again; nobody is reconnected automatically.
+   */
+  async setOfficial(ctx: AuthContext, rawId: string, official: boolean, ip?: string): Promise<AdminMemberRow> {
+    const before = await this.row(rawId);
+    if (before.official !== official) {
+      await this.db.transaction(async (tx) => {
+        await tx
+          .update(users)
+          .set({ isOfficial: official, ...(official && !before.verified ? { verifiedAt: new Date() } : {}), updatedAt: new Date() })
+          .where(eq(users.id, before.id));
+        if (official) await closeStaffConnections(tx, before.id);
+      });
+      await this.audit.record({
+        actorId: ctx.user.id,
+        action: official ? 'member.official_on' : 'member.official_off',
+        targetType: 'user',
+        targetId: before.id,
+        ip,
+      });
+    }
+    return this.row(before.id);
+  }
+
   /** PUT /admin/members/{id}/featured */
   async setFeatured(ctx: AuthContext, rawId: string, featured: boolean, ip?: string): Promise<AdminMemberRow> {
     const before = await this.row(rawId);
@@ -237,6 +264,7 @@ export class AdminMembersService {
         status: users.status,
         verifiedAt: users.verifiedAt,
         isStaff: users.isStaff,
+        isOfficial: users.isOfficial,
         createdAt: users.createdAt,
         handle: memberProfiles.handle,
         name: memberProfiles.displayName,
@@ -275,6 +303,7 @@ export class AdminMembersService {
         status: r.status,
         verified: !!r.verifiedAt,
         staff: r.isStaff,
+        official: r.isOfficial,
         featured: r.featured,
         badges: byUser.get(r.id) ?? [],
         joinedAt: r.createdAt.toISOString(),

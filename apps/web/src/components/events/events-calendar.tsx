@@ -112,7 +112,7 @@ export function EventsCalendar({ filters, onNavigate }: { filters: EventFilters;
           </div>
           <div className="flex items-center gap-1">
             {today && monthKey(month) !== today.slice(0, 7) && (
-              <button type="button" onClick={() => onNavigate({ month: today.slice(0, 7), day: today })} className="mr-1 rounded-md px-2 py-1 text-sm font-medium text-primary-light hover:bg-muted">
+              <button type="button" onClick={() => onNavigate({ month: today.slice(0, 7), day: today })} className="me-1 rounded-md px-2 py-1 text-sm font-medium text-primary-light hover:bg-muted">
                 Today
               </button>
             )}
@@ -131,7 +131,7 @@ export function EventsCalendar({ filters, onNavigate }: { filters: EventFilters;
             <thead>
               <tr>
                 {weekdayShort.map((day) => (
-                  <th key={day} scope="col" className="pb-2 text-left text-xs font-normal text-disabled max-sm:text-center">
+                  <th key={day} scope="col" className="pb-2 text-start text-xs font-normal text-disabled max-sm:text-center">
                     <span className="max-sm:hidden">{day}</span>
                     <span className="sm:hidden" aria-hidden="true">
                       {day[0]}

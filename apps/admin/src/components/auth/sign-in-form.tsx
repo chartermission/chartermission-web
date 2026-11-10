@@ -7,6 +7,7 @@ import { Button } from "@chartermission/ui";
 import { FormNotice, TextField } from "@/components/form-field";
 import { ApiError, api, errorMessage, retryText } from "@/lib/api/client";
 import { HOME_PATH, safeNext } from "@/lib/navigation";
+import { SingleSignOn } from "./sso";
 
 type FieldErrors = { email?: string; password?: string };
 
@@ -82,6 +83,7 @@ export function SignInForm() {
       )}
       {signedOut && !expired && !error && <FormNotice tone="success">You’ve signed out of the admin console.</FormNotice>}
       {error && <FormNotice tone="error">{error}</FormNotice>}
+      <SingleSignOn />
       <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
         <TextField
           ref={emailRef}

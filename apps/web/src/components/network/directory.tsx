@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { usePathname } from "@/i18n/client";
 import { useState, useTransition, type FormEvent } from "react";
 import type { DirectoryMember, DirectoryQuery, Page, Taxonomies } from "@chartermission/contracts";
 import { Button, Icon, Panel, cn } from "@chartermission/ui";

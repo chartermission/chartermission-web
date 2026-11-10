@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import type { PublicOverview } from "@chartermission/contracts";
+import { T } from "@/i18n/client";
 import { Icon, buttonClasses } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import { getViewer } from "@/lib/api/server";
@@ -19,11 +20,11 @@ function SignedOutCta() {
   return (
     <>
       <Link href="/signup" className={buttonClasses({ variant: "accent", className: "px-6! py-3! text-[17px]!" })}>
-        Join Charter Mission
+        <T k="landing.join" />
         <Icon name="chevron-right" size={18} />
       </Link>
       <Link href="/#features" className="inline-flex items-center justify-center rounded-lg border border-white/40 px-6 py-3 text-[17px] font-medium whitespace-nowrap text-inverse transition-colors hover:bg-white/10">
-        See what’s inside
+        <T k="landing.seeInside" />
       </Link>
     </>
   );
@@ -37,11 +38,11 @@ async function HeroCta() {
   return (
     <>
       <Link href="/feed" className={buttonClasses({ variant: "accent", className: "px-6! py-3! text-[17px]!" })}>
-        Welcome back, {first}. Go to your feed
+        <T k="landing.welcomeBack" vars={{ name: first }} />
         <Icon name="chevron-right" size={18} />
       </Link>
       <Link href={`/members/${viewer.handle}`} className="inline-flex items-center justify-center rounded-lg border border-white/40 px-6 py-3 text-[17px] font-medium whitespace-nowrap text-inverse transition-colors hover:bg-white/10">
-        Your profile
+        <T k="landing.yourProfile" />
       </Link>
     </>
   );
@@ -96,7 +97,7 @@ function HeroArt({ overview }: { overview: PublicOverview }) {
       <img src="/brand/africa-network.png" alt="" width={254} height={263} className="absolute top-1/2 left-1/2 w-[46%] -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_12px_32px_rgba(0,0,0,0.3)]" />
 
       {topic && (
-        <FloatCard className="top-[6%] -left-[2%] max-lg:hidden" icon="flame" label="Trending now">
+        <FloatCard className="top-[6%] -start-[2%] max-lg:hidden" icon="flame" label="Trending now">
           <p className="text-md font-semibold text-ink">#{topic.tag}</p>
           <p className="text-xs text-secondary">
             {number.format(topic.posts)} post{topic.posts === 1 ? "" : "s"} in the last two weeks
@@ -104,7 +105,7 @@ function HeroArt({ overview }: { overview: PublicOverview }) {
         </FloatCard>
       )}
       {event && (
-        <FloatCard className="right-[-4%] bottom-[10%] max-lg:hidden" icon="calendar" label="Coming up">
+        <FloatCard className="end-[-4%] bottom-[10%] max-lg:hidden" icon="calendar" label="Coming up">
           <p className="line-clamp-2 text-sm font-semibold text-ink">{event.title}</p>
           <p className="text-xs text-secondary">
             {new Date(event.startsAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
@@ -113,7 +114,7 @@ function HeroArt({ overview }: { overview: PublicOverview }) {
         </FloatCard>
       )}
       {chapter && (
-        <FloatCard className="top-[16%] right-[-2%] max-lg:hidden" icon="globe" label="Chapters">
+        <FloatCard className="top-[16%] end-[-2%] max-lg:hidden" icon="globe" label="Chapters">
           <p className="text-sm font-semibold text-ink">{chapter.name}</p>
           <p className="text-xs text-secondary">and {number.format(Math.max(overview.chapters - 1, 0))} more across Africa and the diaspora</p>
         </FloatCard>
@@ -129,12 +130,12 @@ function HeroArt({ overview }: { overview: PublicOverview }) {
 export function LandingHero({ overview }: { overview: PublicOverview }) {
   // Numbers are shown when they are real and worth showing; a brand-new community leads with what is on offer.
   const stats = [
-    overview.members >= 100 ? { value: approx(overview.members), label: "members" } : null,
-    overview.chapters ? { value: number.format(overview.chapters), label: "country chapters" } : null,
-    overview.countries >= 5 ? { value: number.format(overview.countries), label: "countries represented" } : null,
-    overview.courses ? { value: number.format(overview.courses), label: "courses to learn from" } : null,
+    overview.members >= 100 ? { value: approx(overview.members), label: "members" as const } : null,
+    overview.chapters ? { value: number.format(overview.chapters), label: "chapters" as const } : null,
+    overview.countries >= 5 ? { value: number.format(overview.countries), label: "countries" as const } : null,
+    overview.courses ? { value: number.format(overview.courses), label: "courses" as const } : null,
   ]
-    .filter((s): s is { value: string; label: string } => !!s)
+    .filter((s): s is { value: string; label: "members" | "chapters" | "countries" | "courses" } => !!s)
     .slice(0, 3);
 
   return (
@@ -147,14 +148,13 @@ export function LandingHero({ overview }: { overview: PublicOverview }) {
         <div className="flex min-w-0 flex-col items-start gap-6">
           <p className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-inverse">
             <Icon name="globe" size={14} />
-            Pan-African · Non-partisan · Free to join
+            <T k="landing.eyebrow" />
           </p>
           <h1 id="hero-title" className="text-[52px] leading-[1.1] font-bold tracking-[-1.4px] text-balance text-inverse max-lg:text-[42px] max-sm:text-[34px]">
-            Africa has never lacked great minds. <span className="text-accent-on-dark">It has lacked the bridge between them.</span>
+            <T k="landing.titleA" /> <span className="text-accent-on-dark"><T k="landing.titleB" /></span>
           </h1>
           <p className="max-w-[560px] text-[19px] leading-8 text-primary-tint max-sm:text-[17px] max-sm:leading-7">
-            Charter Mission is that bridge: the professional community where Africa and its diaspora build together. Join your country’s chapter, share what
-            you’re working on, find collaborators and opportunities, and keep learning.
+            <T k="landing.lead" />
           </p>
           <div className="flex flex-wrap gap-3">
             <Suspense fallback={<SignedOutCta />}>
@@ -165,7 +165,7 @@ export function LandingHero({ overview }: { overview: PublicOverview }) {
             <dl className="flex flex-wrap gap-x-10 gap-y-4 border-t border-white/15 pt-6">
               {stats.map((stat) => (
                 <div key={stat.label} className="flex flex-col-reverse">
-                  <dt className="text-sm text-primary-tint">{stat.label}</dt>
+                  <dt className="text-sm text-primary-tint"><T k={`landing.stats.${stat.label}`} /></dt>
                   <dd className="text-h1 text-inverse tabular-nums">{stat.value}</dd>
                 </div>
               ))}

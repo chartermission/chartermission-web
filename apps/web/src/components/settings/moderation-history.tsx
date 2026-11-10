@@ -57,7 +57,7 @@ export function ModerationActions({ actions }: { actions: MyModerationAction[] }
               </div>
               <p className="text-sm text-body">{action.summary}</p>
               {action.target.preview && (
-                <blockquote className="line-clamp-2 border-l-2 border-line pl-3 text-sm text-secondary">
+                <blockquote className="line-clamp-2 border-s-2 border-line ps-3 text-sm text-secondary">
                   {action.target.preview}
                 </blockquote>
               )}

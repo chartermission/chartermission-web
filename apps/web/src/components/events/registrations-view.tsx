@@ -192,7 +192,7 @@ export function RegistrationsView({ event }: { event: EventDetail }) {
                     </Link>
                     <span className="truncate text-xs text-secondary">{row.member.headline ?? `@${row.member.handle}`}</span>
                   </div>
-                  <span className="text-xs text-secondary max-sm:order-last max-sm:w-full max-sm:pl-[52px]">
+                  <span className="text-xs text-secondary max-sm:order-last max-sm:w-full max-sm:ps-[52px]">
                     {row.status === "cancelled" && row.cancelledAt
                       ? `Cancelled ${when(row.cancelledAt)}`
                       : row.status === "attended" && row.attendedAt

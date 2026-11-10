@@ -227,6 +227,11 @@ export type UpdateLeadInput = z.input<typeof UpdateLeadInput>;
 export const MoveLeadStageInput = z.object({
   stage: LeadStage.exclude(["ambassador", "alumni"]),
   note: optText(1000),
+  /**
+   * Moving forward: record the current stage as waived (not needed for this lead) instead of
+   * completed. Stages jumped over are always recorded as waived.
+   */
+  waive: z.boolean().default(false),
 });
 export type MoveLeadStageInput = z.input<typeof MoveLeadStageInput>;
 
@@ -330,6 +335,24 @@ export type LeadActivity = {
   createdAt: string;
 };
 
+/**
+ * One stage of the lead's journey, in pipeline order, for the stage tracker:
+ *  done      finished and moved on            waived    skipped on purpose (with who and why)
+ *  current   where the lead is now            upcoming  not reached yet
+ * Going back to a stage reopens it and every stage after it.
+ */
+export type LeadJourneyState = "done" | "waived" | "current" | "upcoming";
+export type LeadJourneyStage = {
+  stage: LeadStage;
+  label: string;
+  hint: string;
+  state: LeadJourneyState;
+  /** When it was completed or waived; null for stages finished before this was recorded. */
+  at: string | null;
+  by: PersonRef | null;
+  note: string | null;
+};
+
 export type AmbassadorStepView = {
   key: AmbassadorStepKey;
   label: string;
@@ -368,6 +391,8 @@ export type AdminLeadDetail = AdminLeadSummary & {
   createdBy: PersonRef | null;
   /** The chapter for the lead's country, if one exists. */
   chapter: { id: string; slug: string; name: string } | null;
+  /** The seven pipeline stages and where the lead stands in each. */
+  journey: LeadJourneyStage[];
   /** The onboarding checklist, once onboarding has started. */
   checklist: AmbassadorChecklist | null;
   certifiedAt: string | null;

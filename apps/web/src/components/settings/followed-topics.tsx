@@ -87,7 +87,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
         {topics.length > 0 ? (
           <ul className="flex flex-wrap gap-2" aria-label="Followed hashtags">
             {topics.map((topic) => (
-              <li key={topic.id} className={chipClasses("hashtag", "gap-1 pr-1.5")}>
+              <li key={topic.id} className={chipClasses("hashtag", "gap-1 pe-1.5")}>
                 <Link href={`/topics/${encodeURIComponent(topic.id)}`} className="hover:underline">
                   #{topic.display}
                 </Link>
@@ -119,7 +119,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
           <span className="relative flex w-[280px] max-w-full">
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-secondary"
+              className="pointer-events-none absolute top-1/2 start-3 -translate-y-1/2 text-sm text-secondary"
             >
               #
             </span>
@@ -136,7 +136,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
               aria-invalid={error ? true : undefined}
               aria-describedby={error ? "add-topic-error" : undefined}
               className={cn(
-                "w-full rounded-lg border bg-card py-2 pr-3 pl-7 text-sm text-ink placeholder:text-disabled hover:border-line-strong focus:border-primary-light focus:outline-none",
+                "w-full rounded-lg border bg-card py-2 pe-3 ps-7 text-sm text-ink placeholder:text-disabled hover:border-line-strong focus:border-primary-light focus:outline-none",
                 error ? "border-error" : "border-line",
               )}
             />

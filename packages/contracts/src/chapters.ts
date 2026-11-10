@@ -17,6 +17,9 @@ export type ChapterTeamRole = z.infer<typeof ChapterTeamRole>;
 
 export type ChapterTeamMember = { member: MemberRef; role: ChapterTeamRole; label: string };
 
+/** A photograph from a free image library, shown with its photographer's name. */
+export type ChapterPhoto = { url: string; credit: string | null; creditUrl: string | null };
+
 /** GET /chapters — every active chapter. */
 export type ChapterSummary = ChapterRef & {
   countryName: string;
@@ -28,6 +31,8 @@ export type ChapterSummary = ChapterRef & {
   about: string | null;
   /** The chapter's own hashtag in display form, without "#" (e.g. "Nigeria"); links to /topics/{tag}. */
   hashtag: string | null;
+  /** A photograph of the chapter's country, shown on the cover when there is no uploaded cover. */
+  photo: ChapterPhoto | null;
   followers: number;
   viewer: { following: boolean };
 };

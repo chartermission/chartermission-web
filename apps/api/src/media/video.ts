@@ -96,7 +96,13 @@ export async function probeVideo(file: string): Promise<VideoProbe> {
 }
 
 /** Converts to the web rendition. Allows about 6× real time (at least 10 minutes) before giving up. */
-export async function transcodeVideo(input: string, output: string, durationSeconds: number): Promise<void> {
+export async function transcodeVideo(
+  input: string,
+  output: string,
+  durationSeconds: number,
+  /** Keep only this part of the source (the member's trim). Seeking before the input is frame-accurate when re-encoding. */
+  clip?: { startSeconds: number; durationSeconds: number },
+): Promise<void> {
   const { ffmpeg } = await ffmpegPaths();
   const e = VIDEO_MAX_EDGE;
   const scale = `scale='if(gte(iw,ih),min(${e},iw),-2)':'if(gte(iw,ih),-2,min(${e},ih))'`;
@@ -105,7 +111,9 @@ export async function transcodeVideo(input: string, output: string, durationSeco
     [
       '-hide_banner',
       '-y',
+      ...(clip ? ['-ss', clip.startSeconds.toFixed(3)] : []),
       '-i', input,
+      ...(clip ? ['-t', clip.durationSeconds.toFixed(3)] : []),
       '-map', '0:v:0',
       '-map', '0:a:0?',
       '-vf', `${scale},format=yuv420p`,

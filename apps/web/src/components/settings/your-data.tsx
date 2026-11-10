@@ -25,7 +25,7 @@ export function ConsentHistory({ consents }: { consents: ConsentRecordView[] }) 
         <p className="text-sm text-secondary">No consent records yet.</p>
       ) : (
         <div className="-mx-1 overflow-x-auto">
-          <table className="w-full min-w-[420px] text-left text-sm">
+          <table className="w-full min-w-[420px] text-start text-sm">
             <caption className="sr-only">Consent history, newest first</caption>
             <thead>
               <tr className="text-label text-secondary">

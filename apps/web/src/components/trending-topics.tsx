@@ -7,7 +7,7 @@ import { Divider, Icon, Panel, SegmentedControl, TrendingItem, chipClasses } fro
 import { api } from "@/lib/api/client";
 import { errorMessage } from "./social/errors";
 import { topicHref } from "./social/links";
-import { exploreHref } from "@/app/(member)/topics/explore-params";
+import { exploreHref } from "@/app/[locale]/(member)/topics/explore-params";
 
 const windows = [
   { value: "24h", label: "24h" },

@@ -59,10 +59,10 @@ export class SuggestionsService {
     }
     const refs = await this.members.refs([...found.keys(), userId]);
     // Official accounts are follow-only, whichever side they are on.
-    const viewerIsStaff = !!refs.get(userId)?.staff;
+    const viewerIsOfficial = !!refs.get(userId)?.official;
     return [...found]
       .filter(([id]) => refs.has(id))
-      .map(([id, reason]) => ({ ...refs.get(id)!, reason, canConnect: !viewerIsStaff && !refs.get(id)!.staff }));
+      .map(([id, reason]) => ({ ...refs.get(id)!, reason, canConnect: !viewerIsOfficial && !refs.get(id)!.official }));
   }
 
   /** Candidate rules shared by every reason: active, discoverable, not self, not blocked, not followed. */

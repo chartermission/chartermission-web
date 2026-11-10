@@ -17,17 +17,17 @@ export function CelebrationBand({ celebration, headingLevel = 3 }: { celebration
     >
       <BrandPattern tone="text-accent-hover" opacity={0.11} fade="right" />
       <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <span className="absolute right-6 top-3 size-2 rotate-12 rounded-[2px] bg-accent/50" />
-        <span className="absolute right-14 top-8 size-1.5 rounded-full bg-warning" />
-        <span className="absolute right-4 top-12 size-1.5 -rotate-12 rounded-[1px] bg-primary-light/40" />
-        <span className="absolute right-24 top-4 size-1 rounded-full bg-success" />
-        <span className="absolute -right-6 -bottom-8 size-24 rounded-full border-[10px] border-accent/10" />
+        <span className="absolute end-6 top-3 size-2 rotate-12 rounded-[2px] bg-accent/50" />
+        <span className="absolute end-14 top-8 size-1.5 rounded-full bg-warning" />
+        <span className="absolute end-4 top-12 size-1.5 -rotate-12 rounded-[1px] bg-primary-light/40" />
+        <span className="absolute end-24 top-4 size-1 rounded-full bg-success" />
+        <span className="absolute -end-6 -bottom-8 size-24 rounded-full border-[10px] border-accent/10" />
       </span>
       <div className="relative flex items-start gap-3.5">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-card text-accent shadow-[0px_2px_6px_0px_rgba(0,0,0,0.08)]">
           <Icon name={meta.icon} size={22} />
         </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 pr-10 max-sm:pr-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 pe-10 max-sm:pe-4">
           <p className="text-label uppercase tracking-[0.6px] text-accent-hover">{meta.label}</p>
           <Heading className="text-h3 text-ink">{celebration.headline}</Heading>
           {celebration.organisation && (

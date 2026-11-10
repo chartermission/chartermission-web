@@ -9,6 +9,9 @@ import type {
   SessionUser,
   SessionView,
 } from '@chartermission/contracts';
+import { Locale } from '@chartermission/contracts';
+import { env } from '../config/env.js';
+import { ADMIN_SIGNIN_ROLES } from '../core/permissions.js';
 import { InjectDb, type Db } from '../db/db.module.js';
 import {
   comments,
@@ -82,7 +85,14 @@ export class AccountService {
       needsPolicyReaccept: await this.needsPolicyReaccept(user.id),
       restrictions: { postingUntil: active(user.restrictedPostingUntil), connectingUntil: active(user.restrictedConnectingUntil) },
       sessionAudience: ctx.session.audience,
+      adminConsoleUrl: ctx.user.roles.some((r) => ADMIN_SIGNIN_ROLES.includes(r)) ? env().ADMIN_URL.replace(/\/+$/, '') : null,
+      locale: (Locale.safeParse(user.locale).data ?? null) as SessionUser['locale'],
     };
+  }
+
+  /** PUT /me/locale — the interface language, remembered across devices. */
+  async setLocale(ctx: AuthContext, locale: Locale): Promise<void> {
+    await this.db.update(users).set({ locale, updatedAt: new Date() }).where(eq(users.id, ctx.user.id));
   }
 
   /** Spec 4.2 rule: a policy version change prompts re-acceptance (latest consent per policy vs current). */

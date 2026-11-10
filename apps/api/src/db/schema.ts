@@ -75,6 +75,13 @@ export const chapters = pgTable(
     imageFileId: uuid('image_file_id').references((): AnyPgColumn => files.id, { onDelete: 'set null' }),
     /** Custom cover banner for the chapter page (a chapter_cover upload); null shows the generated cover. */
     coverFileId: uuid('cover_file_id').references((): AnyPgColumn => files.id, { onDelete: 'set null' }),
+    /**
+     * A photograph of the chapter's country shown behind the cover when no custom cover is uploaded.
+     * An external image address (Unsplash), with the photographer credited beside it.
+     */
+    photoUrl: text('photo_url'),
+    photoCredit: text('photo_credit'),
+    photoCreditUrl: text('photo_credit_url'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -100,7 +107,12 @@ export const users = pgTable(
     restrictedConnectingUntil: ts('restricted_connecting_until'),
     /** Admin-verified member or official account (decision D2: never set by email verification). */
     verifiedAt: ts('verified_at'),
+    /** Works for Charter Mission: verified tick, two-step verification required, can open the admin console. */
     isStaff: boolean('is_staff').notNull().default(false),
+    /** An official organisation account (not a person): follow-only, it neither sends nor receives connection requests. */
+    isOfficial: boolean('is_official').notNull().default(false),
+    /** Interface language chosen by the member (en, fr, ar); null follows the browser. */
+    locale: text('locale'),
     deactivatedAt: ts('deactivated_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -188,6 +200,8 @@ export const memberProfiles = pgTable(
       .primaryKey()
       .references(() => users.id, { onDelete: 'cascade' }),
     handle: text('handle').notNull(),
+    /** When the member last changed their username (changes are limited, see HANDLE_CHANGE_DAYS). */
+    handleChangedAt: ts('handle_changed_at'),
     displayName: text('display_name').notNull(),
     headline: text('headline'),
     countryCode: text('country_code').references(() => countries.code),
@@ -219,6 +233,23 @@ export const memberProfiles = pgTable(
     check('profile_visibility_ck', sql`${t.profileVisibility} in ('members','public')`),
     check('profile_conn_from_ck', sql`${t.connectionRequestsFrom} in ('members','nobody')`),
   ],
+);
+
+/**
+ * Usernames a member used before. Old profile links keep working (they redirect to the current
+ * username) and nobody else can take the name while the row exists.
+ */
+export const handleHistory = pgTable(
+  'handle_history',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    handle: text('handle').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('handle_history_handle_uq').on(sql`lower(${t.handle})`), index('handle_history_user_idx').on(t.userId)],
 );
 
 export const profileExperiences = pgTable(
@@ -418,6 +449,9 @@ export const files = pgTable(
     /** Videos: length after processing, and the storage key of the still frame (poster). */
     durationMs: integer('duration_ms'),
     posterKey: text('poster_key'),
+    /** Videos: the part the member chose to keep, in milliseconds of the uploaded file. Applied when converting. */
+    trimStartMs: integer('trim_start_ms'),
+    trimEndMs: integer('trim_end_ms'),
     scanStatus: text('scan_status').notNull().default('pending'),
     rejectionReason: text('rejection_reason'),
     isPublic: boolean('is_public').notNull().default(false),
@@ -428,7 +462,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -1389,6 +1423,8 @@ export const ambassadorLeads = pgTable(
     agreementSignedAt: ts('agreement_signed_at'),
     agreementSignedName: text('agreement_signed_name'),
     agreementVersion: text('agreement_version'),
+    /** How each pipeline stage ended: completed or waived, by whom and when (LeadStageRecord by stage key). */
+    stageJourney: jsonb('stage_journey').$type<Record<string, { status: 'done' | 'waived'; at: string; by: string | null; note: string | null }>>().notNull().default({}),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

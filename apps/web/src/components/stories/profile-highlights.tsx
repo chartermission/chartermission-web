@@ -199,8 +199,8 @@ function HighlightEditor({ highlight, onClose, onSaved }: { highlight: Highlight
                       // eslint-disable-next-line @next/next/no-img-element -- permission-checked media URL
                       <img src={thumb} alt="" className="size-full object-cover" />
                     )}
-                    <input type="checkbox" checked={checked} onChange={() => toggle(s.id)} className="absolute left-2 top-2 size-4 accent-primary" aria-label={`${s.caption ?? (s.media.kind === "video" ? "Video" : "Photo")} story from ${new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`} />
-                    {s.media.kind === "video" && <Icon name="video" size={14} className="absolute bottom-2 right-2 text-inverse" />}
+                    <input type="checkbox" checked={checked} onChange={() => toggle(s.id)} className="absolute start-2 top-2 size-4 accent-primary" aria-label={`${s.caption ?? (s.media.kind === "video" ? "Video" : "Photo")} story from ${new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`} />
+                    {s.media.kind === "video" && <Icon name="video" size={14} className="absolute bottom-2 end-2 text-inverse" />}
                   </label>
                 </li>
               );

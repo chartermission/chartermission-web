@@ -8,16 +8,15 @@ const EMPTY: PublicOverview = { members: 0, countries: 0, chapters: 0, courses: 
 /**
  * GET /public/overview: live numbers for the landing page (members, chapters, topics, next events).
  * It reads no cookies, so it is cached on the server for a few minutes and is part of the static
- * shell. If the API can't be reached (including during `next build`), the page falls back to its
- * copy without numbers rather than failing.
+ * shell. If the API can't be reached (always the case during `next build` in Docker), the page
+ * falls back to its copy without numbers rather than failing, and picks the numbers up at the
+ * next refresh a minute later. The fallback must use the same cache lifetime as a real answer:
+ * a result cached for only seconds is left out of the prerender, which fails the build.
  */
 export async function getPublicOverview(): Promise<PublicOverview> {
   "use cache";
-  const res = await fetch(`${API_INTERNAL_URL}/public/overview`, { headers: { accept: "application/json" } }).catch(() => null);
-  if (!res?.ok) {
-    cacheLife("seconds");
-    return EMPTY;
-  }
   cacheLife("minutes");
-  return (await res.json()) as PublicOverview;
+  const res = await fetch(`${API_INTERNAL_URL}/public/overview`, { headers: { accept: "application/json" } }).catch(() => null);
+  if (!res?.ok) return EMPTY;
+  return (await res.json().catch(() => EMPTY)) as PublicOverview;
 }

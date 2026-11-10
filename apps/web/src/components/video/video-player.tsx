@@ -20,7 +20,7 @@ function frame(width: number | null, height: number | null): CSSProperties {
 export function UploadedVideo({ video, className }: { video: AttachmentView; className?: string }) {
   const label = `Video${video.durationSeconds ? `, ${formatDuration(video.durationSeconds)}` : ""}${video.name ? `: ${video.name}` : ""}`;
   return (
-    <div className={cn("flex w-full justify-center overflow-hidden rounded-[10px] bg-ink", className)}>
+    <div dir="ltr" className={cn("flex w-full justify-center overflow-hidden rounded-[10px] bg-ink", className)}>
       <video
         src={video.url}
         poster={video.posterUrl ?? undefined}

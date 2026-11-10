@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from "@/i18n/language-menu";
 import Link from "next/link";
 import { Logo } from "@chartermission/ui";
 import { Container } from "./container";
@@ -66,7 +67,10 @@ export function PublicFooter() {
             ))}
           </div>
         </div>
-        <p className="border-t border-white/15 pt-6 text-xs text-primary-tint">© Charter Mission · chartermission.com</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/15 pt-6">
+          <p className="text-xs text-primary-tint">© Charter Mission · chartermission.com</p>
+          <LanguageSwitcher tone="inverse" />
+        </div>
       </Container>
     </footer>
   );

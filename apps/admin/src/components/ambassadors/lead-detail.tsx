@@ -24,17 +24,19 @@ import { Age, DateTime } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage, isApiError } from "@/lib/api/client";
 import { webHref } from "@/lib/navigation";
-import { MOVABLE_STAGES, STAGE_TONE } from "@/lib/ambassadors";
+import { STAGE_TONE } from "@/lib/ambassadors";
+import { Journey, type JourneyAction } from "./journey";
 import { LeadFields, leadInputFromForm } from "./lead-fields";
 import { Progress } from "./leads-workspace";
 
-type Dialog = "stage" | "certify" | "end" | null;
+type Dialog = "certify" | "end" | null;
 
 /** One lead: pipeline actions, onboarding checklist, rubric, details and activity. */
 export function LeadDetailView({ initial, team, countries }: { initial: AdminLeadDetail; team: TeamMember[]; countries: CountryRef[] }) {
   const [lead, setLead] = useState(initial);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [action, setAction] = useState<JourneyAction | null>(null);
   const base = `/admin/ambassadors/leads/${lead.id}`;
 
   /** Run a mutation that returns the updated lead; report errors as toasts. */
@@ -50,6 +52,12 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
     } finally {
       setBusy(null);
     }
+  }
+
+  /** Every stage change goes through here: forward (complete or waive), back, skip ahead, close, reopen. */
+  async function move(stage: LeadStage, opts: { waive?: boolean; note?: string; done: string }) {
+    const ok = await run("stage", () => api<AdminLeadDetail>(`${base}/stage`, { body: { stage, waive: !!opts.waive, note: opts.note || undefined } }), opts.done);
+    if (ok) setAction(null);
   }
 
   const closed = lead.stage === "ambassador";
@@ -80,11 +88,6 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!closed && (
-            <Button variant="secondary" size="small" disabled={!!busy} onClick={() => setDialog("stage")}>
-              Move stage
-            </Button>
-          )}
           {closed && (
             <Button variant="secondary" size="small" disabled={!!busy} onClick={() => setDialog("end")}>
               End term
@@ -99,6 +102,8 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
         </div>
       </header>
 
+      <Journey lead={lead} busy={!!busy} onAction={setAction} />
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex flex-col gap-5">
           {checklist && (
@@ -111,7 +116,7 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
           )}
           {!checklist && !["declined", "withdrawn", "talent_pool"].includes(lead.stage) && (
             <FormNotice tone="info">
-              Onboarding starts when you move this lead to <strong>Onboarding</strong>. They get an email with the steps and the training courses.
+              The onboarding checklist appears when this lead reaches the <strong>Onboarding</strong> stage. They get an email with the steps and the training courses.
             </FormNotice>
           )}
           <Section title="Qualification scores" aside={<ScoreTotal total={lead.scoreTotal} />}>
@@ -170,31 +175,7 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
         </aside>
       </div>
 
-      {dialog === "stage" && (
-        <ReasonDialog
-          title="Move this lead"
-          description={`${lead.fullName} is in ${LEAD_STAGE_LABELS[lead.stage]}. Moving to Onboarding sends them the onboarding email.`}
-          confirmLabel="Move"
-          reasonField="optional"
-          reasonLabel="Note"
-          reasonPlaceholder="Why, or what happens next (shown in the activity)"
-          minReasonLength={1}
-          reasonHint="Recorded in the lead’s activity and the audit log."
-          onConfirm={async (note, data) => {
-            const stage = String(data.get("stage")) as LeadStage;
-            const ok = await run("stage", () => api<AdminLeadDetail>(`${base}/stage`, { body: { stage, note: note || undefined } }), `Moved to ${LEAD_STAGE_LABELS[stage]}`);
-            if (ok) setDialog(null);
-          }}
-          onClose={() => setDialog(null)}
-        >
-          <DialogSelect
-            label="New stage"
-            name="stage"
-            defaultValue={nextStage(lead.stage)}
-            options={MOVABLE_STAGES.filter((s) => s !== lead.stage).map((s) => ({ value: s, label: LEAD_STAGE_LABELS[s] }))}
-          />
-        </ReasonDialog>
-      )}
+      {action && <JourneyDialog lead={lead} action={action} onClose={() => setAction(null)} onMove={move} />}
       {dialog === "end" && (
         <ReasonDialog
           title={`End ${lead.fullName}’s term?`}
@@ -258,10 +239,141 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
   );
 }
 
-function nextStage(stage: LeadStage): LeadStage {
-  const order: LeadStage[] = ["new", "screening", "review", "interview", "references", "decision", "onboarding"];
-  const i = order.indexOf(stage);
-  return i >= 0 && i < order.length - 1 ? order[i + 1]! : "screening";
+/** The confirmation for a journey action, worded for exactly what will be recorded. */
+function JourneyDialog({
+  lead,
+  action,
+  onClose,
+  onMove,
+}: {
+  lead: AdminLeadDetail;
+  action: JourneyAction;
+  onClose: () => void;
+  onMove: (stage: LeadStage, opts: { waive?: boolean; note?: string; done: string }) => Promise<void>;
+}) {
+  const here = LEAD_STAGE_LABELS[lead.stage];
+  const order = lead.journey.map((s) => s.stage);
+  const audit = "Recorded in the lead’s activity and the audit log.";
+  const emailNote = (to: LeadStage) => (to === "onboarding" && !lead.checklist ? " They get the onboarding email with the steps and the training courses." : "");
+
+  if (action.kind === "complete" || action.kind === "waive") {
+    const to = LEAD_STAGE_LABELS[action.to];
+    const waive = action.kind === "waive";
+    return (
+      <ReasonDialog
+        title={waive ? `Waive ${here}?` : `Complete ${here}?`}
+        description={
+          waive
+            ? `${here} is recorded as waived (not needed for ${lead.fullName}) and they move to ${to}.${emailNote(action.to)} You can go back to it later.`
+            : `${here} is recorded as completed and ${lead.fullName} moves to ${to}.${emailNote(action.to)}`
+        }
+        confirmLabel={waive ? `Waive and move to ${to}` : `Move to ${to}`}
+        reasonField={waive ? "required" : "optional"}
+        reasonLabel={waive ? "Why is this stage waived?" : "Note"}
+        reasonPlaceholder={waive ? "For example: already interviewed for the 2025 intake" : "What was decided, or what happens next"}
+        minReasonLength={waive ? 3 : 1}
+        requiredMessage="Say why the stage is waived. It is shown on the journey."
+        reasonHint={audit}
+        onConfirm={(note) => onMove(action.to, { waive, note, done: waive ? `${here} waived. Now in ${to}.` : `Moved to ${to}` })}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (action.kind === "back") {
+    const to = LEAD_STAGE_LABELS[action.to];
+    const reopened = order.slice(order.indexOf(action.to)).filter((s) => lead.journey.find((j) => j.stage === s)?.state !== "upcoming");
+    return (
+      <ReasonDialog
+        title={`Go back to ${to}?`}
+        description={
+          <>
+            {lead.fullName} returns to <strong>{to}</strong>. {reopened.length > 1 ? `${reopened.map((s) => LEAD_STAGE_LABELS[s]).join(", ")} are reopened` : `${to} is reopened`}, so each can be
+            completed or waived again. {lead.checklist ? "Onboarding steps already ticked are kept." : ""}
+          </>
+        }
+        confirmLabel={`Go back to ${to}`}
+        reasonField="optional"
+        reasonLabel="Note"
+        reasonPlaceholder="Why they are going back"
+        minReasonLength={1}
+        reasonHint={audit}
+        onConfirm={(note) => onMove(action.to, { note, done: `Back in ${to}` })}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (action.kind === "jump") {
+    const to = LEAD_STAGE_LABELS[action.to];
+    const skipped = order.slice(order.indexOf(lead.stage) + 1, order.indexOf(action.to)).map((s) => LEAD_STAGE_LABELS[s]);
+    return (
+      <ReasonDialog
+        title={`Skip ahead to ${to}?`}
+        description={`${here} is recorded as completed and ${skipped.join(", ")} as waived.${emailNote(action.to)} You can go back to any of them later.`}
+        confirmLabel={`Skip to ${to}`}
+        reasonField="required"
+        reasonLabel="Why are these stages skipped?"
+        minReasonLength={3}
+        requiredMessage="Say why the stages are skipped. It is shown on the journey."
+        reasonHint={audit}
+        onConfirm={(note) => onMove(action.to, { note, done: `Moved to ${to}` })}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (action.kind === "close") {
+    return (
+      <ReasonDialog
+        title={`Close ${lead.fullName}’s lead?`}
+        description="The lead leaves the pipeline. The stages they finished are kept, and you can reopen the lead later."
+        confirmLabel="Close lead"
+        reasonField="optional"
+        reasonLabel="Note"
+        reasonPlaceholder="Why, in a line"
+        minReasonLength={1}
+        reasonHint={audit}
+        onConfirm={(note, data) => {
+          const stage = String(data.get("stage")) as LeadStage;
+          return onMove(stage, { note, done: `Closed as ${LEAD_STAGE_LABELS[stage]}` });
+        }}
+        onClose={onClose}
+      >
+        <DialogSelect
+          label="Outcome"
+          name="stage"
+          defaultValue="talent_pool"
+          options={[
+            { value: "talent_pool", label: "Talent pool: strong, but not now" },
+            { value: "declined", label: "Declined: not taken forward" },
+            { value: "withdrawn", label: "Withdrawn: the lead stepped back" },
+          ]}
+        />
+      </ReasonDialog>
+    );
+  }
+
+  // Reopen a closed lead at a stage of the manager's choosing (by default where they stopped).
+  const stopped = lead.journey.find((s) => s.state === "upcoming")?.stage ?? "screening";
+  return (
+    <ReasonDialog
+      title={`Reopen ${lead.fullName}’s lead?`}
+      description="They come back into the pipeline at the stage you choose. That stage and the ones after it start fresh; earlier stages keep their record."
+      confirmLabel="Reopen"
+      reasonField="optional"
+      reasonLabel="Note"
+      minReasonLength={1}
+      reasonHint={audit}
+      onConfirm={(note, data) => {
+        const stage = String(data.get("stage")) as LeadStage;
+        return onMove(stage, { note, done: `Reopened in ${LEAD_STAGE_LABELS[stage]}` });
+      }}
+      onClose={onClose}
+    >
+      <DialogSelect label="Resume at" name="stage" defaultValue={stopped} options={order.map((s) => ({ value: s, label: LEAD_STAGE_LABELS[s] }))} />
+    </ReasonDialog>
+  );
 }
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
@@ -333,7 +445,7 @@ function Checklist({
         )}
       </div>
       <ol className="flex flex-col divide-y divide-line">
-        {checklist.steps.map((step) => {
+        {checklist.steps.map((step, index) => {
           const s = STEP_ICON[step.status];
           const auto = step.key === "account" || (step.key === "training" && checklist.training.length > 0);
           return (
@@ -343,7 +455,21 @@ function Checklist({
                   <Icon name={s.icon} size={14} label={s.label} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm font-medium", step.status === "waived" ? "text-secondary line-through" : "text-ink")}>{step.label}</p>
+                  <p className="flex flex-wrap items-center gap-x-2 text-sm font-medium">
+                    <span className={step.status === "waived" ? "text-secondary line-through" : "text-ink"}>
+                      {index + 1}. {step.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-px text-[11px] font-semibold",
+                        step.status === "done" && "bg-success-light text-success",
+                        step.status === "waived" && "bg-muted text-secondary",
+                        step.status === "pending" && "bg-warning-light text-warning",
+                      )}
+                    >
+                      {s.label}
+                    </span>
+                  </p>
                   <p className="text-xs text-secondary">{step.description}</p>
                   {step.completedAt && (
                     <p className="mt-0.5 text-xs text-secondary">

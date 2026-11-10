@@ -29,7 +29,7 @@ export function assertVideoLength(seconds: number | null, maxSeconds: number): v
     throw new ApiError(
       422,
       "VALIDATION_FAILED",
-      `Videos can be up to ${formatDuration(maxSeconds)} long. This one is ${formatDuration(seconds)}. Trim it, or post it on YouTube and share the link.`,
+      `Videos can be up to ${formatDuration(maxSeconds)} long. This one is ${formatDuration(seconds)}. Choose a shorter part of it.`,
     );
   }
 }
@@ -80,11 +80,17 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * ApiError (including when the file is rejected by validation or the malware scan).
  * `onProgress` receives 0–1 for the byte transfer.
  */
-export async function uploadFile(file: File, purpose: UploadPurpose, onProgress?: (fraction: number) => void): Promise<FileView> {
+export async function uploadFile(
+  file: File,
+  purpose: UploadPurpose,
+  onProgress?: (fraction: number) => void,
+  /** Videos: the part to keep, chosen in the trim window. */
+  trim?: { startMs: number; endMs: number } | null,
+): Promise<FileView> {
   assertUploadable(file, purpose);
   const target = await api<CreateUploadResponse>("/uploads", {
     method: "POST",
-    body: { purpose, fileName: file.name || "upload", mime: file.type, sizeBytes: file.size },
+    body: { purpose, fileName: file.name || "upload", mime: file.type, sizeBytes: file.size, trim: trim ?? undefined },
   });
   await putBytes(target, file, onProgress);
   let view = await api<FileView>(`/uploads/${target.fileId}/complete`, { method: "POST" });
@@ -101,4 +107,24 @@ export async function uploadFile(file: File, purpose: UploadPurpose, onProgress?
     throw new ApiError(422, "UNSUPPORTED_MEDIA", view.rejectionReason ?? "This file couldn’t be accepted. Try a different one.");
   }
   return view;
+}
+
+/** Thrown when the member closes the trim window without choosing: the file is quietly dropped. */
+export class UploadCancelled extends Error {}
+
+/**
+ * Before a video uploads: open the trim window so the member picks the part to post (the whole
+ * video when it fits the limit and they leave it alone). Resolves with the trim to send, or null
+ * for the whole file. When the browser can't read the video (some HEVC .mov files) there is
+ * nothing to show, so the whole file goes up and the server checks the length.
+ */
+export async function chooseVideoPart(file: File, maxSeconds: number): Promise<{ startMs: number; endMs: number } | null> {
+  const [{ readVideoDuration }, { requestVideoTrim }] = await Promise.all([import("@/lib/media-limits"), import("@/components/video/video-trim")]);
+  const seconds = await readVideoDuration(file);
+  if (seconds === null) return null;
+  const result = await requestVideoTrim(file, seconds, maxSeconds);
+  if (result.cancelled) throw new UploadCancelled();
+  const kept = result.trim ? (result.trim.endMs - result.trim.startMs) / 1000 : seconds;
+  assertVideoLength(kept, maxSeconds);
+  return result.trim;
 }

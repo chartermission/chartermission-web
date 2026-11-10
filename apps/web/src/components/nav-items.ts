@@ -1,18 +1,21 @@
 import type { IconName } from "@chartermission/ui";
 
-/** Member section navigation, shared by SideNav and SectionNav. */
-export const sectionNavItems: { href: string; label: string; icon: IconName }[] = [
-  { href: "/feed", label: "Home", icon: "home" },
-  { href: "/articles", label: "Articles", icon: "dashboard" },
-  { href: "/network", label: "Network", icon: "users" },
-  { href: "/opportunities", label: "Opportunities", icon: "briefcase" },
-  { href: "/initiatives", label: "Initiatives", icon: "lightbulb" },
-  { href: "/events", label: "Events", icon: "calendar" },
-  { href: "/learning", label: "Learning", icon: "book" },
-  { href: "/chapters", label: "Chapters", icon: "globe" },
-  { href: "/ambassadors", label: "Ambassadors", icon: "shield" },
-  { href: "/pages", label: "Pages", icon: "building" },
-  { href: "/bookmarks", label: "Saved", icon: "bookmark" },
-  { href: "/drafts", label: "Drafts", icon: "send" },
-  { href: "/analytics", label: "Analytics", icon: "chart" },
+/** Keys under `nav.` in the message files. */
+export type NavKey = "home" | "articles" | "network" | "opportunities" | "initiatives" | "events" | "learning" | "chapters" | "ambassadors" | "pages" | "saved" | "drafts" | "analytics" | "alerts";
+
+/** Member section navigation, shared by SideNav and SectionNav. `label` is the English name; show t(`nav.${key}`). */
+export const sectionNavItems: { href: string; key: NavKey; label: string; icon: IconName }[] = [
+  { href: "/feed", key: "home", label: "Home", icon: "home" },
+  { href: "/articles", key: "articles", label: "Articles", icon: "dashboard" },
+  { href: "/network", key: "network", label: "Network", icon: "users" },
+  { href: "/opportunities", key: "opportunities", label: "Opportunities", icon: "briefcase" },
+  { href: "/initiatives", key: "initiatives", label: "Initiatives", icon: "lightbulb" },
+  { href: "/events", key: "events", label: "Events", icon: "calendar" },
+  { href: "/learning", key: "learning", label: "Learning", icon: "book" },
+  { href: "/chapters", key: "chapters", label: "Chapters", icon: "globe" },
+  { href: "/ambassadors", key: "ambassadors", label: "Ambassadors", icon: "shield" },
+  { href: "/pages", key: "pages", label: "Pages", icon: "building" },
+  { href: "/bookmarks", key: "saved", label: "Saved", icon: "bookmark" },
+  { href: "/drafts", key: "drafts", label: "Drafts", icon: "send" },
+  { href: "/analytics", key: "analytics", label: "Analytics", icon: "chart" },
 ];

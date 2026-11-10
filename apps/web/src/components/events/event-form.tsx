@@ -359,7 +359,7 @@ function ChoiceCard({ name, value, checked, onChange, title, description, icon, 
         <span className="text-sm font-medium text-ink">{title}</span>
         {description && <span className="text-xs text-secondary">{description}</span>}
       </span>
-      <span aria-hidden="true" className={cn("ml-auto mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border", checked ? "border-primary bg-primary" : "border-line-strong bg-card")}>
+      <span aria-hidden="true" className={cn("ms-auto mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border", checked ? "border-primary bg-primary" : "border-line-strong bg-card")}>
         {checked && <span className="size-1.5 rounded-full bg-card" />}
       </span>
     </label>
@@ -429,7 +429,7 @@ function MemberPicker({ id, onPick }: { id: string; onPick: (member: MemberRef) 
       <ul aria-live="polite" className="flex flex-col">
         {shown?.map((member) => (
           <li key={member.id}>
-            <button type="button" onClick={() => onPick(member)} className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-muted">
+            <button type="button" onClick={() => onPick(member)} className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start hover:bg-muted">
               <Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} size={24} />
               <span className="min-w-0 flex-1 truncate text-sm text-ink">{member.name}</span>
               {member.headline && <span className="max-w-[50%] truncate text-xs text-secondary">{member.headline}</span>}
@@ -665,7 +665,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
             <Icon name="alert" size={18} className="text-error" />
             {errorList.length === 1 ? "One thing to fix" : `${errorList.length} things to fix`}
           </p>
-          <ul className="flex list-disc flex-col gap-1 pl-9 text-sm text-body">
+          <ul className="flex list-disc flex-col gap-1 ps-9 text-sm text-body">
             {errorList.map(([path, message]) => (
               <li key={path}>
                 <a
@@ -697,8 +697,8 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
       <Section id="basics" title="Basics" description="What members see first on cards and the event page." icon="lightbulb">
         <FieldShell id="title" label="Title" error={errorFor("title")}>
           <div className="relative">
-            <TextInput id="title" value={s.title} onChange={(v) => set("title", v)} maxLength={EVENT_TITLE_MAX_CHARS + 20} error={errorFor("title")} placeholder="e.g. AfCFTA Rules of Origin Explained" className="pr-16" />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+            <TextInput id="title" value={s.title} onChange={(v) => set("title", v)} maxLength={EVENT_TITLE_MAX_CHARS + 20} error={errorFor("title")} placeholder="e.g. AfCFTA Rules of Origin Explained" className="pe-16" />
+            <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2">
               <Counter value={s.title} max={EVENT_TITLE_MAX_CHARS} />
             </span>
           </div>

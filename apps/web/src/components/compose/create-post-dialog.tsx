@@ -456,7 +456,7 @@ export function CreatePostDialog({
               {sync.status === "error" && <Icon name="alert" size={14} />}
               <span className={cn(sync.status === "saved" && !sync.dirty && "max-sm:sr-only")}>{statusText}</span>
               {sync.status === "error" && (
-                <button type="button" onClick={() => sync.save().catch(() => undefined)} className="ml-1 font-medium text-primary-light hover:underline">
+                <button type="button" onClick={() => sync.save().catch(() => undefined)} className="ms-1 font-medium text-primary-light hover:underline">
                   Retry
                 </button>
               )}
@@ -566,13 +566,13 @@ export function CreatePostDialog({
               <p className="text-md font-medium text-ink">{postingAs?.name ?? viewer.name}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="relative inline-flex items-center rounded-full border border-line text-xs text-body focus-within:ring-2 focus-within:ring-primary-light hover:border-line-strong">
-                  <Icon name={visibilityMeta.icon} size={14} className="pointer-events-none absolute left-2.5 text-secondary" />
+                  <Icon name={visibilityMeta.icon} size={14} className="pointer-events-none absolute start-2.5 text-secondary" />
                   <select
                     aria-label="Who can see this post"
                     aria-describedby={`${id}-visibility-hint`}
                     value={fields.visibility}
                     onChange={(event) => patch({ visibility: event.target.value as Visibility })}
-                    className="appearance-none rounded-full bg-transparent py-1 pl-[30px] pr-[26px] outline-none field-sizing-content"
+                    className="appearance-none rounded-full bg-transparent py-1 ps-[30px] pe-[26px] outline-none field-sizing-content"
                   >
                     {visibilityOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -580,7 +580,7 @@ export function CreatePostDialog({
                       </option>
                     ))}
                   </select>
-                  <Icon name="chevron-down" size={12} className="pointer-events-none absolute right-2.5 text-secondary" />
+                  <Icon name="chevron-down" size={12} className="pointer-events-none absolute end-2.5 text-secondary" />
                 </span>
                 <span id={`${id}-visibility-hint`} className="text-xs text-secondary max-sm:hidden">
                   {visibilityMeta.hint}
@@ -723,7 +723,7 @@ export function CreatePostDialog({
                     Link
                   </label>
                   <div className="relative">
-                    <Icon name="link" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-success" />
+                    <Icon name="link" size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-success" />
                     <input
                       id={`${id}-link`}
                       type="url"
@@ -734,7 +734,7 @@ export function CreatePostDialog({
                       aria-invalid={errors.link ? true : undefined}
                       aria-describedby={errors.link ? `${id}-link-error` : undefined}
                       className={cn(
-                        "h-[38px] w-full rounded-lg border bg-card pl-9 pr-3 text-sm text-ink outline-none placeholder:text-disabled focus:ring-2 focus:ring-primary-tint",
+                        "h-[38px] w-full rounded-lg border bg-card ps-9 pe-3 text-sm text-ink outline-none placeholder:text-disabled focus:ring-2 focus:ring-primary-tint",
                         errors.link ? "border-error" : "border-line focus:border-primary-light",
                       )}
                     />
@@ -804,7 +804,7 @@ export function CreatePostDialog({
                 );
               })}
           </div>
-          <div className="ml-auto flex items-center gap-2.5">
+          <div className="ms-auto flex items-center gap-2.5">
             {type !== "article" && (
               <p className={cn("text-xs max-sm:hidden", count >= maxBody ? "text-error" : nearLimit ? "text-warning" : "text-secondary")}>
                 <span aria-hidden="true">

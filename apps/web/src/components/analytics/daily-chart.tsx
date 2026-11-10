@@ -39,7 +39,7 @@ export function DailyChart({ days, title = "Day by day" }: { days: AnalyticsDay[
   const dense = days.length > 40;
 
   return (
-    <figure className="flex flex-col gap-3">
+    <figure dir="ltr" className="flex flex-col gap-3">
       <figcaption className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-h3 text-ink">{title}</span>
         <span role="radiogroup" aria-label="Measure" className="inline-flex gap-0.5 rounded-lg bg-muted p-0.5">
@@ -71,7 +71,7 @@ export function DailyChart({ days, title = "Day by day" }: { days: AnalyticsDay[
       </p>
 
       <div aria-hidden="true" className="flex gap-2">
-        <div className="flex flex-col justify-between text-right text-[11px] leading-none text-secondary tabular-nums" style={{ height: PLOT }}>
+        <div className="flex flex-col justify-between text-end text-[11px] leading-none text-secondary tabular-nums" style={{ height: PLOT }}>
           <span>{number.format(top)}</span>
           <span>{number.format(top / 2)}</span>
           <span>0</span>
@@ -117,7 +117,7 @@ export function DailyChart({ days, title = "Day by day" }: { days: AnalyticsDay[
               return (
                 <span key={day.day} className="relative h-4 min-w-0 flex-1">
                   {show && (
-                    <span className={cn("absolute top-0 text-[11px] whitespace-nowrap text-secondary", last ? "right-0" : index === 0 ? "left-0" : "left-1/2 -translate-x-1/2")}>
+                    <span className={cn("absolute top-0 text-[11px] whitespace-nowrap text-secondary", last ? "end-0" : index === 0 ? "start-0" : "left-1/2 -translate-x-1/2")}>
                       {last ? "Today" : dayShort(day.day)}
                     </span>
                   )}

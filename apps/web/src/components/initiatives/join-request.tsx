@@ -120,7 +120,7 @@ function JoinForm({
               id={`${id}-role`}
               name="role"
               defaultValue={defaultRoleId}
-              className={cn(fieldClasses, "appearance-none pr-9")}
+              className={cn(fieldClasses, "appearance-none pe-9")}
             >
               <option value="">Any role — I’ll help where needed</option>
               {target.roles.map((role) => (
@@ -132,7 +132,7 @@ function JoinForm({
             <Icon
               name="chevron-down"
               size={16}
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary"
+              className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-secondary"
             />
           </span>
         </div>

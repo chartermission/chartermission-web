@@ -249,3 +249,59 @@
     animation: none;
   }
 }
+
+/*
+ * Right-to-left.
+ * 1. Writing: what members write keeps its own direction whatever the interface language. An
+ *    Arabic post reads right to left on an English page, an English one left to right on an Arabic
+ *    page, and each paragraph of a mixed post is decided on its own. Put dir="auto" and this class
+ *    on anything that shows or collects member-written text.
+ * 2. Layout: in Arabic the whole interface mirrors (the classes use start/end, not left/right).
+ *    Icons that point somewhere are mirrored too; media controls and charts stay left to right.
+ */
+/* In the base layer on purpose: utility classes (text-center, tracking-*) must still win over these. */
+@layer base {
+  .bidi-auto,
+  .whitespace-pre-line,
+  .whitespace-pre-wrap,
+  textarea,
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  [contenteditable="true"] {
+    /* Every multi-line text block in the app (posts, comments, bios, About texts) and every text box. */
+    unicode-bidi: plaintext;
+  }
+  .bidi-auto,
+  .whitespace-pre-line,
+  .whitespace-pre-wrap {
+    text-align: start;
+  }
+  /*
+   * Arabic interface, mixed with text that is not Arabic (names, hashtags, anything not translated
+   * yet): each piece of text takes the direction of its own first letter, so an English phrase reads
+   * left to right with its punctuation in the right place, while the layout stays right to left.
+   * Zero specificity (:where), so any alignment class on an element still wins.
+   */
+  :where(html[lang="ar"]) :where(p, h1, h2, h3, h4, li, dt, dd, label, figcaption, td, th) {
+    unicode-bidi: plaintext;
+    text-align: right;
+  }
+  :where(html[lang="ar"]) :where(span, a, strong, em, b, time, button) {
+    unicode-bidi: plaintext;
+  }
+  svg[data-icon="chevron-right"]:dir(rtl),
+  svg[data-icon="chevron-left"]:dir(rtl),
+  svg[data-icon="arrow-up-right"]:dir(rtl),
+  svg[data-icon="external"]:dir(rtl),
+  svg[data-icon="send"]:dir(rtl) {
+    transform: scaleX(-1);
+  }
+  /* Arabic letters join up, so letter-spacing must be off, and they need a little more line height. */
+  :lang(ar) {
+    letter-spacing: 0 !important;
+  }
+  :lang(ar) body {
+    line-height: 1.7;
+  }
+}

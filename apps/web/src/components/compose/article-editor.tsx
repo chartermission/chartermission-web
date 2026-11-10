@@ -222,7 +222,7 @@ export function ArticleEditor({
             </span>
           ))}
         </div>
-        <div role="tablist" aria-label="Editor view" className="ml-auto inline-flex gap-0.5 rounded-md bg-muted p-0.5">
+        <div role="tablist" aria-label="Editor view" className="ms-auto inline-flex gap-0.5 rounded-md bg-muted p-0.5">
           {(["write", "preview"] as const).map((value) => (
             <button
               key={value}

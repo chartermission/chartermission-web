@@ -124,7 +124,7 @@ export function WriteInvite({ viewer, className }: { viewer: Viewer; className?:
       className={cn("relative flex flex-col justify-end gap-3 overflow-hidden rounded-card bg-linear-to-br from-primary to-primary-light p-5 text-inverse", className)}
     >
       <BrandPattern tone="text-inverse" opacity={0.1} fade="top" />
-      <span aria-hidden="true" className="pointer-events-none absolute -top-16 -right-14 size-36 rounded-full border-[12px] border-accent/35" />
+      <span aria-hidden="true" className="pointer-events-none absolute -top-16 -end-14 size-36 rounded-full border-[12px] border-accent/35" />
       <h2 id="write-invite" className="relative text-h3">
         Share what you’ve learned
       </h2>

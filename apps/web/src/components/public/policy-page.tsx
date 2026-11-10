@@ -77,7 +77,7 @@ export function PolicyPage({
                 <h2 id={`${section.id}-title`} className="text-h3 text-ink">
                   {section.title}
                 </h2>
-                <div className="flex flex-col gap-2 text-md text-body [&_li]:ml-5 [&_li]:list-disc">{section.body}</div>
+                <div className="flex flex-col gap-2 text-md text-body [&_li]:ms-5 [&_li]:list-disc">{section.body}</div>
               </section>
             ))}
           </article>

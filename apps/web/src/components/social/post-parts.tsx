@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
 import { Avatar, Icon, cn, RoleBadgeIcon } from "@chartermission/ui";
-import { TickNumber } from "@/components/motion";
+import { PeopleLink } from "@/components/people/people-link";
+import { useT } from "@/i18n/client";
 import { absoluteDateTime, relativeTime } from "./format";
 import { memberHref, postHref } from "./links";
 import { postTypeAccent, postTypeMeta } from "./post-types/meta";
@@ -120,22 +121,28 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
   );
 }
 
-/** "3 reactions · 2 comments · 1 repost" with the reaction kinds that were used. */
+/**
+ * "3 reactions · 2 comments · 1 repost" with the reaction kinds that were used. Each count opens
+ * the list of members behind it.
+ */
 export function PostCounts({ post, total, breakdown }: { post: PostView; total: number; breakdown: PostView["reactionBreakdown"] }) {
-  const parts: string[] = [];
-  // Counts include replies, so questions say "responses" rather than "answers".
-  const noun = post.type === "question" ? "response" : "comment";
-  if (post.counts.comments) parts.push(`${post.counts.comments} ${noun}${post.counts.comments === 1 ? "" : "s"}`);
-  if (post.counts.reposts) parts.push(`${post.counts.reposts} repost${post.counts.reposts === 1 ? "" : "s"}`);
-  if (!total && !parts.length) return null;
+  const t = useT();
+  const { comments, reposts } = post.counts;
+  if (!total && !comments && !reposts) return null;
   const used = (["like", "insightful", "support"] as const).filter((kind) => breakdown[kind] > 0);
   const kindIcon = { like: "like", insightful: "lightbulb", support: "users" } as const;
   const kindColor = { like: "bg-primary-light", insightful: "bg-warning", support: "bg-success" } as const;
+  // Counts include replies, so questions say "responses" rather than "answers".
+  const commentsLabel = t(post.type === "question" ? "post.responses" : "post.comments", { count: comments });
   return (
-    <p className="flex w-full items-center justify-between gap-3 text-xs text-secondary">
+    <div className="flex w-full items-center justify-between gap-3 text-xs text-secondary">
       <span className="flex items-center gap-1.5">
         {total > 0 && (
-          <>
+          <PeopleLink
+            source={{ path: `/posts/${post.id}/reactions`, title: t("people.reactions"), reactions: true }}
+            className="flex items-center gap-1.5"
+            label={`${t("post.reactions", { count: total })} (${used.map((kind) => `${breakdown[kind]} ${t(`reaction.${kind}`)}`).join(", ")}). ${t("people.seeWho")}`}
+          >
             <span className="flex -space-x-1" aria-hidden="true">
               {used.map((kind) => (
                 <span key={kind} className={cn("flex size-[18px] items-center justify-center rounded-full border border-card text-inverse", kindColor[kind])}>
@@ -143,22 +150,26 @@ export function PostCounts({ post, total, breakdown }: { post: PostView; total: 
                 </span>
               ))}
             </span>
-            <span>
-              <TickNumber value={total} /> reaction{total === 1 ? "" : "s"}
-              <span className="sr-only">
-                {" "}
-                ({used.map((kind) => `${breakdown[kind]} ${kind}`).join(", ")})
-              </span>
-            </span>
-          </>
+            <span>{t("post.reactions", { count: total })}</span>
+          </PeopleLink>
         )}
       </span>
-      {parts.length > 0 && (
-        <Link href={`${postHref(post)}#comments`} className="hover:text-primary hover:underline">
-          {parts.join(" · ")}
-        </Link>
+      {(comments > 0 || reposts > 0) && (
+        <span className="flex items-center gap-1.5">
+          {comments > 0 && (
+            <PeopleLink source={{ path: `/posts/${post.id}/commenters`, title: t("people.commenters") }} label={`${commentsLabel}. ${t("people.seeWho")}`}>
+              {commentsLabel}
+            </PeopleLink>
+          )}
+          {comments > 0 && reposts > 0 && <span aria-hidden>·</span>}
+          {reposts > 0 && (
+            <PeopleLink source={{ path: `/posts/${post.id}/reposts`, title: t("people.reposters") }} label={`${t("post.reposts", { count: reposts })}. ${t("people.seeWho")}`}>
+              {t("post.reposts", { count: reposts })}
+            </PeopleLink>
+          )}
+        </span>
       )}
-    </p>
+    </div>
   );
 }
 

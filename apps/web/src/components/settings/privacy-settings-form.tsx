@@ -35,6 +35,7 @@ const fieldLabels: Record<ProfileField, string> = {
   interests: "Interests",
   languages: "Languages",
   experience: "Experience",
+  network: "Connections and followers",
 };
 
 const profileVisibilityOptions = [
@@ -75,6 +76,8 @@ function fieldValue(field: ProfileField, profile: OwnProfile, email: string, cou
       return profile.links.length ? `${profile.links.length} link${profile.links.length === 1 ? "" : "s"}` : "";
     case "experience":
       return profile.experience.length ? `${profile.experience.length} role${profile.experience.length === 1 ? "" : "s"}` : "";
+    case "network":
+      return "The lists of your connections, your followers and who you follow";
     default:
       return names(profile[field]);
   }

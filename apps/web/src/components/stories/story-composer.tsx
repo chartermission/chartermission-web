@@ -4,8 +4,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { STORY_CAPTION_MAX_CHARS, formatDuration, type StoryView } from "@chartermission/contracts";
 import { Button, Icon, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
-import { assertVideoLength, uploadFile } from "@/lib/upload";
-import { getMediaLimits, readVideoDuration } from "@/lib/media-limits";
+import { UploadCancelled, chooseVideoPart, uploadFile } from "@/lib/upload";
+import { getMediaLimits } from "@/lib/media-limits";
 import { Dialog } from "@/components/social/dialog";
 import { errorMessage } from "@/components/social/error-message";
 import { inputClasses } from "@/components/auth/fields";
@@ -42,20 +42,31 @@ export function StoryComposer({ onClose, onPosted }: { onClose: () => void; onPo
     setStatus("uploading");
     const video = next.type.startsWith("video/");
     try {
-      if (video) {
-        const [seconds, limits] = await Promise.all([readVideoDuration(next), getMediaLimits()]);
-        assertVideoLength(seconds, limits.storyVideoMaxSeconds);
-      }
-      const view = await uploadFile(next, video ? "story_video" : "story_image", (fraction) => {
-        if (run !== attempt.current) return;
-        if (fraction >= 1) setStatus("processing");
-        else setProgress(fraction);
-      });
+      // Videos first open the trim window, where the member picks the part to share.
+      const trim = video ? await chooseVideoPart(next, (await getMediaLimits()).storyVideoMaxSeconds) : null;
+      if (run !== attempt.current) return;
+      const view = await uploadFile(
+        next,
+        video ? "story_video" : "story_image",
+        (fraction) => {
+          if (run !== attempt.current) return;
+          if (fraction >= 1) setStatus("processing");
+          else setProgress(fraction);
+        },
+        trim,
+      );
       if (run !== attempt.current) return;
       setFileId(view.id);
       setStatus("ready");
     } catch (e) {
       if (run !== attempt.current) return;
+      if (e instanceof UploadCancelled) {
+        // Closed the trim window without choosing: back to picking a file.
+        setFile(null);
+        setPreviewUrl(null);
+        setStatus("idle");
+        return;
+      }
       setError(errorMessage(e));
       setStatus("error");
     }
@@ -122,7 +133,7 @@ export function StoryComposer({ onClose, onPosted }: { onClose: () => void; onPo
         />
       </label>
       <p className="-mt-2 text-xs text-secondary">
-        Photos: JPEG, PNG or WebP up to 5 MB. Videos: MP4, MOV or WebM{maxSeconds ? `, up to ${formatDuration(maxSeconds)}` : ""}.
+        Photos: JPEG, PNG or WebP up to 5 MB. Videos: MP4, MOV or WebM{maxSeconds ? `. Stories show up to ${formatDuration(maxSeconds)}: you choose which part of a longer video to share` : ""}.
       </p>
       {status === "uploading" && (
         <div className="flex flex-col gap-1" aria-live="polite">

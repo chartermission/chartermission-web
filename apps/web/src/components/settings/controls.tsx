@@ -39,7 +39,7 @@ export function Switch({
       <span
         aria-hidden="true"
         className={cn(
-          "absolute left-0.5 size-[18px] rounded-full bg-card shadow-[0px_1px_2px_0px_rgba(26,32,44,0.15)] transition-transform",
+          "absolute start-0.5 size-[18px] rounded-full bg-card shadow-[0px_1px_2px_0px_rgba(26,32,44,0.15)] transition-transform",
           checked && "translate-x-[18px]",
         )}
       />
@@ -58,7 +58,7 @@ const visibilityMeta: Record<FieldVisibility, { label: string; icon: IconName }>
 export const visibilityOptions = FieldVisibility.options.map((value) => ({ value, ...visibilityMeta[value] }));
 
 const selectClasses =
-  "w-[180px] appearance-none rounded-lg border border-line bg-card py-2 pr-9 text-sm text-body hover:border-line-strong focus:border-primary-light focus:outline-none";
+  "w-[180px] appearance-none rounded-lg border border-line bg-card py-2 pe-9 text-sm text-body hover:border-line-strong focus:border-primary-light focus:outline-none";
 
 /** Per-field visibility dropdown with the option's icon (Figma 20:3162). Native <select>. */
 export function VisibilitySelect({
@@ -75,7 +75,7 @@ export function VisibilitySelect({
       <Icon
         name={current.icon}
         size={16}
-        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-primary-light"
+        className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-primary-light"
       />
       <select
         value={value}
@@ -83,7 +83,7 @@ export function VisibilitySelect({
           const parsed = FieldVisibility.safeParse(event.target.value);
           if (parsed.success) onChange(parsed.data);
         }}
-        className={cn(selectClasses, "pl-9")}
+        className={cn(selectClasses, "ps-9")}
         {...rest}
       >
         {visibilityOptions.map((option) => (
@@ -105,7 +105,7 @@ export function SettingsSelect({
 }: SelectHTMLAttributes<HTMLSelectElement> & { options: readonly { value: string; label: string }[] }) {
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
-      <select className={cn(selectClasses, "pl-3")} {...rest}>
+      <select className={cn(selectClasses, "ps-3")} {...rest}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -122,7 +122,7 @@ function Chevron() {
     <Icon
       name="chevron-down"
       size={16}
-      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary"
+      className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-secondary"
     />
   );
 }

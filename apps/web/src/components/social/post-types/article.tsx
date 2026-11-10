@@ -34,7 +34,7 @@ export function ArticlePreview({ post }: { post: PostView }) {
   const lead = article.subtitle ?? articleExcerpt(post.body);
   return (
     <div className="group relative flex w-full items-stretch gap-4 overflow-hidden rounded-[10px] border border-line p-3 transition-colors hover:border-line-strong hover:bg-surface max-sm:gap-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-1 py-1 pl-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1 py-1 ps-1">
         <h3 className="line-clamp-2 text-h3 text-ink group-hover:underline max-sm:text-md max-sm:font-semibold">
           <Link href={articleHref(post.id)} className="rounded-sm after:absolute after:inset-0">
             {article.title}

@@ -137,7 +137,7 @@ export function DraftCard({ draft, busy, onAction }: { draft: DraftView; busy: D
         <Button size="small" variant={failed ? "secondary" : "primary"} aria-describedby={`${id}-title`} onClick={() => onAction("publish")} disabled={disabled}>
           {busy === "publish" ? "Publishing…" : "Publish now"}
         </Button>
-        <span className="ml-auto flex items-center gap-1">
+        <span className="ms-auto flex items-center gap-1">
           {scheduled && (
             <Button size="small" variant="ghost" aria-describedby={`${id}-title`} onClick={() => onAction("unschedule")} disabled={disabled}>
               {busy === "unschedule" ? "Moving…" : "Unschedule"}

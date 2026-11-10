@@ -44,6 +44,7 @@ export class MembersService {
       .select({
         id: users.id,
         isStaff: users.isStaff,
+        isOfficial: users.isOfficial,
         verifiedAt: users.verifiedAt,
         status: users.status,
         handle: memberProfiles.handle,
@@ -67,6 +68,7 @@ export class MembersService {
         tone: (r.tone as AvatarTone) ?? toneFor(r.id),
         verified: !gone && (!!r.verifiedAt || r.isStaff),
         staff: r.isStaff,
+        official: !gone && r.isOfficial,
         badge: gone ? null : (badges.get(r.id) ?? null),
       });
     }

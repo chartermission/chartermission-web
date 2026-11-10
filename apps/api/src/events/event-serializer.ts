@@ -132,6 +132,7 @@ export class EventSerializer {
       tone: 'tint' as const,
       verified: false,
       staff: false,
+      official: false,
     };
     return { type: 'member', member };
   }

@@ -61,7 +61,7 @@ export function HostStatusBanner({ event, canPublishDirectly }: { event: EventDe
         <p className="text-md font-semibold text-ink">{banner.title}</p>
         <p className="text-sm text-body">{banner.text}</p>
         {note && (event.status === "changes_requested" || event.status === "rejected" || event.status === "unpublished") && (
-          <blockquote className="mt-1 border-l-[3px] border-line-strong bg-card/70 py-2 pl-3 pr-3 text-sm text-ink">
+          <blockquote className="mt-1 border-s-[3px] border-line-strong bg-card/70 py-2 ps-3 pe-3 text-sm text-ink">
             <span className="block text-label uppercase text-secondary">Note from the reviewer</span>
             {note}
           </blockquote>

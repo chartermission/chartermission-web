@@ -96,7 +96,7 @@ export function Menu({
           }}
           className={cn(
             "absolute top-full z-20 mt-1 flex min-w-[200px] flex-col rounded-[10px] border border-line bg-card py-1 shadow-[0px_8px_20px_0px_rgba(0,0,0,0.1)]",
-            align === "end" ? "right-0" : "left-0",
+            align === "end" ? "end-0" : "start-0",
           )}
         >
           {items.map((item) => (

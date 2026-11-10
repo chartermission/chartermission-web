@@ -23,7 +23,6 @@ import { PasswordService } from '../auth/password.service.js';
 import { TokensService } from '../auth/tokens.service.js';
 import { HandleService } from '../profiles/handles.js';
 import { AmbassadorMailer } from './ambassador-mail.js';
-import { closeStaffConnections } from '../profiles/staff-connections.js';
 
 type CreateManager = z.output<typeof CreateManagerSchema>;
 const MANAGER_ROLE = 'ambassador_manager';
@@ -128,8 +127,8 @@ export class ManagersService {
       userId = existing.id;
       await this.db.transaction(async (tx) => {
         await this.setScopes(tx, userId, roleId, codes, ctx.user.id);
+        // A manager is a person on the team: staff, but they keep connecting like any member.
         await tx.update(users).set({ isStaff: true }).where(eq(users.id, userId));
-        await closeStaffConnections(tx, userId);
       });
     } else {
       // A staff account with an unknown random password: they choose their own from the email link.

@@ -134,7 +134,7 @@ export function ChaptersConsole({ initial, countries }: { initial: AdminChapterR
                     </td>
                     <td className="py-3 pr-2.5">
                       <div className="h-8 w-32 overflow-hidden rounded-md border border-line">
-                        <ChapterCover name={row.name} countryCode={row.countryCode} src={row.coverUrl} />
+                        <ChapterCover name={row.name} countryCode={row.countryCode} src={row.coverUrl} photo={row.photoUrl ? { url: row.photoUrl } : null} />
                       </div>
                     </td>
                     <td className="py-3 pr-2.5 text-body">
@@ -275,6 +275,7 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
   const [error, setError] = useState<string | null>(null);
   const [image, setImage] = useState<{ fileId: string | null; url: string | null } | undefined>(undefined);
   const [cover, setCover] = useState<{ fileId: string | null; url: string | null } | undefined>(undefined);
+  const [photoUrl, setPhotoUrl] = useState(row.photoUrl ?? "");
   const imageUrl = image === undefined ? row.imageUrl : image.url;
   const coverUrl = cover === undefined ? row.coverUrl : cover.url;
   return (
@@ -293,6 +294,9 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
           status: data.get("status") === "active" ? "active" : "dormant",
           about: String(data.get("about") ?? "").trim() || null,
           hashtag: String(data.get("hashtag") ?? "").trim().replace(/^#/, "") || null,
+          photoUrl: photoUrl.trim() || null,
+          photoCredit: String(data.get("photoCredit") ?? "").trim() || null,
+          photoCreditUrl: String(data.get("photoCreditUrl") ?? "").trim() || null,
           ...(image !== undefined ? { imageFileId: image.fileId } : {}),
           ...(cover !== undefined ? { coverFileId: cover.fileId } : {}),
         };
@@ -336,7 +340,7 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
         purpose="chapter_cover"
         preview={
           <div className="h-[60px] w-[240px] overflow-hidden rounded-md border border-line">
-            <ChapterCover name={row.name} countryCode={row.countryCode} src={coverUrl} />
+            <ChapterCover name={row.name} countryCode={row.countryCode} src={coverUrl} photo={photoUrl ? { url: photoUrl } : null} />
           </div>
         }
         custom={!!coverUrl}
@@ -344,6 +348,20 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
         onReset={() => setCover({ fileId: null, url: null })}
         disabled={busy}
       />
+      <TextField
+        label="Country photo"
+        name="photoUrl"
+        type="url"
+        value={photoUrl}
+        onChange={(event) => setPhotoUrl(event.target.value)}
+        maxLength={600}
+        placeholder="https://images.unsplash.com/photo-…"
+        hint="A photograph of the country, shown behind the title when there is no uploaded cover. Paste an image address from Unsplash (free to use). Leave empty for the plain green cover."
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField label="Photographer" name="photoCredit" defaultValue={row.photoCredit ?? ""} maxLength={120} hint="Shown as “Photo: name / Unsplash” on the cover." />
+        <TextField label="Photographer’s page" name="photoCreditUrl" type="url" defaultValue={row.photoCreditUrl ?? ""} maxLength={600} placeholder="https://unsplash.com/@…" />
+      </div>
       <TextField
         label="Chapter hashtag"
         name="hashtag"

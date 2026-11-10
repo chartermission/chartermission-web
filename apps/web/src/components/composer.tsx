@@ -112,7 +112,7 @@ export function Composer({ viewer, onOpen }: { viewer: Viewer; onOpen?: (start?:
           type="button"
           disabled={!!blocked}
           onClick={() => onOpen?.()}
-          className="flex h-11 min-w-0 flex-1 items-center rounded-[22px] bg-muted px-4 text-left text-sm text-disabled hover:bg-primary-tint-2 disabled:cursor-not-allowed disabled:hover:bg-muted"
+          className="flex h-11 min-w-0 flex-1 items-center rounded-[22px] bg-muted px-4 text-start text-sm text-disabled hover:bg-primary-tint-2 disabled:cursor-not-allowed disabled:hover:bg-muted"
         >
           <span className="truncate">Share an update, ask a question or start a poll…</span>
         </button>

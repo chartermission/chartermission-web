@@ -10,9 +10,12 @@ import { closeStaffConnections } from '../profiles/staff-connections.js';
  *   node dist/db/bootstrap.js                        reference data: countries, taxonomies, chapters,
  *                                                    roles, permissions and setting defaults
  *   node dist/db/bootstrap.js --super-admin <email>  also makes an existing, registered account a Super Admin
+ *                                                    (a person on the team: they keep connecting like any member)
+ *   ... --super-admin <email> --official             the same, and marks it an official organisation account:
+ *                                                    follow-only, its connections become followers
  * The Docker image runs the first form on every start so roles and permissions follow the code.
  */
-export async function bootstrap(superAdminEmail?: string) {
+export async function bootstrap(superAdminEmail?: string, official = false) {
   const pool = createPool();
   const db = createDb(pool);
   try {
@@ -27,9 +30,9 @@ export async function bootstrap(superAdminEmail?: string) {
     if (!user) throw new Error(`No account with the email ${email}. Register it on the member site first.`);
     const [role] = await db.select({ id: s.roles.id }).from(s.roles).where(eq(s.roles.key, 'super_admin')).limit(1);
     if (!role) throw new Error('The super_admin role is missing after seeding reference data.');
-    await db.update(s.users).set({ isStaff: true }).where(eq(s.users.id, user.id));
+    await db.update(s.users).set({ isStaff: true, ...(official ? { isOfficial: true } : {}) }).where(eq(s.users.id, user.id));
     // Official accounts are follow-only: members who were connected to it now follow it.
-    await closeStaffConnections(db, user.id);
+    if (official) await closeStaffConnections(db, user.id);
     const existing = await db
       .select({ id: s.userRoles.id })
       .from(s.userRoles)
@@ -51,6 +54,6 @@ export async function bootstrap(superAdminEmail?: string) {
 
 if (isMain(import.meta.url)) {
   const i = process.argv.indexOf('--super-admin');
-  await bootstrap(i > -1 ? process.argv[i + 1] : undefined);
+  await bootstrap(i > -1 ? process.argv[i + 1] : undefined, process.argv.includes('--official'));
   console.log('Reference data is up to date');
 }

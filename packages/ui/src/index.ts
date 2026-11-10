@@ -24,6 +24,6 @@ export {
 export { SegmentedControl } from "./components/segmented";
 export { FilterSelect } from "./components/select";
 export { RoleBadgeIcon, RoleBadgePill, type RoleBadgeData } from "./components/role-badge";
-export { ChapterAvatar, ChapterCover, chapterLabel } from "./components/chapter-art";
+export { ChapterAvatar, ChapterCover, chapterLabel, chapterPhotoSrc } from "./components/chapter-art";
 export { FLAG_COLOURS, flagColours } from "./components/flag-colours";
 export { ProfileBadgeChip, ProfileBadgeList, type ProfileBadgeData } from "./components/profile-badge";

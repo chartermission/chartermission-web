@@ -16,7 +16,7 @@ export function FilterSelect({
     <span className={cn("relative inline-flex", className)}>
       <select
         aria-label={label}
-        className="appearance-none rounded-lg border border-line bg-card py-1.5 pl-2.5 pr-[30px] text-sm text-body hover:border-line-strong"
+        className="appearance-none rounded-lg border border-line bg-card py-1.5 ps-2.5 pe-[30px] text-sm text-body hover:border-line-strong"
         {...rest}
       >
         {options.map((option) => (
@@ -25,7 +25,7 @@ export function FilterSelect({
           </option>
         ))}
       </select>
-      <Icon name="chevron-down" size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary" />
+      <Icon name="chevron-down" size={14} className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary" />
     </span>
   );
 }

@@ -88,6 +88,31 @@ In production staff set it up on their first sign-in. Members can turn on the sa
   Views are stored against a keyed hash of the viewer, so reach can be counted but nobody can list who viewed a post.
 - **Articles** are written on `/articles/new`; the landing page reads live numbers from `GET /public/overview`.
 
+### Team accounts, console sign-on, languages and chapters
+
+- **Team member or official account**: an account given an admin role is a *team member* (`users.is_staff`): verified tick,
+  two-step verification, and it connects with members like anyone. An *official* account (`users.is_official`) speaks for an
+  organisation and is follow-only. Mark one in the console under Members → Make official; its connections become followers.
+- **Single sign-on into the console**: a team member signed in on the member site opens the console from the account menu
+  (or by visiting the console) without the password. The member site issues a one-time code (60 seconds) that the console
+  exchanges for its own session, so the two hosts never share a cookie. The authenticator code is asked for unless it was
+  entered on the member site in the last 30 minutes (`SESSION_POLICY.admin.idleMs` in `AuthService.adminSsoStart`).
+- **Usernames** change in Settings → Account, once every 30 days. The old address redirects, and the old name is held for
+  180 days (`handle_history`).
+- **Member lists**: reaction, comment and repost counts, and a profile's connections, followers and following, open a list of
+  members (`apps/api/src/people`). "Connections and followers" in Privacy settings decides who may open a member's lists.
+- **Languages**: English, French and Arabic. Pages are served from `app/[locale]`; the proxy picks the language from the
+  `cm_locale` cookie, then the browser, and rewrites, so addresses stay the same (`/fr/…` or `/ar/…` switches and redirects).
+  Messages live in `apps/web/src/i18n/messages`: `en.ts` is the source, and `fr.ts` and `ar.ts` must have the same keys or
+  the type check fails. Use `useT()` in Client Components, `<T k="…" />` or `await getT()` in Server Components. Arabic lays
+  out right to left (use `ms-`/`ps-`/`start-` classes, never `ml-`/`pl-`/`left-`). What members write keeps its own
+  direction in any language. Not everything is translated yet: untranslated text shows in English.
+- **Video**: choosing a video opens a trim window; the chosen part is sent with the upload and only that part is converted
+  (`files.trim_start_ms`, `trim_end_ms`). The length limits are in the console under Media settings.
+- **Chapters**: every African country, and a diaspora chapter for every other country and territory with residents
+  (`moreDiasporaChapters()`), each with a hashtag, an About text and a landmark photo behind its cover
+  (`apps/api/src/db/chapter-photos.ts`, Unsplash, photographer credited on the cover). Admins can change a chapter's photo.
+
 ### Emails in development
 
 With `MAIL_DRIVER=log` nothing is sent: emails go to the `email_outbox` table and the API log. The check-email

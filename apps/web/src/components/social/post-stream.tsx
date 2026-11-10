@@ -379,7 +379,7 @@ function NewPostsPill({
           type="button"
           onClick={show}
           aria-busy={busy}
-          className="pointer-events-auto flex h-10 -translate-y-4 items-center gap-2 rounded-full bg-primary py-1 pl-1.5 pr-4 text-sm font-medium text-inverse shadow-[0px_6px_16px_0px_rgba(25,37,80,0.28)] transition-colors hover:bg-primary-light"
+          className="pointer-events-auto flex h-10 -translate-y-4 items-center gap-2 rounded-full bg-primary py-1 ps-1.5 pe-4 text-sm font-medium text-inverse shadow-[0px_6px_16px_0px_rgba(25,37,80,0.28)] transition-colors hover:bg-primary-light"
         >
           {authors.length > 0 ? (
             <span className="flex -space-x-2" aria-hidden="true">

@@ -58,11 +58,11 @@ export class RelationshipService {
         .select({ targetId: mutes.targetId })
         .from(mutes)
         .where(and(eq(mutes.userId, viewerId), eq(mutes.targetType, 'member'), inArray(mutes.targetId, others))),
-      // Official (staff) accounts are follow-only, whichever side they are on.
+      // Official accounts are follow-only, whichever side they are on.
       this.db
         .select({ id: users.id })
         .from(users)
-        .where(and(eq(users.isStaff, true), inArray(users.id, [viewerId, ...others]))),
+        .where(and(eq(users.isOfficial, true), inArray(users.id, [viewerId, ...others]))),
     ]);
     const staff = new Set(staffRows.map((r) => r.id));
     for (const id of others) {

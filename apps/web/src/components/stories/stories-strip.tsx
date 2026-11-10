@@ -66,7 +66,7 @@ export function StoriesStrip({ initial, me, canPost }: { initial: StoryTray; me:
               <button
                 type="button"
                 onClick={() => setComposing(true)}
-                className="absolute -bottom-0.5 -right-0.5 flex size-6 items-center justify-center rounded-full border-2 border-card bg-primary text-inverse hover:bg-primary-light"
+                className="absolute -bottom-0.5 -end-0.5 flex size-6 items-center justify-center rounded-full border-2 border-card bg-primary text-inverse hover:bg-primary-light"
                 aria-label="Add to your story"
                 tabIndex={tray.mine ? 0 : -1}
               >

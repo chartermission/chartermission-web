@@ -5,7 +5,9 @@ import {
   LEAD_CLOSED_STAGES,
   LEAD_OPEN_STAGES,
   LEAD_RUBRIC,
+  LEAD_STAGE_HINTS,
   LEAD_STAGE_LABELS,
+  type LeadJourneyStage,
   LeadStage,
   AMBASSADOR_STEPS,
   type AdminLeadDetail,
@@ -286,13 +288,29 @@ export class LeadsService {
     if (lead.stage === 'ambassador') throw Errors.conflict('This lead is a certified Ambassador. End their term before moving them.');
 
     const startsOnboarding = input.stage === 'onboarding' && !lead.onboardingStartedAt;
+    const order: readonly string[] = LEAD_OPEN_STAGES;
+    const from = order.indexOf(lead.stage);
+    const to = order.indexOf(input.stage);
+    const journey: StageJourney = { ...(lead.stageJourney ?? {}) };
+    const stamp = (status: 'done' | 'waived', note: string | null) => ({ status, at: new Date().toISOString(), by: ctx.user.id, note });
+    let verb = 'Moved';
+    if (to >= 0 && from >= 0 && to > from) {
+      // Forward: the stage being left is completed or waived; anything jumped over is waived.
+      journey[lead.stage] = stamp(input.waive ? 'waived' : 'done', input.note ?? null);
+      for (const skipped of order.slice(from + 1, to)) journey[skipped] ??= stamp('waived', 'Skipped');
+      if (input.waive) verb = `Waived ${LEAD_STAGE_LABELS[lead.stage as LeadStage]} and moved`;
+    } else if (to >= 0) {
+      // Back (or back into the pipeline from a closed stage): that stage and every later one reopen.
+      for (const reopened of order.slice(to)) delete journey[reopened];
+      if (from > to) verb = 'Sent back';
+    }
     await this.db.transaction(async (tx) => {
       await tx
         .update(ambassadorLeads)
-        .set({ stage: input.stage, stageChangedAt: new Date(), ...(startsOnboarding ? { onboardingStartedAt: new Date() } : {}) })
+        .set({ stage: input.stage, stageChangedAt: new Date(), stageJourney: journey, ...(startsOnboarding ? { onboardingStartedAt: new Date() } : {}) })
         .where(eq(ambassadorLeads.id, id));
-      const body = `Moved from ${LEAD_STAGE_LABELS[lead.stage as LeadStage]} to ${LEAD_STAGE_LABELS[input.stage]}${input.note ? `: ${input.note}` : ''}`;
-      await this.activity(tx, id, ctx.user.id, 'stage', body, { from: lead.stage, to: input.stage });
+      const body = `${verb} from ${LEAD_STAGE_LABELS[lead.stage as LeadStage]} to ${LEAD_STAGE_LABELS[input.stage]}${input.note ? `: ${input.note}` : ''}`;
+      await this.activity(tx, id, ctx.user.id, 'stage', body, { from: lead.stage, to: input.stage, waived: input.waive });
       if (startsOnboarding) await this.createSteps(tx, id, lead.userId, ctx.user.id);
     });
     await this.audit.record({ actorId: ctx.user.id, action: 'ambassador.lead.stage', targetType: 'ambassador_lead', targetId: id, before: { stage: lead.stage }, after: { stage: input.stage }, ip });
@@ -424,7 +442,13 @@ export class LeadsService {
       }
       await tx
         .update(ambassadorLeads)
-        .set({ stage: 'ambassador', stageChangedAt: new Date(), certifiedAt: new Date(), founding: input.founding })
+        .set({
+          stage: 'ambassador',
+          stageChangedAt: new Date(),
+          certifiedAt: new Date(),
+          founding: input.founding,
+          stageJourney: { ...(lead.stageJourney ?? {}), onboarding: { status: 'done', at: new Date().toISOString(), by: ctx.user.id, note: input.note ?? null } },
+        })
         .where(eq(ambassadorLeads.id, id));
       const title = input.founding ? 'Founding Ambassador' : 'Ambassador';
       await this.activity(tx, id, ctx.user.id, 'certified', `Certified as ${title}${chapter ? ` for ${chapter.name}` : ''}${input.note ? `: ${input.note}` : ''}`);
@@ -660,7 +684,8 @@ export class LeadsService {
         .limit(ACTIVITY_LIMIT),
       lead.onboardingStartedAt ? this.checklistView(lead) : null,
     ]);
-    const people = await this.names([lead.createdBy, ...activityRows.map((a) => a.actorId)]);
+    const stageJourney = (lead.stageJourney ?? {}) as StageJourney;
+    const people = await this.names([lead.createdBy, ...activityRows.map((a) => a.actorId), ...Object.values(stageJourney).map((r) => r.by)]);
     const activity: LeadActivity[] = activityRows.map((a) => ({
       id: a.id,
       kind: a.kind as LeadActivityKind,
@@ -680,6 +705,7 @@ export class LeadsService {
       member,
       createdBy: lead.createdBy ? (people.get(lead.createdBy) ?? null) : null,
       chapter,
+      journey: journeyView(lead.stage as LeadStage, stageJourney, people),
       checklist,
       certifiedAt: isoOrNull(lead.certifiedAt),
       founding: lead.founding,
@@ -719,6 +745,31 @@ export class LeadsService {
       readyToCertify: !!lead.userId && steps.every((s) => DONE.includes(s.status)),
     };
   }
+}
+
+type StageJourney = Record<string, { status: 'done' | 'waived'; at: string; by: string | null; note: string | null }>;
+
+/** The seven open stages with the lead's standing in each (see LeadJourneyStage). */
+function journeyView(stage: LeadStage, records: StageJourney, people: Map<string, PersonRef>): LeadJourneyStage[] {
+  const order: readonly LeadStage[] = LEAD_OPEN_STAGES;
+  // Certified and alumni leads finished every stage. A lead closed early stopped wherever its records end.
+  const finished = stage === 'ambassador' || stage === 'alumni';
+  const at = order.indexOf(stage);
+  const reached = finished ? order.length : at >= 0 ? at : Math.max(-1, ...order.map((s, i) => (records[s] ? i : -1))) + 1;
+  return order.map((s, i) => {
+    const record = records[s];
+    const state: LeadJourneyStage['state'] = !finished && i === at ? 'current' : i < reached ? (record?.status ?? 'done') : 'upcoming';
+    const kept = state === 'done' || state === 'waived' ? record : undefined;
+    return {
+      stage: s,
+      label: LEAD_STAGE_LABELS[s],
+      hint: LEAD_STAGE_HINTS[s],
+      state,
+      at: kept?.at ?? null,
+      by: kept?.by ? (people.get(kept.by) ?? null) : null,
+      note: kept?.note ?? null,
+    };
+  });
 }
 
 function emptyCounts(): Record<LeadStage, number> {

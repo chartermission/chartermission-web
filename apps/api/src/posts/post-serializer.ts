@@ -49,6 +49,7 @@ const FALLBACK_AUTHOR: MemberRef = {
   tone: 'tint',
   verified: false,
   staff: false,
+  official: false,
 };
 
 /**
@@ -65,6 +66,7 @@ function pageAuthor(page: PageRefRow): MemberRef {
     tone: 'primary',
     verified: page.verified,
     staff: false,
+    official: false,
     badge: null,
   };
 }

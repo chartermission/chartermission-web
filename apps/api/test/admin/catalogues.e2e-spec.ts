@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { assertSafeToSeedDemo, seedReference } from '../../src/db/seed.js';
-import { BADGES, CHAPTERS, COUNTRIES, FEATURED_HASHTAGS, MEMBERS, REGION_HASHTAGS } from '../../src/db/seed-data.js';
+import { BADGES, CHAPTERS, COUNTRIES, FEATURED_HASHTAGS, MEMBERS, REGION_HASHTAGS, moreDiasporaChapters } from '../../src/db/seed-data.js';
 
 describe('Admin catalogues: chapters, topics, badges and members', () => {
   let t: TestApp;
@@ -25,7 +25,7 @@ describe('Admin catalogues: chapters, topics, badges and members', () => {
     expect(countries.filter((c) => c.region !== 'Diaspora').length).toBeGreaterThanOrEqual(54);
 
     const chapters = await t.db.select().from(s.chapters);
-    expect(chapters.length).toBe(CHAPTERS.length);
+    expect(chapters.length).toBe(CHAPTERS.length + moreDiasporaChapters().length);
     expect(chapters.length).toBeGreaterThanOrEqual(54 + 19);
 
     const topics = await t.db.select().from(s.hashtags).where(eq(s.hashtags.featured, true));

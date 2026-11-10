@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { NavItem, Panel } from "@chartermission/ui";
 import { sectionNavItems as items } from "../nav-items";
+import { T } from "@/i18n/client";
 
 /**
  * Section navigation for pages that live outside a nav section's URL but
@@ -12,8 +13,8 @@ export function SectionNav({ active }: { active?: string }) {
   return (
     <Panel aria-label="Sections" className="flex flex-col gap-0.5 p-2">
       <nav className="flex flex-col gap-0.5">
-        {items.map((item) => (
-          <NavItem key={item.href} {...item} linkAs={Link} active={item.href === active} />
+        {items.map(({ key, ...item }) => (
+          <NavItem key={item.href} {...item} label={<T k={`nav.${key}`} />} linkAs={Link} active={item.href === active} />
         ))}
       </nav>
     </Panel>

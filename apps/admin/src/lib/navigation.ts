@@ -6,6 +6,7 @@ export function safeNext(next: string | string[] | null | undefined): string | n
   const value = Array.isArray(next) ? next[0] : next;
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
   if (value === "/signin" || value.startsWith("/signin/") || value.startsWith("/signin?")) return null;
+  if (value === "/sso" || value.startsWith("/sso?")) return null;
   return value;
 }
 

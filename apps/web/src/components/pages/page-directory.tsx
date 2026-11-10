@@ -65,13 +65,13 @@ export function PageDirectory({ initial }: { initial: Page<PageSummary> }) {
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[240px] flex-1">
           <span className="sr-only">Search pages</span>
-          <Icon name="search" size={18} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-secondary" />
+          <Icon name="search" size={18} className="pointer-events-none absolute top-1/2 start-3 -translate-y-1/2 text-secondary" />
           <input
             type="search"
             value={q}
             onChange={(event) => setQ(event.target.value)}
             placeholder="Search pages by name"
-            className="h-11 w-full rounded-lg border border-line bg-card pr-3 pl-10 text-sm text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
+            className="h-11 w-full rounded-lg border border-line bg-card pe-3 ps-10 text-sm text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
           />
         </label>
         <label>

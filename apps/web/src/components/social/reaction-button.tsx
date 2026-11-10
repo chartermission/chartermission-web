@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactionKind, ReactionState } from "@chartermission/contracts";
 import { Icon, cn, type IconName } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
-import { TickNumber, burst, pop } from "@/components/motion";
+import { burst, pop } from "@/components/motion";
 import { reactionKinds, reactionMeta } from "./reaction-meta";
 import { toast } from "./toast";
 
@@ -177,11 +177,6 @@ export function ReactionButton({
         </span>
         {current?.label ?? idle.label}
         <span className="sr-only"> {subject}</span>
-        {compact && state.total > 0 && (
-          <span className="text-secondary">
-            · <TickNumber value={state.total} />
-          </span>
-        )}
       </button>
       <span id={`${targetId}-reactions-hint`} className="sr-only">
         Press Tab for more reactions
@@ -192,7 +187,7 @@ export function ReactionButton({
           role="group"
           aria-label={`React to ${subject}`}
           className={cn(
-            "reaction-float absolute bottom-full left-0 z-30 flex items-center rounded-full border border-line bg-card shadow-[0_8px_24px_rgb(15_42_42/0.16)]",
+            "reaction-float absolute bottom-full start-0 z-30 flex items-center rounded-full border border-line bg-card shadow-[0_8px_24px_rgb(15_42_42/0.16)]",
             compact ? "mb-1.5 gap-1 p-1" : "mb-2 gap-1.5 p-1.5",
           )}
         >
@@ -244,7 +239,7 @@ function KindSummary({ state }: { state: ReactionSnapshot }) {
   if (!used.length) return null;
   const text = used.map((kind) => `${breakdown[kind]} ${reactionMeta[kind].label.toLowerCase()}`).join(", ");
   return (
-    <span className="ml-1 flex items-center" title={text}>
+    <span className="ms-1 flex items-center" title={text}>
       <span className="flex -space-x-1" aria-hidden="true">
         {used.map((kind) => (
           <span key={kind} className={cn("flex size-4 items-center justify-center rounded-full border border-card text-inverse", kindDot[kind])}>

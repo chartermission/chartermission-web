@@ -1,12 +1,13 @@
 import { hash } from '@node-rs/argon2';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { createDb, createPool, type Db } from './client.js';
 import * as s from './schema.js';
 import {
   BADGES,
   CHAPTERS,
-  CHAPTERS_LIST_VERSION,
+  CHAPTERS_PHOTO_VERSION,
   CHAPTERS_PROFILE_VERSION,
+  chapterSets,
   COUNTRIES,
   FEATURED_HASHTAG_SETS,
   REFERENCE_SEED_VERSIONS,
@@ -27,6 +28,7 @@ import { seedStories } from './seed-stories.js';
 import { seedModeration } from './seed-moderation.js';
 import { seedChaptersAndOpportunities } from './seed-opportunities.js';
 import { seedPages } from './seed-pages.js';
+import { CHAPTER_PHOTOS } from './chapter-photos.js';
 import { seedDemoMfa } from './seed-accounts.js';
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
@@ -90,13 +92,22 @@ async function seedCatalogues(db: Db) {
 
   if (due('chapters')) {
     // Each step runs once: a later version never re-creates a chapter an admin removed.
-    if ((done.chapters ?? 0) < CHAPTERS_LIST_VERSION) {
-      await db
+    const had = done.chapters ?? 0;
+    const added: string[] = [];
+    for (const set of chapterSets()) {
+      if (had >= set.version) continue;
+      const rows = await db
         .insert(s.chapters)
-        .values(CHAPTERS.map(([sl, name, countryCode]) => ({ slug: sl, name, countryCode })))
-        .onConflictDoNothing();
+        .values(set.chapters.map(([sl, name, countryCode]) => ({ slug: sl, name, countryCode })))
+        .onConflictDoNothing()
+        .returning({ id: s.chapters.id });
+      added.push(...rows.map((r) => r.id));
     }
-    if ((done.chapters ?? 0) < CHAPTERS_PROFILE_VERSION) await seedChapterProfiles(db);
+    // Hashtag and About text: every chapter the first time, afterwards only the chapters just added
+    // (an About an admin has since cleared on purpose stays empty).
+    if (had < CHAPTERS_PROFILE_VERSION) await seedChapterProfiles(db);
+    else if (added.length) await seedChapterProfiles(db, added);
+    if (had < CHAPTERS_PHOTO_VERSION) await seedChapterPhotos(db);
     done.chapters = REFERENCE_SEED_VERSIONS.chapters;
   }
   if (due('hashtags')) {
@@ -135,7 +146,7 @@ async function seedCatalogues(db: Db) {
  * The chapter's logo and cover need no seeding: they are drawn for each chapter from its name
  * and its country's flag colours until an admin uploads a picture.
  */
-export async function seedChapterProfiles(db: Db) {
+export async function seedChapterProfiles(db: Db, only?: string[]) {
   const rows = await db
     .select({
       id: s.chapters.id,
@@ -147,7 +158,8 @@ export async function seedChapterProfiles(db: Db) {
       region: s.countries.region,
     })
     .from(s.chapters)
-    .innerJoin(s.countries, eq(s.countries.code, s.chapters.countryCode));
+    .innerJoin(s.countries, eq(s.countries.code, s.chapters.countryCode))
+    .where(only ? inArray(s.chapters.id, only) : undefined);
   for (const row of rows) {
     const defaults = chapterDefaults(row);
     const hashtag = defaults.hashtag;
@@ -163,6 +175,23 @@ export async function seedChapterProfiles(db: Db) {
       .insert(s.hashtags)
       .values({ tag: hashtag.toLowerCase(), display: hashtag, description: defaults.hashtagDescription })
       .onConflictDoUpdate({ target: s.hashtags.tag, set: { description: sql`coalesce(${s.hashtags.description}, excluded.description)` } });
+  }
+}
+
+/**
+ * A landmark photograph for each chapter's cover (db/chapter-photos.ts), shown behind the title
+ * until an admin uploads a cover of their own. Only chapters without a photo are touched, so a
+ * photo an admin chose in the console is kept.
+ */
+export async function seedChapterPhotos(db: Db) {
+  const rows = await db.select({ id: s.chapters.id, countryCode: s.chapters.countryCode, photoUrl: s.chapters.photoUrl }).from(s.chapters);
+  for (const row of rows) {
+    const photo = CHAPTER_PHOTOS[row.countryCode];
+    if (!photo || row.photoUrl) continue;
+    await db
+      .update(s.chapters)
+      .set({ photoUrl: photo.url, photoCredit: photo.credit, photoCreditUrl: photo.creditUrl })
+      .where(eq(s.chapters.id, row.id));
   }
 }
 
@@ -183,6 +212,7 @@ export async function seedMembers(db: Db): Promise<Record<string, string>> {
         status: 'active',
         emailVerifiedAt: joinedAt,
         isStaff: !!m.staff,
+        isOfficial: !!m.staff || m.key === 'team',
         verifiedAt: m.verified || m.staff ? new Date() : null,
         createdAt: joinedAt,
       })

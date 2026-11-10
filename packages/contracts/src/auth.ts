@@ -45,6 +45,15 @@ export const SignInResult = z.object({
 });
 export type SignInResult = z.infer<typeof SignInResult>;
 
+/**
+ * Single sign-on from the member site into the admin console:
+ *   GET  /auth/admin/sso/start?next=   on the member site: redirects to {admin}/sso?code=… for a
+ *                                      signed-in team member, else to the console's sign-in form.
+ *   POST /auth/admin/sso { code }      from the console: SignInResult (the one-time code lasts 60 seconds).
+ */
+export const AdminSsoInput = z.object({ code: z.string().min(20).max(200) });
+export type AdminSsoInput = z.infer<typeof AdminSsoInput>;
+
 /** POST /auth/verify */
 export const VerifyEmailInput = z.object({ token: z.string().min(16).max(200) });
 export type VerifyEmailInput = z.infer<typeof VerifyEmailInput>;
@@ -80,6 +89,14 @@ export const ConsentRecordView = z.object({ policyType: PolicyType, policyVersio
 export type ConsentRecordView = z.infer<typeof ConsentRecordView>;
 
 /** GET /me — the signed-in account. 401 UNAUTHENTICATED when there is no session. */
+/** Interface languages. Arabic is laid out right to left. */
+export const Locale = z.enum(["en", "fr", "ar"]);
+export type Locale = z.infer<typeof Locale>;
+
+/** PUT /me/locale */
+export const SetLocaleInput = z.object({ locale: Locale });
+export type SetLocaleInput = z.infer<typeof SetLocaleInput>;
+
 export const SessionUser = z.object({
   id: z.string().uuid(),
   email: z.string(),
@@ -100,6 +117,10 @@ export const SessionUser = z.object({
   needsPolicyReaccept: z.boolean(),
   restrictions: z.object({ postingUntil: z.string().nullable(), connectingUntil: z.string().nullable() }),
   sessionAudience: z.enum(["member", "admin"]),
+  /** For team members who may open the admin console: its address (single sign-on at {url}/sso). Null for everyone else. */
+  adminConsoleUrl: z.string().nullable(),
+  /** Interface language the member chose (Settings); null follows the browser. */
+  locale: Locale.nullable(),
 });
 export type SessionUser = z.infer<typeof SessionUser>;
 

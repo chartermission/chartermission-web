@@ -133,7 +133,7 @@ export function MutedList({ initial }: { initial: MuteView[] }) {
           <span className="text-sm font-medium text-ink">Hashtags</span>
           <ul className="flex flex-wrap gap-2">
             {tags.map((mute) => (
-              <li key={mute.targetId} className={chipClasses("neutral", "gap-1 pr-1.5")}>
+              <li key={mute.targetId} className={chipClasses("neutral", "gap-1 pe-1.5")}>
                 #{mute.targetId}
                 <button
                   type="button"

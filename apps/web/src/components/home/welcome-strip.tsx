@@ -93,7 +93,7 @@ export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
       <span
         aria-hidden="true"
         className={cn(
-          "pointer-events-none absolute inset-y-0 left-0 w-3/5 bg-linear-to-r to-transparent transition-opacity duration-500",
+          "pointer-events-none absolute inset-y-0 start-0 w-3/5 bg-linear-to-r to-transparent transition-opacity duration-500",
           period ? cn(wash[period], "opacity-100") : "opacity-0",
         )}
       />
@@ -135,11 +135,11 @@ export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
           </div>
         </div>
         {nudge && nudgeHidden === false && (
-          <div className="motion-fade-up flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3 sm:pl-16">
+          <div className="motion-fade-up flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3 sm:ps-16">
             <Link
               href={nudge.href}
               onClick={openNudge}
-              className={buttonClasses({ size: "small", className: "max-w-full min-w-0 justify-start text-left" })}
+              className={buttonClasses({ size: "small", className: "max-w-full min-w-0 justify-start text-start" })}
             >
               <Icon name={nudgeIcon[nudge.kind]} size={16} className="shrink-0" />
               <span className="min-w-0 whitespace-normal">{nudge.label}</span>

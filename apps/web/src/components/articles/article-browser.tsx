@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { usePathname } from "@/i18n/client";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { ArticleSort, ArticlesHub, Page, PostView } from "@chartermission/contracts";
 import { Icon, SegmentedControl, buttonClasses, cn } from "@chartermission/ui";

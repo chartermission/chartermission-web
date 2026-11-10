@@ -150,15 +150,54 @@ export const CHAPTERS: [string, string, string][] = [
  * "reference_seeds"), so an item an admin removes isn't re-created on the next start. Bump a
  * version to seed newly added items; existing rows are never overwritten.
  */
-export const REFERENCE_SEED_VERSIONS = { chapters: 3, hashtags: 2, badges: 1 } as const;
+export const REFERENCE_SEED_VERSIONS = { chapters: 4, hashtags: 2, badges: 1 } as const;
 
 /**
  * What each chapters version added, so a later version never redoes an earlier step on a database
  * that already has it (a chapter an admin removed must stay removed):
- *   2 = the list of chapters; 3 = each chapter's hashtag and About text.
+ *   2 = the first list of chapters (Africa and 19 diaspora host countries);
+ *   3 = each chapter's hashtag and About text;
+ *   4 = a diaspora chapter for every other country and territory, and a landmark photograph
+ *       for every chapter's cover.
  */
-export const CHAPTERS_LIST_VERSION = 2;
 export const CHAPTERS_PROFILE_VERSION = 3;
+export const CHAPTERS_PHOTO_VERSION = 4;
+
+/**
+ * Places in the country list with no resident community (research stations, wildlife reserves,
+ * military bases), which get no chapter. Western Sahara is left out as well: what a chapter there
+ * is called is a decision for the Charter Mission team, who can add it in the admin console.
+ */
+export const NO_CHAPTER = new Set(['AQ', 'BV', 'IO', 'TF', 'HM', 'GS', 'UM', 'EH']);
+
+const chapterSlug = (name: string) =>
+  name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+/**
+ * Chapters version 4: "{Country} Diaspora Chapter" for every country and territory outside Africa
+ * that did not have one (India, Pakistan, Türkiye, Japan, …), made from the country list.
+ */
+export function moreDiasporaChapters(): [string, string, string][] {
+  const taken = new Set(CHAPTERS.map(([, , code]) => code));
+  const slugs = new Set(CHAPTERS.map(([slug]) => slug));
+  return COUNTRIES.filter(([code, , region]) => region === 'Diaspora' && !taken.has(code) && !NO_CHAPTER.has(code)).map(([code, name]) => {
+    let slug = chapterSlug(name);
+    if (slugs.has(slug)) slug = `${slug}-diaspora`;
+    slugs.add(slug);
+    return [slug, `${name} Diaspora Chapter`, code];
+  });
+}
+
+/** The chapter lists by the version that introduced them. */
+export const chapterSets = (): { version: number; chapters: [string, string, string][] }[] => [
+  { version: 2, chapters: CHAPTERS },
+  { version: 4, chapters: moreDiasporaChapters() },
+];
 
 /** Curated topics: featured in onboarding and on the Topics page until real trends take over. */
 export const FEATURED_HASHTAGS: [string, string][] = [

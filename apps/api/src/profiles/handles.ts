@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { memberProfiles } from '../db/schema.js';
+import { handleHistory, memberProfiles } from '../db/schema.js';
 
 /** Handles that would collide with routes or impersonate the platform. */
 export const RESERVED_HANDLES = new Set([
@@ -27,6 +27,11 @@ export const RESERVED_HANDLES = new Set([
 ]);
 
 const MAX = 30;
+
+/** A member can change their username once in this many days. */
+export const HANDLE_CHANGE_DAYS = 30;
+/** A username someone gave up stays reserved for them (and keeps redirecting) this long. */
+export const HANDLE_HOLD_DAYS = 180;
 
 /** "Amara Okafor" → "amara-okafor" (ASCII, 3–30 chars, matches UpdateProfileInput.handle). */
 export function slugifyName(name: string): string {
@@ -61,7 +66,11 @@ export class HandleService {
       .select({ handle: memberProfiles.handle })
       .from(memberProfiles)
       .where(sql`lower(${memberProfiles.handle}) like ${`${prefix.replace(/[\\%_]/g, '\\$&')}%`}`);
-    const taken = new Set(rows.map((r) => r.handle.toLowerCase()));
+    const old = await db
+      .select({ handle: handleHistory.handle })
+      .from(handleHistory)
+      .where(sql`lower(${handleHistory.handle}) like ${`${prefix.replace(/[\\%_]/g, '\\$&')}%`}`);
+    const taken = new Set([...rows, ...old].map((r) => r.handle.toLowerCase()));
     for (let n = 1; n < 10_000; n++) {
       const candidate = withSuffix(base, n);
       if (!taken.has(candidate) && !RESERVED_HANDLES.has(candidate)) return candidate;

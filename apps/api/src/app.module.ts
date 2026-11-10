@@ -24,6 +24,7 @@ import { StoriesModule } from './stories/stories.module.js';
 import { ChaptersModule } from './chapters/chapters.module.js';
 import { OpportunitiesModule } from './opportunities/opportunities.module.js';
 import { PagesModule } from './pages/pages.module.js';
+import { PeopleModule } from './people/people.module.js';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { PagesModule } from './pages/pages.module.js';
     ChaptersModule,
     OpportunitiesModule,
     PagesModule,
+    PeopleModule,
   ],
   controllers: [AppController],
   providers: [

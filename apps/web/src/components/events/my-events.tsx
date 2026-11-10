@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { usePathname } from "@/i18n/client";
 import { useCallback, useState, useTransition } from "react";
 import type { EventSummary, Page } from "@chartermission/contracts";
 import { Panel, SegmentedControl, buttonClasses, cn } from "@chartermission/ui";

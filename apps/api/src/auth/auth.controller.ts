@@ -24,6 +24,8 @@ import {
   type SessionUser,
   type SessionView,
   type SignInResult,
+  SetLocaleInput,
+  AdminSsoInput,
   type PolicyVersions,
   type Taxonomies,
 } from '@chartermission/contracts';
@@ -84,6 +86,21 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<SignInResult> {
     return this.auth.login(input, req, res);
+  }
+
+  /** Single sign-on into the admin console, step 1 (see AuthService.adminSsoStart). Opened as a link, so it redirects. */
+  @Get('admin/sso/start')
+  async adminSsoStart(@Req() req: AppRequest, @Res() res: Response): Promise<void> {
+    const next = typeof req.query.next === 'string' ? req.query.next : undefined;
+    res.setHeader('Cache-Control', 'no-store');
+    res.redirect(302, await this.auth.adminSsoStart(req, next));
+  }
+
+  /** Step 2: the console exchanges the one-time code for its own session. */
+  @Post('admin/sso')
+  @HttpCode(200)
+  adminSso(@ZBody(AdminSsoInput) input: AdminSsoInput, @Req() req: AppRequest, @Res({ passthrough: true }) res: Response): Promise<SignInResult> {
+    return this.auth.adminSso(input.code, req, res);
   }
 
   @Post('logout')
@@ -157,6 +174,14 @@ export class AccountController {
   @AllowPendingMfa()
   me(@Auth() ctx: AuthContext): Promise<SessionUser> {
     return this.account.me(ctx);
+  }
+
+  @Put('locale')
+  @Access('session')
+  @AllowPendingMfa()
+  async setLocale(@Auth() ctx: AuthContext, @ZBody(SetLocaleInput) input: SetLocaleInput): Promise<Ok> {
+    await this.account.setLocale(ctx, input.locale);
+    return OK;
   }
 
   @Post('consents')

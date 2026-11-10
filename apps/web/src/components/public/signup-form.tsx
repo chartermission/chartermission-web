@@ -212,7 +212,7 @@ export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] })
             className={cn(
               boxClasses(!!countryError),
               focusRing(!!countryError),
-              "cursor-pointer appearance-none pr-10 pl-3.5",
+              "cursor-pointer appearance-none pe-10 ps-3.5",
               values.country ? "text-ink" : "text-disabled",
             )}
           >
@@ -232,7 +232,7 @@ export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] })
           <Icon
             name="chevron-down"
             size={18}
-            className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-secondary"
+            className="pointer-events-none absolute top-1/2 end-3.5 -translate-y-1/2 text-secondary"
           />
         </div>
       </Field>

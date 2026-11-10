@@ -229,6 +229,52 @@ function pin(code: string): { x: number; y: number } | null {
 }
 
 /**
+ * Sized address for a chapter photograph. Unsplash serves any width from the same address, so
+ * the browser gets a file that fits the cover instead of the multi-megabyte original.
+ */
+export function chapterPhotoSrc(url: string, width = 1600): string {
+  if (!/^https:\/\/images\.unsplash\.com\//.test(url)) return url;
+  return `${url.split("?")[0]}?auto=format&fit=crop&w=${width}&h=${Math.round(width / 4)}&q=70`;
+}
+
+/** The cover with a country photograph: photo, green wash from the reading side, title and flag stripe. */
+function PhotoCover({ name, countryCode, photo, className }: { name: string; countryCode: string; photo: { url: string; credit?: string | null }; className?: string }) {
+  const label = chapterLabel(name);
+  const diaspora = /diaspora/i.test(label);
+  const place = label.replace(/\s+diaspora$/i, "");
+  const colours = flagColours(countryCode);
+  const headSize = Math.min(64, Math.floor(1000 / (`Find your people in ${place}`.length * 0.56)));
+  const wash = `cover-wash-${countryCode}`;
+  return (
+    <svg viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" className={cn("block h-full w-full", className)}>
+      <defs>
+        <linearGradient id={wash} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={GREEN} stopOpacity="0.96" />
+          <stop offset="0.45" stopColor={GREEN} stopOpacity="0.82" />
+          <stop offset="0.75" stopColor={GREEN} stopOpacity="0.3" />
+          <stop offset="1" stopColor={GREEN} stopOpacity="0.1" />
+        </linearGradient>
+      </defs>
+      <rect width="1600" height="400" fill={GREEN} />
+      <image href={chapterPhotoSrc(photo.url)} x="0" y="0" width="1600" height="400" preserveAspectRatio="xMidYMid slice" />
+      <rect width="1600" height="400" fill={`url(#${wash})`} />
+      <g fontFamily="Inter, 'Inter Variable', system-ui, sans-serif">
+        <text x="96" y="150" fontSize="22" fontWeight="600" letterSpacing="0.08em" fill="#FFFFFF" fillOpacity="0.85">
+          {diaspora ? "CHARTER MISSION · DIASPORA CHAPTER" : "CHARTER MISSION · CHAPTER"}
+        </text>
+        <text x="96" y={150 + 24 + headSize} fontSize={headSize} fontWeight="700" fill="#FFFFFF" letterSpacing="-0.01em">
+          Find your people in <tspan fill={ORANGE}>{place}</tspan>
+        </text>
+        <text x="96" y={150 + 24 + headSize + 56} fontSize="26" fill="#FFFFFF" fillOpacity="0.9">
+          {diaspora ? "Africans abroad, connected to home · chartermission.com" : "Connect, learn and act together · chartermission.com"}
+        </text>
+      </g>
+      <FlagStripe colours={colours} x={0} y={382} width={1600} height={18} />
+    </svg>
+  );
+}
+
+/**
  * Chapter page cover (1600 × 400 design, 4:1): green with deco rings, the Africa network map with
  * the chapter's country pinned (diaspora chapters show the map unpinned), the line "Find your people
  * in {country}" with the country highlighted in orange, and the brand stripe in flag colours.
@@ -237,17 +283,21 @@ export function ChapterCover({
   name,
   countryCode,
   src,
+  photo,
   className,
 }: {
   name: string;
   countryCode: string;
   src?: string | null;
+  /** A photograph of the country. It sits behind the title, under a green wash that keeps the text readable. */
+  photo?: { url: string; credit?: string | null } | null;
   className?: string;
 }) {
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element -- permission-checked API media
     return <img src={src} alt="" className={cn("h-full w-full object-cover", className)} />;
   }
+  if (photo) return <PhotoCover name={name} countryCode={countryCode} photo={photo} className={className} />;
   const label = chapterLabel(name);
   const diaspora = /diaspora/i.test(label);
   const place = label.replace(/\s+diaspora$/i, "");

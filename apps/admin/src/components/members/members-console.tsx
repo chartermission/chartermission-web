@@ -7,6 +7,7 @@ import { Avatar, Button, Chip, Icon, ProfileBadgeChip, SegmentedControl, cn } fr
 import { FormModal, selectClasses } from "@/components/ambassadors/modal";
 import { inputClasses } from "@/components/form-field";
 import { EmptyState } from "@/components/states";
+import { ReasonDialog } from "@/components/reason-dialog";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
 import { WEB_URL } from "@/lib/navigation";
@@ -22,6 +23,7 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [badgeFor, setBadgeFor] = useState<AdminMemberRow | null>(null);
+  const [officialFor, setOfficialFor] = useState<AdminMemberRow | null>(null);
   const first = useRef(true);
 
   const queryFor = (cursor?: string | null) => ({
@@ -70,12 +72,16 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
 
   const replace = (row: AdminMemberRow) => setPage((p) => ({ ...p, items: p.items.map((r) => (r.id === row.id ? row : r)) }));
 
-  async function set(row: AdminMemberRow, what: "verified" | "featured", value: boolean) {
+  async function set(row: AdminMemberRow, what: "verified" | "featured" | "official", value: boolean) {
     setBusyId(row.id);
     try {
       replace(await api<AdminMemberRow>(`/admin/members/${row.id}/${what}`, { method: "PUT", body: { [what]: value } }));
       toast(
-        what === "verified"
+        what === "official"
+          ? value
+            ? `${row.name} is now an official account. Members follow it; its connections became followers.`
+            : `${row.name} is an ordinary account again and can connect with members.`
+          : what === "verified"
           ? value
             ? `${row.name} is verified.`
             : `${row.name}’s verified tick was removed.`
@@ -183,10 +189,11 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
                             {row.countryCode && ` · ${row.countryCode}`}
                             {row.status !== "active" && ` · ${row.status}`}
                           </span>
-                          {(row.featured || row.staff) && (
-                            <span className="mt-1 flex gap-1">
+                          {(row.featured || row.staff || row.official) && (
+                            <span className="mt-1 flex flex-wrap gap-1">
                               {row.featured && <Chip tone="info">Suggested on sign-up</Chip>}
-                              {row.staff && <Chip tone="neutral">Staff</Chip>}
+                              {row.official && <Chip tone="warning">Official account · follow only</Chip>}
+                              {row.staff && !row.official && <Chip tone="neutral">Team member</Chip>}
                             </span>
                           )}
                         </div>
@@ -208,6 +215,9 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
                       <div className="flex flex-wrap justify-end gap-1">
                         <Button variant="ghost" size="small" disabled={busy} onClick={() => void set(row, "verified", !row.verified)}>
                           {row.verified ? "Remove tick" : "Verify"}
+                        </Button>
+                        <Button variant="ghost" size="small" disabled={busy} onClick={() => setOfficialFor(row)}>
+                          {row.official ? "Make ordinary account" : "Make official"}
                         </Button>
                         <Button variant="ghost" size="small" disabled={busy} onClick={() => void set(row, "featured", !row.featured)}>
                           {row.featured ? "Stop suggesting" : "Suggest on sign-up"}
@@ -232,6 +242,30 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
         </div>
       )}
 
+      {officialFor && (
+        <ReasonDialog
+          title={officialFor.official ? `Make ${officialFor.name} an ordinary account?` : `Make ${officialFor.name} an official account?`}
+          description={
+            officialFor.official ? (
+              "It will be able to send and receive connection requests like any member. Its followers stay; nobody is reconnected automatically."
+            ) : (
+              <>
+                Use this for an account that speaks for an organisation, such as the Charter Mission account. Members will only be able to <strong>follow</strong> it: the Connect button
+                disappears, its current connections and pending requests become followers, and it gets the verified tick. People on the team should stay ordinary accounts so they can
+                connect as themselves.
+              </>
+            )
+          }
+          confirmLabel={officialFor.official ? "Make ordinary" : "Make official"}
+          reasonField="none"
+          onConfirm={async () => {
+            const row = officialFor;
+            setOfficialFor(null);
+            await set(row, "official", !row.official);
+          }}
+          onClose={() => setOfficialFor(null)}
+        />
+      )}
       {badgeFor && (
         <AwardBadges
           member={badgeFor}

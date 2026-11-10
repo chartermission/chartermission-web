@@ -92,6 +92,13 @@
       "when": 1794320789324,
       "tag": "0012_chapter_hashtags",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794325741649,
+      "tag": "0013_staff_handles_trim_photos",
+      "breakpoints": true
     }
   ]
 }

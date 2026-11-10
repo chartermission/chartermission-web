@@ -66,7 +66,7 @@ export function TextField({
         <label htmlFor={id} className="text-label text-body">
           {label}
           {required && <span className="sr-only"> (required)</span>}
-          {optional && <span className="ml-1 font-normal text-secondary">(optional)</span>}
+          {optional && <span className="ms-1 font-normal text-secondary">(optional)</span>}
         </label>
         {max && value.length > max * 0.6 && (
           <span className={cn("text-[11px]", value.length >= max ? "text-error" : "text-secondary")} aria-hidden="true">
@@ -75,7 +75,7 @@ export function TextField({
         )}
       </div>
       <div className="relative">
-        {icon && <Icon name={icon} size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />}
+        {icon && <Icon name={icon} size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-secondary" />}
         <input
           id={id}
           type={type}
@@ -88,7 +88,7 @@ export function TextField({
           aria-required={required || undefined}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className={cn(inputClasses, border(!!error), icon && "pl-9")}
+          className={cn(inputClasses, border(!!error), icon && "ps-9")}
         />
       </div>
       {hint && (
@@ -160,7 +160,7 @@ export function CategoryPicker<T extends string>({
               onClick={() => onChange(option.value)}
               onKeyDown={(event) => onKeyDown(event, index)}
               className={cn(
-                "flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors max-sm:flex-col max-sm:gap-1 max-sm:px-1.5 max-sm:text-center max-sm:text-xs",
+                "flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-start text-sm transition-colors max-sm:flex-col max-sm:gap-1 max-sm:px-1.5 max-sm:text-center max-sm:text-xs",
                 checked ? "border-primary bg-primary-tint-2 font-medium text-primary" : "border-line bg-card text-body hover:border-line-strong hover:bg-surface",
                 error && !value && "border-error/60",
               )}
@@ -263,7 +263,7 @@ export function SkillsInput({ skills, onChange, error }: { skills: string[]; onC
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={id} className="text-label text-body">
-          Skills <span className="ml-1 font-normal text-secondary">(optional, up to {MAX_SKILLS})</span>
+          Skills <span className="ms-1 font-normal text-secondary">(optional, up to {MAX_SKILLS})</span>
         </label>
         <span className="text-[11px] text-secondary" aria-hidden="true">
           {skills.length}/{MAX_SKILLS}
@@ -278,7 +278,7 @@ export function SkillsInput({ skills, onChange, error }: { skills: string[]; onC
       >
         <ul className="contents" aria-label="Skills added">
           {skills.map((skill, index) => (
-            <li key={skill} className="flex items-center gap-1 rounded-full bg-primary-tint py-0.5 pl-2.5 pr-1 text-xs font-medium text-primary">
+            <li key={skill} className="flex items-center gap-1 rounded-full bg-primary-tint py-0.5 ps-2.5 pe-1 text-xs font-medium text-primary">
               {skill}
               <button
                 type="button"

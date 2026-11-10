@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import type {
   ChapterRef,
   ExperienceItem,
   MemberProfile,
   OwnProfile,
+  HandleAvailability,
   PreviewAs,
   PrivacySettingsInput,
   ProfileField,
@@ -12,13 +13,13 @@ import type {
   UpdateProfileInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, connections, files, follows, memberProfiles, posts, profileExperiences, users } from '../db/schema.js';
+import { chapters, connections, files, follows, handleHistory, memberProfiles, posts, profileExperiences, users } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { BadgesService } from '../core/badges.service.js';
 import { MembersService, mediaUrl, toneFor } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { AppError, Errors } from '../common/errors.js';
-import { RESERVED_HANDLES } from './handles.js';
+import { HANDLE_CHANGE_DAYS, HANDLE_HOLD_DAYS, RESERVED_HANDLES } from './handles.js';
 import { isUniqueViolation } from './pg-error.js';
 import { RelationshipService } from './relationship.service.js';
 import { isUuid, type ProfileTaxonomies, TaxonomyService } from './taxonomy.service.js';
@@ -47,8 +48,10 @@ const profileColumns = {
   email: users.email,
   status: users.status,
   isStaff: users.isStaff,
+  isOfficial: users.isOfficial,
   joinedAt: users.createdAt,
   handle: memberProfiles.handle,
+  handleChangedAt: memberProfiles.handleChangedAt,
   displayName: memberProfiles.displayName,
   headline: memberProfiles.headline,
   countryCode: memberProfiles.countryCode,
@@ -72,8 +75,10 @@ export type ProfileRow = {
   email: string;
   status: string;
   isStaff: boolean;
+  isOfficial: boolean;
   joinedAt: Date;
   handle: string;
+  handleChangedAt: Date | null;
   displayName: string;
   headline: string | null;
   countryCode: string | null;
@@ -120,7 +125,14 @@ export class ProfilesService {
       .innerJoin(users, eq(users.id, memberProfiles.userId))
       .where(where)
       .limit(1);
-    return row ?? null;
+    if (row || isUuid(handleOrId)) return row ?? null;
+    // A username the member used before: old links keep working (the web app redirects to the new one).
+    const [old] = await this.db
+      .select({ userId: handleHistory.userId })
+      .from(handleHistory)
+      .where(eq(sql`lower(${handleHistory.handle})`, handleOrId.toLowerCase()))
+      .limit(1);
+    return old ? this.findRow(old.userId) : null;
   }
 
   async rowFor(userId: string): Promise<ProfileRow> {
@@ -152,6 +164,24 @@ export class ProfilesService {
     return this.build(row, relation, relationship);
   }
 
+  /**
+   * The member whose connections or followers are being listed, after the same checks as their
+   * profile, plus their own "network" privacy setting (members, connections or only me).
+   */
+  async networkOwner(handleOrId: string, ctx: AuthContext): Promise<ProfileRow> {
+    const row = await this.findRow(handleOrId);
+    const admin = isAdminViewer(ctx);
+    if (!row || row.status === 'deleted' || (!admin && HIDDEN_STATUSES.has(row.status))) throw Errors.notFound('Member');
+    const viewerId = ctx.user.id;
+    if (admin || viewerId === row.userId) return row;
+    if (await this.relations.isBlockedEitherWay(viewerId, row.userId)) throw Errors.notFound('Member');
+    const relation: ViewerRelation = (await this.relations.areConnected(viewerId, row.userId)) ? 'connection' : 'member';
+    if (!canSeeField(relation, effectiveVisibility(row.fieldVisibility).network)) {
+      throw Errors.forbidden(`${row.displayName} keeps this list private`);
+    }
+    return row;
+  }
+
   /** GET /me/profile/preview?as= (CM-PRF-05): the owner's profile through another viewer's allow-list. */
   async preview(userId: string, as: PreviewAs): Promise<MemberProfile> {
     const row = await this.rowFor(userId);
@@ -163,7 +193,7 @@ export class ProfilesService {
       followsYou: false,
       blocked: false,
       muted: false,
-      canConnect: !row.isStaff,
+      canConnect: !row.isOfficial,
     };
     return this.build(row, PREVIEW_RELATION[as], relationship);
   }
@@ -292,6 +322,7 @@ export class ProfilesService {
       experience,
       profileVisibility: row.profileVisibility as OwnProfile['profileVisibility'],
       fieldVisibility: effectiveVisibility(row.fieldVisibility),
+      handleChangeAvailableAt: handleChangeAvailableAt(row.handleChangedAt)?.toISOString() ?? null,
       discoverable: row.discoverable,
       findableByEmail: row.findableByEmail,
       connectionRequestsFrom: row.connectionRequestsFrom as OwnProfile['connectionRequestsFrom'],
@@ -304,10 +335,17 @@ export class ProfilesService {
     const current = await this.rowFor(userId);
     const set: Partial<typeof memberProfiles.$inferInsert> = {};
 
-    if (input.handle !== undefined && input.handle !== current.handle.toLowerCase()) {
-      if (RESERVED_HANDLES.has(input.handle)) throw Errors.validation({ handle: 'That handle is not available' });
-      await this.assertHandleFree(input.handle, userId);
-      set.handle = input.handle;
+    const newHandle = input.handle !== undefined && input.handle !== current.handle.toLowerCase() ? input.handle : null;
+    if (newHandle) {
+      const wait = handleChangeAvailableAt(current.handleChangedAt);
+      if (wait) {
+        throw Errors.validation({ handle: `You changed your username recently. You can change it again on ${wait.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.` });
+      }
+      const problem = await this.handleProblem(newHandle, userId);
+      if (problem === TAKEN) throw handleTaken();
+      if (problem) throw Errors.validation({ handle: problem });
+      set.handle = newHandle;
+      set.handleChangedAt = new Date();
     }
     if (input.name !== undefined) set.displayName = input.name;
     if (input.headline !== undefined) set.headline = input.headline || null;
@@ -342,6 +380,11 @@ export class ProfilesService {
 
     try {
       await this.db.transaction(async (tx) => {
+        if (newHandle) {
+          // Free the name if it was only held by an expired reservation or by this member's own history.
+          await tx.delete(handleHistory).where(eq(sql`lower(${handleHistory.handle})`, newHandle));
+          await tx.insert(handleHistory).values({ userId, handle: current.handle.toLowerCase() }).onConflictDoNothing();
+        }
         if (Object.keys(set).length > 0) await tx.update(memberProfiles).set(set).where(eq(memberProfiles.userId, userId));
         for (const [kind, ids] of Object.entries(taxonomies) as [keyof ProfileTaxonomies, string[] | undefined][]) {
           if (ids) await this.taxonomy.replace(tx, kind, userId, ids);
@@ -407,13 +450,36 @@ export class ProfilesService {
     if (Object.keys(set).length > 0) await this.db.update(memberProfiles).set(set).where(eq(memberProfiles.userId, userId));
   }
 
-  private async assertHandleFree(handle: string, userId: string) {
+  /** GET /me/handle-availability?handle= — checked as the member types. */
+  async handleAvailability(userId: string, handle: string): Promise<HandleAvailability> {
+    const current = await this.rowFor(userId);
+    if (handle === current.handle.toLowerCase()) return { handle, available: true, reason: null };
+    const reason = await this.handleProblem(handle, userId);
+    return { handle, available: !reason, reason };
+  }
+
+  /** Why this member can't take the username, or null when they can. */
+  private async handleProblem(handle: string, userId: string): Promise<string | null> {
+    if (RESERVED_HANDLES.has(handle)) return 'That username is not available';
     const [taken] = await this.db
       .select({ id: memberProfiles.userId })
       .from(memberProfiles)
       .where(and(eq(sql`lower(${memberProfiles.handle})`, handle), ne(memberProfiles.userId, userId)))
       .limit(1);
-    if (taken) throw handleTaken();
+    if (taken) return TAKEN;
+    // Someone else used it recently: held for them so their old links can't be taken over.
+    const [held] = await this.db
+      .select({ id: handleHistory.id })
+      .from(handleHistory)
+      .where(
+        and(
+          eq(sql`lower(${handleHistory.handle})`, handle),
+          ne(handleHistory.userId, userId),
+          gt(handleHistory.createdAt, new Date(Date.now() - HANDLE_HOLD_DAYS * 86_400_000)),
+        ),
+      )
+      .limit(1);
+    return held ? 'That username is not available' : null;
   }
 
   /** avatarFileId must be the member's own, clean, avatar-purpose upload (CM-PRF-07). */
@@ -431,6 +497,15 @@ export class ProfilesService {
       throw Errors.validation({ [field]: 'Upload a JPEG, PNG or WebP photo first' });
     }
   }
+}
+
+const TAKEN = 'That username is taken';
+
+/** When the member may change their username again, or null if they can now. */
+function handleChangeAvailableAt(changedAt: Date | null): Date | null {
+  if (!changedAt) return null;
+  const next = new Date(changedAt.getTime() + HANDLE_CHANGE_DAYS * 86_400_000);
+  return next.getTime() > Date.now() ? next : null;
 }
 
 function handleTaken() {

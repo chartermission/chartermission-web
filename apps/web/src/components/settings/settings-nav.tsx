@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/client";
 import { useEffect, useRef } from "react";
 import { Icon, cn, type IconName } from "@chartermission/ui";
 

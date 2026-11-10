@@ -56,6 +56,7 @@ export function formerMember(id: string): MemberRef {
     tone: toneFor(id),
     verified: false,
     staff: false,
+    official: false,
   };
 }
 

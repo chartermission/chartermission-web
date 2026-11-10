@@ -239,7 +239,7 @@ function ApplyForm({
             onChange={(e) => set({ motivation: e.target.value })}
             className={textareaClasses(!!err("motivation"))}
           />
-          <p id={`${fid("motivation")}-count`} className="text-right text-xs text-secondary">
+          <p id={`${fid("motivation")}-count`} className="text-end text-xs text-secondary">
             {form.motivation.trim().length} / 3000
           </p>
         </Field>

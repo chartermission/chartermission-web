@@ -45,7 +45,7 @@ const PILL: Record<RoleBadgeData["kind"], string> = {
 export function RoleBadgePill({ badge, className }: { badge: RoleBadgeData | null | undefined; className?: string }) {
   if (!badge) return null;
   return (
-    <span className={cn("inline-flex w-fit items-center gap-1.5 rounded-full py-1 pr-3 pl-1.5 text-sm font-semibold", PILL[badge.kind], className)}>
+    <span className={cn("inline-flex w-fit items-center gap-1.5 rounded-full py-1 pe-3 ps-1.5 text-sm font-semibold", PILL[badge.kind], className)}>
       <RoleBadgeIcon badge={badge} size={20} className="pointer-events-none" />
       <span>
         {badge.label} · {badge.place}
