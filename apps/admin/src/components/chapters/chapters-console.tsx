@@ -126,6 +126,7 @@ export function ChaptersConsole({ initial, countries }: { initial: AdminChapterR
                           <span className="font-medium text-ink">{row.name}</span>
                           <span className="text-xs text-secondary">
                             /chapters/{row.slug}
+                            {row.hashtag && ` · #${row.hashtag}`}
                             {row.imageUrl && " · custom picture"}
                           </span>
                         </div>
@@ -291,6 +292,7 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
           name: String(data.get("name") ?? "").trim(),
           status: data.get("status") === "active" ? "active" : "dormant",
           about: String(data.get("about") ?? "").trim() || null,
+          hashtag: String(data.get("hashtag") ?? "").trim().replace(/^#/, "") || null,
           ...(image !== undefined ? { imageFileId: image.fileId } : {}),
           ...(cover !== undefined ? { coverFileId: cover.fileId } : {}),
         };
@@ -341,6 +343,14 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
         onUploaded={(fileId, url) => setCover({ fileId, url })}
         onReset={() => setCover({ fileId: null, url: null })}
         disabled={busy}
+      />
+      <TextField
+        label="Chapter hashtag"
+        name="hashtag"
+        defaultValue={row.hashtag ?? ""}
+        maxLength={51}
+        placeholder="e.g. Nigeria"
+        hint="Shown on the chapter page. Letters, numbers and underscores, with no spaces."
       />
       <Field label="About" hint="Up to 1,000 characters. Ambassadors and Chapter Leads can also edit this on the chapter page.">
         {(id, describedBy) => (

@@ -10,11 +10,13 @@ import {
   type Page,
   type PostView,
 } from "@chartermission/contracts";
-import { Button, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
+import Link from "next/link";
+import { Button, Chip, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
 import { Composer, blockedReason, type ComposeStart } from "@/components/composer";
 import { CreatePostDialog } from "@/components/compose/create-post-dialog";
 import { announceDraftsChanged } from "@/components/drafts/drafts-events";
 import { ErrorNotice } from "@/components/social/errors";
+import { topicHref } from "@/components/social/links";
 import type { MenuItem } from "@/components/social/menu";
 import { PostCard } from "@/components/social/post-card";
 import { announcePostCreated } from "@/components/social/post-events";
@@ -252,7 +254,7 @@ export function ChapterMembers({ slug, initial }: { slug: string; initial: Page<
 }
 
 /** About tab: the text, with an editor for the chapter team. */
-export function ChapterAbout({ slug, name, about: initial, canEdit }: { slug: string; name: string; about: string | null; canEdit: boolean }) {
+export function ChapterAbout({ slug, name, about: initial, canEdit, hashtag }: { slug: string; name: string; hashtag?: string | null; about: string | null; canEdit: boolean }) {
   const [about, setAbout] = useState(initial ?? "");
   const [draft, setDraft] = useState(about);
   const [editing, setEditing] = useState(false);
@@ -325,6 +327,17 @@ export function ChapterAbout({ slug, name, about: initial, canEdit }: { slug: st
       ) : (
         <p className="text-md text-secondary">
           {canEdit ? "Tell members what this chapter is about, where it meets and how to get involved." : "The chapter team hasn’t added a description yet."}
+        </p>
+      )}
+      {hashtag && !editing && (
+        <p className="flex flex-wrap items-center gap-2 border-t border-line pt-3 text-sm text-secondary">
+          Chapter hashtag
+          <Link href={topicHref(hashtag)}>
+            <Chip tone="hashtag" className="hover:bg-accent hover:text-inverse">
+              #{hashtag}
+            </Chip>
+          </Link>
+          <span>Add it to a post so members of this chapter can find it.</span>
         </p>
       )}
     </Panel>

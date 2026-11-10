@@ -69,6 +69,8 @@ export const chapters = pgTable(
     status: text('status').notNull().default('active'),
     /** Short About text, edited by the chapter's Ambassadors and Chapter Leads. */
     about: text('about'),
+    /** The chapter's own hashtag in display form, without "#" (e.g. "Nigeria", "UKDiaspora"). */
+    hashtag: text('hashtag'),
     /** Custom display picture (a chapter_image upload); null shows the generated brand avatar. */
     imageFileId: uuid('image_file_id').references((): AnyPgColumn => files.id, { onDelete: 'set null' }),
     /** Custom cover banner for the chapter page (a chapter_cover upload); null shows the generated cover. */

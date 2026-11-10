@@ -64,6 +64,17 @@ the four staff accounts with fixed keys, listed with QR codes in the demo accoun
 (`docs/Charter-Mission-Test-Accounts.pdf`): add them to an authenticator app once and use its codes to sign in.
 In production staff set it up on their first sign-in. Members can turn on the same protection in Settings → Security.
 
+### Reference data and demo data
+
+- **Reference data** (countries, taxonomies, chapters, topics, badges, roles) comes from `seedReference`, which
+  `db:bootstrap:prod` runs on every API start. It is safe on a live database: catalogues are versioned
+  (`REFERENCE_SEED_VERSIONS`), new versions only add what is missing, and nothing an admin or Ambassador changed is
+  overwritten. Every chapter gets its own hashtag (`#Nigeria`, `#UKDiaspora`) and an About text for its country; chapter
+  logos and covers are drawn from the chapter's name and flag colours until an admin uploads a picture.
+- **Demo data** (`db:seed`, `db:reset`) is for empty development databases only. Both refuse to run when the database
+  has accounts that are not demo accounts; to reset a local database you registered your own account in, add
+  `--confirm-database=chartermission`. The e2e tests only run against a database whose name contains `_test`.
+
 ### Pages, verification and post analytics
 
 - **Official accounts are follow-only.** An account with the staff flag (set by `bootstrap --super-admin`, or when someone

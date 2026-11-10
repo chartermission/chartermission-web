@@ -31,6 +31,7 @@ type ChapterRow = {
   countryCode: string;
   status: string;
   about: string | null;
+  hashtag: string | null;
   countryName: string;
   region: string;
   imageFileId: string | null;
@@ -183,6 +184,7 @@ export class ChaptersService {
         countryCode: chapters.countryCode,
         status: chapters.status,
         about: chapters.about,
+        hashtag: chapters.hashtag,
         countryName: countries.name,
         region: countries.region,
         imageFileId: chapters.imageFileId,
@@ -213,6 +215,7 @@ export class ChaptersService {
       imageUrl: mediaUrl(r.imageFileId),
       coverUrl: mediaUrl(r.coverFileId),
       about: r.about,
+      hashtag: r.hashtag,
       followers,
       viewer: { following },
     };

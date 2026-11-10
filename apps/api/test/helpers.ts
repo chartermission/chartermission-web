@@ -38,6 +38,12 @@ export async function createTestApp(): Promise<TestApp> {
   configureApp(app);
   await app.init();
   const db = app.get<Db>(DB);
+  // The tests empty every table: only ever against a database made for them.
+  const [target] = (await db.execute<{ name: string }>(sql`select current_database() as name`)).rows;
+  if (!target?.name.includes('_test')) {
+    await app.close();
+    throw new Error(`Refusing to run tests against "${target?.name}": the test database name must contain "_test" (see test/setup-env.ts).`);
+  }
   await resetDatabase(db);
   await seedReference(db);
   app.get(SettingsService).clearCache();

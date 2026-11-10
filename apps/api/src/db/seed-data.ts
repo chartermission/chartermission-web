@@ -150,7 +150,15 @@ export const CHAPTERS: [string, string, string][] = [
  * "reference_seeds"), so an item an admin removes isn't re-created on the next start. Bump a
  * version to seed newly added items; existing rows are never overwritten.
  */
-export const REFERENCE_SEED_VERSIONS = { chapters: 2, hashtags: 1, badges: 1 } as const;
+export const REFERENCE_SEED_VERSIONS = { chapters: 3, hashtags: 2, badges: 1 } as const;
+
+/**
+ * What each chapters version added, so a later version never redoes an earlier step on a database
+ * that already has it (a chapter an admin removed must stay removed):
+ *   2 = the list of chapters; 3 = each chapter's hashtag and About text.
+ */
+export const CHAPTERS_LIST_VERSION = 2;
+export const CHAPTERS_PROFILE_VERSION = 3;
 
 /** Curated topics: featured in onboarding and on the Topics page until real trends take over. */
 export const FEATURED_HASHTAGS: [string, string][] = [
@@ -186,6 +194,21 @@ export const FEATURED_HASHTAGS: [string, string][] = [
   ['Manufacturing', 'Industry, value addition and made-in-Africa.'],
   ['SocialImpact', 'Non-profits, social enterprise and community projects.'],
   ['AfricaDay', 'Celebrating Africa Day (25 May) and the continent’s history.'],
+];
+
+/** Added in hashtags version 2: one topic per African region. */
+export const REGION_HASHTAGS: [string, string][] = [
+  ['WestAfrica', 'People, trade and ideas across West Africa.'],
+  ['EastAfrica', 'People, trade and ideas across East Africa.'],
+  ['NorthAfrica', 'People, trade and ideas across North Africa.'],
+  ['SouthernAfrica', 'People, trade and ideas across Southern Africa.'],
+  ['CentralAfrica', 'People, trade and ideas across Central Africa.'],
+];
+
+/** Featured topics by the hashtags version that introduced them. */
+export const FEATURED_HASHTAG_SETS: { version: number; tags: [string, string][] }[] = [
+  { version: 1, tags: FEATURED_HASHTAGS },
+  { version: 2, tags: REGION_HASHTAGS },
 ];
 
 export type SeedBadge = { slug: string; name: string; description: string; tone: 'primary' | 'accent' | 'warning' | 'info' | 'success'; icon: string };

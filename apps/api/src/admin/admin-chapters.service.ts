@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { and, asc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import type { AdminChapterCreateInput, AdminChapterRow, AdminChaptersQuery, AdminChapterUpdateInput, Ok } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, countries, events, files, follows, posts, userRoles } from '../db/schema.js';
+import { chapters, countries, events, files, follows, hashtags, posts, userRoles } from '../db/schema.js';
+import { chapterDefaults } from '../chapters/chapter-defaults.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
@@ -47,6 +48,7 @@ export class AdminChaptersService {
         region: countries.region,
         status: chapters.status,
         about: chapters.about,
+        hashtag: chapters.hashtag,
         imageFileId: chapters.imageFileId,
         coverFileId: chapters.coverFileId,
         followers,
@@ -74,15 +76,22 @@ export class AdminChaptersService {
 
   /** POST /admin/chapters */
   async create(ctx: AuthContext, input: AdminChapterCreateInput, ip?: string): Promise<AdminChapterRow> {
-    const [country] = await this.db.select({ code: countries.code }).from(countries).where(eq(countries.code, input.countryCode)).limit(1);
+    const [country] = await this.db
+      .select({ code: countries.code, name: countries.name, region: countries.region })
+      .from(countries)
+      .where(eq(countries.code, input.countryCode))
+      .limit(1);
     if (!country) throw Errors.validation({ countryCode: 'Choose a country from the list' });
+    // A new chapter starts like the seeded ones: its own hashtag and an About text for its country.
+    const defaults = chapterDefaults({ name: input.name, countryCode: country.code, countryName: country.name, region: country.region });
     const slug = input.slug ?? slugify(input.name.replace(/\s+chapter$/i, ''));
     if (!slug) throw Errors.validation({ slug: 'Enter a link name' });
     try {
       const [created] = await this.db
         .insert(chapters)
-        .values({ slug, name: input.name, countryCode: input.countryCode, status: input.status })
+        .values({ slug, name: input.name, countryCode: input.countryCode, status: input.status, about: defaults.about, hashtag: defaults.hashtag })
         .returning({ id: chapters.id });
+      await this.ensureHashtag(defaults.hashtag, defaults.hashtagDescription);
       await this.audit.record({ actorId: ctx.user.id, action: 'chapter.created', targetType: 'chapter', targetId: created!.id, after: { ...input, slug }, ip });
       return this.row(created!.id);
     } catch (err) {
@@ -98,6 +107,7 @@ export class AdminChaptersService {
     if (!before) throw Errors.notFound('That chapter');
     if (input.imageFileId) await this.assertFile(input.imageFileId, 'chapter_image', 'imageFileId');
     if (input.coverFileId) await this.assertFile(input.coverFileId, 'chapter_cover', 'coverFileId');
+    if (input.hashtag) await this.ensureHashtag(input.hashtag, `The hashtag of the ${input.name ?? before.name}.`);
     await this.db
       .update(chapters)
       .set({ ...input, ...(input.about !== undefined ? { about: input.about || null } : {}), updatedAt: new Date() })
@@ -113,6 +123,14 @@ export class AdminChaptersService {
       ip,
     });
     return this.row(id);
+  }
+
+  /** The topic behind a chapter's hashtag exists, so it can be followed before anyone has posted with it. */
+  private async ensureHashtag(display: string, description: string) {
+    await this.db
+      .insert(hashtags)
+      .values({ tag: display.toLowerCase(), display, description })
+      .onConflictDoUpdate({ target: hashtags.tag, set: { description: sql`coalesce(${hashtags.description}, excluded.description)` } });
   }
 
   /** DELETE /admin/chapters/{id}: only chapters nobody has used yet; otherwise deactivate. */

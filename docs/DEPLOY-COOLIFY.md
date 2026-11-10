@@ -114,7 +114,14 @@ NEXT_PUBLIC_WEB_URL=https://chartermission.com
 
 The container runs `migrate.js` (pending Drizzle migrations), then `bootstrap.js` (countries,
 taxonomies, chapters, roles, permissions, setting defaults — idempotent, no demo data), then the server.
-Never run `db:seed` against production.
+Every chapter gets its own hashtag and an About text written for its country; its logo and cover are drawn
+from its name and flag colours until an admin uploads a picture. Reference data is versioned: a new release
+fills in what is missing and never overwrites what admins or Ambassadors changed, or re-creates a chapter
+that was removed.
+
+Never run `db:seed` or `db:reset` against production: they create demo accounts with a published password,
+and `db:reset` empties every table. Both now refuse a database that has real accounts unless the command
+names it (`--confirm-database=<name>`), wherever they are run from.
 
 ## 7. First Super Admin
 

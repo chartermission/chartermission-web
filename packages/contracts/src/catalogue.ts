@@ -29,6 +29,8 @@ export type AdminChapterRow = {
   region: string;
   status: string;
   about: string | null;
+  /** The chapter's own hashtag, without "#". */
+  hashtag: string | null;
   imageUrl: string | null;
   coverUrl: string | null;
   followers: number;
@@ -58,6 +60,13 @@ export const AdminChapterUpdateInput = z
     name: z.string().trim().min(2).max(80),
     status: AdminChapterStatus,
     about: z.string().trim().max(1000).nullable(),
+    /** The chapter's hashtag, with or without "#": letters, numbers and underscores. Null removes it. */
+    hashtag: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/^#/, ""))
+      .pipe(z.string().regex(/^[A-Za-z0-9_]{2,50}$/, "Use 2 to 50 letters, numbers or underscores, with no spaces"))
+      .nullable(),
     imageFileId: z.string().uuid().nullable(),
     coverFileId: z.string().uuid().nullable(),
   })

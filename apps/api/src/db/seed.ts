@@ -5,8 +5,10 @@ import * as s from './schema.js';
 import {
   BADGES,
   CHAPTERS,
+  CHAPTERS_LIST_VERSION,
+  CHAPTERS_PROFILE_VERSION,
   COUNTRIES,
-  FEATURED_HASHTAGS,
+  FEATURED_HASHTAG_SETS,
   REFERENCE_SEED_VERSIONS,
   COURSE_TOPICS,
   DEMO_PASSWORD,
@@ -30,6 +32,7 @@ import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
 import { DEFAULT_FIELD_VISIBILITY } from '@chartermission/contracts';
 import { isMain } from './is-main.js';
+import { chapterDefaults } from '../chapters/chapter-defaults.js';
 
 const slug = (v: string) => v.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -86,21 +89,29 @@ async function seedCatalogues(db: Db) {
   const due = (k: keyof typeof REFERENCE_SEED_VERSIONS) => (done[k] ?? 0) < REFERENCE_SEED_VERSIONS[k];
 
   if (due('chapters')) {
-    await db
-      .insert(s.chapters)
-      .values(CHAPTERS.map(([sl, name, countryCode]) => ({ slug: sl, name, countryCode })))
-      .onConflictDoNothing();
+    // Each step runs once: a later version never re-creates a chapter an admin removed.
+    if ((done.chapters ?? 0) < CHAPTERS_LIST_VERSION) {
+      await db
+        .insert(s.chapters)
+        .values(CHAPTERS.map(([sl, name, countryCode]) => ({ slug: sl, name, countryCode })))
+        .onConflictDoNothing();
+    }
+    if ((done.chapters ?? 0) < CHAPTERS_PROFILE_VERSION) await seedChapterProfiles(db);
     done.chapters = REFERENCE_SEED_VERSIONS.chapters;
   }
   if (due('hashtags')) {
-    for (const [display, description] of FEATURED_HASHTAGS) {
-      await db
-        .insert(s.hashtags)
-        .values({ tag: display.toLowerCase(), display, description, featured: true })
-        .onConflictDoUpdate({
-          target: s.hashtags.tag,
-          set: { featured: true, description: sql`coalesce(${s.hashtags.description}, excluded.description)` },
-        });
+    // Only the sets newer than what this database has: topics an admin un-featured stay that way.
+    for (const set of FEATURED_HASHTAG_SETS) {
+      if ((done.hashtags ?? 0) >= set.version) continue;
+      for (const [display, description] of set.tags) {
+        await db
+          .insert(s.hashtags)
+          .values({ tag: display.toLowerCase(), display, description, featured: true })
+          .onConflictDoUpdate({
+            target: s.hashtags.tag,
+            set: { featured: true, description: sql`coalesce(${s.hashtags.description}, excluded.description)` },
+          });
+      }
     }
     done.hashtags = REFERENCE_SEED_VERSIONS.hashtags;
   }
@@ -115,6 +126,44 @@ async function seedCatalogues(db: Db) {
     .insert(s.platformSettings)
     .values({ key: SEEDS_KEY, value: done })
     .onConflictDoUpdate({ target: s.platformSettings.key, set: { value: done } });
+}
+
+/**
+ * Gives every chapter that exists its own hashtag and an About text written for its country
+ * (chapters/chapter-defaults.ts). Only empty fields are filled: text an Ambassador or admin wrote,
+ * and a hashtag an admin chose, are kept. Chapters added from the admin console are included.
+ * The chapter's logo and cover need no seeding: they are drawn for each chapter from its name
+ * and its country's flag colours until an admin uploads a picture.
+ */
+export async function seedChapterProfiles(db: Db) {
+  const rows = await db
+    .select({
+      id: s.chapters.id,
+      name: s.chapters.name,
+      countryCode: s.chapters.countryCode,
+      about: s.chapters.about,
+      hashtag: s.chapters.hashtag,
+      countryName: s.countries.name,
+      region: s.countries.region,
+    })
+    .from(s.chapters)
+    .innerJoin(s.countries, eq(s.countries.code, s.chapters.countryCode));
+  for (const row of rows) {
+    const defaults = chapterDefaults(row);
+    const hashtag = defaults.hashtag;
+    if (!row.about?.trim() || !row.hashtag) {
+      await db
+        .update(s.chapters)
+        .set({ about: row.about?.trim() ? row.about : defaults.about, hashtag })
+        .where(eq(s.chapters.id, row.id));
+    }
+    // The topic itself, so it can be followed and searched before anyone has used it. Not featured:
+    // onboarding suggests the member's own chapter instead of listing every country.
+    await db
+      .insert(s.hashtags)
+      .values({ tag: hashtag.toLowerCase(), display: hashtag, description: defaults.hashtagDescription })
+      .onConflictDoUpdate({ target: s.hashtags.tag, set: { description: sql`coalesce(${s.hashtags.description}, excluded.description)` } });
+  }
 }
 
 /** Demo members (verified emails, completed onboarding). Returns user ids keyed by SeedMember.key. */
@@ -188,6 +237,33 @@ export async function resetDatabase(db: Db) {
   if (names) await db.execute(sql.raw(`truncate ${names} restart identity cascade`));
 }
 
+/**
+ * The demo seed is for empty development and staging databases. It creates staff accounts with a
+ * published password, and --reset empties every table, so it must never meet real members.
+ * This refuses to continue when the database holds accounts that are not demo accounts, unless the
+ * command names that database: --confirm-database=<name>.
+ */
+export async function assertSafeToSeedDemo(db: Db, argv: string[] = process.argv) {
+  const demoEmails = MEMBERS.map((m) => m.email.toLowerCase());
+  const [info] = (
+    await db.execute<{ name: string; real: number }>(
+      // Demo accounts: the seeded staff accounts, and anything on the reserved example domains.
+      sql`select current_database() as name, (select count(*)::int from ${s.users} u
+            where lower(u.email) not in (${sql.join(demoEmails.map((e) => sql`${e}`), sql`, `)})
+              and split_part(lower(u.email), '@', 2) not in ('example.com', 'example.org', 'example.net', 'example.test')) as real`,
+    )
+  ).rows;
+  if (!info || info.real === 0) return;
+  const confirmed = argv.find((a) => a.startsWith('--confirm-database='))?.split('=')[1];
+  if (confirmed === info.name) return;
+  const what = argv.includes('--reset') ? 'reset (this deletes every member, post and setting)' : 'add demo accounts and demo content to';
+  throw new Error(
+    `Refusing to ${what} the database "${info.name}": it has ${info.real} real account${info.real === 1 ? '' : 's'}.\n` +
+      `Reference data (chapters, hashtags, badges, roles) is applied without demo data by: node dist/db/bootstrap.js (it runs on every API start).\n` +
+      `If this really is a throwaway database, run the command again with --confirm-database=${info.name}`,
+  );
+}
+
 async function main() {
   if (process.env.NODE_ENV === 'production' && !process.argv.includes('--force')) {
     throw new Error('Refusing to seed demo data in production (pass --force for staging).');
@@ -195,6 +271,7 @@ async function main() {
   const pool = createPool();
   const db = createDb(pool);
   try {
+    await assertSafeToSeedDemo(db);
     if (process.argv.includes('--reset')) await resetDatabase(db);
     await seedReference(db);
     const ids = await seedMembers(db);
@@ -221,4 +298,13 @@ async function main() {
   }
 }
 
-if (isMain(import.meta.url)) await main();
+if (isMain(import.meta.url)) {
+  await main().catch((err: unknown) => {
+    // A refusal is an answer, not a crash: say why and stop, without a stack trace.
+    if (err instanceof Error && err.message.startsWith('Refusing')) {
+      console.error(`\n${err.message}\n`);
+      process.exit(1);
+    }
+    throw err;
+  });
+}

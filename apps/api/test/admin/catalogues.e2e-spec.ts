@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
-import { seedReference } from '../../src/db/seed.js';
-import { BADGES, CHAPTERS, COUNTRIES, FEATURED_HASHTAGS } from '../../src/db/seed-data.js';
+import { assertSafeToSeedDemo, seedReference } from '../../src/db/seed.js';
+import { BADGES, CHAPTERS, COUNTRIES, FEATURED_HASHTAGS, MEMBERS, REGION_HASHTAGS } from '../../src/db/seed-data.js';
 
 describe('Admin catalogues: chapters, topics, badges and members', () => {
   let t: TestApp;
@@ -29,12 +29,94 @@ describe('Admin catalogues: chapters, topics, badges and members', () => {
     expect(chapters.length).toBeGreaterThanOrEqual(54 + 19);
 
     const topics = await t.db.select().from(s.hashtags).where(eq(s.hashtags.featured, true));
-    expect(topics.length).toBe(FEATURED_HASHTAGS.length);
+    expect(topics.length).toBe(FEATURED_HASHTAGS.length + REGION_HASHTAGS.length);
     const badges = await t.db.select().from(s.badges);
     expect(badges.map((b) => b.slug)).toEqual(expect.arrayContaining(BADGES.map((b) => b.slug)));
 
     const tax = await member.get('/taxonomies').expect(200);
     expect(tax.body.countries.some((c: { code: string }) => c.code === 'PK')).toBe(true);
+  });
+
+  it('gives every chapter its own hashtag and an About text written for its country', async () => {
+    const chapters = await t.db.select().from(s.chapters);
+    expect(chapters.every((c) => !!c.about && !!c.hashtag)).toBe(true);
+    const by = (slug: string) => chapters.find((c) => c.slug === slug)!;
+    expect(by('nigeria')).toMatchObject({ hashtag: 'Nigeria' });
+    expect(by('nigeria').about).toMatch(/^The Nigeria Chapter is the home on Charter Mission for members living, working and building in Nigeria\./);
+    expect(by('nigeria').about).toContain('#Nigeria');
+    expect(by('united-kingdom')).toMatchObject({ hashtag: 'UKDiaspora' });
+    expect(by('united-kingdom').about).toMatch(/^The UK Diaspora Chapter brings together members of the African diaspora in the United Kingdom/);
+    expect(by('cote-divoire').hashtag).toBe('CoteDIvoire');
+    expect(by('sao-tome-and-principe').hashtag).toBe('SaoTomeAndPrincipe');
+    expect(by('dr-congo').about).toContain('in the Democratic Republic of the Congo');
+    // One hashtag per chapter, all different, each a valid topic that exists but isn't featured.
+    const tags = chapters.map((c) => c.hashtag!);
+    expect(new Set(tags.map((x) => x.toLowerCase())).size).toBe(chapters.length);
+    expect(tags.every((x) => /^[A-Za-z0-9_]{2,50}$/.test(x))).toBe(true);
+    expect(chapters.every((c) => c.about!.length <= 1000)).toBe(true);
+    const [topic] = await t.db.select().from(s.hashtags).where(eq(s.hashtags.tag, 'nigeria'));
+    expect(topic).toMatchObject({ display: 'Nigeria', featured: false, status: 'active' });
+    expect(topic!.description).toContain('Nigeria Chapter');
+
+    // Members see it on the chapter, and can follow the topic.
+    const detail = await member.get('/chapters/nigeria').expect(200);
+    expect(detail.body).toMatchObject({ hashtag: 'Nigeria' });
+    expect(detail.body.about).toContain('Nigeria');
+    await member.post('/follows', { targetType: 'hashtag', targetId: 'Nigeria' }).expect(201);
+  });
+
+  it('upgrading a live database fills the gaps and leaves what people changed alone', async () => {
+    // A database from before chapter profiles (chapters v2, hashtags v1), with edits made since.
+    await t.db.update(s.chapters).set({ about: null, hashtag: null });
+    await t.db.update(s.chapters).set({ about: 'We meet on the first Friday in Accra.' }).where(eq(s.chapters.slug, 'ghana'));
+    await t.db.update(s.chapters).set({ hashtag: 'KenyaBuilds' }).where(eq(s.chapters.slug, 'kenya'));
+    await t.db.delete(s.chapters).where(eq(s.chapters.slug, 'comoros'));
+    await t.db.update(s.hashtags).set({ featured: false }).where(eq(s.hashtags.tag, 'tourism'));
+    await t.db.delete(s.hashtags).where(eq(s.hashtags.tag, 'westafrica'));
+    await t.db.insert(s.chapters).values({ slug: 'pk-test', name: 'Pakistan Diaspora Chapter', countryCode: 'PK' });
+    await t.db.update(s.platformSettings).set({ value: { chapters: 2, hashtags: 1, badges: 1 } }).where(eq(s.platformSettings.key, 'reference_seeds'));
+
+    await seedReference(t.db);
+
+    const chapters = await t.db.select().from(s.chapters);
+    const by = (slug: string) => chapters.find((c) => c.slug === slug);
+    // Text an Ambassador wrote and a hashtag an admin chose are kept; only the gaps are filled.
+    expect(by('ghana')).toMatchObject({ about: 'We meet on the first Friday in Accra.', hashtag: 'Ghana' });
+    expect(by('kenya')!.hashtag).toBe('KenyaBuilds');
+    expect(by('kenya')!.about).toContain('#KenyaBuilds');
+    expect(by('senegal')).toMatchObject({ hashtag: 'Senegal' });
+    // A chapter an admin removed stays removed; one they added is included.
+    expect(by('comoros')).toBeUndefined();
+    expect(by('pk-test')).toMatchObject({ hashtag: 'PakistanDiaspora' });
+    expect(chapters.every((c) => !!c.about && !!c.hashtag)).toBe(true);
+    // A topic an admin un-featured stays un-featured; the new regional topics arrive featured.
+    const topics = await t.db.select().from(s.hashtags);
+    expect(topics.find((x) => x.tag === 'tourism')!.featured).toBe(false);
+    expect(topics.find((x) => x.tag === 'westafrica')).toMatchObject({ display: 'WestAfrica', featured: true });
+
+    // Running it again changes nothing.
+    await t.db.update(s.chapters).set({ about: 'Edited after the upgrade.' }).where(eq(s.chapters.slug, 'senegal'));
+    await seedReference(t.db);
+    const [senegal] = await t.db.select().from(s.chapters).where(eq(s.chapters.slug, 'senegal'));
+    expect(senegal!.about).toBe('Edited after the upgrade.');
+    await t.db.delete(s.chapters).where(eq(s.chapters.slug, 'pk-test'));
+    await t.db.update(s.hashtags).set({ featured: true }).where(eq(s.hashtags.tag, 'tourism'));
+  });
+
+  it('the demo seed and reset refuse a database that has real accounts', async () => {
+    // Demo accounts and test accounts on the reserved example domains don't count as real.
+    await expect(assertSafeToSeedDemo(t.db, ['node', 'seed.ts', '--reset'])).resolves.toBeUndefined();
+    // One real member is enough to stop both commands.
+    const [real] = await t.db.insert(s.users).values({ email: 'Real.Member@gmail.com', passwordHash: 'x', status: 'active' }).returning({ id: s.users.id });
+    await expect(assertSafeToSeedDemo(t.db, ['node', 'seed.ts'])).rejects.toThrow(/Refusing to add demo accounts.*real account/s);
+    await expect(assertSafeToSeedDemo(t.db, ['node', 'seed.ts', '--reset'])).rejects.toThrow(/Refusing to reset \(this deletes every member/);
+    await expect(assertSafeToSeedDemo(t.db, ['node', 'seed.ts', '--reset', '--confirm-database=production'])).rejects.toThrow(/Refusing/);
+    const [{ name }] = (await t.db.execute<{ name: string }>(sql`select current_database() as name`)).rows as [{ name: string }];
+    await expect(assertSafeToSeedDemo(t.db, ['node', 'seed.ts', '--reset', `--confirm-database=${name}`])).resolves.toBeUndefined();
+    // The seeded staff accounts are demo accounts even though they aren't on an example domain.
+    await t.db.update(s.users).set({ email: MEMBERS.find((m) => m.roles?.includes('super_admin'))!.email }).where(eq(s.users.id, real!.id));
+    await expect(assertSafeToSeedDemo(t.db, ['node', 'seed.ts', '--reset'])).resolves.toBeUndefined();
+    await t.db.delete(s.users).where(eq(s.users.id, real!.id));
   });
 
   it('a removed seeded chapter is not re-created on the next start', async () => {
@@ -49,7 +131,11 @@ describe('Admin catalogues: chapters, topics, badges and members', () => {
   it('creates, deactivates, reactivates and removes chapters; members only see active ones', async () => {
     await mod.get('/admin/chapters').expect(403);
     const created = await admin.post('/admin/chapters', { name: 'Pakistan Diaspora Chapter', countryCode: 'PK' }).expect(201);
-    expect(created.body).toMatchObject({ slug: 'pakistan-diaspora', status: 'active', countryName: 'Pakistan', imageUrl: null });
+    expect(created.body).toMatchObject({ slug: 'pakistan-diaspora', status: 'active', countryName: 'Pakistan', imageUrl: null, hashtag: 'PakistanDiaspora' });
+    expect(created.body.about).toContain('African diaspora in Pakistan');
+    expect((await admin.patch(`/admin/chapters/${created.body.id}`, { hashtag: '#PakistanBuilds' }).expect(200)).body.hashtag).toBe('PakistanBuilds');
+    await admin.patch(`/admin/chapters/${created.body.id}`, { hashtag: 'two words' }).expect(422);
+    expect(await t.db.select().from(s.hashtags).where(eq(s.hashtags.tag, 'pakistanbuilds'))).toHaveLength(1);
     await admin.post('/admin/chapters', { name: 'Pakistan Diaspora Chapter', countryCode: 'PK' }).expect(422);
 
     let list = await member.get('/chapters').expect(200);
@@ -119,7 +205,7 @@ describe('Admin catalogues: chapters, topics, badges and members', () => {
     const onboarding = await member.get('/me/onboarding').expect(200);
     const suggested = onboarding.body.suggestions.hashtags.map((h: { tag: string }) => h.tag);
     expect(suggested).not.toContain('Blueeconomy');
-    expect(FEATURED_HASHTAGS.map(([d]) => d)).toEqual(expect.arrayContaining(suggested));
+    expect([...FEATURED_HASHTAGS, ...REGION_HASHTAGS].map(([d]) => d)).toEqual(expect.arrayContaining(suggested));
 
     await mod.delete(`/admin/topics/${added.body.id}`).expect(200);
     const used = await t.db.select().from(s.hashtags).where(eq(s.hashtags.tag, 'afcfta'));

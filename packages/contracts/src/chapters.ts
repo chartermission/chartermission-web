@@ -26,6 +26,8 @@ export type ChapterSummary = ChapterRef & {
   /** Uploaded cover banner for the chapter page; null means show the generated cover (ChapterCover). */
   coverUrl: string | null;
   about: string | null;
+  /** The chapter's own hashtag in display form, without "#" (e.g. "Nigeria"); links to /topics/{tag}. */
+  hashtag: string | null;
   followers: number;
   viewer: { following: boolean };
 };

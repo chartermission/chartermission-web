@@ -150,7 +150,7 @@ async function ChapterView({ params }: Pick<PageProps<"/chapters/[slug]">, "para
             <ChapterMembers slug={chapter.slug} initial={members} />
           </TabPanel>
           <TabPanel value="about">
-            <ChapterAbout slug={chapter.slug} name={chapter.name} about={chapter.about} canEdit={chapter.viewer.canManage} />
+            <ChapterAbout slug={chapter.slug} name={chapter.name} about={chapter.about} hashtag={chapter.hashtag} canEdit={chapter.viewer.canManage} />
           </TabPanel>
         </main>
 

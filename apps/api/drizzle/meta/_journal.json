@@ -85,6 +85,13 @@
       "when": 1794317624560,
       "tag": "0011_pages_verification_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794320789324,
+      "tag": "0012_chapter_hashtags",
+      "breakpoints": true
     }
   ]
 }
