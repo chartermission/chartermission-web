@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/social/skeletons";
 import { toast } from "@/components/social/toast";
 import { api } from "@/lib/api/client";
 import { applicationTone } from "./opportunity-card";
+import { useT } from "@/i18n/client";
 
 type Filter = "all" | Exclude<ApplicationStatus, "withdrawn">;
 const FILTERS: { value: Filter; label: string }[] = [
@@ -31,6 +32,7 @@ type Decision = { app: ApplicationView; status: "accepted" | "declined" };
 
 /** The poster's applicant list: filter by status; shortlist, accept or decline with an optional message. */
 export function ApplicantsView({ opportunityId, title, initial }: { opportunityId: string; title: string; initial: ApplicationsPage }) {
+  const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
   const [page, setPage] = useState(initial);
   const [loading, setLoading] = useState(false);
@@ -70,11 +72,11 @@ export function ApplicantsView({ opportunityId, title, initial }: { opportunityI
     }));
     toast.success(
       input.status === "shortlisted"
-        ? `${app.applicant.name} shortlisted`
+        ? t("{name} shortlisted", { name: app.applicant.name })
         : input.status === "accepted"
-          ? `${app.applicant.name} accepted. We’ve let them know.`
+          ? t("{name} accepted. We’ve let them know.", { name: app.applicant.name })
           : input.status === "declined"
-            ? `We’ve let ${app.applicant.name} know`
+            ? t("We’ve let {name} know", { name: app.applicant.name })
             : "Moved back to new",
     );
   }
@@ -113,7 +115,7 @@ export function ApplicantsView({ opportunityId, title, initial }: { opportunityI
             <li key={app.id}>
               <Panel className="flex flex-col gap-3 p-5">
                 <div className="flex items-start gap-3">
-                  <Link href={`/members/${app.applicant.handle}`} tabIndex={-1} aria-hidden="true">
+                  <Link href={`/${app.applicant.handle}`} tabIndex={-1} aria-hidden="true">
                     <MemberAvatar member={app.applicant} />
                   </Link>
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -134,7 +136,7 @@ export function ApplicantsView({ opportunityId, title, initial }: { opportunityI
                 </div>
                 <p className="whitespace-pre-line text-sm text-body">{app.note}</p>
                 <div className="flex flex-wrap gap-2">
-                  <Link href={`/members/${app.applicant.handle}`} className="text-sm font-medium text-primary-light hover:underline">
+                  <Link href={`/${app.applicant.handle}`} className="text-sm font-medium text-primary-light hover:underline">
                     View profile
                   </Link>
                   <span className="flex-1" />
@@ -175,7 +177,7 @@ export function ApplicantsView({ opportunityId, title, initial }: { opportunityI
 
       {decision && (
         <ConfirmDialog
-          title={decision.status === "accepted" ? `Accept ${decision.app.applicant.name}?` : `Decline ${decision.app.applicant.name}?`}
+          title={decision.status === "accepted" ? t("Accept {name}?", { name: decision.app.applicant.name }) : t("Decline {name}?", { name: decision.app.applicant.name })}
           confirmLabel={decision.status === "accepted" ? "Accept and notify" : "Decline and notify"}
           danger={decision.status === "declined"}
           onClose={() => setDecision(null)}

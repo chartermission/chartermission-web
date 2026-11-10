@@ -8,6 +8,8 @@ import { getMediaLimits } from "@/lib/media-limits";
 import { formatDuration, UPLOAD_LIMITS } from "@chartermission/contracts";
 import { errorMessage } from "@/components/social/errors";
 import { formatBytes } from "@/components/social/format";
+import { T, useT } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 export const MAX_IMAGES = 4;
 
@@ -32,6 +34,7 @@ let counter = 0;
  * signed upload with progress, then the server-side validation and malware scan.
  */
 export function useAttachments(initial?: { files: DraftView["attachments"]; altTexts?: Record<string, string> }) {
+  const t = useT();
   const [items, setItems] = useState<Attachment[]>(() =>
     (initial?.files ?? []).map((file) => ({
       key: `att-${++counter}`,
@@ -78,11 +81,11 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
       accepted = files.slice(0, 1);
     } else {
       if (hasDoc || hasVideo) {
-        setNotice(`A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the ${hasDoc ? "PDF" : "video"} first.`);
+        setNotice((hasDoc ? t("A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the PDF first.") : t("A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the video first.")));
         return;
       }
       accepted = files.slice(0, Math.max(0, maxImages - imageCount));
-      if (accepted.length < files.length) setNotice(maxImages === 1 ? "An article takes one cover image." : `You can add up to ${maxImages} images.`);
+      if (accepted.length < files.length) setNotice(maxImages === 1 ? "An article takes one cover image." : t("You can add up to {maxImages} images.", { maxImages }));
     }
 
     const next: Attachment[] = accepted.map((file) => {
@@ -160,10 +163,10 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
 
 export type AttachmentsState = ReturnType<typeof useAttachments>;
 
-function statusText(item: Attachment) {
+function statusText(t: Translate, item: Attachment) {
   switch (item.status) {
     case "uploading":
-      return `Uploading ${Math.round(item.progress * 100)}%`;
+      return t("Uploading {percent}%", { percent: Math.round(item.progress * 100) });
     case "scanning":
       return item.purpose === "post_video" ? "Processing video… longer videos can take a few minutes" : "Checking file…";
     case "ready":
@@ -189,7 +192,7 @@ function AltTextField({ item, onChange }: { item: Attachment; onChange: (alt: st
         className="flex w-fit items-center gap-1 rounded-sm text-xs font-medium text-primary-light hover:underline"
       >
         <Icon name="plus" size={12} />
-        Add description<span className="sr-only"> for {item.name}</span>
+        Add description<span className="sr-only"> <T vars={{ name: item.name }}>{"for {name}"}</T></span>
       </button>
     );
   }
@@ -210,11 +213,11 @@ function AltTextField({ item, onChange }: { item: Attachment; onChange: (alt: st
           aria-describedby={`${id}-count`}
           className="h-8 w-full rounded-md border border-line bg-card ps-2.5 pe-16 text-xs text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
         />
-        <span id={`${id}-count`} className={cn("pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-[11px]", near ? "text-warning" : "text-disabled")}>
+        <span id={`${id}-count`} className={cn("pointer-events-none absolute end-2.5 inset-y-0 my-auto h-fit text-[11px]", near ? "text-warning" : "text-disabled")}>
           <span aria-hidden="true">
             {item.alt.length}/{ALT_TEXT_MAX_CHARS}
           </span>
-          <span className="sr-only">Up to {ALT_TEXT_MAX_CHARS} characters</span>
+          <span className="sr-only"><T vars={{ ALTTEXTMAXCHARS: ALT_TEXT_MAX_CHARS }}>{"Up to {ALTTEXTMAXCHARS} characters"}</T></span>
         </span>
       </div>
     </div>
@@ -236,6 +239,7 @@ export function AttachmentPicker({
   /** "cover": one article cover image. */
   variant?: "attachments" | "cover";
 }) {
+  const t = useT();
   const { items, notice, add, remove, setAlt } = state;
   const images = items.filter((i) => i.purpose === "post_image" && i.status !== "rejected").length;
   const full =
@@ -292,7 +296,7 @@ export function AttachmentPicker({
             : mode === "image"
               ? "Up to 4 images. JPEG, PNG or WebP, 5 MB each."
               : mode === "video"
-                ? `One video: MP4, MOV or WebM, ${videoGb} GB max.${maxSeconds ? ` Posts show up to ${formatDuration(maxSeconds)}: if yours is longer, you choose which part to post.` : ""}`
+                ? `${t("One video: MP4, MOV or WebM, {size} GB max.", { size: videoGb })}${maxSeconds ? ` ${t("Posts show up to {duration}: if yours is longer, you choose which part to post.", { duration: formatDuration(maxSeconds) })}` : ""}`
                 : "One PDF, up to 10 MB."}{" "}
           {!cover && "Files are checked for safety before anyone else sees them."}
         </p>
@@ -326,13 +330,13 @@ export function AttachmentPicker({
                 <span className="truncate text-sm font-medium text-ink">{item.name}</span>
                 <span className={cn("text-xs", item.status === "rejected" ? "text-error" : item.status === "ready" ? "text-success" : "text-secondary")}>
                   {item.size > 0 && `${formatBytes(item.size)} · `}
-                  {statusText(item)}
+                  {statusText(t, item)}
                 </span>
                 {(item.status === "uploading" || item.status === "scanning") && (
                   <span
                     className="h-1 w-full overflow-hidden rounded bg-muted"
                     role="progressbar"
-                    aria-label={`Uploading ${item.name}`}
+                    aria-label={t("Uploading {name}", { name: item.name })}
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={Math.round(item.progress * 100)}
@@ -349,7 +353,7 @@ export function AttachmentPicker({
                 type="button"
                 onClick={() => remove(item.key)}
                 className="shrink-0 rounded-md p-1.5 text-secondary hover:bg-muted hover:text-error"
-                aria-label={`Remove ${item.name}`}
+                aria-label={t("Remove {name}", { name: item.name })}
               >
                 <Icon name="x" size={16} />
               </button>

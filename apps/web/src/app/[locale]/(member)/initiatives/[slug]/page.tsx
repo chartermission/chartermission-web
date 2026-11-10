@@ -15,6 +15,7 @@ import {
 } from "@/components/initiatives/initiative-sections";
 import { JoinRequestProvider, JoinRequestTrigger } from "@/components/initiatives/join-request";
 import { getInitiative, initiativeStatusMeta, initiatives } from "@/lib/mock/initiatives";
+import { getT } from "@/i18n/server";
 
 export function generateStaticParams() {
   return initiatives.map(({ slug }) => ({ slug }));
@@ -53,6 +54,7 @@ function InitiativeSkeleton() {
 }
 
 async function InitiativeDetail({ params }: Pick<PageProps<"/[locale]/initiatives/[slug]">, "params">) {
+  const t = await getT();
   const { slug } = await params;
   const initiative = getInitiative(slug);
   if (!initiative) notFound();
@@ -62,15 +64,15 @@ async function InitiativeDetail({ params }: Pick<PageProps<"/[locale]/initiative
   const recruiting = initiative.status === "recruiting";
   const stats = [
     { value: numberFormat.format(initiative.collaborators), label: "collaborators" },
-    { value: `${done} of ${initiative.milestones.length}`, label: "milestones" },
+    { value: t("{done} of {total}", { done, total: initiative.milestones.length }), label: "milestones" },
     { value: numberFormat.format(initiative.countries), label: "countries" },
     { value: numberFormat.format(initiative.followers), label: "followers" },
   ];
   const tabs = [
     { value: "overview", label: "Overview" },
-    { value: "updates", label: `Updates (${initiative.updatesCount})` },
+    { value: "updates", label: t("Updates ({count})", { count: initiative.updatesCount }) },
     { value: "milestones", label: "Milestones" },
-    { value: "people", label: `People (${initiative.collaborators})` },
+    { value: "people", label: t("People ({count})", { count: initiative.collaborators }) },
   ];
 
   return (
@@ -139,7 +141,7 @@ async function InitiativeDetail({ params }: Pick<PageProps<"/[locale]/initiative
         </section>
 
         <Tabs values={tabs.map((tab) => tab.value)} defaultValue="overview">
-          <TabList label={`${initiative.title} sections`} tabs={tabs} />
+          <TabList label={t("{title} sections", { title: initiative.title })} tabs={tabs} />
 
           <div className="flex flex-col items-start gap-6 lg:flex-row">
             <div className="flex w-full min-w-0 flex-1 flex-col">

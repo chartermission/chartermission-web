@@ -7,6 +7,7 @@ import { ImageCropDialog, assertCroppable } from "@/components/account/image-cro
 import { isApiError } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
 import { PageLogo } from "./page-logo";
+import { T, useT } from "@/i18n/client";
 
 type Status = { kind: "idle" } | { kind: "uploading"; progress: number } | { kind: "processing" } | { kind: "error"; text: string };
 
@@ -26,6 +27,7 @@ export function PagePictureField({
   url: string | null;
   onChange: (picture: { fileId: string | null; url: string | null }) => void;
 }) {
+  const t = useT();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -86,7 +88,7 @@ export function PagePictureField({
               }}
             />
             <Button variant="secondary" size="small" disabled={busy} onClick={() => input.current?.click()} aria-describedby={`${id}-hint`}>
-              {url ? `Change ${kind}` : `Upload ${kind}`}
+              {url ? t("Change {kind}", { kind }) : t("Upload {kind}", { kind })}
             </Button>
             {url && (
               <Button variant="ghost" size="small" disabled={busy} onClick={() => onChange({ fileId: null, url: null })}>
@@ -98,7 +100,7 @@ export function PagePictureField({
             {kind === "logo" ? "A square image, at least 300 × 300." : "A wide image works best."} JPEG, PNG or WebP. You can crop it before saving.
           </p>
           <div aria-live="polite" className="empty:hidden">
-            {status.kind === "uploading" && <span className="text-xs text-secondary">Uploading… {Math.round(status.progress * 100)}%</span>}
+            {status.kind === "uploading" && <span className="text-xs text-secondary"><T vars={{ number: Math.round(status.progress * 100) }}>{"Uploading… {number}%"}</T></span>}
             {status.kind === "processing" && <span className="text-xs text-secondary">Checking the picture…</span>}
             {status.kind === "error" && <span className="text-xs text-error">{status.text}</span>}
           </div>

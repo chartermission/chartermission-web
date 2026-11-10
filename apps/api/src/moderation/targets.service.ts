@@ -43,7 +43,7 @@ export function hrefFor(
     case 'comment':
       return `/posts/${extra.postId}#comment-${id}`;
     case 'member':
-      return `/members/${extra.handle ?? id}`;
+      return `/${extra.handle ?? id}`;
     case 'hashtag':
       return `/topics/${extra.tag ?? id}`;
     case 'story':

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import type { AdminChapterRow, Taxonomies } from "@chartermission/contracts";
+import { CHAPTER_POSTS_DEFAULTS, type AdminChapterRow, type ChapterPostsSettings, type Taxonomies } from "@chartermission/contracts";
 import { ChaptersConsole } from "@/components/chapters/chapters-console";
 import { PageHeader } from "@/components/shell/page-header";
 import { SkeletonTable } from "@/components/skeletons";
@@ -14,13 +14,17 @@ export const metadata: Metadata = { title: "Chapters" };
 async function Chapters() {
   const viewer = await requireViewer("/chapters");
   if (!can(viewer, PERM.chaptersAdmin)) return <NoAccess section="chapters" />;
-  let data: [AdminChapterRow[], Taxonomies];
+  let data: [AdminChapterRow[], Taxonomies, ChapterPostsSettings];
   try {
-    data = await Promise.all([apiGet<AdminChapterRow[]>("/admin/chapters"), apiGet<Taxonomies>("/taxonomies")]);
+    data = await Promise.all([
+      apiGet<AdminChapterRow[]>("/admin/chapters"),
+      apiGet<Taxonomies>("/taxonomies"),
+      apiGet<ChapterPostsSettings>("/admin/settings/chapter-posts").catch(() => CHAPTER_POSTS_DEFAULTS),
+    ]);
   } catch (e) {
     return <LoadError message={e instanceof ApiError ? e.message : "Chapters couldn’t be loaded."} />;
   }
-  return <ChaptersConsole initial={data[0]} countries={data[1].countries} />;
+  return <ChaptersConsole initial={data[0]} countries={data[1].countries} postRule={data[2]} />;
 }
 
 /** Chapter catalogue: one chapter per country, at home and in the diaspora. */
@@ -29,7 +33,7 @@ export default function ChaptersPage() {
     <>
       <PageHeader
         title="Chapters"
-        description="Add, rename, deactivate or remove chapters, and set their pictures and covers. Chapters without an upload use the generated brand design."
+        description="Add, rename, deactivate or remove chapters, set their pictures and covers, and decide whether members’ posts appear straight away or wait for approval."
       />
       <Suspense fallback={<SkeletonTable label="Loading chapters" rows={8} />}>
         <Chapters />

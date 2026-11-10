@@ -8,12 +8,14 @@ import { api } from "@/lib/api/client";
 import { dateHeading, monthKey, monthLabel, monthOf, monthWeeks, shiftMonth, weekdayInitials, type MonthRef } from "./month-grid";
 import { dayKey } from "./time";
 import { useViewerZone } from "./use-viewer-zone";
+import { useIntlTag } from "@/i18n/client";
 
 /**
  * Right-rail month calendar (Figma node 10:1514). Days with events (in the viewer's zone, from
  * GET /events/calendar) carry an orange dot and open that day in the calendar view.
  */
 export function MiniCalendar() {
+  const intl = useIntlTag();
   const zone = useViewerZone();
   const today = zone ? dayKey(new Date(), zone) : null;
   const [picked, setPicked] = useState<MonthRef | null>(null);
@@ -32,7 +34,7 @@ export function MiniCalendar() {
 
   if (!month) return <Panel aria-hidden="true" className="h-[340px]" />;
   const counts = loaded?.id === `${id}|${zone}` ? loaded.counts : new Map<string, number>();
-  const label = monthLabel(month);
+  const label = monthLabel(intl, month);
 
   return (
     <Panel aria-label="Event calendar" className="flex flex-col gap-3 p-5">
@@ -50,7 +52,7 @@ export function MiniCalendar() {
         </div>
       </div>
       <div className="grid grid-cols-7 justify-items-center" aria-hidden="true">
-        {weekdayInitials.map((day, index) => (
+        {weekdayInitials(intl).map((day, index) => (
           <span key={index} className="w-9 text-center text-xs text-disabled">
             {day}
           </span>
@@ -74,7 +76,7 @@ export function MiniCalendar() {
               <Link
                 key={date}
                 href={`/events?view=calendar&month=${date.slice(0, 7)}&day=${date}`}
-                aria-label={`${dateHeading(date)}: ${count} ${count === 1 ? "event" : "events"}`}
+                aria-label={`${dateHeading(intl, date)}: ${count} ${count === 1 ? "event" : "events"}`}
                 className={cn(
                   "flex size-9 flex-col items-center justify-center gap-0.5 rounded-lg text-sm font-medium",
                   isToday ? "bg-primary text-inverse" : "text-ink hover:bg-primary-tint-2",

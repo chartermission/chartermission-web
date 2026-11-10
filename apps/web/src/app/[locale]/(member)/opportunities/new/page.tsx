@@ -6,8 +6,12 @@ import { requireClientViewer } from "@/components/social/data";
 import { VerifyEmailPrompt } from "@/components/social/errors";
 import { PanelSkeleton } from "@/components/social/skeletons";
 import { formOptions } from "../form-data";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Post an opportunity" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Post an opportunity") };
+}
 
 async function NewForm() {
   const viewer = await requireClientViewer("/opportunities/new");

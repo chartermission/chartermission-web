@@ -2,15 +2,15 @@
 export const ARTICLES_PAGE = 6;
 
 /** "3 Nov" this year, "3 Nov 2025" otherwise. */
-export function articleDate(iso: string, now = new Date()): string {
+export function articleDate(intl: string, iso: string, now = new Date()): string {
   const date = new Date(iso);
   const sameYear = date.getFullYear() === now.getFullYear();
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+  return date.toLocaleDateString(intl, { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
 }
 
 /** "3 November 2026", for bylines. */
-export function articleLongDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+export function articleLongDate(intl: string, iso: string): string {
+  return new Date(iso).toLocaleDateString(intl, { day: "numeric", month: "long", year: "numeric" });
 }
 
 /** The body without a trailing line of hashtags (the reader shows them as chips). */

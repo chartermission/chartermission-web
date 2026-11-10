@@ -21,6 +21,6 @@ import { ExpiryService } from './expiry.js';
     ModerationEventsService,
     ExpiryService,
   ],
-  exports: [TargetsService, ModerationActionsService, ExpiryService],
+  exports: [TargetsService, ModerationActionsService, ExpiryService, ReportsService],
 })
 export class ModerationModule {}

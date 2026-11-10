@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { usePathname } from "@/i18n/client";
+import { usePathname, useT } from "@/i18n/client";
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { COURSE_LEVEL_LABELS, type CourseDuration, type CourseLevel, type CourseSummary, type LearningHub, type Page } from "@chartermission/contracts";
 import { Icon, buttonClasses, cn } from "@chartermission/ui";
@@ -57,6 +57,7 @@ function CourseGrid({
   onClear: () => void;
   onClearSaved: () => void;
 }) {
+  const t = useT();
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [loading, setLoading] = useState(false);
@@ -86,7 +87,7 @@ function CourseGrid({
         });
         setAdded((current) => ({ ...current, ...Object.fromEntries(page.items.map((c, order) => [c.id, order])) }));
         setCursor(page.nextCursor);
-        setAnnouncement(`${page.items.length === 1 ? "1 more course" : `${page.items.length} more courses`} loaded.${page.nextCursor ? "" : " That’s every course."}`);
+        setAnnouncement(`${t("{count} more courses loaded.", { count: page.items.length })}${page.nextCursor ? "" : ` ${t("That’s every course.")}`}`);
         const first = page.items[0];
         if (fromButton && first) {
           requestAnimationFrame(() => gridRef.current?.querySelector<HTMLAnchorElement>(`[data-course-id="${CSS.escape(first.id)}"] h3 a`)?.focus());
@@ -99,7 +100,7 @@ function CourseGrid({
         setLoading(false);
       }
     },
-    [filters],
+    [filters, t],
   );
 
   useEffect(() => {
@@ -111,7 +112,7 @@ function CourseGrid({
   }, [cursor, loading, error, load]);
 
   const total = cursor ? knownTotal(filters, facets) : items.length;
-  const countLabel = total !== null ? courses(total) : `${items.length}+ courses`;
+  const countLabel = total !== null ? courses(total) : t("{count}+ courses", { count: items.length });
   const onlySaved = filters.saved && !hasActiveFilters({ ...filters, saved: false });
 
   return (
@@ -242,6 +243,7 @@ export function LearningBrowser({
   error?: string | null;
   facets: CatalogueFacets;
 }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
@@ -320,7 +322,7 @@ export function LearningBrowser({
       ? facets.levels.map((l) => ({ value: l.level, label: `${COURSE_LEVEL_LABELS[l.level]} (${l.courses})` }))
       : (Object.keys(COURSE_LEVEL_LABELS) as CourseLevel[]).map((level) => ({ value: level, label: COURSE_LEVEL_LABELS[level] }))),
   ];
-  const heading = shown.saved ? "Saved courses" : activeTopic ? `${activeTopic.name} courses` : "All courses";
+  const heading = shown.saved ? "Saved courses" : activeTopic ? t("{name} courses", { name: activeTopic.name }) : "All courses";
   const gridKey = filtersToSearch(filters);
 
   const chip = (active: boolean) =>

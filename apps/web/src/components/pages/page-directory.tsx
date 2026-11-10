@@ -65,7 +65,7 @@ export function PageDirectory({ initial }: { initial: Page<PageSummary> }) {
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[240px] flex-1">
           <span className="sr-only">Search pages</span>
-          <Icon name="search" size={18} className="pointer-events-none absolute top-1/2 start-3 -translate-y-1/2 text-secondary" />
+          <Icon name="search" size={18} className="pointer-events-none absolute inset-y-0 my-auto h-fit start-3 text-secondary" />
           <input
             type="search"
             value={q}

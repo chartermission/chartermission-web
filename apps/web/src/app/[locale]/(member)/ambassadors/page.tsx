@@ -8,11 +8,15 @@ import { PageHeader, PageShell } from "@/components/discover/page-shell";
 import { PanelSkeleton } from "@/components/social/skeletons";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { getTaxonomies, groupCountries } from "@/lib/taxonomies";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Ambassador programme",
-  description: "Lead your country's Charter Mission chapter as an Ambassador, or nominate someone who would.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Ambassador programme"),
+    description: t("Lead your country's Charter Mission chapter as an Ambassador, or nominate someone who would."),
+  };
+}
 
 async function Programme() {
   const viewer = await requireViewer("/ambassadors");

@@ -37,6 +37,10 @@ export type AdminChapterRow = {
   photoUrl: string | null;
   photoCredit: string | null;
   photoCreditUrl: string | null;
+  /** This chapter's own rule for members' posts; null follows the platform setting. */
+  postApproval: "direct" | "review" | null;
+  /** Posts waiting for the chapter team's approval. */
+  pendingPosts: number;
   followers: number;
   posts: number;
   createdAt: string;
@@ -77,6 +81,8 @@ export const AdminChapterUpdateInput = z
     photoUrl: z.string().trim().url().max(600).regex(/^https:\/\//, "Use an https:// image address").nullable(),
     photoCredit: z.string().trim().max(120).nullable(),
     photoCreditUrl: z.string().trim().url().max(600).nullable(),
+    /** "direct" or "review" for this chapter only; null follows the platform setting. */
+    postApproval: z.enum(["direct", "review"]).nullable(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "Nothing to update");

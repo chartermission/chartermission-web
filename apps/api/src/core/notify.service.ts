@@ -58,6 +58,10 @@ export const CATEGORY_OF: Record<NotificationType, NotificationCategory | 'alway
   page_admin_added: 'always',
   verification_approved: 'always',
   verification_declined: 'always',
+  chapter_post_reviewed: 'always',
+  chapter_post_pending: 'always',
+  chapter_ban: 'always',
+  message_received: 'connections',
 };
 
 export interface NotifyInput {

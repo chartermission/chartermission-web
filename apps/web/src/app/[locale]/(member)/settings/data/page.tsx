@@ -6,8 +6,12 @@ import { settle } from "@/components/account/settle";
 import { SettingsCardSkeleton, SettingsHeader } from "@/components/settings/settings-card";
 import { ConsentHistory, DataActions } from "@/components/settings/your-data";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Your data" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Your data") };
+}
 
 async function Consents() {
   const result = await settle(apiGet<ConsentRecordView[]>("/me/consents"));

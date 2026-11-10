@@ -40,7 +40,7 @@ export function TextField({
           className={inputClasses(!!error, cn(trailing ? "pr-16" : undefined, inputClassName))}
           {...rest}
         />
-        {trailing && <span className="absolute top-1/2 right-1.5 -translate-y-1/2">{trailing}</span>}
+        {trailing && <span className="absolute inset-y-0 right-1.5 my-auto h-fit">{trailing}</span>}
       </span>
       {error ? (
         <p id={`${id}-error`} role="alert" className="flex items-center gap-1.5 text-xs text-error">

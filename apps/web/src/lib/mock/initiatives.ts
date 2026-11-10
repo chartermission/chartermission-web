@@ -113,7 +113,7 @@ export const initiatives: Initiative[] = [
     updates: [
       {
         id: "milestone-3",
-        author: { name: amara.name, verified: true, tone: amara.tone, href: `/members/${amara.handle}` },
+        author: { name: amara.name, verified: true, tone: amara.tone, href: `/${amara.handle}` },
         meta: "Update · Initiative lead · 3d",
         body: "Milestone 3 done ✅ Our first refrigerated truck reached Apapa in 31 hours with zero spoilage. Thank you to the 18 collaborators who made this happen.",
         image: { label: "Agbara pilot hub · first shipment" },
@@ -172,7 +172,7 @@ export const initiatives: Initiative[] = [
     updates: [
       {
         id: "homes-3200",
-        author: { name: wanjiru.name, tone: wanjiru.tone, href: `/members/${wanjiru.handle}` },
+        author: { name: wanjiru.name, tone: wanjiru.tone, href: `/${wanjiru.handle}` },
         meta: "Update · Initiative lead · 1w",
         body: "3,200 households are now cooking without charcoal. Next stop: the clean-cooking hackathon on 28 November — we still need hardware mentors.",
         tags: ["CleanCooking", "ClimateAction"],
@@ -224,7 +224,7 @@ export const initiatives: Initiative[] = [
     updates: [
       {
         id: "curriculum",
-        author: { name: kwame.name, verified: true, tone: kwame.tone, href: `/members/${kwame.handle}` },
+        author: { name: kwame.name, verified: true, tone: kwame.tone, href: `/${kwame.handle}` },
         meta: "Update · Initiative lead · 2w",
         body: "The 12-week curriculum is drafted. We're now looking for weekend instructors and online mentors from the diaspora.",
         tags: ["WomenInTech", "Education"],

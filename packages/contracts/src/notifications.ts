@@ -59,6 +59,15 @@ export const NotificationType = z.enum([
   "verification_approved",
   /** Your (or your page's) verification request was declined, with the reason. Icon alert. */
   "verification_declined",
+  /* Chapters. Always sent (they are about the member's own post or membership). */
+  /** Your post was approved for, declined by, held by or removed from a chapter. Icon check or alert. */
+  "chapter_post_reviewed",
+  /** To a chapter's team: a post is waiting for approval. Icon shield. */
+  "chapter_post_pending",
+  /** You were barred from a chapter. Icon alert. */
+  "chapter_ban",
+  /** A member sent you a private message (at most one notice per conversation per day). Icon avatar. */
+  "message_received",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 

@@ -1,16 +1,19 @@
 import Link from "next/link";
 import type { LearningPathSummary } from "@chartermission/contracts";
 import { Chip, Icon, cn } from "@chartermission/ui";
-import { plural } from "@/components/social/format";
+
 import { formatMinutes, levelLabel, levelTone, pathHref } from "./format";
+import type { Translate } from "@/i18n/translate";
+import { getT } from "@/i18n/server";
 
 /** "5 courses · 14 hours" */
-export function pathMeta(path: Pick<LearningPathSummary, "courseCount" | "totalMinutes">) {
-  return [plural(path.courseCount, "course"), formatMinutes(path.totalMinutes)].filter(Boolean).join(" · ");
+export function pathMeta(t: Translate, path: Pick<LearningPathSummary, "courseCount" | "totalMinutes">) {
+  return [t("{count} courses", { count: path.courseCount }), formatMinutes(path.totalMinutes)].filter(Boolean).join(" · ");
 }
 
 /** White card for a learning path (hub band, course page). The whole card opens the path page. */
-export function PathCard({ path, className, headingLevel = 3 }: { path: LearningPathSummary; className?: string; headingLevel?: 3 | 4 }) {
+export async function PathCard({ path, className, headingLevel = 3 }: { path: LearningPathSummary; className?: string; headingLevel?: 3 | 4 }) {
+  const t = await getT();
   const Heading = headingLevel === 4 ? "h4" : "h3";
   return (
     <article
@@ -28,7 +31,7 @@ export function PathCard({ path, className, headingLevel = 3 }: { path: Learning
             {levelLabel(path.level)}
           </Chip>
         )}
-        <span className="text-xs text-secondary">{pathMeta(path)}</span>
+        <span className="text-xs text-secondary">{pathMeta(t, path)}</span>
       </div>
       <Heading className="text-h3 text-ink">
         <Link href={pathHref(path.slug)} className="outline-none after:absolute after:inset-0 after:content-[''] group-hover:text-primary-light">

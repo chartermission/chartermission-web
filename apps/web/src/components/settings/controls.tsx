@@ -75,7 +75,7 @@ export function VisibilitySelect({
       <Icon
         name={current.icon}
         size={16}
-        className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-primary-light"
+        className="pointer-events-none absolute start-3 inset-y-0 my-auto h-fit text-primary-light"
       />
       <select
         value={value}
@@ -122,7 +122,7 @@ function Chevron() {
     <Icon
       name="chevron-down"
       size={16}
-      className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-secondary"
+      className="pointer-events-none absolute end-3 inset-y-0 my-auto h-fit text-secondary"
     />
   );
 }

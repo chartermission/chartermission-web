@@ -103,7 +103,7 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[260px] flex-1">
           <span className="sr-only">Search members</span>
-          <Icon name="search" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-secondary" />
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 left-3 my-auto h-fit text-secondary" />
           <input
             type="search"
             value={query}
@@ -138,7 +138,7 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
               </option>
             ))}
           </select>
-          <Icon name="chevron-down" size={14} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-secondary" />
+          <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 right-3 my-auto h-fit text-secondary" />
         </span>
       </div>
 
@@ -179,7 +179,7 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
                         <Avatar name={row.name} size={40} src={row.avatarUrl ?? undefined} />
                         <div className="flex min-w-0 flex-col">
                           <span className="flex items-center gap-1 font-medium text-ink">
-                            <Link href={`${WEB_URL}/members/${row.handle}`} target="_blank" className="hover:underline">
+                            <Link href={`${WEB_URL}/${row.handle}`} target="_blank" className="hover:underline">
                               {row.name}
                             </Link>
                             {row.verified && <Icon name="verified" size={16} className="text-primary-light" label="Verified" />}

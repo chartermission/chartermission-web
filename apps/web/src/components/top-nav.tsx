@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import type { MessagesUnread } from "@chartermission/contracts";
 import { usePathname, useT } from "@/i18n/client";
 import type { NavKey } from "@/components/nav-items";
 import { Icon, Logo, LogoMark, cn, type AvatarTone, type IconName } from "@chartermission/ui";
 import { UserMenu } from "@/components/account/user-menu";
+import { SearchBox } from "@/components/search/search-box";
+import { onMessagesChanged } from "@/components/messages/messages-events";
+import { api } from "@/lib/api/client";
 
 const links: { href: string; key: NavKey; icon: IconName }[] = [
   { href: "/feed", key: "home", icon: "home" },
@@ -13,6 +18,7 @@ const links: { href: string; key: NavKey; icon: IconName }[] = [
   { href: "/opportunities", key: "opportunities", icon: "briefcase" },
   { href: "/events", key: "events", icon: "calendar" },
   { href: "/learning", key: "learning", icon: "book" },
+  { href: "/messages", key: "messages", icon: "mail" },
   { href: "/notifications", key: "alerts", icon: "bell" },
 ];
 
@@ -29,8 +35,31 @@ export interface TopNavViewer {
 const focusedPaths = ["/onboarding"];
 
 /** Top nav that highlights the current section. Reads the URL, so render it inside a <Suspense> boundary. */
-export function TopNav({ viewer, unread = 0 }: { viewer: TopNavViewer | null; unread?: number }) {
-  return <TopNavBar viewer={viewer} unread={unread} pathname={usePathname()} />;
+export function TopNav({ viewer, unread = 0, unreadMessages = 0 }: { viewer: TopNavViewer | null; unread?: number; unreadMessages?: number }) {
+  return <TopNavBar viewer={viewer} unread={unread} unreadMessages={useUnreadMessages(unreadMessages)} pathname={usePathname()} />;
+}
+
+/** The Messages badge: starts from the server's count, then checks again every so often and whenever a conversation is read. */
+function useUnreadMessages(initial: number): number {
+  const [count, setCount] = useState(initial);
+  useEffect(() => {
+    let live = true;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      api<MessagesUnread>("/messages/unread").then(
+        (r) => live && setCount(r.unread),
+        () => undefined,
+      );
+    };
+    const timer = window.setInterval(refresh, 30000);
+    const off = onMessagesChanged(refresh);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+      off();
+    };
+  }, []);
+  return count;
 }
 
 /**
@@ -40,10 +69,12 @@ export function TopNav({ viewer, unread = 0 }: { viewer: TopNavViewer | null; un
 export function TopNavBar({
   viewer,
   unread = 0,
+  unreadMessages = 0,
   pathname,
 }: {
   viewer: TopNavViewer | null;
   unread?: number;
+  unreadMessages?: number;
   pathname: string | null;
 }) {
   const t = useT();
@@ -57,18 +88,7 @@ export function TopNavBar({
           <LogoMark className="md:hidden" />
         </Link>
         {!focused && (
-          <form action="/search" role="search" className="w-[420px] max-w-full max-xl:w-[280px] max-lg:hidden">
-            <label className="flex h-10 items-center gap-2.5 rounded-lg bg-muted px-3.5 text-secondary focus-within:ring-2 focus-within:ring-primary-light">
-              <Icon name="search" size={18} />
-              <span className="sr-only">Search</span>
-              <input
-                name="q"
-                type="search"
-                placeholder={t("nav.searchPlaceholder")}
-                className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-disabled"
-              />
-            </label>
-          </form>
+          <SearchBox className="w-[420px] max-w-full max-2xl:w-[300px] max-xl:w-[220px] max-lg:hidden" />
         )}
         <div className="flex-1" />
         {!focused && (
@@ -97,9 +117,9 @@ export function TopNavBar({
                 >
                   <span className="relative">
                     <Icon name={link.icon} size={20} />
-                    {link.href === "/notifications" && unread > 0 ? (
+                    {(link.href === "/notifications" ? unread : link.href === "/messages" ? unreadMessages : 0) > 0 ? (
                       <span className="absolute -top-1.5 -end-2 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 font-semibold text-inverse">
-                        {unread > 99 ? "99+" : unread}
+                        {link.href === "/messages" ? (unreadMessages > 99 ? "99+" : unreadMessages) : unread > 99 ? "99+" : unread}
                         <span className="sr-only"> {t("nav.unread")}</span>
                       </span>
                     ) : null}

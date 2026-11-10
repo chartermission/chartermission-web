@@ -1,30 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import { Avatar, Chip, buttonClasses, cn } from "@chartermission/ui";
-import { initiativeStatusMeta, type Initiative } from "@/lib/mock/initiatives";
+import { initiativeStatusMeta } from "@/lib/mock/initiatives";
+import type { InitiativeSummary } from "./initiative-summary";
 import { FollowButton } from "./initiative-actions";
 import { JoinRequestProvider, JoinRequestTrigger } from "./join-request";
+import { T, useT } from "@/i18n/client";
 
-export type InitiativeSummary = Pick<
-  Initiative,
-  "slug" | "title" | "theme" | "status" | "country" | "summary" | "progressLabel" | "percent" | "lead" | "collaborators"
-> & { roles: { id: string; title: string }[] };
-
-export function toInitiativeSummary(initiative: Initiative): InitiativeSummary {
-  const { slug, title, theme, status, country, summary, progressLabel, percent, lead, collaborators, roles } = initiative;
-  return {
-    slug,
-    title,
-    theme,
-    status,
-    country,
-    summary,
-    progressLabel,
-    percent,
-    lead,
-    collaborators,
-    roles: roles.map(({ id, title: roleTitle }) => ({ id, title: roleTitle })),
-  };
-}
 
 /**
  * Directory card — Figma "Initiative card" (node 17:101). App-local rather
@@ -32,6 +15,7 @@ export function toInitiativeSummary(initiative: Initiative): InitiativeSummary {
  * own tone and the footer action varies by status (join dialog / follow / view).
  */
 export function InitiativeTile({ initiative, className }: { initiative: InitiativeSummary; className?: string }) {
+  const t = useT();
   const status = initiativeStatusMeta[initiative.status];
   const href = `/initiatives/${initiative.slug}`;
 
@@ -58,7 +42,7 @@ export function InitiativeTile({ initiative, className }: { initiative: Initiati
           aria-valuenow={initiative.percent}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={`${initiative.title} progress`}
+          aria-label={t("{title} progress", { title: initiative.title })}
         >
           <div className="h-full rounded-[3px] bg-accent" style={{ width: `${initiative.percent}%` }} />
         </div>
@@ -68,7 +52,7 @@ export function InitiativeTile({ initiative, className }: { initiative: Initiati
         <span className="flex min-w-0 items-center gap-2 text-xs text-secondary">
           <Avatar name={initiative.lead.name} size={24} tone={initiative.lead.tone} />
           <span className="truncate">
-            Led by {initiative.lead.name} · {initiative.collaborators} collaborators
+            <T vars={{ name: initiative.lead.name, collaborators: initiative.collaborators }}>{"Led by {name} · {collaborators} collaborators"}</T>
           </span>
         </span>
         <TileAction initiative={initiative} href={href} />
@@ -78,6 +62,7 @@ export function InitiativeTile({ initiative, className }: { initiative: Initiati
 }
 
 function TileAction({ initiative, href }: { initiative: InitiativeSummary; href: string }) {
+  const t = useT();
   if (initiative.status === "recruiting") {
     return (
       <JoinRequestProvider
@@ -88,7 +73,7 @@ function TileAction({ initiative, href }: { initiative: InitiativeSummary; href:
           roles: initiative.roles,
         }}
       >
-        <JoinRequestTrigger aria-label={`Request to join ${initiative.title}`}>Request to join</JoinRequestTrigger>
+        <JoinRequestTrigger aria-label={t("Request to join {title}", { title: initiative.title })}>Request to join</JoinRequestTrigger>
       </JoinRequestProvider>
     );
   }

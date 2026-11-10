@@ -9,10 +9,11 @@ import { staggerStyle } from "@/components/motion";
 import { ErrorNotice } from "./errors";
 import { PostCard } from "./post-card";
 import type { MenuItem } from "./menu";
-import { onPostCreated } from "./post-events";
+import { onPostCreated, onPostRemoved } from "./post-events";
 import { PostSkeleton } from "./skeletons";
 import { toast } from "./toast";
 import type { Viewer } from "./viewer";
+import { useT } from "@/i18n/client";
 
 type Query = Record<string, string | number | boolean | undefined>;
 
@@ -91,6 +92,7 @@ export function PostStream({
   /** With acceptNew: which newly created posts belong in this list (default: all). */
   acceptCreated?: (post: PostView) => boolean;
 }) {
+  const t = useT();
   const [posts, setPosts] = useState<PostView[]>(initial?.items ?? []);
   const [cursor, setCursor] = useState<string | null>(initial ? initial.nextCursor : null);
   const [loading, setLoading] = useState(!initial);
@@ -146,7 +148,7 @@ export function PostStream({
         setCursor(page.nextCursor);
         if (next) {
           setAnnouncement(
-            `${added.length === 1 ? "1 more post" : `${added.length} more posts`} loaded.${page.nextCursor ? "" : " You’re all caught up."}`,
+            `${t("{count} more posts loaded.", { count: added.length })}${page.nextCursor ? "" : ` ${t("You’re all caught up.")}`}`,
           );
           const first = added[0];
           if (fromButton && first) requestAnimationFrame(() => focusPost(first.id));
@@ -159,7 +161,7 @@ export function PostStream({
         setLoading(false);
       }
     },
-    [path, focusPost],
+    [path, focusPost, t],
   );
 
   // First page on mount when the server didn't provide one (e.g. a tab opened later).
@@ -191,6 +193,16 @@ export function PostStream({
     });
   }, [acceptNew]);
 
+  // A post held or removed elsewhere on the page (chapter moderation) leaves this list too.
+  useEffect(
+    () =>
+      onPostRemoved((postId) => {
+        setPosts((current) => current.filter((p) => p.id !== postId));
+        setCreated((current) => current.filter((p) => p.id !== postId));
+      }),
+    [],
+  );
+
   const createdIds = new Set(created.map((p) => p.id));
   const all = [...created, ...posts.filter((p) => !createdIds.has(p.id))];
   const remove = (post: PostView, scope: "post" | "author") => {
@@ -216,14 +228,14 @@ export function PostStream({
       const delay = Math.round(Math.min(450, 80 + Math.abs(window.scrollY - top) / 6));
       setEntrances((current) => ({ ...current, ...Object.fromEntries(added.map((p, order) => [p.id, { kind: "arrive", order, delay } as Entrance])) }));
       const first = added[0];
-      setAnnouncement(added.length ? `${added.length === 1 ? "1 new post" : `${added.length} new posts`} added to the top of the feed` : "No new posts");
+      setAnnouncement(added.length ? t("{count} new posts added to the top of the feed", { count: added.length }) : "No new posts");
       if (section) {
         window.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       }
       if (first) requestAnimationFrame(() => focusPost(first.id));
       return added.length;
     },
-    [path, focusPost],
+    [path, focusPost, t],
   );
 
   const since = newest(posts);
@@ -304,6 +316,7 @@ function NewPostsPill({
   since: string | null;
   onShow: (since: string) => Promise<number>;
 }) {
+  const t = useT();
   const [result, setResult] = useState<FeedNewResponse & { since: string }>({ count: 0, authors: [], since: "" });
   const [busy, setBusy] = useState(false);
   // An empty list counts from when it was opened.
@@ -367,12 +380,12 @@ function NewPostsPill({
 
   // A count is only for the `since` it was asked with; newer posts on screen reset it.
   const { count, authors } = result.since === since ? result : { count: 0, authors: [] };
-  const text = `See ${count > 99 ? "99+" : count} new post${count === 1 ? "" : "s"}`;
+  const text = (count > 99 ? t("See 99+ new posts") : t("See {count} new posts", { count }));
   return (
     // Zero-height sticky row: the pill floats over the list and the -mb cancels the list gap.
     <div className="pointer-events-none sticky top-[92px] z-20 -mb-4 flex h-0 justify-center">
       <p className="sr-only" aria-live="polite">
-        {count > 0 ? `${count} new post${count === 1 ? "" : "s"} available` : ""}
+        {count > 0 ? t("{count} new posts available", { count }) : ""}
       </p>
       {count > 0 && (
         <button

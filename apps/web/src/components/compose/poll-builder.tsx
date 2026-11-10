@@ -2,6 +2,7 @@
 
 import { useId, useRef } from "react";
 import { Icon, cn } from "@chartermission/ui";
+import { T, useT } from "@/i18n/client";
 
 export const MIN_POLL_OPTIONS = 2;
 export const MAX_POLL_OPTIONS = 4;
@@ -36,6 +37,7 @@ export function PollBuilder({
   onRemove: () => void;
   error?: string | null;
 }) {
+  const t = useT();
   const id = useId();
   const refs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -105,7 +107,7 @@ export function PollBuilder({
             value={option}
             maxLength={MAX_POLL_OPTION_LENGTH}
             onChange={(event) => setOption(index, event.target.value)}
-            placeholder={`Option ${index + 1}`}
+            placeholder={t("Option {count}", { count: index + 1 })}
             aria-invalid={error && !option.trim() && index < MIN_POLL_OPTIONS ? true : undefined}
             className={cn(inputClasses, index >= MIN_POLL_OPTIONS && "pe-9")}
           />
@@ -113,8 +115,8 @@ export function PollBuilder({
             <button
               type="button"
               onClick={() => removeOption(index)}
-              aria-label={`Remove option ${index + 1}`}
-              className="absolute end-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-secondary hover:bg-muted hover:text-ink"
+              aria-label={t("Remove option {count}", { count: index + 1 })}
+              className="absolute end-2 inset-y-0 my-auto h-fit rounded-md p-1 text-secondary hover:bg-muted hover:text-ink"
             >
               <Icon name="x" size={14} />
             </button>
@@ -125,14 +127,14 @@ export function PollBuilder({
       {poll.options.length < MAX_POLL_OPTIONS && (
         <div>
           <label htmlFor={`${id}-add`} className="sr-only">
-            Add option {poll.options.length + 1} (up to {MAX_POLL_OPTIONS})
+            <T vars={{ count: poll.options.length + 1, MAXPOLLOPTIONS: MAX_POLL_OPTIONS }}>{"Add option {count} (up to {MAXPOLLOPTIONS})"}</T>
           </label>
           <input
             id={`${id}-add`}
             value=""
             maxLength={MAX_POLL_OPTION_LENGTH}
             onChange={(event) => addOption(event.target.value)}
-            placeholder={`Add option (up to ${MAX_POLL_OPTIONS})`}
+            placeholder={t("Add option (up to {MAXPOLLOPTIONS})", { MAXPOLLOPTIONS: MAX_POLL_OPTIONS })}
             className={inputClasses}
           />
         </div>
@@ -155,7 +157,7 @@ export function PollBuilder({
               </option>
             ))}
           </select>
-          <Icon name="chevron-down" size={14} className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary" />
+          <Icon name="chevron-down" size={14} className="pointer-events-none absolute end-2.5 inset-y-0 my-auto h-fit text-secondary" />
         </span>
       </div>
 

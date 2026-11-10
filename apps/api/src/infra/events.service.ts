@@ -27,6 +27,9 @@ export type DomainEvent =
   | { type: 'scheduled.failed'; draftId: string; authorId: string; reason: string }
   | { type: 'opportunity.applied'; applicationId: string }
   | { type: 'opportunity.application_decided'; applicationId: string; status: 'shortlisted' | 'accepted' | 'declined'; message: string | null }
+  | { type: 'chapter.post_pending'; postId: string; chapterId: string; authorId: string }
+  | { type: 'chapter.post_reviewed'; postId: string; chapterId: string; action: 'approve' | 'decline' | 'hold' | 'remove'; actorId: string }
+  | { type: 'chapter.banned'; chapterId: string; userId: string; actorId: string }
   | { type: 'page.reviewed'; pageId: string; action: 'approve' | 'reject' | 'suspend' | 'restore'; actorId: string }
   | { type: 'page.admin_added'; pageId: string; userId: string; actorId: string }
   | { type: 'verification.decided'; requestId: string };

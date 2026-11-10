@@ -19,6 +19,7 @@ const MEMBER_AREAS = [
   "/stories",
   "/pages",
   "/analytics",
+  "/messages",
 ];
 
 const needsSession = (pathname: string) =>
@@ -43,6 +44,19 @@ export function proxy(request: NextRequest) {
     const response = NextResponse.redirect(url);
     response.cookies.set(LOCALE_COOKIE, first, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
     return response;
+  }
+
+  // Profiles moved from /members/{username} to /{username}; old links and bookmarks still arrive.
+  if (/^\/members\/?$/.test(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/network";
+    return NextResponse.redirect(url, 308);
+  }
+  const oldProfile = /^\/members\/([^/]+)\/?$/.exec(pathname);
+  if (oldProfile) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/${oldProfile[1]}`;
+    return NextResponse.redirect(url, 308);
   }
 
   if (needsSession(pathname) && !request.cookies.has("cm_session")) {

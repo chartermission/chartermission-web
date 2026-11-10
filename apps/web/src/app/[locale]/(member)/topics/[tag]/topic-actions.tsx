@@ -6,6 +6,7 @@ import { api } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { Menu } from "@/components/social/menu";
 import { toast } from "@/components/social/toast";
+import { useT } from "@/i18n/client";
 
 /** Follow / unfollow (POST/DELETE /follows), mute (POST/DELETE /mutes) and report for a hashtag. */
 export function TopicActions({ tag, following: initialFollowing, muted: initialMuted, onFollowersChange }: {
@@ -14,6 +15,7 @@ export function TopicActions({ tag, following: initialFollowing, muted: initialM
   muted: boolean;
   onFollowersChange?: (delta: number) => void;
 }) {
+  const t = useT();
   const [following, setFollowing] = useState(initialFollowing);
   const [muted, setMuted] = useState(initialMuted);
   const [busy, setBusy] = useState(false);
@@ -27,7 +29,7 @@ export function TopicActions({ tag, following: initialFollowing, muted: initialM
     onFollowersChange?.(next ? 1 : -1);
     try {
       await api("/follows", { method: next ? "POST" : "DELETE", body: target });
-      toast.success(next ? `Following #${tag}. Its posts will show up in your feed.` : `Unfollowed #${tag}`);
+      toast.success(next ? t("Following #{tag}. Its posts will show up in your feed.", { tag }) : t("Unfollowed #{tag}", { tag }));
     } catch (e) {
       setFollowing(!next);
       onFollowersChange?.(next ? -1 : 1);
@@ -42,7 +44,7 @@ export function TopicActions({ tag, following: initialFollowing, muted: initialM
     try {
       await api("/mutes", { method: next ? "POST" : "DELETE", body: target });
       setMuted(next);
-      toast.success(next ? `Muted #${tag}. Posts with it won’t appear in your feed.` : `Unmuted #${tag}`);
+      toast.success(next ? t("Muted #{tag}. Posts with it won’t appear in your feed.", { tag }) : t("Unmuted #{tag}", { tag }));
     } catch (e) {
       toast.error(e);
     }
@@ -62,9 +64,9 @@ export function TopicActions({ tag, following: initialFollowing, muted: initialM
         </span>
       )}
       <Menu
-        label={`More options for #${tag}`}
+        label={t("More options for #{tag}", { tag })}
         items={[
-          { label: muted ? `Unmute #${tag}` : `Mute #${tag}`, icon: "eye-off", onSelect: toggleMute },
+          { label: muted ? t("Unmute #{tag}", { tag }) : t("Mute #{tag}", { tag }), icon: "eye-off", onSelect: toggleMute },
           { label: "Report hashtag", icon: "flag", onSelect: () => setReporting(true) },
         ]}
         trigger={

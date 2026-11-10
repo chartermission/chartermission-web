@@ -11,6 +11,8 @@ import { requestCompose } from "./compose-request";
 import { greetingFor, useDayPeriod, type DayPeriod } from "./day-period";
 import { hideForToday, useHiddenToday } from "./hidden-today";
 import { TimeMotif } from "./time-motif";
+import { useT } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 const wash: Record<DayPeriod, string> = {
   morning: "from-accent-light/80",
@@ -18,6 +20,22 @@ const wash: Record<DayPeriod, string> = {
   evening: "from-primary-tint/80",
   night: "from-primary-tint/80",
 };
+
+/** The nudge in the page language (the API sends English). */
+function nudgeLabel(t: Translate, nudge: { kind: WelcomeNudgeKind; label: string }, openQuestions: number): string {
+  switch (nudge.kind) {
+    case "complete_profile":
+      return t("Add a photo and headline so people recognise you");
+    case "first_post":
+      return t("Share your first update");
+    case "follow_chapter":
+      return t("Join your chapter");
+    case "answer_question":
+      return t("Help answer {count} open questions", { count: openQuestions });
+    default:
+      return nudge.label;
+  }
+}
 
 const nudgeIcon: Record<WelcomeNudgeKind, IconName> = {
   complete_profile: "user",
@@ -29,27 +47,27 @@ const nudgeIcon: Record<WelcomeNudgeKind, IconName> = {
 /** `short` is the phone wording, where the strip has to stay compact. */
 type Stat = { key: string; count: number; text: string; short: string; href: string; icon: IconName };
 
-function statsOf({ stats, chapter, lastVisitAt }: WelcomeSummary): Stat[] {
-  const s = (count: number, one: string, many = `${one}s`) => (count === 1 ? one : many);
+function statsOf(t: Translate, { stats, chapter, lastVisitAt }: WelcomeSummary): Stat[] {
+  // The number is printed separately, before each phrase; it is passed only to pick singular or plural.
   const all: Stat[] = [
     {
       key: "posts",
       count: stats.newPosts,
-      text: `new ${s(stats.newPosts, "post")} ${lastVisitAt ? "since your last visit" : "today"}`,
-      short: `new ${s(stats.newPosts, "post")}`,
+      text: lastVisitAt ? t("new posts since your last visit", { count: stats.newPosts }) : t("new posts today", { count: stats.newPosts }),
+      short: t("new posts", { count: stats.newPosts }),
       href: "/feed?tab=latest",
       icon: "message",
     },
-    { key: "questions", count: stats.openQuestions, text: `open ${s(stats.openQuestions, "question")}`, short: `open ${s(stats.openQuestions, "question")}`, href: "/feed?type=question&unanswered=true", icon: postTypeMeta.question.icon },
+    { key: "questions", count: stats.openQuestions, text: t("open questions", { count: stats.openQuestions }), short: t("open questions", { count: stats.openQuestions }), href: "/feed?type=question&unanswered=true", icon: postTypeMeta.question.icon },
     {
       key: "members",
       count: stats.newMembers,
-      text: chapter ? `new ${s(stats.newMembers, "member")} in ${chapter.name}` : `new ${s(stats.newMembers, "member")} this week`,
-      short: `new ${s(stats.newMembers, "member")}`,
+      text: chapter ? t("new members in {chapter}", { count: stats.newMembers, chapter: chapter.name }) : t("new members this week", { count: stats.newMembers }),
+      short: t("new members", { count: stats.newMembers }),
       href: chapter ? `/chapters/${chapter.slug}#members` : "/network?tab=directory&sort=recent",
       icon: "users",
     },
-    { key: "celebrations", count: stats.celebrations, text: `${s(stats.celebrations, "celebration")} this week`, short: s(stats.celebrations, "celebration"), href: "/feed?type=celebration", icon: postTypeMeta.celebration.icon },
+    { key: "celebrations", count: stats.celebrations, text: t("celebrations this week", { count: stats.celebrations }), short: t("celebrations", { count: stats.celebrations }), href: "/feed?type=celebration", icon: postTypeMeta.celebration.icon },
   ];
   return all.filter((stat) => stat.count > 0);
 }
@@ -60,6 +78,7 @@ function statsOf({ stats, chapter, lastVisitAt }: WelcomeSummary): Stat[] {
  * next step that can be put off until tomorrow.
  */
 export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
+  const t = useT();
   const headingId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const period = useDayPeriod();
@@ -69,13 +88,13 @@ export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
   const [announcement, setAnnouncement] = useState("");
 
   const firstWelcome = summary.isNewMember && !summary.lastVisitAt;
-  const heading = firstWelcome ? `Welcome to Charter Mission, ${firstName}` : period ? `${greetingFor[period]}, ${firstName}` : null;
+  const heading = firstWelcome ? t("Welcome to Charter Mission, {firstName}", { firstName }) : period ? t("{greeting}, {firstName}", { greeting: t(greetingFor[period]), firstName }) : null;
   const intro = firstWelcome
     ? "We’re glad you’re here. This is what’s happening in the community today."
     : summary.lastVisitAt
       ? "Welcome back. Here’s what’s new in the community."
       : "Here’s what’s happening in the community today.";
-  const stats = statsOf(summary);
+  const stats = statsOf(t, summary);
 
   function openNudge(event: MouseEvent<HTMLAnchorElement>) {
     // Already on the feed: open the composer in place instead of a round trip through ?compose=1.
@@ -111,7 +130,7 @@ export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
                 heading ? "opacity-100" : "opacity-0",
               )}
             >
-              {heading ?? `Welcome back, ${firstName}`}
+              {heading ?? t("Welcome back, {firstName}", { firstName })}
             </h2>
             <p className="text-sm text-secondary max-sm:hidden">{intro}</p>
             {stats.length > 0 ? (
@@ -142,7 +161,7 @@ export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
               className={buttonClasses({ size: "small", className: "max-w-full min-w-0 justify-start text-start" })}
             >
               <Icon name={nudgeIcon[nudge.kind]} size={16} className="shrink-0" />
-              <span className="min-w-0 whitespace-normal">{nudge.label}</span>
+              <span className="min-w-0 whitespace-normal">{nudgeLabel(t, nudge, summary.stats.openQuestions)}</span>
               <Icon name="chevron-right" size={16} className="shrink-0" />
             </Link>
             <button type="button" onClick={hideNudge} className="rounded-sm text-xs font-medium text-secondary hover:text-primary hover:underline">

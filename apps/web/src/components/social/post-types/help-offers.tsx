@@ -3,6 +3,7 @@ import type { HelpOfferView } from "@chartermission/contracts";
 import { Icon, Panel } from "@chartermission/ui";
 import { memberHref } from "../links";
 import { AuthorName, MemberAvatar, TimeAgo } from "../post-parts";
+import { T } from "@/i18n/client";
 
 /** "Offers of help" on the author's own request (GET /posts/{id}/help), with an empty state. */
 export function HelpOffersPanel({ offers, closed }: { offers: HelpOfferView[] | null; closed: boolean }) {
@@ -52,7 +53,7 @@ export function HelpOffersPanel({ offers, closed }: { offers: HelpOfferView[] | 
                   <p className="text-xs italic text-secondary">No note added</p>
                 )}
                 <Link href={memberHref(offer.member.handle)} className="mt-0.5 w-fit text-xs font-medium text-primary-light hover:underline">
-                  View profile<span className="sr-only"> of {offer.member.name}</span>
+                  View profile<span className="sr-only"> <T vars={{ name: offer.member.name }}>{"of {name}"}</T></span>
                 </Link>
               </div>
             </li>

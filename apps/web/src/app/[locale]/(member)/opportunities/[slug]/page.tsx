@@ -6,11 +6,12 @@ import { OPPORTUNITY_TYPE_LABELS, opportunityPlace, type OpportunityDetail } fro
 import { Chip, Icon, Panel } from "@chartermission/ui";
 import { formatDayMonth } from "@/components/discover/dates";
 import { OpportunityActions } from "@/components/opportunities/opportunity-actions";
-import { deadlineChip } from "@/components/opportunities/opportunity-card";
+import { deadlineChip } from "@/components/opportunities/opportunity-dates";
 import { requireClientViewer } from "@/components/social/data";
 import { AuthorName, MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { PanelSkeleton } from "@/components/social/skeletons";
 import { apiGetOrNull } from "@/lib/api/server";
+import { getT, getIntlTag } from "@/i18n/server";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/opportunities/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -19,15 +20,17 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/opportun
 }
 
 async function Detail({ params }: Pick<PageProps<"/[locale]/opportunities/[slug]">, "params">) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const { slug } = await params;
   await requireClientViewer(`/opportunities/${slug}`);
   const o = await apiGetOrNull<OpportunityDetail>(`/opportunities/${encodeURIComponent(slug)}`);
   if (!o) notFound();
-  const deadline = deadlineChip(o);
+  const deadline = deadlineChip(intl, t, o);
   const facts: { icon: "map-pin" | "calendar" | "briefcase" | "target"; label: string; value: string }[] = [
     { icon: "briefcase", label: "Type", value: OPPORTUNITY_TYPE_LABELS[o.type] },
     { icon: "map-pin", label: "Where", value: opportunityPlace(o) },
-    { icon: "calendar", label: "Deadline", value: o.deadline ? formatDayMonth(o.deadline) : "Rolling" },
+    { icon: "calendar", label: "Deadline", value: o.deadline ? formatDayMonth(intl, o.deadline) : "Rolling" },
     ...(o.compensation ? [{ icon: "target" as const, label: "Pay or award", value: o.compensation }] : []),
   ];
 

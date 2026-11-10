@@ -1,16 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Button, Icon, buttonClasses, type ButtonProps } from "@chartermission/ui";
-import { absoluteDateTime } from "@/components/social/format";
-import { activeUntil, type Viewer } from "@/components/social/viewer";
+import type { Viewer } from "@/components/social/viewer";
+import { articleBlockedReason } from "./article-blocked";
 import { writeArticleHref } from "./write-article";
+import { useT, useIntlTag } from "@/i18n/client";
 
-/** Why the viewer can't publish right now, if anything. */
-export function articleBlockedReason(viewer: Viewer): string | null {
-  if (!viewer.emailVerified) return "Verify your email address to publish articles.";
-  if (viewer.status === "suspended") return "Your account is suspended, so you can’t publish.";
-  const until = activeUntil(viewer.restrictions.postingUntil);
-  return until ? `You can’t post until ${absoluteDateTime(until)}.` : null;
-}
 
 /** "Write an article": opens the writing page (/articles/new). Disabled, with the reason, when the viewer can't publish. */
 export function WriteArticleButton({
@@ -24,7 +20,9 @@ export function WriteArticleButton({
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
 }) {
-  const blocked = articleBlockedReason(viewer);
+  const intl = useIntlTag();
+  const t = useT();
+  const blocked = articleBlockedReason(intl, t, viewer);
   const content = (
     <>
       <Icon name="plus" size={size === "small" ? 16 : 18} />

@@ -14,6 +14,7 @@ import {
   RevokeOverrideInput,
   TrendingOverrideInput,
   TrendingRules,
+  ChapterPostsSettings,
   MediaSettings,
   type AdminActionView,
   type AdminAppealRow,
@@ -208,7 +209,7 @@ export class AdminAuditController {
   }
 }
 
-/** Platform settings editable in the console: video length limits (Media settings). */
+/** Platform settings editable in the console: video length limits (Media settings) and the chapter posting rule. */
 @Controller('admin/settings')
 export class AdminSettingsController {
   constructor(
@@ -220,6 +221,30 @@ export class AdminSettingsController {
   @Access('admin', 'settings.manage')
   media(): Promise<MediaSettings> {
     return this.settings.get('media_limits');
+  }
+
+  @Get('chapter-posts')
+  @Access('admin', 'chapters.admin')
+  chapterPosts(): Promise<ChapterPostsSettings> {
+    return this.settings.get('chapter_posts');
+  }
+
+  /** The rule for chapters that don't set their own. Posts already waiting stay in their chapter's queue. */
+  @Put('chapter-posts')
+  @Access('admin', 'chapters.admin')
+  async updateChapterPosts(@Auth() ctx: AuthContext, @ZBody(ChapterPostsSettings) input: ChapterPostsSettings, @Req() req: AppRequest): Promise<ChapterPostsSettings> {
+    const before = await this.settings.get('chapter_posts');
+    await this.settings.set('chapter_posts', input, ctx.user.id);
+    await this.audit.record({
+      actorId: ctx.user.id,
+      action: 'settings.chapter_posts.updated',
+      targetType: 'setting',
+      targetId: 'chapter_posts',
+      before,
+      after: input,
+      ip: clientIp(req),
+    });
+    return this.settings.get('chapter_posts');
   }
 
   /** Applies to videos uploaded from now on; videos already processed stay as they are. */

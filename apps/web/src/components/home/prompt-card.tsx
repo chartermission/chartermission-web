@@ -10,9 +10,11 @@ import type { Viewer } from "@/components/social/viewer";
 import { requestCompose } from "./compose-request";
 import { MomentCard } from "./moment-card";
 import { AvatarStack } from "./moment-parts";
+import { useT } from "@/i18n/client";
 
 /** Today's #DailyPrompt: the question set large, who answered, Share your answer / See answers. */
 export function PromptCard({ moment, viewer }: { moment: PromptMoment; viewer: Viewer }) {
+  const t = useT();
   const [state, setState] = useState({ answered: moment.answered, responses: moment.responses, responders: moment.responders });
   const tag = moment.hashtag;
 
@@ -35,7 +37,7 @@ export function PromptCard({ moment, viewer }: { moment: PromptMoment; viewer: V
   );
 
   const { answered, responses, responders } = state;
-  const count = responses === 1 ? "1 member answered today" : `${responses} members answered today`;
+  const count = responses === 1 ? "1 member answered today" : t("{responses} members answered today", { responses });
   return (
     <MomentCard id={moment.id} label="Daily prompt" icon="message" iconTone="text-info">
       {(headingId) => (

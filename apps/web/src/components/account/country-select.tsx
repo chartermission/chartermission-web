@@ -46,7 +46,7 @@ export function CountrySelect({
       <Icon
         name="chevron-down"
         size={18}
-        className="pointer-events-none absolute top-1/2 end-3.5 -translate-y-1/2 text-secondary"
+        className="pointer-events-none absolute inset-y-0 my-auto h-fit end-3.5 text-secondary"
       />
     </div>
   );

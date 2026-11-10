@@ -4,6 +4,7 @@ import {
   CHAPTER_PIN_LIMIT,
   chapterTeamLabel,
   type ChapterDetail,
+  type ChapterPin,
   type ChapterMembersQuery,
   type ChapterSummary,
   type ChapterTeamMember,
@@ -14,8 +15,9 @@ import {
   type UpdateChapterInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapterPins, chapters, countries, events, follows, posts, roles, userRoles, users } from '../db/schema.js';
+import { chapterBans, chapterPins, chapters, countries, events, follows, posts, roles, userRoles, users } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
+import { ChapterRules } from '../core/chapter-rules.service.js';
 import { MembersService, mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { Errors } from '../common/errors.js';
@@ -56,6 +58,7 @@ export class ChaptersService {
     private readonly serializer: PostSerializer,
     private readonly access: EventAccess,
     private readonly audit: AuditService,
+    private readonly rules: ChapterRules,
   ) {}
 
   /** GET /chapters — active chapters, A to Z. */
@@ -71,11 +74,11 @@ export class ChaptersService {
   async detail(user: AuthUser, slugOrId: string): Promise<ChapterDetail> {
     const chapter = await this.load(slugOrId);
     const canManage = await this.canManage(user, chapter.id);
-    const [followerCounts, following, team, pinned, recentMembers, nearby, postCount, eventCount, led] = await Promise.all([
+    const [followerCounts, following, team, { pinned, pins }, recentMembers, nearby, postCount, eventCount, led, postApproval, banned, moderation] = await Promise.all([
       this.followerCounts([chapter.id]),
       this.followingSet(user.id),
       this.team(chapter.id),
-      this.pinnedPosts(user, chapter.id),
+      this.pinnedPosts(user, chapter.id, canManage),
       this.recentMembers(chapter.id, 8),
       this.rows(and(eq(chapters.status, 'active'), eq(countries.region, chapter.region), ne(chapters.id, chapter.id))!),
       this.db
@@ -87,12 +90,17 @@ export class ChaptersService {
         .from(events)
         .where(and(eq(events.hostChapterId, chapter.id), eq(events.status, 'published'), gt(events.endsAt, new Date()))),
       this.access.ledChapters(user.id),
+      this.rules.approval(chapter.id),
+      this.rules.isBanned(user.id, chapter.id),
+      canManage ? this.moderationCounts(chapter.id) : null,
     ]);
     const followers = followerCounts.get(chapter.id) ?? 0;
     return {
       ...this.summary(chapter, followers, following.has(chapter.id)),
       team,
       pinned,
+      pins,
+      postApproval,
       recentMembers,
       nearby: nearby
         .sort((a, b) => a.name.localeCompare(b.name, 'en'))
@@ -103,7 +111,9 @@ export class ChaptersService {
         following: following.has(chapter.id),
         canManage,
         canHostAsChapter: led.has(chapter.id) || user.permissions.has('event.manage'),
+        banned,
       },
+      moderation,
     };
   }
 
@@ -278,17 +288,35 @@ export class ChaptersService {
     return [...out.values()].sort((a, b) => rank[a.role] - rank[b.role]);
   }
 
-  private async pinnedPosts(user: AuthUser, chapterId: string) {
-    const pins = await this.db
-      .select({ postId: chapterPins.postId })
+  /** Pinned posts, newest pin first; for the chapter team, also who pinned each one. */
+  private async pinnedPosts(user: AuthUser, chapterId: string, forTeam: boolean) {
+    const rows = await this.db
+      .select({ postId: chapterPins.postId, pinnedBy: chapterPins.pinnedBy, createdAt: chapterPins.createdAt })
       .from(chapterPins)
       .innerJoin(posts, eq(posts.id, chapterPins.postId))
       .where(and(eq(chapterPins.chapterId, chapterId), isNull(posts.deletedAt), eq(posts.status, 'published'), eq(posts.moderationState, 'visible')))
       .orderBy(desc(chapterPins.createdAt));
-    const ids = pins.map((p) => p.postId);
+    const ids = rows.map((p) => p.postId);
     const views = await this.serializer.posts(ids, user);
     const byId = new Map(views.map((v) => [v.id, v]));
-    return ids.map((id) => byId.get(id)).filter((v): v is NonNullable<typeof v> => !!v);
+    const pinned = ids.map((id) => byId.get(id)).filter((v): v is NonNullable<typeof v> => !!v);
+    let pins: ChapterPin[] = [];
+    if (forTeam) {
+      const refs = await this.members.refs(rows.map((r) => r.pinnedBy).filter((x): x is string => !!x));
+      pins = rows.map((r) => ({ postId: r.postId, pinnedBy: (r.pinnedBy && refs.get(r.pinnedBy)) || null, pinnedAt: r.createdAt.toISOString() }));
+    }
+    return { pinned, pins };
+  }
+
+  private async moderationCounts(chapterId: string): Promise<{ pendingPosts: number; bannedMembers: number }> {
+    const [[pending], [banned]] = await Promise.all([
+      this.db
+        .select({ n: count() })
+        .from(posts)
+        .where(and(eq(posts.chapterId, chapterId), eq(posts.status, 'in_review'), isNull(posts.deletedAt))),
+      this.db.select({ n: count() }).from(chapterBans).where(eq(chapterBans.chapterId, chapterId)),
+    ]);
+    return { pendingPosts: pending?.n ?? 0, bannedMembers: banned?.n ?? 0 };
   }
 
   private async recentMembers(chapterId: string, limit: number): Promise<MemberRef[]> {

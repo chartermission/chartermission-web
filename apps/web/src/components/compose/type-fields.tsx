@@ -11,6 +11,7 @@ import {
   todayIso,
 } from "@/components/social/post-types/meta";
 import { MAX_SKILL_LENGTH, MAX_SKILLS, type CelebrationFields, type FieldErrors, type RequestFields } from "./composition";
+import { T, useT } from "@/i18n/client";
 
 export const inputClasses =
   "h-[38px] w-full rounded-lg border bg-card px-3 text-sm text-ink outline-none placeholder:text-disabled focus:ring-2 focus:ring-primary-tint";
@@ -75,7 +76,7 @@ export function TextField({
         )}
       </div>
       <div className="relative">
-        {icon && <Icon name={icon} size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-secondary" />}
+        {icon && <Icon name={icon} size={16} className="pointer-events-none absolute start-3 inset-y-0 my-auto h-fit text-secondary" />}
         <input
           id={id}
           type={type}
@@ -230,6 +231,7 @@ export function CelebrationForm({
 
 /** Skills as removable chips: Enter or comma adds, Backspace on an empty field removes the last. */
 export function SkillsInput({ skills, onChange, error }: { skills: string[]; onChange: (skills: string[]) => void; error?: string }) {
+  const t = useT();
   const id = useId();
   const [text, setText] = useState("");
   const [notice, setNotice] = useState("");
@@ -249,13 +251,13 @@ export function SkillsInput({ skills, onChange, error }: { skills: string[]; onC
     }
     onChange(next);
     setText("");
-    setNotice(next.length >= MAX_SKILLS ? `Added. That’s the maximum of ${MAX_SKILLS} skills.` : `Added ${parts.join(", ")}.`);
+    setNotice(next.length >= MAX_SKILLS ? t("Added. That’s the maximum of {MAXSKILLS} skills.", { MAXSKILLS: MAX_SKILLS }) : t("Added {join}.", { join: parts.join(", ") }));
   }
 
   function removeAt(index: number) {
     const removed = skills[index];
     onChange(skills.filter((_, i) => i !== index));
-    setNotice(`Removed ${removed}.`);
+    setNotice(t("Removed {removed}.", { removed }));
     inputRef.current?.focus();
   }
 
@@ -263,7 +265,7 @@ export function SkillsInput({ skills, onChange, error }: { skills: string[]; onC
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={id} className="text-label text-body">
-          Skills <span className="ms-1 font-normal text-secondary">(optional, up to {MAX_SKILLS})</span>
+          Skills <span className="ms-1 font-normal text-secondary"><T vars={{ MAXSKILLS: MAX_SKILLS }}>{"(optional, up to {MAXSKILLS})"}</T></span>
         </label>
         <span className="text-[11px] text-secondary" aria-hidden="true">
           {skills.length}/{MAX_SKILLS}
@@ -286,7 +288,7 @@ export function SkillsInput({ skills, onChange, error }: { skills: string[]; onC
                   event.stopPropagation();
                   removeAt(index);
                 }}
-                aria-label={`Remove ${skill}`}
+                aria-label={t("Remove {skill}", { skill })}
                 className="rounded-full p-0.5 text-primary-light hover:bg-primary hover:text-inverse"
               >
                 <Icon name="x" size={12} />

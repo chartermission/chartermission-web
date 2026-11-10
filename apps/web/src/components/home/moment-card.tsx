@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import { Icon, cn, type IconName } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import { hideForToday, unhide, useHiddenToday } from "./hidden-today";
+import { T } from "@/i18n/client";
 
 /**
  * Shell for a community moment woven into the feed: a quiet tinted header strip with the
@@ -61,7 +62,7 @@ export function MomentCard({
           }}
           className="rounded-sm text-sm font-medium text-primary-light hover:underline"
         >
-          Undo<span className="sr-only"> and show the {label.toLowerCase()} again</span>
+          Undo<span className="sr-only"> <T vars={{ lowerCase: label.toLowerCase() }}>{"and show the {lowerCase} again"}</T></span>
         </button>
       </div>
     );
@@ -89,7 +90,7 @@ export function MomentCard({
           className="relative flex size-8 shrink-0 items-center justify-center rounded-md text-secondary hover:bg-card hover:text-ink"
         >
           <Icon name="x" size={16} />
-          <span className="sr-only">Hide the {label.toLowerCase()} for today</span>
+          <span className="sr-only"><T vars={{ lowerCase: label.toLowerCase() }}>{"Hide the {lowerCase} for today"}</T></span>
         </button>
       </header>
       <div className="flex flex-col gap-4 p-5 max-sm:px-4">{children(headingId)}</div>

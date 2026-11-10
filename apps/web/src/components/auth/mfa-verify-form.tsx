@@ -7,9 +7,11 @@ import { Button } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { destinationFor } from "./destinations";
 import { Field, FormAlert, describedBy, inputClasses, retryMessage, textLinkClasses } from "./fields";
+import { useT } from "@/i18n/client";
 
 /** Second sign-in step for members who turned on two-step verification (POST /auth/mfa/verify). */
 export function MfaVerifyForm({ next }: { next: string | null }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const [code, setCode] = useState("");
@@ -34,7 +36,7 @@ export function MfaVerifyForm({ next }: { next: string | null }) {
     } catch (e) {
       setSubmitting(false);
       setCode("");
-      if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(e.retryAfter, "Too many incorrect codes."));
+      if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(t, e.retryAfter, "Too many incorrect codes."));
       else if (isApiError(e) && e.status === 401) router.replace("/signin?notice=expired");
       else if (isApiError(e)) setError(e.code === "VALIDATION_FAILED" ? "That code isn’t right. Try the current one." : e.message);
       else setError("Something went wrong. Please try again.");

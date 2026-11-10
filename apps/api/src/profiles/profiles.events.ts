@@ -32,7 +32,6 @@ export class ProfilesEvents implements OnModuleInit {
         objectType: 'connection',
         objectId: e.connectionId,
         segments: [
-          { text: actor.name, strong: true },
           { text: ' wants to connect with you', strong: false },
         ],
         href: '/network?tab=requests',
@@ -59,10 +58,9 @@ export class ProfilesEvents implements OnModuleInit {
         objectType: 'connection',
         objectId: e.connectionId,
         segments: [
-          { text: actor.name, strong: true },
           { text: ' accepted your connection request', strong: false },
         ],
-        href: `/members/${actor.handle}`,
+        href: `/${actor.handle}`,
         icon: 'avatar',
         dedupeKey: `connection_accepted:${e.connectionId}`,
         email: {
@@ -90,10 +88,9 @@ export class ProfilesEvents implements OnModuleInit {
         objectType: 'member',
         objectId: e.followerId,
         segments: [
-          { text: actor.name, strong: true },
           { text: ' started following you', strong: false },
         ],
-        href: `/members/${actor.handle}`,
+        href: `/${actor.handle}`,
         icon: 'avatar',
         dedupeKey: `follow:${e.followerId}`,
       });

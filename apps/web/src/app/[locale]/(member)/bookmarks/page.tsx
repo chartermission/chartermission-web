@@ -11,8 +11,12 @@ import { errorMessage } from "@/components/social/error-message";
 import { PostStream } from "@/components/social/post-stream";
 import { EmptyState, LoadingStatus, PostSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Saved posts" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Saved posts") };
+}
 
 async function BookmarksMain() {
   const viewer = await requireClientViewer("/bookmarks");

@@ -1,8 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
 import { Avatar, Icon, cn, RoleBadgeIcon } from "@chartermission/ui";
 import { PeopleLink } from "@/components/people/people-link";
-import { useT } from "@/i18n/client";
+import { useT, useIntlTag } from "@/i18n/client";
 import { absoluteDateTime, relativeTime } from "./format";
 import { memberHref, postHref } from "./links";
 import { postTypeAccent, postTypeMeta } from "./post-types/meta";
@@ -23,9 +25,11 @@ export function AuthorName({ member, className, href }: { member: MemberRef; cla
 }
 
 export function TimeAgo({ iso, className }: { iso: string; className?: string }) {
+  const intl = useIntlTag();
+  const t = useT();
   return (
-    <time dateTime={iso} title={absoluteDateTime(iso)} className={className} suppressHydrationWarning>
-      {relativeTime(iso)}
+    <time dateTime={iso} title={absoluteDateTime(intl, iso)} className={className} suppressHydrationWarning>
+      {relativeTime(intl, t, iso)}
     </time>
   );
 }
@@ -62,6 +66,7 @@ export function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
 
 /** The original post inside a repost (one level only). */
 export function RepostEmbed({ original }: { original: PostView | null }) {
+  const t = useT();
   if (!original) {
     return (
       <p className="flex w-full items-center gap-2 rounded-[10px] border border-dashed border-line-strong bg-surface px-4 py-3 text-sm text-secondary">
@@ -93,7 +98,7 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
               : original.celebration
                 ? CELEBRATION_LABELS[original.celebration.category]
                 : original.request
-                  ? `Looking for · ${REQUEST_LABELS[original.request.category]}`
+                  ? t("Looking for · {label}", { label: t(REQUEST_LABELS[original.request.category]) })
                   : null}
         </p>
       )}
@@ -110,7 +115,7 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
             : videos > 0 || original.linkPreview?.embed
               ? "Video"
               : images > 0
-                ? `${images} image${images === 1 ? "" : "s"}`
+                ? t("{count} images", { count: images })
                 : "PDF document"}
         </p>
       )}

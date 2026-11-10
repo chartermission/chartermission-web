@@ -10,6 +10,7 @@ import { relativeTime } from "@/components/social/format";
 import { topicHref } from "@/components/social/links";
 import { FOLLOWED_PAGE, LIST_PAGE } from "./explore-params";
 import { FollowButton, useExploreNav, useSessionFollowed, useTopicFollow } from "./explore-state";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 const n = (value: number) => value.toLocaleString("en-US");
 
@@ -87,8 +88,10 @@ function InlineError({ message, onRetry }: { message: string; onRetry: () => voi
 /* ---------- Popular / New cards ---------- */
 
 function TopicCard({ topic, list }: { topic: TopicSummary; list: "popular" | "new" }) {
+  const intl = useIntlTag();
+  const t = useT();
   const { following, followers, busy, toggle } = useTopicFollow(topic);
-  const started = relativeTime(topic.createdAt);
+  const started = relativeTime(intl, t, topic.createdAt);
   return (
     <li className="flex flex-col gap-3 rounded-[10px] border border-line bg-card p-4 transition-colors hover:border-line-strong">
       <div className="flex items-start gap-3">
@@ -113,7 +116,7 @@ function TopicCard({ topic, list }: { topic: TopicSummary; list: "popular" | "ne
             <span className={topic.posts7d > 0 ? "font-semibold text-success" : undefined}>{n(topic.posts7d)}</span> post{topic.posts7d === 1 ? "" : "s"} this week
           </span>
           {list === "new" && (
-            <span className="truncate">Started {started === "now" ? "just now" : /\d{4}$/.test(started) ? started : `${started} ago`}</span>
+            <span className="truncate">Started {started === "now" ? "just now" : /\d{4}$/.test(started) ? started : t("{started} ago", { started })}</span>
           )}
         </span>
         <FollowButton following={following} busy={busy} onToggle={toggle} tag={topic.tag} />
@@ -163,6 +166,7 @@ export function DiscoverTopics({ list, initial, error }: { list: "popular" | "ne
 /* ---------- Rows: search results and "Your topics" ---------- */
 
 function TopicRow({ topic, detail }: { topic: TopicSummary; detail: boolean }) {
+  const t = useT();
   const { following, followers, busy, toggle } = useTopicFollow(topic);
   return (
     <li className={cn("flex items-center gap-3", detail ? "px-5 py-3.5 max-sm:px-4" : "py-2.5")}>
@@ -173,7 +177,7 @@ function TopicRow({ topic, detail }: { topic: TopicSummary; detail: boolean }) {
         </Link>
         {detail && topic.description && <p className="line-clamp-1 text-xs text-body">{topic.description}</p>}
         <p className="truncate text-xs text-secondary">
-          {detail ? `${n(topic.posts)} post${topic.posts === 1 ? "" : "s"} · ` : ""}
+          {detail ? `${t("{count} posts", { count: topic.posts })} · ` : ""}
           {n(topic.posts7d)} this week{detail ? ` · ${n(followers)} follower${followers === 1 ? "" : "s"}` : ""}
         </p>
       </div>
@@ -184,6 +188,7 @@ function TopicRow({ topic, detail }: { topic: TopicSummary; detail: boolean }) {
 
 /** Results for ?q= (GET /topics?q=), with "Load more". */
 export function TopicSearchResults({ q, initial, error }: { q: string; initial: Page<TopicSummary> | null; error: string | null }) {
+  const t = useT();
   const { refresh, pending, go } = useExploreNav();
   const paged = usePagedTopics(initial, { q, sort: "popular", limit: LIST_PAGE });
   const count = paged.items.length;
@@ -191,10 +196,10 @@ export function TopicSearchResults({ q, initial, error }: { q: string; initial: 
     <Panel aria-labelledby="topic-results" className={cn("flex flex-col transition-opacity", pending && "opacity-60")}>
       <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-4 max-sm:px-4">
         <h2 id="topic-results" className="min-w-0 truncate text-h3 text-ink">
-          Topics matching “{q}”
+          <T vars={{ q }}>{"Topics matching “{q}”"}</T>
         </h2>
         <p role="status" className="shrink-0 text-xs text-secondary">
-          {error ? "" : `${count}${paged.hasMore ? "+" : ""} ${count === 1 ? "topic" : "topics"}`}
+          {error ? "" : (paged.hasMore ? t("{count}+ topics", { count }) : t("{count} topics", { count }))}
         </p>
       </div>
       <div className="border-t border-line">
@@ -205,7 +210,7 @@ export function TopicSearchResults({ q, initial, error }: { q: string; initial: 
             <span className="flex size-11 items-center justify-center rounded-full bg-primary-tint-2 text-primary-light">
               <Icon name="search" size={22} />
             </span>
-            <p className="text-md font-medium text-ink">No topics match “{q}”</p>
+            <p className="text-md font-medium text-ink"><T vars={{ q }}>{"No topics match “{q}”"}</T></p>
             <p className="max-w-sm text-sm text-secondary">Check the spelling, or start the topic yourself: a hashtag becomes a topic once it’s used in a post.</p>
             <button type="button" onClick={() => go({ q: null })} className={buttonClasses({ variant: "secondary", size: "small", className: "mt-2" })}>
               Clear search

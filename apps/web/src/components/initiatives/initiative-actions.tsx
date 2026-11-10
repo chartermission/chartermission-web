@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Icon, buttonClasses, type ButtonSize, type ButtonVariant } from "@chartermission/ui";
+import { useT } from "@/i18n/client";
 
 /** Follow / Following toggle. */
 export function FollowButton({
@@ -15,12 +16,13 @@ export function FollowButton({
   size?: ButtonSize;
   className?: string;
 }) {
+  const t = useT();
   const [following, setFollowing] = useState(false);
   return (
     <button
       type="button"
       aria-pressed={following}
-      aria-label={following ? `Following ${title}` : `Follow ${title}`}
+      aria-label={following ? t("Following {title}", { title }) : t("Follow {title}", { title })}
       onClick={() => setFollowing((value) => !value)}
       className={buttonClasses({ variant, size, className })}
     >

@@ -251,7 +251,7 @@ export function BulkPictureUpload({
                               </option>
                             ))}
                           </select>
-                          <Icon name="chevron-down" size={14} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-secondary" />
+                          <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 right-3 my-auto h-fit text-secondary" />
                         </span>
                         {dup && <span className="text-xs text-warning">Another file is set for this chapter; the last one uploaded wins.</span>}
                       </td>
@@ -267,7 +267,7 @@ export function BulkPictureUpload({
                             <option value="picture">Picture</option>
                             <option value="cover">Cover</option>
                           </select>
-                          <Icon name="chevron-down" size={14} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-secondary" />
+                          <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 right-3 my-auto h-fit text-secondary" />
                         </span>
                       </td>
                       <td className="py-2 pr-3 text-xs">

@@ -14,16 +14,22 @@ import { Bone, LoadingStatus, SectionError } from "@/components/social/skeletons
 import { Toaster } from "@/components/social/toast";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { CatalogueSkeleton, LearningBrowser } from "./learning-browser";
+import { getT, getIntlTag } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Learning",
-  description: "Short, practical courses and learning paths from Charter Center, picked for Charter Mission members.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Learning"),
+    description: t("Short, practical courses and learning paths from Charter Center, picked for Charter Mission members."),
+  };
+}
 
 /** GET /learning, shared by the header note, the hub sections and the filters. */
 const getHub = cache(() => settle(apiGet<LearningHub>("/learning")));
 
 async function SyncedNote() {
+  const intl = await getIntlTag();
+  const t = await getT();
   await requireViewer("/learning");
   const hub = await getHub();
   const syncedAt = hub.ok ? hub.data.syncedAt : null;
@@ -33,7 +39,7 @@ async function SyncedNote() {
       <Icon name="repeat" size={14} />
       Catalogue updated from Charter Center{" "}
       <time dateTime={syncedAt} suppressHydrationWarning>
-        {relativeTime(syncedAt) === "now" ? "just now" : `${relativeTime(syncedAt)} ago`}
+        {relativeTime(intl, t, syncedAt) === "now" ? "just now" : t("{time} ago", { time: relativeTime(intl, t, syncedAt) })}
       </time>
     </p>
   );
@@ -92,9 +98,10 @@ function FeaturedCourses({ courses }: { courses: CourseSummary[] }) {
 
 /** Learning paths band and featured courses (GET /learning). */
 async function HubTop() {
+  const t = await getT();
   await requireViewer("/learning");
   const hub = await getHub();
-  if (!hub.ok) return <SectionError message={`Learning couldn’t load. ${errorMessage(hub.error)}`} retryHref="/learning" />;
+  if (!hub.ok) return <SectionError message={t("Learning couldn’t load. {error}", { error: errorMessage(hub.error) })} retryHref="/learning" />;
   const { paths, featured } = hub.data;
   return (
     <>

@@ -17,7 +17,8 @@ import { announceQuestionChange } from "@/components/social/post-types/events";
 import { toast } from "@/components/social/toast";
 import type { Viewer } from "@/components/social/viewer";
 import { PeopleLink } from "@/components/people/people-link";
-import { useT } from "@/i18n/client";
+import { EmojiPicker, insertAtCaret } from "@/components/social/emoji-picker";
+import { useT, T } from "@/i18n/client";
 
 type Sort = "relevant" | "newest";
 
@@ -92,24 +93,41 @@ function CommentForm({
           <label htmlFor={`${id}-input`} className="sr-only">
             {label}
           </label>
-          <textarea
-            ref={ref}
-            id={`${id}-input`}
-            value={text}
-            rows={text.includes("\n") || text.length > 70 ? 3 : 1}
-            onChange={(event) => {
-              setText(event.target.value);
-              if (fieldError) setFieldError(null);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && onCancel) onCancel();
-            }}
-            maxLength={COMMENT_MAX_CHARS}
-            placeholder={placeholder}
-            aria-invalid={fieldError ? true : undefined}
-            aria-describedby={fieldError ? `${id}-error` : undefined}
-            className="min-h-6 w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-disabled"
-          />
+          <div className="flex items-start gap-1">
+            <textarea
+              ref={ref}
+              id={`${id}-input`}
+              value={text}
+              rows={text.includes("\n") || text.length > 70 ? 3 : 1}
+              onChange={(event) => {
+                setText(event.target.value);
+                if (fieldError) setFieldError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && onCancel) onCancel();
+              }}
+              maxLength={COMMENT_MAX_CHARS}
+              placeholder={placeholder}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={fieldError ? `${id}-error` : undefined}
+              className="min-h-6 w-full min-w-0 flex-1 resize-none bg-transparent text-sm text-ink outline-none placeholder:text-disabled"
+            />
+            <EmojiPicker
+              className="-my-0.5 -me-1.5 shrink-0"
+              onPick={(emoji) =>
+                insertAtCaret(
+                  ref.current,
+                  text,
+                  emoji,
+                  (next) => {
+                    setText(next);
+                    if (fieldError) setFieldError(null);
+                  },
+                  COMMENT_MAX_CHARS,
+                )
+              }
+            />
+          </div>
           {(text.trim() || onCancel) && (
             <div className="flex items-center justify-end gap-3">
               <span className={cn("me-auto text-xs", text.length > COMMENT_MAX_CHARS - 100 ? "text-warning" : "text-secondary")}>
@@ -185,7 +203,7 @@ function CommentItem({
 
   const author = comment.author;
   const own = author.id === viewer.id;
-  const subject = answer ? `${author.name}’s answer` : `${author.name}’s comment`;
+  const subject = answer ? t("{name}’s answer", { name: author.name }) : t("{name}’s comment", { name: author.name });
   const accepted = !!answer?.accepted;
   const menu: MenuItem[] = [];
   const noun = answer ? "answer" : "comment";
@@ -196,7 +214,7 @@ function CommentItem({
   return (
     <article
       id={anchor}
-      aria-label={`${accepted ? "Best answer" : answer ? "Answer" : "Comment"} by ${author.name}`}
+      aria-label={(accepted ? t("Best answer by {name}", { name: author.name }) : answer ? t("Answer by {name}", { name: author.name }) : t("Comment by {name}", { name: author.name }))}
       className="flex scroll-mt-24 items-start gap-2.5"
     >
       <Link href={memberHref(author.handle)} tabIndex={-1} aria-hidden="true">
@@ -249,7 +267,7 @@ function CommentItem({
                   {comment.editedAt && " · Edited"}
                 </span>
               </p>
-              {menu.length > 0 && <Menu label={`More options for ${subject}`} items={menu} trigger={<Icon name="more" size={16} />} />}
+              {menu.length > 0 && <Menu label={t("More options for {subject}", { subject })} items={menu} trigger={<Icon name="more" size={16} />} />}
             </div>
             {author.headline && <p className="-mt-1 truncate text-xs text-secondary">{author.headline}</p>}
             <RichText text={comment.body} className="text-sm text-body" />
@@ -264,7 +282,7 @@ function CommentItem({
               </PeopleLink>
             )}
             <button type="button" onClick={() => onReply(comment)} className="rounded-sm font-medium text-secondary hover:text-primary">
-              Reply<span className="sr-only"> to {author.name}</span>
+              Reply<span className="sr-only"> <T vars={{ name: author.name }}>{"to {name}"}</T></span>
             </button>
             {answer?.canAccept && (
               <button
@@ -325,6 +343,7 @@ export function Comments({
   /** For questions: comments are answers, and the asker picks the best one. */
   question?: { acceptedCommentId: string | null; askerId: string } | null;
 }) {
+  const t = useT();
   const id = useId();
   const isQuestion = question !== null;
   const isAsker = !!question && question.askerId === viewer.id;
@@ -512,7 +531,7 @@ export function Comments({
         </h2>
         <span className="relative inline-flex items-center">
           <select
-            aria-label={`Sort ${noun}s`}
+            aria-label={t("Sort {noun}s", { noun })}
             value={sort}
             onChange={(event) => reload(event.target.value as Sort)}
             className="appearance-none rounded-md bg-transparent py-0.5 ps-1 pe-5 text-sm font-medium text-body hover:text-ink"
@@ -536,7 +555,7 @@ export function Comments({
         ) : (
           <div className="flex items-start gap-2.5 rounded-lg bg-warning-light px-3 py-2.5">
             <Icon name="mail" size={18} className="mt-0.5 shrink-0 text-warning" />
-            <VerifyEmailPrompt message={`Verify your email address to ${isQuestion ? "answer" : "comment"} and react.`} />
+            <VerifyEmailPrompt message={(isQuestion ? t("Verify your email address to answer and react.") : t("Verify your email address to comment and react."))} />
           </div>
         )}
       </div>
@@ -600,7 +619,7 @@ export function Comments({
                         className="flex items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline disabled:opacity-60"
                       >
                         <Icon name="chevron-down" size={14} />
-                        {thread.loadingReplies ? "Loading replies…" : `View ${hiddenReplies} more repl${hiddenReplies === 1 ? "y" : "ies"}`}
+                        {thread.loadingReplies ? "Loading replies…" : t("View {count} more replies", { count: hiddenReplies })}
                       </button>
                     </li>
                   )}
@@ -610,7 +629,7 @@ export function Comments({
                         <CommentForm
                           key={replyTo.mention}
                           viewer={viewer}
-                          label={`Reply to ${thread.author?.name ?? "comment"}`}
+                          label={t("Reply to {count}", { count: thread.author?.name ?? "comment" })}
                           placeholder="Write a reply…"
                           initialText={replyTo.mention}
                           submitLabel="Reply"
@@ -633,13 +652,13 @@ export function Comments({
       {error ? <ErrorNotice error={error} onRetry={() => (threads.length ? loadMore() : reload(sort))} /> : null}
       {loading && (
         <p role="status" className="py-2 text-center text-sm text-secondary">
-          Loading {noun}s…
+          <T vars={{ noun }}>{"Loading {noun}s…"}</T>
         </p>
       )}
       {!loading && cursor && (
         <div className="flex justify-center">
           <button type="button" onClick={loadMore} className="rounded-lg px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-tint-2">
-            Load more {noun}s
+            <T vars={{ noun }}>{"Load more {noun}s"}</T>
           </button>
         </div>
       )}

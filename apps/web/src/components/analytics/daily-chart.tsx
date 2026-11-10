@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AnalyticsDay } from "@chartermission/contracts";
 import { cn } from "@chartermission/ui";
+import { T } from "@/i18n/client";
 
 type Metric = "impressions" | "engagements";
 
@@ -67,7 +68,7 @@ export function DailyChart({ days, title = "Day by day" }: { days: AnalyticsDay[
         <span>
           {metricLabel[metric].toLowerCase()} {shown ? `on ${dayLong(shown.day)}` : `in the last ${days.length} days`}
         </span>
-        {shown && metric === "impressions" && <span>· {number.format(shown.viewers)} new viewers</span>}
+        {shown && metric === "impressions" && <span><T vars={{ count: number.format(shown.viewers) }}>{"· {count} new viewers"}</T></span>}
       </p>
 
       <div aria-hidden="true" className="flex gap-2">
@@ -130,7 +131,7 @@ export function DailyChart({ days, title = "Day by day" }: { days: AnalyticsDay[
 
       <table className="sr-only">
         <caption>
-          {metricLabel[metric]} per day, last {days.length} days
+          <T vars={{ value: metricLabel[metric], count: days.length }}>{"{value} per day, last {count} days"}</T>
         </caption>
         <thead>
           <tr>

@@ -6,6 +6,7 @@ import { Icon, Panel } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { Switch } from "./controls";
 import { SaveBar } from "./save-bar";
+import { useT } from "@/i18n/client";
 
 type Channel = "in_app" | "email";
 type Matrix = Record<NotificationCategory, Record<Channel, boolean>>;
@@ -103,6 +104,7 @@ function toPreferences(matrix: Matrix): NotificationPreference[] {
 
 /** Per-category in-app and email preferences (CM-NTF-03). Security and account messages are always sent. */
 export function NotificationPreferencesForm({ initial }: { initial: NotificationPreferences }) {
+  const t = useT();
   const [saved, setSaved] = useState<Matrix>(() => toMatrix(initial.preferences));
   const [matrix, setMatrix] = useState<Matrix>(saved);
   const [saving, setSaving] = useState(false);
@@ -211,7 +213,7 @@ export function NotificationPreferencesForm({ initial }: { initial: Notification
             {channels.map((channel) => (
               <span key={channel.id} className="flex w-[72px] justify-center max-sm:w-14">
                 <Switch
-                  label={`Security and account: ${channel.label} (always on)`}
+                  label={t("Security and account: {label} (always on)", { label: channel.label })}
                   checked
                   onChange={() => undefined}
                   disabled

@@ -8,27 +8,27 @@ function toDate(iso: string) {
 }
 
 /** "14 Nov" */
-export function formatDayMonth(iso: string) {
-  return toDate(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+export function formatDayMonth(intl: string, iso: string) {
+  return toDate(iso).toLocaleDateString(intl, { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
 /** "Tue 24 Nov" */
-export function formatWeekdayDayMonth(iso: string) {
+export function formatWeekdayDayMonth(intl: string, iso: string) {
   const date = toDate(iso);
-  const weekday = date.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
-  return `${weekday} ${formatDayMonth(iso)}`;
+  const weekday = date.toLocaleDateString(intl, { weekday: "short", timeZone: "UTC" });
+  return `${weekday} ${formatDayMonth(intl, iso)}`;
 }
 
 /** "Saturday" */
-export function formatWeekday(iso: string) {
-  return toDate(iso).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+export function formatWeekday(intl: string, iso: string) {
+  return toDate(iso).toLocaleDateString(intl, { weekday: "long", timeZone: "UTC" });
 }
 
 /** { month: "NOV", day: "24" } for date badges. */
-export function dateBadge(iso: string) {
+export function dateBadge(intl: string, iso: string) {
   const date = toDate(iso);
   return {
-    month: date.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }).toUpperCase(),
+    month: date.toLocaleDateString(intl, { month: "short", timeZone: "UTC" }).toUpperCase(),
     day: String(date.getUTCDate()).padStart(2, "0"),
   };
 }

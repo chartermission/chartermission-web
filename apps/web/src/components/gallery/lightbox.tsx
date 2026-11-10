@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type TouchEvent
 import type { AttachmentView } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
 import { hasAuthorAlt, imageAlt } from "./image-alt";
+import { T, useT } from "@/i18n/client";
 
 /** Space kept clear around the image: the top bar, the caption strip and the side buttons. */
 const BAR = 64;
@@ -51,6 +52,7 @@ export function Lightbox({
   onIndexChange: (index: number) => void;
   onClose: (lastIndex: number) => void;
 }) {
+  const t = useT();
   const id = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -133,7 +135,7 @@ export function Lightbox({
   return (
     <dialog
       ref={ref}
-      aria-label={multiple ? `Photo viewer, ${count} photos` : "Photo viewer"}
+      aria-label={multiple ? t("Photo viewer, {count} photos", { count }) : "Photo viewer"}
       onClose={() => onCloseRef.current(indexRef.current)}
       onKeyDown={onKeyDown}
       className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden bg-transparent p-0 text-inverse backdrop:bg-ink/95"
@@ -148,7 +150,7 @@ export function Lightbox({
                   {index + 1} / {count}
                 </span>
                 <span className="sr-only">
-                  Photo {index + 1} of {count}
+                  <T vars={{ count: index + 1, count2: count }}>{"Photo {count} of {count2}"}</T>
                 </span>
               </>
             )}
@@ -210,7 +212,7 @@ export function Lightbox({
               <button
                 type="button"
                 onClick={() => step(-1)}
-                aria-label={`Previous photo (${((index - 1 + count) % count) + 1} of ${count})`}
+                aria-label={t("Previous photo ({index} of {total})", { index: ((index - 1 + count) % count) + 1, total: count })}
                 className={cn(roundButton, "absolute start-4 top-1/2 -translate-y-1/2 max-sm:start-2")}
               >
                 <Icon name="chevron-left" size={24} />
@@ -218,7 +220,7 @@ export function Lightbox({
               <button
                 type="button"
                 onClick={() => step(1)}
-                aria-label={`Next photo (${((index + 1) % count) + 1} of ${count})`}
+                aria-label={t("Next photo ({index} of {total})", { index: ((index + 1) % count) + 1, total: count })}
                 className={cn(roundButton, "absolute end-4 top-1/2 -translate-y-1/2 max-sm:end-2")}
               >
                 <Icon name="chevron-right" size={24} />
@@ -242,7 +244,7 @@ export function Lightbox({
         </div>
 
         <p className="sr-only" aria-live="polite" aria-atomic="true">
-          {multiple ? `Photo ${index + 1} of ${count}. ` : ""}
+          {multiple ? t("Photo {count} of {count2}.", { count: index + 1, count2: count }) : ""}
           {alt}
         </p>
       </div>

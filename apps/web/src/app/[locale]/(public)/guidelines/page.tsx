@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import { POLICY_REF_LABELS, type PolicyRef } from "@chartermission/contracts";
 import { PolicyPage } from "@/components/public/policy-page";
 import { guidelineAnchor } from "@/components/account/policy-links";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Community Guidelines", description: "How we keep Charter Mission safe and useful." };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Community Guidelines"), description: t("How we keep Charter Mission safe and useful.") };
+}
 
 const descriptions: Record<PolicyRef, string> = {
   "guidelines.respect": "Disagree with ideas, not people. Keep discussion civil and constructive.",

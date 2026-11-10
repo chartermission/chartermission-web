@@ -17,6 +17,7 @@ import { fieldKey, focusFirstInvalid, maxBodyFor, type CelebrationFields, type F
 import { CelebrationForm, FieldError, RequestForm, TextField } from "@/components/compose/type-fields";
 import { ErrorNotice } from "../errors";
 import { toast } from "../toast";
+import { T, useT } from "@/i18n/client";
 
 const opt = (value: string) => (value.trim() ? value.trim() : undefined);
 const sentence = (message: string) => (/[.!?…]$/.test(message) ? message : `${message}.`);
@@ -26,6 +27,7 @@ const sentence = (message: string) => (/[.!?…]$/.test(message) ? message : `${
  * (headline, title, skills…) and image descriptions. Edited posts are marked "Edited".
  */
 export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSaved: (post: PostView) => void; onCancel: () => void }) {
+  const t = useT();
   const id = useId();
   const [body, setBody] = useState(post.body);
   const [celebration, setCelebration] = useState<CelebrationFields>({
@@ -56,9 +58,9 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
     };
     const text = body.trim();
     if (!text) set("text", "Write something before saving");
-    else if (text.length > max) set("text", `Posts can be up to ${max.toLocaleString("en")} characters`);
+    else if (text.length > max) set("text", t("Posts can be up to {count} characters", { count: max.toLocaleString("en") }));
     if (post.type === "question" && text && text.length < 10) set("text", "Write your question (at least 10 characters)");
-    if (post.type === "article" && text && text.length < ARTICLE_MIN_CHARS) set("text", `Articles need at least ${ARTICLE_MIN_CHARS} characters`);
+    if (post.type === "article" && text && text.length < ARTICLE_MIN_CHARS) set("text", t("Articles need at least {ARTICLEMINCHARS} characters", { ARTICLEMINCHARS: ARTICLE_MIN_CHARS }));
     const input: UpdatePostInput = { body: text };
     if (images.length) input.altTexts = Object.fromEntries(images.map((image) => [image.id, (alts[image.id] ?? "").trim()]));
     if (post.type === "celebration") {
@@ -153,7 +155,7 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
               {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media */}
               <img src={image.url} alt="" className="size-11 shrink-0 rounded-md object-cover" />
               <label htmlFor={`${id}-alt-${image.id}`} className="sr-only">
-                Description for image {index + 1}
+                <T vars={{ count: index + 1 }}>{"Description for image {count}"}</T>
               </label>
               <input
                 id={`${id}-alt-${image.id}`}

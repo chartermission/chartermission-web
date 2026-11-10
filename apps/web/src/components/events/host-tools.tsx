@@ -13,6 +13,7 @@ import { toast } from "@/components/social/toast";
 import { api } from "@/lib/api/client";
 import { LifecycleChip } from "./event-meta";
 import { canEditEvent } from "./rules";
+import { useT } from "@/i18n/client";
 
 const SUBMITTABLE = new Set<EventDetail["status"]>(["draft", "changes_requested", "rejected", "unpublished"]);
 
@@ -125,6 +126,7 @@ function SubmitDialog({ event, canPublishDirectly, onClose }: { event: EventDeta
 }
 
 function CancelEventDialog({ event, onClose }: { event: EventDetail; onClose: () => void }) {
+  const t = useT();
   const router = useRouter();
   const id = useId();
   const [reason, setReason] = useState("");
@@ -153,7 +155,7 @@ function CancelEventDialog({ event, onClose }: { event: EventDetail; onClose: ()
   return (
     <Dialog
       title="Cancel this event?"
-      description={people ? `${people} registered and waitlisted ${people === 1 ? "member" : "members"} will be notified in the app and by email.` : "Nobody has registered yet."}
+      description={people ? t("{count} registered and waitlisted members will be notified in the app and by email.", { count: people }) : "Nobody has registered yet."}
       onClose={onClose}
       width={480}
       footer={

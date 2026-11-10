@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ChapterRef, FollowInput, FollowsQuery, FollowView, Page } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { blocks, chapters, follows, hashtags, pages } from '../db/schema.js';
+import { ChapterRules } from '../core/chapter-rules.service.js';
 import { MembersService } from '../core/members.service.js';
 import { PageRefsService } from '../core/page-refs.service.js';
 import { RelationsService } from '../core/relations.service.js';
@@ -35,6 +36,7 @@ export class FollowsService {
     private readonly members: MembersService,
     private readonly events: EventsService,
     private readonly pageRefs: PageRefsService,
+    private readonly chapterRules: ChapterRules,
   ) {}
 
   /** A page by id or slug. Only live pages can be followed; any page can be unfollowed. */
@@ -78,6 +80,7 @@ export class FollowsService {
   /** POST /follows. Returns true when a new follow was created. */
   async follow(userId: string, input: FollowInput): Promise<boolean> {
     const target = await this.resolve(userId, input, true);
+    if (target.targetType === 'chapter') await this.chapterRules.assertCanJoin(userId, target.targetId);
     const created = await this.db.transaction(async (tx) => {
       if (target.targetType === 'hashtag') {
         await tx.insert(hashtags).values({ tag: target.targetId, display: target.display! }).onConflictDoNothing();

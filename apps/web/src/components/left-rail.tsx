@@ -12,12 +12,12 @@ async function ProfileSummary() {
   if (!viewer) return null;
   const [own, profile] = await Promise.all([
     apiGet<OwnProfile>("/me/profile").catch(() => null),
-    apiGetOrNull<MemberProfile>(`/members/${viewer.handle}`).catch(() => null),
+    apiGetOrNull<MemberProfile>(`/${viewer.handle}`).catch(() => null),
   ]);
   const percent = own?.completeness.percent ?? null;
   return (
     <Panel className="flex flex-col gap-2.5 p-4">
-      <Link href={`/members/${viewer.handle}`} className="group flex items-center gap-3">
+      <Link href={`/${viewer.handle}`} className="group flex items-center gap-3">
         <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} size={56} tone={viewer.tone} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-md font-medium text-ink group-hover:underline">{viewer.name}</span>

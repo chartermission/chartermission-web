@@ -19,8 +19,12 @@ import { EmptyState, LoadingStatus, PanelSkeleton, SectionError } from "@/compon
 import { Toaster } from "@/components/social/toast";
 import { apiGet } from "@/lib/api/server";
 import { getTaxonomies } from "@/lib/taxonomies";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Network" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Network") };
+}
 
 const tabs = [
   { value: "connections", label: "Connections" },

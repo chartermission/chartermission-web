@@ -9,6 +9,7 @@ import type { Viewer } from "@/components/social/viewer";
 import { FollowMemberButton } from "./follow-buttons";
 import { MomentCard } from "./moment-card";
 import { daysAgo } from "./moment-parts";
+import { useT, useIntlTag } from "@/i18n/client";
 
 function scopeOf(scope: NewMembersMoment["scope"]) {
   switch (scope.type) {
@@ -23,6 +24,8 @@ function scopeOf(scope: NewMembersMoment["scope"]) {
 
 /** "Say hello to new members in …": up to six recent joiners in a scrollable row, each with Follow. */
 export function NewMembersCard({ moment, viewer }: { moment: NewMembersMoment; viewer: Viewer }) {
+  const t = useT();
+  const intl = useIntlTag();
   const { place, href } = scopeOf(moment.scope);
   const members = moment.members.filter((member) => member.id !== viewer.id).slice(0, 6);
   if (!members.length) return null;
@@ -37,7 +40,7 @@ export function NewMembersCard({ moment, viewer }: { moment: NewMembersMoment; v
                 Say hello to new members{place ? ` in ${place}` : " on Charter Mission"}
               </h2>
               <p className="text-sm text-secondary">
-                {total === 1 ? "1 person" : `${total} people`} joined in the last {NEW_MEMBER_DAYS} days. A follow is a warm welcome.
+                {total === 1 ? "1 person" : t("{count} people", { count: total })} joined in the last {NEW_MEMBER_DAYS} days. A follow is a warm welcome.
               </p>
             </div>
             <Link href={href} className="flex shrink-0 items-center gap-0.5 rounded-sm pt-1 text-sm font-medium text-primary-light hover:underline">
@@ -46,7 +49,7 @@ export function NewMembersCard({ moment, viewer }: { moment: NewMembersMoment; v
             </Link>
           </div>
           <ul
-            aria-label={`New members${place ? ` in ${place}` : ""}`}
+            aria-label={(place ? t("New members in {place}", { place }) : t("New members"))}
             className="-mx-5 flex snap-x scroll-px-5 gap-3 overflow-x-auto px-5 pb-1 max-sm:-mx-4 max-sm:scroll-px-4 max-sm:px-4"
           >
             {members.map((member) => (
@@ -65,7 +68,7 @@ export function NewMembersCard({ moment, viewer }: { moment: NewMembersMoment; v
                   </Link>
                   <p className="line-clamp-2 min-h-8 text-xs text-secondary">{member.headline ?? "New member"}</p>
                   <p className="text-xs text-success">
-                    Joined <time dateTime={member.joinedAt}>{daysAgo(member.joinedAt)}</time>
+                    Joined <time dateTime={member.joinedAt}>{daysAgo(member.joinedAt, intl)}</time>
                   </p>
                 </div>
                 <FollowMemberButton member={member} following={member.isFollowing} block className="mt-auto" />

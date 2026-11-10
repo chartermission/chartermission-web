@@ -7,6 +7,7 @@ import { WriteArticleButton } from "./write-article-button";
 import { articleHref, authorHref } from "@/components/social/links";
 import { Bone } from "@/components/social/skeletons";
 import { ArticleCounts, ArticleDate, CoverImage } from "./article-card";
+import { T } from "@/i18n/client";
 
 /** The featured article: large cover, title, subtitle, author, date and reading time. */
 export function FeaturedArticle({ post }: { post: PostView }) {
@@ -52,7 +53,7 @@ export function FeaturedArticle({ post }: { post: PostView }) {
                 )}
                 <ArticleDate iso={post.createdAt} />
                 <span aria-hidden="true">·</span>
-                <span>{article.readingMinutes} min read</span>
+                <span><T vars={{ readingMinutes: article.readingMinutes }}>{"{readingMinutes} min read"}</T></span>
               </p>
             </div>
           </div>
@@ -92,7 +93,7 @@ export function PopularArticles({ posts, className }: { posts: PostView[]; class
                 <p className="flex flex-wrap items-center gap-x-1 text-xs text-secondary">
                   <span className="truncate">{post.author.name}</span>
                   <span aria-hidden="true">·</span>
-                  <span>{post.article?.readingMinutes ?? 1} min read</span>
+                  <span><T vars={{ count: post.article?.readingMinutes ?? 1 }}>{"{count} min read"}</T></span>
                   <span aria-hidden="true">·</span>
                   <span className="flex items-center gap-1">
                     <Icon name="like" size={12} />

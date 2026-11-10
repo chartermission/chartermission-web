@@ -6,9 +6,11 @@ import { Icon, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { formatCount, timeLeft } from "./format";
 import { toast } from "./toast";
+import { T, useT } from "@/i18n/client";
 
 /** Poll with vote buttons; results show after voting or once it closes (POST /posts/{id}/poll/vote). */
 export function PostPoll({ postId, poll, onUpdated }: { postId: string; poll: PollView; onUpdated: (post: PostView) => void }) {
+  const t = useT();
   const [busy, setBusy] = useState<string | null>(null);
   const showResults = poll.closed || poll.myVoteOptionId !== null;
 
@@ -23,10 +25,10 @@ export function PostPoll({ postId, poll, onUpdated }: { postId: string; poll: Po
     }
   }
 
-  const footer = `${formatCount(poll.totalVotes)} vote${poll.totalVotes === 1 ? "" : "s"} · ${poll.closed ? "Final results" : timeLeft(poll.closesAt)}`;
+  const footer = `${t("{count} votes", { count: poll.totalVotes })} · ${poll.closed ? t("Final results") : timeLeft(t, poll.closesAt)}`;
 
   return (
-    <div className="flex w-full flex-col gap-2" role="group" aria-label={`Poll: ${poll.question}`}>
+    <div className="flex w-full flex-col gap-2" role="group" aria-label={t("Poll: {question}", { question: poll.question })}>
       <p className="text-md font-medium text-ink">{poll.question}</p>
       {poll.options.map((option) => {
         const chosen = poll.myVoteOptionId === option.id;
@@ -54,7 +56,7 @@ export function PostPoll({ postId, poll, onUpdated }: { postId: string; poll: Po
                 )}
               </span>
               <span className={cn("relative text-sm font-medium", chosen ? "text-primary" : "text-secondary")}>
-                {option.percent}%<span className="sr-only">, {formatCount(option.votes)} votes</span>
+                {option.percent}%<span className="sr-only"><T vars={{ count: formatCount(option.votes) }}>{", {count} votes"}</T></span>
               </span>
             </div>
           );

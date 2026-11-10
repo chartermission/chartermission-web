@@ -89,7 +89,7 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[240px] flex-1">
           <span className="sr-only">Search topics</span>
-          <Icon name="search" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-secondary" />
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 left-3 my-auto h-fit text-secondary" />
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search topics" className={inputClasses(false, "pl-9")} />
         </label>
         <SegmentedControl

@@ -1,13 +1,15 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { Translate } from "@/i18n/translate";
+import { useT, useIntlTag } from "@/i18n/client";
 
 const noSubscribe = () => () => {};
 
-function format(iso: string, timeZone?: string) {
+function format(intl: string, iso: string, timeZone?: string) {
   const date = new Date(iso);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(intl, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -23,16 +25,16 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-function ago(iso: string, now: number, timeZone?: string) {
+function ago(intl: string, t: Translate, iso: string, now: number, timeZone?: string) {
   const diff = Math.max(0, now - new Date(iso).getTime());
   if (diff < MINUTE) return "just now";
-  if (diff < HOUR) return `${Math.floor(diff / MINUTE)} min ago`;
-  if (diff < DAY) return `${Math.floor(diff / HOUR)} h ago`;
+  if (diff < HOUR) return t("{count} min ago", { count: Math.floor(diff / MINUTE) });
+  if (diff < DAY) return t("{count} h ago", { count: Math.floor(diff / HOUR) });
   if (diff < 7 * DAY) {
     const days = Math.floor(diff / DAY);
-    return days === 1 ? "yesterday" : `${days} days ago`;
+    return days === 1 ? "yesterday" : t("{count} days ago", { count: days });
   }
-  return `on ${new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone })}`;
+  return `on ${new Date(iso).toLocaleDateString(intl, { day: "numeric", month: "short", year: "numeric", timeZone })}`;
 }
 
 /**
@@ -40,10 +42,11 @@ function ago(iso: string, now: number, timeZone?: string) {
  * the browser's zone, so it renders UTC and the client swaps in local time after hydration.
  */
 export function LocalDateTime({ iso, className }: { iso: string; className?: string }) {
+  const intl = useIntlTag();
   const text = useSyncExternalStore(
     noSubscribe,
-    () => format(iso),
-    () => format(iso, "UTC"),
+    () => format(intl, iso),
+    () => format(intl, iso, "UTC"),
   );
   return (
     <time dateTime={iso} className={className}>
@@ -54,10 +57,12 @@ export function LocalDateTime({ iso, className }: { iso: string; className?: str
 
 /** "Edited 2 h ago" style relative time, local-zone date for older ones. */
 export function TimeAgo({ iso, prefix, className }: { iso: string; prefix: string; className?: string }) {
+  const intl = useIntlTag();
+  const t = useT();
   const text = useSyncExternalStore(
     noSubscribe,
-    () => ago(iso, Date.now()),
-    () => ago(iso, Date.now(), "UTC"),
+    () => ago(intl, t, iso, Date.now()),
+    () => ago(intl, t, iso, Date.now(), "UTC"),
   );
   return (
     <time dateTime={iso} className={className}>

@@ -10,8 +10,12 @@ import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { can } from "@/components/social/viewer";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "My events" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("My events") };
+}
 
 type SearchParams = PageProps<"/[locale]/events/mine">["searchParams"];
 

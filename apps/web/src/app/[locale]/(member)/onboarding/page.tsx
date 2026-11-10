@@ -9,8 +9,12 @@ import { RestrictedPrompt } from "@/components/account/verify-prompt";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { getTaxonomies, groupCountries } from "@/lib/taxonomies";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Set up your profile" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Set up your profile") };
+}
 
 function WizardSkeleton() {
   return (

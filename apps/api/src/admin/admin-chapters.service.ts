@@ -54,6 +54,8 @@ export class AdminChaptersService {
         photoUrl: chapters.photoUrl,
         photoCredit: chapters.photoCredit,
         photoCreditUrl: chapters.photoCreditUrl,
+        postApproval: sql<'direct' | 'review' | null>`${chapters.postApproval}`,
+        pendingPosts: sql<number>`(select count(*)::int from ${posts} p where p.chapter_id = ${chapters.id} and p.status = 'in_review' and p.deleted_at is null)`,
         followers,
         posts: postCount,
         createdAt: chapters.createdAt,

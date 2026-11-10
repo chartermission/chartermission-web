@@ -9,9 +9,11 @@ import { Dialog } from "@/components/social/dialog";
 import { errorMessage } from "@/components/social/error-message";
 import { inputClasses } from "@/components/auth/fields";
 import { StoryViewer } from "./story-viewer";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 /** Highlights row on a member profile: named story collections. The owner can add, edit and delete them. */
 export function ProfileHighlights({ initial, own, name }: { initial: HighlightView[]; own: boolean; name: string }) {
+  const t = useT();
   const [list, setList] = useState(initial);
   const [open, setOpen] = useState<number | null>(null);
   const [editing, setEditing] = useState<HighlightView | "new" | null>(null);
@@ -44,7 +46,7 @@ export function ProfileHighlights({ initial, own, name }: { initial: HighlightVi
               type="button"
               onClick={() => h.stories.length && setOpen(index)}
               className="size-[68px] overflow-hidden rounded-full border-2 border-line bg-muted p-[2px] focus-visible:outline-2 focus-visible:outline-primary-light"
-              aria-label={`Open highlight ${h.title}${own ? "" : ` from ${name}`}`}
+              aria-label={(own ? t("Open highlight {title}", { title: h.title }) : t("Open highlight {title} from {name}", { title: h.title, name }))}
             >
               {h.coverUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- permission-checked media URL
@@ -95,7 +97,7 @@ export function ProfileHighlights({ initial, own, name }: { initial: HighlightVi
       )}
       {deleting && (
         <ConfirmDialog
-          title={`Delete “${deleting.title}”?`}
+          title={t("Delete “{title}”?", { title: deleting.title })}
           confirmLabel="Delete highlight"
           danger
           onConfirm={async () => {
@@ -113,6 +115,8 @@ export function ProfileHighlights({ initial, own, name }: { initial: HighlightVi
 
 /** Create or edit a highlight: a name and stories chosen from the last 30 days. */
 function HighlightEditor({ highlight, onClose, onSaved }: { highlight: HighlightView | null; onClose: () => void; onSaved: (h: HighlightView) => void }) {
+  const intl = useIntlTag();
+  const t = useT();
   const id = useId();
   const [title, setTitle] = useState(highlight?.title ?? "");
   const [stories, setStories] = useState<StoryView[] | null>(null);
@@ -186,7 +190,7 @@ function HighlightEditor({ highlight, onClose, onSaved }: { highlight: Highlight
       {stories && stories.length > 0 && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 text-sm font-medium text-ink">
-            Stories <span className="font-normal text-secondary">({selected.length} selected)</span>
+            Stories <span className="font-normal text-secondary"><T vars={{ count: selected.length }}>{"({count} selected)"}</T></span>
           </legend>
           <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {stories.map((s) => {
@@ -199,7 +203,7 @@ function HighlightEditor({ highlight, onClose, onSaved }: { highlight: Highlight
                       // eslint-disable-next-line @next/next/no-img-element -- permission-checked media URL
                       <img src={thumb} alt="" className="size-full object-cover" />
                     )}
-                    <input type="checkbox" checked={checked} onChange={() => toggle(s.id)} className="absolute start-2 top-2 size-4 accent-primary" aria-label={`${s.caption ?? (s.media.kind === "video" ? "Video" : "Photo")} story from ${new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`} />
+                    <input type="checkbox" checked={checked} onChange={() => toggle(s.id)} className="absolute start-2 top-2 size-4 accent-primary" aria-label={t("{caption} story from {date}", { caption: s.caption ?? (s.media.kind === "video" ? t("Video") : t("Photo")), date: new Date(s.createdAt).toLocaleDateString(intl, { day: "numeric", month: "short" }) })} />
                     {s.media.kind === "video" && <Icon name="video" size={14} className="absolute bottom-2 end-2 text-inverse" />}
                   </label>
                 </li>

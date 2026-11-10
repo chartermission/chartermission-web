@@ -82,10 +82,18 @@ export const chapters = pgTable(
     photoUrl: text('photo_url'),
     photoCredit: text('photo_credit'),
     photoCreditUrl: text('photo_credit_url'),
+    /**
+     * Whether members' posts appear in the chapter straight away ('direct') or wait for the chapter
+     * team or staff to approve them ('review'). Null follows the platform setting (chapter_posts).
+     */
+    postApproval: text('post_approval'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [check('chapters_status_ck', sql`${t.status} in ('proposed','active','dormant','closed')`)],
+  (t) => [
+    check('chapters_status_ck', sql`${t.status} in ('proposed','active','dormant','closed')`),
+    check('chapters_post_approval_ck', sql`${t.postApproval} is null or ${t.postApproval} in ('direct','review')`),
+  ],
 );
 
 /* ======================= Identity and access (5.1) ======================= */
@@ -213,6 +221,9 @@ export const memberProfiles = pgTable(
     avatarFileId: uuid('avatar_file_id'),
     /** Wide banner at the top of the profile (profile_cover upload). */
     coverFileId: uuid('cover_file_id'),
+    /** Intro video (profile_video upload) and résumé (profile_resume upload, a PDF). */
+    introVideoFileId: uuid('intro_video_file_id'),
+    resumeFileId: uuid('resume_file_id'),
     avatarTone: text('avatar_tone').notNull().default('tint'),
     profileVisibility: text('profile_visibility').notNull().default('members'),
     fieldVisibility: jsonb('field_visibility').$type<Record<string, string>>().notNull().default({}),
@@ -462,7 +473,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','profile_video','profile_resume')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -516,8 +527,18 @@ export const posts = pgTable(
       description: string | null;
       imageUrl: string | null;
     } | null>(),
+    /**
+     * 'in_review' waits for the chapter team's approval and 'declined' was turned down or taken out
+     * of the chapter; like 'pending_media', both are seen only by the author and the reviewers.
+     */
     status: text('status').notNull().default('published'),
     moderationState: text('moderation_state').notNull().default('visible'),
+    /** Chapter approval: null when the post never needed it, else 'pending', 'approved' or 'declined'. */
+    chapterReview: text('chapter_review'),
+    chapterReviewBy: uuid('chapter_review_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    chapterReviewAt: ts('chapter_review_at'),
+    /** The reviewer's note to the author (why it was declined, held or removed). */
+    chapterReviewNote: text('chapter_review_note'),
     pinnedAt: ts('pinned_at'),
     editedAt: ts('edited_at'),
     deletedAt: ts('deleted_at'),
@@ -540,7 +561,8 @@ export const posts = pgTable(
     check('posts_kind_ck', sql`${t.kind} in ('standard','announcement')`),
     check('posts_type_ck', sql`${t.type} in ('standard','question','celebration','request','article')`),
     check('posts_visibility_ck', sql`${t.visibility} in ('members','public')`),
-    check('posts_status_ck', sql`${t.status} in ('pending_media','published')`),
+    check('posts_status_ck', sql`${t.status} in ('pending_media','published','in_review','declined')`),
+    check('posts_chapter_review_ck', sql`${t.chapterReview} is null or ${t.chapterReview} in ('pending','approved','declined')`),
     check('posts_mod_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
   ],
 );
@@ -1600,6 +1622,71 @@ export const chapterPins = pgTable(
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.chapterId, t.postId] }), index('chapter_pins_post_idx').on(t.postId)],
+);
+
+/* ============================== Messages ============================== */
+
+/**
+ * A private conversation between two members. There is one per pair: member_a is always the
+ * smaller id, so the pair can be found whichever of the two opens it.
+ */
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: id(),
+    memberA: uuid('member_a')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    memberB: uuid('member_b')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** When each of the two last opened the conversation; later messages from the other are unread. */
+    aReadAt: ts('a_read_at'),
+    bReadAt: ts('b_read_at'),
+    lastMessageAt: ts('last_message_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('conversations_pair_ux').on(t.memberA, t.memberB),
+    index('conversations_a_idx').on(t.memberA, t.lastMessageAt),
+    index('conversations_b_idx').on(t.memberB, t.lastMessageAt),
+    check('conversations_order_ck', sql`${t.memberA} < ${t.memberB}`),
+  ],
+);
+
+export const messages = pgTable(
+  'messages',
+  {
+    id: id(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    senderId: uuid('sender_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+    /** Deleted by its sender: the text is cleared and the other member sees that a message was deleted. */
+    deletedAt: ts('deleted_at'),
+  },
+  (t) => [index('messages_conversation_idx').on(t.conversationId, t.createdAt)],
+);
+
+/** Members a chapter's team has barred from the chapter: they can't join it or post in it. */
+export const chapterBans = pgTable(
+  'chapter_bans',
+  {
+    chapterId: uuid('chapter_id')
+      .notNull()
+      .references(() => chapters.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    bannedBy: uuid('banned_by').references(() => users.id, { onDelete: 'set null' }),
+    reason: text('reason'),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.chapterId, t.userId] }), index('chapter_bans_user_idx').on(t.userId)],
 );
 
 /* ============================ Opportunities ============================ */

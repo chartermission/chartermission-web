@@ -19,6 +19,7 @@ import { Field, FormAlert, describedBy, inputClasses, retryMessage } from "@/com
 import { ChipPicker } from "./chip-picker";
 import { CommunityStep } from "./community-step";
 import { OnboardingProgress } from "./progress";
+import { T, useT } from "@/i18n/client";
 
 type StepKey = (typeof ONBOARDING_STEPS)[number];
 
@@ -90,6 +91,7 @@ export function OnboardingWizard({
   countryGroups: CountryGroup[];
   viewer: { name: string; tone: AvatarTone; emailVerified: boolean };
 }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -207,7 +209,7 @@ export function OnboardingWizard({
       } else if (isApiError(error, "ACCOUNT_SUSPENDED") || isApiError(error, "ACCOUNT_DEACTIVATED")) {
         setFormError({ text: error.message, restricted: true });
       } else if (isApiError(error, "RATE_LIMITED")) {
-        setFormError({ text: retryMessage(error.retryAfter) });
+        setFormError({ text: retryMessage(t, error.retryAfter) });
       } else {
         setFormError({ text: isApiError(error) ? error.message : "Something went wrong. Please try again." });
       }
@@ -258,7 +260,7 @@ export function OnboardingWizard({
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-6 pt-8 pb-16 max-sm:px-4 max-sm:pt-5">
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-accent">Welcome to Charter Mission, {firstName}</p>
+        <p className="text-sm font-medium text-accent"><T vars={{ firstName }}>{"Welcome to Charter Mission, {firstName}"}</T></p>
         <OnboardingProgress current={index} />
       </div>
 

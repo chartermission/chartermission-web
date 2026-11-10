@@ -9,8 +9,12 @@ import { RegistrationsView } from "@/components/events/registrations-view";
 import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGetOrNull, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Registrations" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Registrations") };
+}
 
 async function RegistrationsMain({ params }: { params: PageProps<"/[locale]/events/[slug]/registrations">["params"] }) {
   const { slug } = await params;

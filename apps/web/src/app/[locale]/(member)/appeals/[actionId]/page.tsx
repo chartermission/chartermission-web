@@ -10,8 +10,12 @@ import { guidelineHref } from "@/components/account/policy-links";
 import { ACTION_LABELS, APPEAL_STATUS, TARGET_LABELS, expiryText } from "@/components/account/moderation-labels";
 import { SettingsCardSkeleton } from "@/components/settings/settings-card";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Appeal a decision", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Appeal a decision"), robots: { index: false } };
+}
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -23,6 +27,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 async function Appeal({ params }: Pick<PageProps<"/[locale]/appeals/[actionId]">, "params">) {
+  const t = await getT();
   const { actionId } = await params;
   await requireViewer(`/appeals/${actionId}`);
   let actions: MyModerationAction[];
@@ -91,8 +96,8 @@ async function Appeal({ params }: Pick<PageProps<"/[locale]/appeals/[actionId]">
               {action.appeal.status === "open" || action.appeal.status === "in_review"
                 ? "We’ve received your appeal. A different moderator will review it and we’ll notify you of the outcome."
                 : action.appeal.status === "overturned"
-                  ? `Your appeal was successful${action.appeal.decidedAt ? ` (${formatDate(action.appeal.decidedAt)})` : ""}. The decision was reversed and any restriction lifted.`
-                  : `Your appeal was reviewed${action.appeal.decidedAt ? ` on ${formatDate(action.appeal.decidedAt)}` : ""} and the decision stands. Appeal decisions are final.`}
+                  ? (action.appeal.decidedAt ? t("Your appeal was successful ({date}). The decision was reversed and any restriction lifted.", { date: formatDate(action.appeal.decidedAt) }) : t("Your appeal was successful. The decision was reversed and any restriction lifted."))
+                  : (action.appeal.decidedAt ? t("Your appeal was reviewed on {date} and the decision stands. Appeal decisions are final.", { date: formatDate(action.appeal.decidedAt) }) : t("Your appeal was reviewed and the decision stands. Appeal decisions are final."))}
             </p>
             <p className="text-secondary">Each decision can be appealed once.</p>
           </div>

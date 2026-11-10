@@ -24,6 +24,7 @@ import type { Viewer } from "@/components/social/viewer";
 import { BrandCover } from "@/components/illustrations";
 import { articleLongDate, withoutTrailingTags } from "./format";
 import { ReadingProgress } from "./reading-progress";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 type Modal = "report" | "delete" | "block" | "mute" | "repost" | null;
 
@@ -35,6 +36,8 @@ const action = "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-me
  * the overflow menu) and an "about the author" footer. Comments render below, separately.
  */
 export function ArticleReader({ post: initial, viewer, author }: { post: PostView; viewer: Viewer; author: MemberProfile | null }) {
+  const intl = useIntlTag();
+  const t = useT();
   const router = useRouter();
   const [post, setPost] = useState(initial);
   const [reactions, setReactions] = useState<ReactionSnapshot>({
@@ -55,7 +58,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
   // An article published as a page belongs to everyone who manages that page.
   const isOwn = post.page ? post.viewer.canEdit : post.author.id === viewer.id;
   const canFollow = !!author && !author.relationship.self && !isOwn;
-  const subject = `${post.author.name}’s article`;
+  const subject = t("{name}’s article", { name: post.author.name });
   const moderated = post.moderationState && post.moderationState !== "visible";
 
   function update(next: PostView) {
@@ -113,7 +116,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
       {article.coverUrl ? (
         <figure className="overflow-hidden rounded-card border border-line bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media */}
-          <img src={article.coverUrl} alt={coverAlt(article)} className="aspect-[2/1] max-h-[480px] w-full object-cover max-sm:aspect-[16/10]" />
+          <img src={article.coverUrl} alt={coverAlt(t, article)} className="aspect-[2/1] max-h-[480px] w-full object-cover max-sm:aspect-[16/10]" />
         </figure>
       ) : (
         <BrandCover variant="navy" className="aspect-[3/1] rounded-card max-sm:aspect-[2/1]">
@@ -143,7 +146,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
         {editing ? (
           <>
             <h1 id="article-title" className="sr-only">
-              Editing “{article.title}”
+              <T vars={{ title: article.title }}>{"Editing “{title}”"}</T>
             </h1>
             <PostEditForm
               post={post}
@@ -215,10 +218,10 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
                     </>
                   )}
                   <time dateTime={post.createdAt} suppressHydrationWarning>
-                    {articleLongDate(post.createdAt)}
+                    {articleLongDate(intl, post.createdAt)}
                   </time>
                   <span aria-hidden="true">·</span>
-                  <span>{article.readingMinutes} min read</span>
+                  <span><T vars={{ readingMinutes: article.readingMinutes }}>{"{readingMinutes} min read"}</T></span>
                   {post.editedAt && (
                     <>
                       <span aria-hidden="true">·</span>
@@ -227,7 +230,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
                   )}
                 </p>
               </div>
-              <Menu label={`More options for ${subject}`} items={menu} />
+              <Menu label={t("More options for {subject}", { subject })} items={menu} />
             </div>
           </header>
         )}
@@ -265,7 +268,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
             <a href="#add-comment" className={cn(action, "text-secondary")}>
               <Icon name="message" size={18} />
               <span className="max-sm:sr-only">Comment</span>
-              <span className="sr-only"> on {subject}</span>
+              <span className="sr-only"> <T vars={{ subject }}>{"on {subject}"}</T></span>
             </a>
             <button type="button" onClick={() => setModal("repost")} className={cn(action, post.viewer.reposted ? "text-success" : "text-secondary")}>
               <Icon name="repeat" size={18} />
@@ -282,7 +285,7 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
             <button type="button" onClick={copyLink} className={cn(action, "text-secondary")}>
               <Icon name="share" size={18} />
               <span className="max-sm:sr-only">Share</span>
-              <span className="sr-only"> link to {subject}</span>
+              <span className="sr-only"> <T vars={{ subject }}>{"link to {subject}"}</T></span>
             </button>
           </div>
         </div>
@@ -340,12 +343,12 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
       )}
       {modal === "mute" && (
         <ConfirmDialog
-          title={`Mute ${post.author.name}?`}
+          title={t("Mute {name}?", { name: post.author.name })}
           confirmLabel="Mute"
           onClose={() => setModal(null)}
           onConfirm={async () => {
             await api("/mutes", { method: "POST", body: { targetType: "member", targetId: post.author.id } });
-            leave(`${post.author.name} is muted. Their posts won’t appear in your feed.`);
+            leave(t("{name} is muted. Their posts won’t appear in your feed.", { name: post.author.name }));
           }}
         >
           Their posts won’t appear in your feed. They won’t be told, and you stay connected. Unmute any time from their profile.
@@ -353,13 +356,13 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
       )}
       {modal === "block" && (
         <ConfirmDialog
-          title={`Block ${post.author.name}?`}
+          title={t("Block {name}?", { name: post.author.name })}
           confirmLabel="Block"
           danger
           onClose={() => setModal(null)}
           onConfirm={async () => {
             await api(`/blocks/${post.author.id}`, { method: "POST" });
-            leave(`${post.author.name} is blocked. You can unblock them in Settings → Blocked & muted.`);
+            leave(t("{name} is blocked. You can unblock them in Settings → Blocked & muted.", { name: post.author.name }));
           }}
         >
           You won’t see each other’s posts or profiles, and any connection or follow between you is removed. They aren’t told. <UnblockHint />

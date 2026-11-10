@@ -42,6 +42,7 @@ import { PostTypeSwitcher } from "./post-type-switcher";
 import { ScheduleDialog, scheduleLabel } from "./schedule-dialog";
 import { CelebrationForm, FieldError, RequestForm } from "./type-fields";
 import { useDraftSync } from "./use-draft";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 export type ComposeTool = "photo" | "video" | "document" | "link" | "poll" | "topic" | "mention";
 
@@ -130,6 +131,8 @@ export function CreatePostDialog({
   onPosted: (post: PostView) => void;
   onDraftChange?: (draft: DraftView | null) => void;
 }) {
+  const intl = useIntlTag();
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const inPage = presentation === "page";
@@ -306,7 +309,7 @@ export function CreatePostDialog({
     }
     patch({ type: next });
     if (next === "article" && (fileMode === "document" || fileMode === "video") && attachments.items.length === 0) setFileMode(null);
-    setNotice(`${postTypeMeta[next].label} selected`);
+    setNotice(t("{label} selected", { label: postTypeMeta[next].label }));
   }
 
   /** Validate for posting or scheduling; focus the first problem. */
@@ -362,7 +365,7 @@ export function CreatePostDialog({
     try {
       const view = await sync.save({ scheduledFor: iso });
       finishedRef.current = true;
-      toast.success(`Scheduled for ${scheduleLabel(view.scheduledFor ?? iso)}. Find it in Drafts → Scheduled.`);
+      toast.success(t("Scheduled for {scheduleLabel}. Find it in Drafts → Scheduled.", { scheduleLabel: scheduleLabel(intl, view.scheduledFor ?? iso) }));
       close();
     } catch (e) {
       setBusy(null);
@@ -499,7 +502,7 @@ export function CreatePostDialog({
                   const next = event.target.value || undefined;
                   // Pages don't post requests or announcements; those stay with the member.
                   patch({ pageId: next, ...(next ? { announcement: false, ...(type === "request" ? { type: "standard" as const } : {}) } : {}) });
-                  setNotice(next ? `Posting as ${pages.find((p) => p.id === next)?.name ?? "the page"}` : "Posting as yourself");
+                  setNotice(next ? t("Posting as {name}", { name: pages.find((p) => p.id === next)?.name ?? t("the page") }) : "Posting as yourself");
                 }}
                 className="max-w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm font-medium text-ink outline-none focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
               >
@@ -529,12 +532,12 @@ export function CreatePostDialog({
               <p className="min-w-0 flex-1 text-ink">
                 {failed ? (
                   <>
-                    Couldn’t publish{failed.scheduledFor ? ` at ${absoluteDateTime(failed.scheduledFor)}` : ""}: {failed.lastError ?? "something went wrong"}. Fix it
+                    Couldn’t publish{failed.scheduledFor ? ` at ${absoluteDateTime(intl, failed.scheduledFor)}` : ""}: {failed.lastError ?? "something went wrong"}. Fix it
                     and post now, or schedule it again.
                   </>
                 ) : (
                   <>
-                    Scheduled for <span className="font-medium">{scheduleLabel(scheduled!.scheduledFor!)}</span>
+                    Scheduled for <span className="font-medium">{scheduleLabel(intl, scheduled!.scheduledFor!)}</span>
                   </>
                 )}
               </p>
@@ -678,7 +681,7 @@ export function CreatePostDialog({
                 </span>
               )}
               <span id={`${id}-hint`} className="sr-only">
-                Up to {maxBody.toLocaleString("en-US")} characters. Type # to add a topic or @ to mention a member.
+                <T vars={{ count: maxBody.toLocaleString("en-US") }}>{"Up to {count} characters. Type # to add a topic or @ to mention a member."}</T>
               </span>
               <div className={cn(type === "question" && "rounded-card border border-line bg-surface px-4 py-3 [&_.text-md]:text-h3")}>
                 <ComposeEditor
@@ -723,7 +726,7 @@ export function CreatePostDialog({
                     Link
                   </label>
                   <div className="relative">
-                    <Icon name="link" size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-success" />
+                    <Icon name="link" size={16} className="pointer-events-none absolute start-3 inset-y-0 my-auto h-fit text-success" />
                     <input
                       id={`${id}-link`}
                       type="url"
@@ -750,8 +753,8 @@ export function CreatePostDialog({
                 <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
                   <Icon name={previewVideo ? "video" : "link"} size={14} className="text-success" />
                   {previewVideo
-                    ? `A ${VIDEO_PROVIDER_LABELS[previewVideo.provider]} player will be added to your post.`
-                    : `A preview card for ${previewDomain} will be added after you post.`}
+                    ? t("A {label} player will be added to your post.", { label: VIDEO_PROVIDER_LABELS[previewVideo.provider] })
+                    : t("A preview card for {previewDomain} will be added after you post.", { previewDomain })}
                 </p>
               )}
 
@@ -811,7 +814,7 @@ export function CreatePostDialog({
                   {count.toLocaleString("en-US")} / {maxBody.toLocaleString("en-US")}
                 </span>
                 <span className="sr-only" aria-live="polite">
-                  {nearLimit ? `${(maxBody - count).toLocaleString("en-US")} characters left` : ""}
+                  {nearLimit ? t("{count} characters left", { count: (maxBody - count).toLocaleString("en-US") }) : ""}
                 </span>
               </p>
             )}

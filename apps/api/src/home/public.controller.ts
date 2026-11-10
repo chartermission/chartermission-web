@@ -39,7 +39,7 @@ export class PublicOverviewService {
         })
         .from(chapters)
         .where(eq(chapters.status, 'active'))
-        .orderBy(sql`4 desc`, asc(chapters.name))
+        .orderBy(sql`4 desc`, sql`(${chapters.name} ilike '%diaspora%')`, asc(chapters.name))
         .limit(8),
       this.db
         .select({ tag: hashtags.display, posts: sql<number>`count(*)::int` })

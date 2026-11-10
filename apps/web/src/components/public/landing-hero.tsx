@@ -6,6 +6,7 @@ import { Icon, buttonClasses } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import { getViewer } from "@/lib/api/server";
 import { Container } from "./container";
+import { getIntlTag } from "@/i18n/server";
 
 const number = new Intl.NumberFormat("en-GB");
 
@@ -41,7 +42,7 @@ async function HeroCta() {
         <T k="landing.welcomeBack" vars={{ name: first }} />
         <Icon name="chevron-right" size={18} />
       </Link>
-      <Link href={`/members/${viewer.handle}`} className="inline-flex items-center justify-center rounded-lg border border-white/40 px-6 py-3 text-[17px] font-medium whitespace-nowrap text-inverse transition-colors hover:bg-white/10">
+      <Link href={`/${viewer.handle}`} className="inline-flex items-center justify-center rounded-lg border border-white/40 px-6 py-3 text-[17px] font-medium whitespace-nowrap text-inverse transition-colors hover:bg-white/10">
         <T k="landing.yourProfile" />
       </Link>
     </>
@@ -62,7 +63,8 @@ function FloatCard({ className, icon, label, children }: { className: string; ic
 }
 
 /** The brand's Africa network map inside soft rings, with live cards around it. Decorative on small screens. */
-function HeroArt({ overview }: { overview: PublicOverview }) {
+async function HeroArt({ overview }: { overview: PublicOverview }) {
+  const intl = await getIntlTag();
   const topic = overview.trending[0];
   const event = overview.events[0];
   const chapter = overview.topChapters[0];
@@ -108,7 +110,7 @@ function HeroArt({ overview }: { overview: PublicOverview }) {
         <FloatCard className="end-[-4%] bottom-[10%] max-lg:hidden" icon="calendar" label="Coming up">
           <p className="line-clamp-2 text-sm font-semibold text-ink">{event.title}</p>
           <p className="text-xs text-secondary">
-            {new Date(event.startsAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
+            {new Date(event.startsAt).toLocaleDateString(intl, { day: "numeric", month: "short", timeZone: "UTC" })}
             {event.location ? ` · ${event.location}` : event.format === "online" ? " · Online" : ""}
           </p>
         </FloatCard>

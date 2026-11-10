@@ -3,15 +3,18 @@
 import Link from "next/link";
 import type { ChapterHighlightMoment } from "@chartermission/contracts";
 import { ChapterAvatar, Icon, buttonClasses, RoleBadgeIcon } from "@chartermission/ui";
-import { plural } from "@/components/social/format";
+
 import { memberHref, postHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import { FollowChapterButton } from "./follow-buttons";
 import { MomentCard } from "./moment-card";
 import { countryName } from "./moment-parts";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 /** Chapter highlight: the chapter's week in numbers and its top post, Follow chapter / Open chapter. */
 export function ChapterCard({ moment }: { moment: ChapterHighlightMoment }) {
+  const t = useT();
+  const intl = useIntlTag();
   const { chapter, topPost } = moment;
   const chapterHref = `/chapters/${chapter.slug}`;
   return (
@@ -27,7 +30,7 @@ export function ChapterCard({ moment }: { moment: ChapterHighlightMoment }) {
                 </Link>
               </h2>
               <p className="text-sm text-secondary">
-                {countryName(chapter.countryCode)} · This week in the chapter
+                <T vars={{ countryName: countryName(chapter.countryCode, intl) }}>{"{countryName} · This week in the chapter"}</T>
               </p>
             </div>
           </div>
@@ -63,7 +66,7 @@ export function ChapterCard({ moment }: { moment: ChapterHighlightMoment }) {
                 {topPost.excerpt}
               </Link>
               <p className="text-xs text-secondary">
-                {plural(topPost.reactions, "reaction")} · {plural(topPost.comments, "comment")}
+                {t("{count} reactions", { count: topPost.reactions })} · {t("{count} comments", { count: topPost.comments })}
               </p>
             </div>
           )}

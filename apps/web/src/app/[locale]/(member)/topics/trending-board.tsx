@@ -7,6 +7,7 @@ import { Icon, Panel, SegmentedControl, chipClasses, cn } from "@chartermission/
 import { topicHref } from "@/components/social/links";
 import type { ScopeOption } from "./explore-params";
 import { useExploreNav } from "./explore-state";
+import { T, useT } from "@/i18n/client";
 
 const windows = [
   { value: "24h", label: "24h" },
@@ -76,6 +77,7 @@ export function TrendingBoard({
   updated: string | null;
   error: string | null;
 }) {
+  const t = useT();
   const { go, refresh, pending } = useExploreNav();
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? items : items.slice(0, INITIAL_ROWS);
@@ -145,7 +147,7 @@ export function TrendingBoard({
             <span className="flex size-11 items-center justify-center rounded-full bg-accent-light text-accent">
               <Icon name="flame" size={22} />
             </span>
-            <p className="text-md font-medium text-ink">Nothing is trending {where} {period}</p>
+            <p className="text-md font-medium text-ink"><T vars={{ where, period }}>{"Nothing is trending {where} {period}"}</T></p>
             <p className="max-w-sm text-sm text-secondary">Topics trend once several members post about them.{active.scope !== "global" ? " Try a wider scope" : ""}{active.scope !== "global" && window === "24h" ? " or" : window === "24h" ? " Try" : ""}{window === "24h" ? " the 7-day view" : ""}{active.scope !== "global" || window === "24h" ? "." : ""}</p>
             <div className="mt-1 flex flex-wrap justify-center gap-2">
               {active.scope !== "global" && (
@@ -162,7 +164,7 @@ export function TrendingBoard({
           </div>
         ) : (
           <>
-            <ol aria-label={`Trending ${where}, ${period}`} className="flex flex-col divide-y divide-line py-1">
+            <ol aria-label={t("Trending {where}, {period}", { where, period })} className="flex flex-col divide-y divide-line py-1">
               {shown.map((item) => (
                 <Row key={item.tag} item={item} window={window} />
               ))}
@@ -174,7 +176,7 @@ export function TrendingBoard({
                 onClick={() => setExpanded((v) => !v)}
                 className="flex w-full items-center justify-center gap-1 rounded-b-card border-t border-line py-3 text-sm font-medium text-primary-light hover:bg-primary-tint-2"
               >
-                {expanded ? "Show top 10 only" : `Show ${items.length - INITIAL_ROWS} more`}
+                {expanded ? "Show top 10 only" : t("Show {count} more", { count: items.length - INITIAL_ROWS })}
                 <Icon name="chevron-down" size={16} className={expanded ? "rotate-180" : undefined} />
               </button>
             )}

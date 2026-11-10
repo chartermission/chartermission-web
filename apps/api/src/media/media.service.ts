@@ -275,7 +275,8 @@ export class MediaService implements OnModuleInit {
         return await this.reject(file, 'rejected', 'The file’s contents don’t match its type');
       }
       const limits = await this.settings.get('media_limits');
-      const maxSeconds = file.purpose === 'story_video' ? limits.storyVideoMaxSeconds : limits.postVideoMaxSeconds;
+      const maxSeconds =
+        file.purpose === 'story_video' ? limits.storyVideoMaxSeconds : file.purpose === 'profile_video' ? limits.introVideoMaxSeconds : limits.postVideoMaxSeconds;
       let source: VideoProbe;
       try {
         source = await probeVideo(input);
@@ -425,6 +426,7 @@ export async function reencodeImage(data: Buffer, mime: string) {
 
 function describeMimes(purpose: UploadPurpose): string {
   if (purpose === 'post_document') return 'a PDF up to 10 MB';
+  if (purpose === 'profile_resume') return 'a PDF up to 5 MB';
   if (isVideoPurpose(purpose)) return `an MP4, MOV or WebM video up to ${Math.round(UPLOAD_LIMITS[purpose].maxBytes / 1024 / 1024)} MB`;
   return `JPEG, PNG or WebP up to ${Math.round(UPLOAD_LIMITS[purpose].maxBytes / 1024 / 1024)} MB`;
 }

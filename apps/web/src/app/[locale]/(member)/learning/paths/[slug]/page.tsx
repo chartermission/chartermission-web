@@ -12,10 +12,12 @@ import { CourseThumbnail } from "@/components/learning/course-thumbnail";
 import { CourseChips } from "@/components/learning/course-tile";
 import { courseHref, formatMinutes, levelLabel, pathHref } from "@/components/learning/format";
 import { SaveCourseButton } from "@/components/learning/save-course-button";
-import { plural } from "@/components/social/format";
+
 import { Bone, LoadingStatus } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGetOrNull, requireViewer } from "@/lib/api/server";
+import { T } from "@/i18n/client";
+import { getT } from "@/i18n/server";
 
 type Params = PageProps<"/[locale]/learning/paths/[slug]">["params"];
 
@@ -34,11 +36,12 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/learning
   return { title: path.title, description: path.description.slice(0, 160), openGraph: { title: path.title, description: path.description.slice(0, 160) } };
 }
 
-function PathHeader({ path }: { path: LearningPath }) {
+async function PathHeader({ path }: { path: LearningPath }) {
+  const t = await getT();
   const facts = [
     path.level ? { icon: "chart" as const, label: levelLabel(path.level) } : null,
-    path.totalMinutes > 0 ? { icon: "clock" as const, label: `About ${formatMinutes(path.totalMinutes)} in total` } : null,
-    { icon: "book" as const, label: plural(path.courseCount, "course") },
+    path.totalMinutes > 0 ? { icon: "clock" as const, label: t("About {duration} in total", { duration: formatMinutes(path.totalMinutes) }) } : null,
+    { icon: "book" as const, label: t("{count} courses", { count: path.courseCount }) },
   ].filter((f): f is { icon: "chart" | "clock" | "book"; label: string } => !!f);
 
   return (
@@ -83,7 +86,7 @@ function PathStep({ course, index, last }: { course: CourseSummary; index: numbe
       <article className="group relative mb-5 flex min-w-0 flex-1 overflow-hidden rounded-card border border-line bg-card transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-[0px_8px_20px_-8px_rgba(25,37,80,0.18)] max-sm:flex-col">
         <CourseThumbnail course={course} className="w-[200px] shrink-0 max-sm:hidden" />
         <div className="flex min-w-0 flex-1 flex-col gap-2 p-5 max-sm:p-4">
-          <p className="text-label uppercase text-secondary">Step {index + 1}</p>
+          <p className="text-label uppercase text-secondary"><T vars={{ count: index + 1 }}>{"Step {count}"}</T></p>
           <h3 dir="auto" className="text-h3 text-ink">
             <Link href={courseHref(course.slug)} className="rounded-sm hover:text-primary-light hover:underline">
               {course.title}

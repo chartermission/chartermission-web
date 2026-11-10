@@ -6,8 +6,12 @@ import { settle } from "@/components/account/settle";
 import { PageShell } from "@/components/discover/page-shell";
 import { SingleStory } from "@/components/stories/single-story";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Story" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Story") };
+}
 
 async function Story({ params }: { params: PageProps<"/[locale]/stories/[id]">["params"] }) {
   const { id } = await params;

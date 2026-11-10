@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Choose a new password", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Choose a new password"), robots: { index: false } };
+}
 
 async function ResetWithToken({ searchParams }: Pick<PageProps<"/[locale]/reset-password">, "searchParams">) {
   const raw = (await searchParams).token;

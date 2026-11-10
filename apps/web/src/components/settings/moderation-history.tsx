@@ -22,6 +22,7 @@ import {
 } from "@/components/account/moderation-labels";
 import { guidelineHref } from "@/components/account/policy-links";
 import { SettingsCard } from "./settings-card";
+import { T } from "@/i18n/client";
 
 /** Actions on the member's account or content (GET /me/moderation-actions), with appeal entry points. */
 export function ModerationActions({ actions }: { actions: MyModerationAction[] }) {
@@ -64,7 +65,7 @@ export function ModerationActions({ actions }: { actions: MyModerationAction[] }
               <div className="flex flex-wrap items-center justify-between gap-2">
                 {action.policyRef ? (
                   <Link href={guidelineHref(action.policyRef)} className="text-xs font-medium text-primary-light hover:underline">
-                    Guideline: {POLICY_REF_LABELS[action.policyRef]}
+                    <T vars={{ label: POLICY_REF_LABELS[action.policyRef] }}>{"Guideline: {label}"}</T>
                   </Link>
                 ) : (
                   <span />

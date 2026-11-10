@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from "react";
-import type { UnreadCount } from "@chartermission/contracts";
+import type { MessagesUnread, UnreadCount } from "@chartermission/contracts";
 import { AccountBanners, AccountGate } from "@/components/account/account-notices";
 import { TopNav, TopNavBar } from "@/components/top-nav";
 import { apiGet, getViewer } from "@/lib/api/server";
@@ -14,7 +14,10 @@ import { VideoTrimHost } from "@/components/video/video-trim";
 async function ViewerChrome() {
   const viewer = await getViewer().catch(() => null);
   if (!viewer) return <TopNavBar viewer={null} pathname={null} />;
-  const unread = await apiGet<UnreadCount>("/notifications/unread-count").catch(() => ({ unread: 0 }));
+  const [unread, unreadMessages] = await Promise.all([
+    apiGet<UnreadCount>("/notifications/unread-count").catch(() => ({ unread: 0 })),
+    apiGet<MessagesUnread>("/messages/unread").catch(() => ({ unread: 0 })),
+  ]);
   const account = {
     email: viewer.email,
     emailVerified: viewer.emailVerified,
@@ -29,6 +32,7 @@ async function ViewerChrome() {
       <TopNav
         viewer={{ name: viewer.name, handle: viewer.handle, avatarUrl: viewer.avatarUrl, tone: viewer.tone, adminUrl: viewer.adminConsoleUrl }}
         unread={unread.unread}
+        unreadMessages={unreadMessages.unread}
       />
       <LocaleSync accountLocale={viewer.locale} />
       <AccountBanners viewer={account} />

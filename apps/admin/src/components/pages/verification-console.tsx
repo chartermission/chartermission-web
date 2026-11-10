@@ -90,7 +90,7 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
         <ul className={cn("flex flex-col gap-3", loading && "opacity-70")} aria-busy={loading}>
           {rows.map((row) => {
             const subject = row.page ? row.page.name : row.applicant.name;
-            const subjectHref = row.page ? webHref(`/pages/${row.page.slug}`) : webHref(`/members/${row.applicant.handle}`);
+            const subjectHref = row.page ? webHref(`/pages/${row.page.slug}`) : webHref(`/${row.applicant.handle}`);
             return (
               <li key={row.id} className="flex flex-col gap-4 rounded-card border border-line bg-card p-5">
                 <div className="flex flex-wrap items-start gap-3">
@@ -111,7 +111,7 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
                       {row.page ? (
                         <>
                           Requested by{" "}
-                          <a href={webHref(`/members/${row.applicant.handle}`)} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline">
+                          <a href={webHref(`/${row.applicant.handle}`)} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline">
                             {row.applicant.name}
                           </a>{" "}
                           ·{" "}

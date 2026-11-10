@@ -8,8 +8,12 @@ import { requireClientViewer } from "@/components/social/data";
 import { PanelSkeleton } from "@/components/social/skeletons";
 import { apiGetOrNull } from "@/lib/api/server";
 import { formOptions } from "../../form-data";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Edit opportunity" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Edit opportunity") };
+}
 
 async function EditForm({ params }: Pick<PageProps<"/[locale]/opportunities/[slug]/edit">, "params">) {
   const { slug } = await params;

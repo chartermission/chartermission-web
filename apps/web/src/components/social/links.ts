@@ -1,7 +1,8 @@
 /** Canonical in-app paths for social objects. */
 
 export const topicHref = (tag: string) => `/topics/${encodeURIComponent(tag.replace(/^#/, "").toLowerCase())}`;
-export const memberHref = (handle: string) => `/members/${handle}`;
+/** A member's profile: chartermission.com/{username}. */
+export const memberHref = (handle: string) => `/${handle}`;
 
 export const pageHref = (slug: string) => `/pages/${slug}`;
 

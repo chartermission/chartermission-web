@@ -30,6 +30,7 @@ import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { can, isActiveUntil } from '../core/policy.js';
 import { MembersService } from '../core/members.service.js';
+import { ChapterRules } from '../core/chapter-rules.service.js';
 import { PageRefsService } from '../core/page-refs.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
@@ -93,6 +94,7 @@ export class PostsService implements OnModuleInit {
     private readonly media: MediaService,
     private readonly previews: LinkPreviewService,
     private readonly pageRefs: PageRefsService,
+    private readonly chapterRules: ChapterRules,
   ) {}
 
   onModuleInit() {
@@ -150,11 +152,13 @@ export class PostsService implements OnModuleInit {
       const [chapter] = await this.db.select({ id: chapters.id }).from(chapters).where(eq(chapters.id, input.chapterId)).limit(1);
       if (!chapter) throw Errors.validation({ chapterId: 'Choose an existing chapter' });
     }
+    // Chapter rules: barred members can't post here, and posts may wait for the chapter team's approval.
+    const review = input.chapterId && input.kind !== 'announcement' ? (await this.chapterRules.posting(user, input.chapterId)).review : false;
     const tags = parseHashtags(input.body);
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
     const linkUrl = input.linkUrl ?? firstHttpsUrl(input.body);
     // CM-FED rule: a post is visible only after its attachments pass scanning.
-    const status = attachments.every((f) => f.scanStatus === 'clean') ? 'published' : 'pending_media';
+    const status = !attachments.every((f) => f.scanStatus === 'clean') ? 'pending_media' : review ? 'in_review' : 'published';
     const now = new Date();
 
     const post = await this.db.transaction(async (tx) => {
@@ -175,6 +179,7 @@ export class PostsService implements OnModuleInit {
           // Video links get their player straight away; the title and description follow from the preview job.
           linkPreview: linkUrl ? embedPreview(linkUrl) : null,
           status,
+          chapterReview: review ? 'pending' : null,
           pinnedAt: input.kind === 'announcement' ? now : null,
         })
         .returning();
@@ -221,6 +226,7 @@ export class PostsService implements OnModuleInit {
 
     if (linkUrl) await this.queue.add('media', 'link-preview', { postId: post.id });
     if (status === 'published') await this.announce(post);
+    else if (status === 'in_review') await this.events.emit({ type: 'chapter.post_pending', postId: post.id, chapterId: post.chapterId!, authorId: post.authorId });
     this.analytics.track('post_created', user.id, user.countryCode);
     if (input.kind === 'announcement') {
       await this.audit.record({ actorId: user.id, action: 'post.announce', targetType: 'post', targetId: post.id });
@@ -525,12 +531,31 @@ export class PostsService implements OnModuleInit {
         return;
       }
     }
-    const [published] = await this.db
+    // A post that still needs the chapter team's approval waits for it once its files are clean.
+    const next = post.chapterReview === 'pending' && post.chapterId ? 'in_review' : 'published';
+    const [settled] = await this.db
       .update(posts)
-      .set({ status: 'published' })
+      .set({ status: next })
       .where(and(eq(posts.id, postId), eq(posts.status, 'pending_media')))
       .returning();
-    if (published) await this.announce(published);
+    if (!settled) return;
+    if (next === 'published') await this.announce(settled);
+    else await this.events.emit({ type: 'chapter.post_pending', postId: settled.id, chapterId: settled.chapterId!, authorId: settled.authorId });
+  }
+
+  /**
+   * The chapter team approved a waiting post: publish it and tell followers and mentioned members,
+   * exactly as if it had just been posted. Returns false when it was no longer waiting.
+   */
+  async publishApproved(postId: string, reviewerId: string): Promise<boolean> {
+    const [published] = await this.db
+      .update(posts)
+      .set({ status: 'published', chapterReview: 'approved', chapterReviewBy: reviewerId, chapterReviewAt: new Date(), chapterReviewNote: null })
+      .where(and(eq(posts.id, postId), eq(posts.status, 'in_review'), isNull(posts.deletedAt)))
+      .returning();
+    if (!published) return false;
+    await this.announce(published);
+    return true;
   }
 
   private async refreshLinkPreview(postId: string) {

@@ -8,8 +8,12 @@ import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { getTaxonomies, groupCountries } from "@/lib/taxonomies";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Create a page" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Create a page") };
+}
 
 async function NewPage() {
   const viewer = await requireViewer("/pages/new");

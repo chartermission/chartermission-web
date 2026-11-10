@@ -67,7 +67,11 @@ export class NotificationsService {
         .filter((id) => !blocked.has(id))
         .map((id) => refs.get(id))
         .filter((r): r is MemberRef => !!r);
-      const segments = [...actorPrefix(actors.map((a) => a.name), actors.length ? row.actorCount : 0), ...(data.segments ?? [])];
+      const prefix = actorPrefix(actors.map((a) => a.name), actors.length ? row.actorCount : 0);
+      // Some notifications were stored with the actor's name already at the front; don't print it twice.
+      let stored = data.segments ?? [];
+      if (prefix.length && stored[0]?.strong && actors.some((a) => a.name === stored[0]!.text)) stored = stored.slice(1);
+      const segments = [...prefix, ...stored];
       return {
         id: row.id,
         type: row.type as NotificationView['type'],

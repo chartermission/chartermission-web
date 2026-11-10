@@ -4,6 +4,7 @@ import type { PublicOverview } from "@chartermission/contracts";
 import { ChapterAvatar, Icon, buttonClasses, cn, type IconName } from "@chartermission/ui";
 import { getViewer } from "@/lib/api/server";
 import { Container } from "./container";
+import { getT, getIntlTag } from "@/i18n/server";
 
 const number = new Intl.NumberFormat("en-GB");
 
@@ -134,7 +135,8 @@ export function LandingSteps() {
 
 /* ------------------------------- Chapters (live) ------------------------------- */
 
-export function LandingChapters({ overview }: { overview: PublicOverview }) {
+export async function LandingChapters({ overview }: { overview: PublicOverview }) {
+  const t = await getT();
   return (
     <section id="chapters" aria-labelledby="chapters-title" className="scroll-mt-6 bg-surface py-24 max-sm:py-16">
       <Container className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-center gap-14 max-lg:grid-cols-1 max-lg:gap-10">
@@ -171,7 +173,7 @@ export function LandingChapters({ overview }: { overview: PublicOverview }) {
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-md font-semibold text-ink">{chapter.name}</span>
                     <span className="text-xs text-secondary">
-                      {chapter.members > 0 ? `${number.format(chapter.members)} member${chapter.members === 1 ? "" : "s"}` : "Be among the first to join"}
+                      {chapter.members > 0 ? t("{count} members", { count: chapter.members }) : "Be among the first to join"}
                     </span>
                   </span>
                   <Icon name="chevron-right" size={18} className="shrink-0 text-secondary" />
@@ -189,17 +191,19 @@ export function LandingChapters({ overview }: { overview: PublicOverview }) {
 
 /* ------------------------------- Learning and events (live) ------------------------------- */
 
-const eventDate = (iso: string) => {
+const eventDate = (intl: string, iso: string) => {
   const date = new Date(iso);
   return {
-    day: date.toLocaleDateString("en-GB", { day: "numeric", timeZone: "UTC" }),
-    month: date.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }),
+    day: date.toLocaleDateString(intl, { day: "numeric", timeZone: "UTC" }),
+    month: date.toLocaleDateString(intl, { month: "short", timeZone: "UTC" }),
   };
 };
 
 const formatLabel: Record<string, string> = { online: "Online", in_person: "In person", hybrid: "Hybrid" };
 
-export function LandingLearnAndMeet({ overview }: { overview: PublicOverview }) {
+export async function LandingLearnAndMeet({ overview }: { overview: PublicOverview }) {
+  const intl = await getIntlTag();
+  const t = await getT();
   return (
     <section aria-label="Learning and events" className="bg-card py-24 max-sm:py-16">
       <Container className="grid grid-cols-2 gap-6 max-lg:grid-cols-1">
@@ -210,7 +214,7 @@ export function LandingLearnAndMeet({ overview }: { overview: PublicOverview }) 
           </span>
           <h2 className="text-[28px] leading-9 font-bold tracking-[-0.4px] text-inverse">Keep learning with Charter Center</h2>
           <p className="text-md leading-7 text-primary-tint">
-            {overview.courses ? `${number.format(overview.courses)} courses` : "Courses"} and guided learning paths from Charter Center sit inside your membership, synced daily
+            {overview.courses ? t("{count} courses", { count: overview.courses }) : "Courses"} and guided learning paths from Charter Center sit inside your membership, synced daily
             so the catalogue is always current.
           </p>
           <ul className="flex flex-col gap-2 text-md text-inverse">
@@ -233,14 +237,14 @@ export function LandingLearnAndMeet({ overview }: { overview: PublicOverview }) 
           <h2 className="text-[28px] leading-9 font-bold tracking-[-0.4px] text-ink">Meet the community</h2>
           <p className="text-md leading-7 text-body">
             {overview.upcomingEvents > 0
-              ? `${number.format(overview.upcomingEvents)} event${overview.upcomingEvents === 1 ? "" : "s"} coming up, online and in person.`
+              ? t("{count} events coming up, online and in person.", { count: overview.upcomingEvents })
               : "Workshops, meetups and conferences from members and chapters."}{" "}
             Register in a click, join the waitlist when one is full, and get a reminder before it starts.
           </p>
           {overview.events.length > 0 && (
             <ul className="flex flex-col gap-2.5">
               {overview.events.map((event) => {
-                const date = eventDate(event.startsAt);
+                const date = eventDate(intl, event.startsAt);
                 return (
                   <li key={event.slug}>
                     <Link href={`/events/${event.slug}`} className="flex items-center gap-3.5 rounded-card border border-line bg-card px-4 py-3 hover:border-line-strong">
@@ -474,13 +478,14 @@ async function CtaButtons() {
   );
 }
 
-export function LandingCta({ overview }: { overview: PublicOverview }) {
+export async function LandingCta({ overview }: { overview: PublicOverview }) {
+  const t = await getT();
   return (
     <section aria-labelledby="cta-title" className="bg-[linear-gradient(100deg,var(--color-accent)_0%,#ff3a12_60%,var(--color-accent-orange)_100%)] py-16">
       <Container className="flex items-center justify-between gap-8 max-lg:flex-col max-lg:items-start">
         <div className="flex flex-col gap-2">
           <h2 id="cta-title" className="text-[36px] leading-[44px] font-bold tracking-[-0.6px] text-inverse max-sm:text-[28px] max-sm:leading-9">
-            {overview.countries >= 5 ? `Join members in ${number.format(overview.countries)} countries` : "Take your place in the community"}
+            {overview.countries >= 5 ? t("Join members in {count} countries", { count: overview.countries }) : "Take your place in the community"}
           </h2>
           <p className="text-[17px] text-inverse/90">Free to join. Your profile, your visibility settings, your community.</p>
         </div>

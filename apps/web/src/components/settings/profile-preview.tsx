@@ -23,12 +23,18 @@ const shownFields: { key: ProfileField; label: string }[] = [
   { key: "interests", label: "Interests" },
   { key: "languages", label: "Languages" },
   { key: "experience", label: "Experience" },
+  { key: "introVideo", label: "Intro video" },
+  { key: "resume", label: "Résumé" },
 ];
 
 function valueOf(profile: MemberProfile, key: ProfileField): string | string[] | null {
   switch (key) {
     case "network":
       return null;
+    case "introVideo":
+      return profile.introVideo ? "Shown" : null;
+    case "resume":
+      return profile.resume ? profile.resume.name : null;
     case "location":
       return profile.country || profile.city ? [profile.city, profile.country?.name].filter(Boolean).join(", ") : null;
     case "links":

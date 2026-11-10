@@ -7,6 +7,7 @@ import { Button } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { destinationFor } from "./destinations";
 import { Field, FormAlert, describedBy, inputClasses, retryMessage, textLinkClasses } from "./fields";
+import { useT } from "@/i18n/client";
 
 const groupSecret = (secret: string) => secret.replace(/(.{4})/g, "$1 ").trim();
 
@@ -15,6 +16,7 @@ const groupSecret = (secret: string) => secret.replace(/(.{4})/g, "$1 ").trim();
  * (POST /auth/mfa/setup once per visit, then POST /auth/mfa/enable with the first code).
  */
 export function MfaSetupForm({ email, next }: { email: string; next: string | null }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const [setup, setSetup] = useState<MfaSetupResponse | null>(null);
@@ -56,7 +58,7 @@ export function MfaSetupForm({ email, next }: { email: string; next: string | nu
     } catch (e) {
       setSubmitting(false);
       setCode("");
-      if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(e.retryAfter, "Too many incorrect codes."));
+      if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(t, e.retryAfter, "Too many incorrect codes."));
       else if (isApiError(e) && e.status === 401) router.replace("/signin?notice=expired");
       else if (isApiError(e)) setError(e.code === "INVALID_MFA_CODE" ? "That code isn’t right. Try the current one." : e.message);
       else setError("Something went wrong. Please try again.");

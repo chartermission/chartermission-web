@@ -2,10 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { buttonClasses } from "@chartermission/ui";
 import { InitiativeDirectory } from "@/components/initiatives/initiative-directory";
-import { toInitiativeSummary } from "@/components/initiatives/initiative-tile";
+import { toInitiativeSummary } from "@/components/initiatives/initiative-summary";
 import { initiativeCountries, initiativeThemes, initiatives } from "@/lib/mock/initiatives";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Initiatives" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Initiatives") };
+}
 
 /** Initiatives directory — Figma "Web / Initiatives" (node 17:1868, content 17:1921). */
 export default function InitiativesPage() {

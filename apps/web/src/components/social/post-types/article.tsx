@@ -1,20 +1,23 @@
 import Link from "next/link";
+import type { Translate } from "@/i18n/translate";
 import type { PostView } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
 import { BrandCover } from "@/components/illustrations";
 import { articleHref } from "../links";
 import { stripMarkdown } from "./markdown";
+import { useT } from "@/i18n/client";
 
 /** Default alt text when the author didn't describe the cover. */
-export const coverAlt = (article: NonNullable<PostView["article"]>) => article.coverAlt ?? `Cover image for “${article.title}”`;
+export const coverAlt = (t: Translate, article: NonNullable<PostView["article"]>) => article.coverAlt ?? t("Cover image for “{title}”", { title: article.title });
 
 /** Cover image of an article, or nothing when it has none. */
 export function ArticleCover({ article, className }: { article: NonNullable<PostView["article"]>; className?: string }) {
+  const t = useT();
   if (!article.coverUrl) return null;
   return (
     <div className={cn("w-full overflow-hidden bg-muted", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media */}
-      <img src={article.coverUrl} alt={coverAlt(article)} className="size-full object-cover" loading="lazy" />
+      <img src={article.coverUrl} alt={coverAlt(t, article)} className="size-full object-cover" loading="lazy" />
     </div>
   );
 }
@@ -30,6 +33,7 @@ export function articleExcerpt(body: string) {
  * article on its reader page; the full body is never shown here.
  */
 export function ArticlePreview({ post }: { post: PostView }) {
+  const t = useT();
   const article = post.article!;
   const lead = article.subtitle ?? articleExcerpt(post.body);
   return (
@@ -54,7 +58,7 @@ export function ArticlePreview({ post }: { post: PostView }) {
       <div className="w-[148px] shrink-0 overflow-hidden rounded-lg max-sm:w-[88px]">
         {article.coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- permission-checked API media
-          <img src={article.coverUrl} alt={coverAlt(article)} className="size-full min-h-[104px] object-cover max-sm:min-h-[88px]" loading="lazy" />
+          <img src={article.coverUrl} alt={coverAlt(t, article)} className="size-full min-h-[104px] object-cover max-sm:min-h-[88px]" loading="lazy" />
         ) : (
           <BrandCover className="size-full min-h-[104px] max-sm:min-h-[88px]">
             <Icon name="book" size={28} />

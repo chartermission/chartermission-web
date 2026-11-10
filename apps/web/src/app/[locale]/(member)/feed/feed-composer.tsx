@@ -11,6 +11,7 @@ import { onComposeRequest } from "@/components/home/compose-request";
 import { announcePostCreated } from "@/components/social/post-events";
 import { toast } from "@/components/social/toast";
 import type { Viewer } from "@/components/social/viewer";
+import { useT, useIntlTag } from "@/i18n/client";
 
 type Session = { key: number; body?: string } & ComposeStart;
 
@@ -20,10 +21,12 @@ type Session = { key: number; body?: string } & ComposeStart;
  * requestCompose() calls from the welcome strip and the daily prompt card.
  */
 export function FeedComposer({ viewer, compose = false }: { viewer: Viewer; compose?: boolean }) {
+  const intl = useIntlTag();
+  const t = useT();
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const blocked = !!blockedReason(viewer);
+  const blocked = !!blockedReason(intl, t, viewer);
 
   useEffect(() => {
     const open = (start: Omit<Session, "key">) => {
@@ -49,7 +52,9 @@ export function FeedComposer({ viewer, compose = false }: { viewer: Viewer; comp
     toast.success(
       post.status === "pending_media"
         ? "Posted. Your files are being checked; others will see the post once that finishes."
-        : post.kind === "announcement"
+        : post.status === "in_review"
+          ? "Sent to the chapter team for approval. You’ll be told when it’s live."
+          : post.kind === "announcement"
           ? "Announcement published and pinned for all members"
           : post.poll
             ? "Your poll is live"

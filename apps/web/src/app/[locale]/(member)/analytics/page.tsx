@@ -12,12 +12,18 @@ import { absoluteDate } from "@/components/social/format";
 import { postAnalyticsHref } from "@/components/social/links";
 import { EmptyState, LoadingStatus, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT, getIntlTag } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Analytics" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Analytics") };
+}
 
 type Props = PageProps<"/[locale]/analytics">;
 
 async function Overview({ searchParams }: Props) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const query = await searchParams;
   const viewer = await requireViewer("/analytics");
   const days = [7, 28, 90].includes(Number(query.days)) ? Number(query.days) : 28;
@@ -42,7 +48,7 @@ async function Overview({ searchParams }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         {livePages.length > 0 ? (
           <nav aria-label="Whose posts" className="flex flex-wrap gap-2">
-            {[{ slug: null as string | null, name: `${viewer.name} (you)` }, ...livePages].map((item) => {
+            {[{ slug: null as string | null, name: t("{name} (you)", { name: viewer.name }) }, ...livePages].map((item) => {
               const current = (item.slug ?? undefined) === pageSlug;
               return (
                 <Link
@@ -67,19 +73,19 @@ async function Overview({ searchParams }: Props) {
       </div>
 
       <section aria-label="Totals" className="grid grid-cols-4 gap-3 max-md:grid-cols-2">
-        <StatTile icon="eye" label="Impressions" value={formatCount(data.totals.impressions)} trend={change(data.totals.impressions, data.previous.impressions)} note={`In the last ${days} days`} />
-        <StatTile icon="like" label="Engagements" value={formatCount(data.totals.engagements)} trend={change(data.totals.engagements, data.previous.engagements)} note="Reactions, comments, reposts" />
+        <StatTile icon="eye" label="Impressions" value={formatCount(data.totals.impressions)} trend={change(t, data.totals.impressions, data.previous.impressions)} note={t("In the last {count} days", { count: days })} />
+        <StatTile icon="like" label="Engagements" value={formatCount(data.totals.engagements)} trend={change(t, data.totals.engagements, data.previous.engagements)} note="Reactions, comments, reposts" />
         <StatTile icon="trending" label="Engagement rate" value={formatRate(data.totals.engagementRate)} note="Engagements ÷ new viewers" />
         <StatTile
           icon="users"
           label="Followers"
           value={formatCount(data.totals.followers)}
-          note={data.totals.newFollowers ? `${formatCount(data.totals.newFollowers)} new in this period` : "No new followers in this period"}
+          note={data.totals.newFollowers ? t("{count} new in this period", { count: data.totals.newFollowers }) : "No new followers in this period"}
         />
       </section>
 
       <Panel className="p-5">
-        <DailyChart days={data.daily} title={data.page ? `${data.page.name}: day by day` : "Your posts: day by day"} />
+        <DailyChart days={data.daily} title={data.page ? t("{name}: day by day", { name: data.page.name }) : "Your posts: day by day"} />
       </Panel>
 
       <Panel className="flex flex-col gap-4 p-5">
@@ -121,7 +127,7 @@ async function Overview({ searchParams }: Props) {
                       <Link href={postAnalyticsHref(post.id)} className="group flex min-w-0 flex-col">
                         <span className="truncate font-medium text-ink group-hover:underline">{post.title ?? (post.excerpt || "Post without text")}</span>
                         <span className="text-xs text-secondary">
-                          {post.type === "article" ? "Article" : post.type === "question" ? "Question" : "Post"} · {absoluteDate(post.createdAt)}
+                          {post.type === "article" ? "Article" : post.type === "question" ? "Question" : "Post"} · {absoluteDate(intl, post.createdAt)}
                         </span>
                       </Link>
                     </th>

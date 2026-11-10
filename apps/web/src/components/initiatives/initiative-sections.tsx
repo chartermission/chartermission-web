@@ -3,9 +3,12 @@ import { Avatar, Chip, Icon, Panel, PostCard, chipClasses, cn } from "@chartermi
 import { topicHref } from "@/components/feed-list";
 import type { Initiative, Milestone, TeamMember } from "@/lib/mock/initiatives";
 import { JoinRequestTrigger } from "./join-request";
+import { T } from "@/i18n/client";
+import { getT } from "@/i18n/server";
 
 /** "Roles we need" card (Figma 18:1957). */
-export function RolesNeeded({ initiative }: { initiative: Initiative }) {
+export async function RolesNeeded({ initiative }: { initiative: Initiative }) {
+  const t = await getT();
   const acceptsRequests = initiative.status === "recruiting";
   return (
     <Panel aria-labelledby="roles-heading" className="flex flex-col gap-3.5 p-5">
@@ -13,7 +16,7 @@ export function RolesNeeded({ initiative }: { initiative: Initiative }) {
         <h2 id="roles-heading" className="text-h3 text-ink">
           Roles we need
         </h2>
-        <span className="text-sm font-medium text-accent-hover">{initiative.roles.length} open</span>
+        <span className="text-sm font-medium text-accent-hover"><T vars={{ count: initiative.roles.length }}>{"{count} open"}</T></span>
       </div>
       <ul className="flex flex-col gap-3.5">
         {initiative.roles.map((role) => (
@@ -30,7 +33,7 @@ export function RolesNeeded({ initiative }: { initiative: Initiative }) {
               </ul>
             </div>
             {acceptsRequests && (
-              <JoinRequestTrigger roleId={role.id} aria-label={`Apply for ${role.title}`}>
+              <JoinRequestTrigger roleId={role.id} aria-label={t("Apply for {title}", { title: role.title })}>
                 Apply
               </JoinRequestTrigger>
             )}
@@ -99,7 +102,7 @@ export function UpdatesList({ initiative }: { initiative: Initiative }) {
     return (
       <Panel className="flex flex-col items-center gap-1 px-6 py-10 text-center">
         <p className="text-md font-medium text-ink">No updates yet</p>
-        <p className="text-sm text-secondary">Follow this initiative to hear when {initiative.lead.name} posts one.</p>
+        <p className="text-sm text-secondary"><T vars={{ name: initiative.lead.name }}>{"Follow this initiative to hear when {name} posts one."}</T></p>
       </Panel>
     );
   }
@@ -117,7 +120,7 @@ function TeamRow({ member }: { member: TeamMember }) {
   return (
     <li className="flex items-center gap-2.5">
       <Avatar name={member.name} size={32} tone={member.tone} />
-      <Link href={`/members/${member.handle}`} className="group flex min-w-0 flex-1 flex-col">
+      <Link href={`/${member.handle}`} className="group flex min-w-0 flex-1 flex-col">
         <span className="text-sm font-medium text-ink group-hover:underline">{member.name}</span>
         <span className="text-xs text-secondary">{member.role}</span>
       </Link>
@@ -146,7 +149,7 @@ export function TeamPanel({
         </h2>
         {seeAllHref && (
           <a href={seeAllHref} className="text-sm font-medium text-primary-light hover:underline">
-            See all {total}
+            <T vars={{ count: total }}>{"See all {count}"}</T>
           </a>
         )}
       </div>

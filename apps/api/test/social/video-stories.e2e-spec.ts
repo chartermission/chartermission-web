@@ -79,7 +79,7 @@ describe('Video posts, media settings and stories', () => {
     await t.close();
   });
   afterEach(async () => {
-    await t.app.get(SettingsService).set('media_limits', { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60 }, null);
+    await t.app.get(SettingsService).set('media_limits', { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60, introVideoMaxSeconds: 300 }, null);
   });
 
   it('shows a player for video links', async () => {
@@ -92,12 +92,12 @@ describe('Video posts, media settings and stories', () => {
 
   it('lets Platform Admins set the video length limits; members read them', async () => {
     const m = await createMember(t);
-    expect((await m.get('/uploads/limits').expect(200)).body).toEqual({ postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60 });
+    expect((await m.get('/uploads/limits').expect(200)).body).toEqual({ postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60, introVideoMaxSeconds: 300 });
     const mod = await createMember(t, { roles: ['moderator'], admin: true });
-    await mod.put('/admin/settings/media', { postVideoMaxSeconds: 120, storyVideoMaxSeconds: 30 }).expect(403);
-    await admin.put('/admin/settings/media', { postVideoMaxSeconds: 4000, storyVideoMaxSeconds: 30 }).expect(422);
-    const saved = (await admin.put('/admin/settings/media', { postVideoMaxSeconds: 120, storyVideoMaxSeconds: 30 }).expect(200)).body;
-    expect(saved).toEqual({ postVideoMaxSeconds: 120, storyVideoMaxSeconds: 30 });
+    await mod.put('/admin/settings/media', { postVideoMaxSeconds: 120, storyVideoMaxSeconds: 30, introVideoMaxSeconds: 300 }).expect(403);
+    await admin.put('/admin/settings/media', { postVideoMaxSeconds: 4000, storyVideoMaxSeconds: 30, introVideoMaxSeconds: 300 }).expect(422);
+    const saved = (await admin.put('/admin/settings/media', { postVideoMaxSeconds: 120, storyVideoMaxSeconds: 30, introVideoMaxSeconds: 300 }).expect(200)).body;
+    expect(saved).toEqual({ postVideoMaxSeconds: 120, storyVideoMaxSeconds: 30, introVideoMaxSeconds: 300 });
     expect((await m.get('/uploads/limits').expect(200)).body.postVideoMaxSeconds).toBe(120);
     const audit = await t.db.select().from(s.auditLog).where(eq(s.auditLog.action, 'settings.media.updated'));
     expect(audit.length).toBeGreaterThan(0);
@@ -132,7 +132,7 @@ describe('Video posts, media settings and stories', () => {
 
   it('rejects videos longer than the admin limit', async (ctx) => {
     if (!ffmpeg) ctx.skip();
-    await admin.put('/admin/settings/media', { postVideoMaxSeconds: 10, storyVideoMaxSeconds: 5 }).expect(200);
+    await admin.put('/admin/settings/media', { postVideoMaxSeconds: 10, storyVideoMaxSeconds: 5, introVideoMaxSeconds: 300 }).expect(200);
     const m = await createMember(t);
     const data = await makeVideo('long.mp4', 12);
     const id = await uploadBytes(t, m, { purpose: 'post_video', fileName: 'long.mp4', mime: 'video/mp4', data });

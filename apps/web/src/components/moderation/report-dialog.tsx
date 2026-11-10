@@ -12,6 +12,7 @@ import { Button, Icon, buttonClasses, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { Dialog } from "@/components/social/dialog";
 import { ErrorNotice } from "@/components/social/errors";
+import { T, useT } from "@/i18n/client";
 
 const DETAIL_MAX = 1000;
 
@@ -50,6 +51,7 @@ export function ReportDialog({
   subject: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const id = useId();
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [detail, setDetail] = useState("");
@@ -90,7 +92,7 @@ export function ReportDialog({
           <span className="flex size-10 items-center justify-center rounded-full bg-success-light text-success">
             <Icon name="check" size={22} />
           </span>
-          <p className="text-md text-ink">We received your report about {subject}.</p>
+          <p className="text-md text-ink"><T vars={{ subject }}>{"We received your report about {subject}."}</T></p>
           <p className="text-sm text-body">{result.nextSteps}</p>
           <button
             ref={doneRef}
@@ -107,7 +109,7 @@ export function ReportDialog({
 
   return (
     <Dialog
-      title={`Report ${targetNoun[targetType]}`}
+      title={t("Report {value}", { value: targetNoun[targetType] })}
       description={<>Tell us what’s wrong with {subject}. Reports are confidential; the {targetType === "member" ? "member" : "author"} isn’t told who reported.</>}
       onClose={onClose}
       width={520}

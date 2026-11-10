@@ -7,7 +7,8 @@ import { PAGE_CATEGORY_LABELS, type Page, type PageDetail, type PostView } from 
 import { Chip, Icon, Panel, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { PageActions } from "@/components/pages/page-actions";
-import { PageName, followersLabel } from "@/components/pages/page-card";
+import { PageName } from "@/components/pages/page-card";
+import { followersLabel } from "@/components/pages/followers-label";
 import { PageLogo } from "@/components/pages/page-logo";
 import { PagePosts } from "@/components/pages/page-posts";
 import { requireClientViewer } from "@/components/social/data";
@@ -17,6 +18,8 @@ import { MemberAvatar } from "@/components/social/post-parts";
 import { SectionRail } from "@/components/social/section-nav";
 import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
+import { T } from "@/i18n/client";
+import { getT, getIntlTag } from "@/i18n/server";
 
 type Params = PageProps<"/[locale]/pages/[slug]">["params"];
 
@@ -53,6 +56,8 @@ const statusNote: Partial<Record<PageDetail["status"], { tone: string; icon: Ico
 };
 
 async function PageMain({ params }: { params: Params }) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const { slug } = await params;
   const viewer = await requireClientViewer(`/pages/${slug}`);
   const page = await getPage(slug.toLowerCase());
@@ -69,7 +74,7 @@ async function PageMain({ params }: { params: Params }) {
           <Icon name={note.icon} size={20} className="mt-0.5 shrink-0" />
           <p>
             <span className="font-medium">{note.title}.</span> {note.body}
-            {page.reviewNote && page.status !== "pending" && <span className="mt-1 block">Reviewer’s note: “{page.reviewNote}”</span>}
+            {page.reviewNote && page.status !== "pending" && <span className="mt-1 block"><T vars={{ reviewNote: page.reviewNote }}>{"Reviewer’s note: “{reviewNote}”"}</T></span>}
           </p>
         </div>
       )}
@@ -106,9 +111,9 @@ async function PageMain({ params }: { params: Params }) {
             <li className="flex items-center gap-1.5">
               <Icon name="users" size={16} />
               {page.viewer.role && page.followers > 0 ? (
-                <PeopleLink source={{ path: `/pages/${page.slug}/followers`, title: `Followers of ${page.name}` }}>{followersLabel(page.followers)}</PeopleLink>
+                <PeopleLink source={{ path: `/pages/${page.slug}/followers`, title: t("Followers of {name}", { name: page.name }) }}>{followersLabel(t, page.followers)}</PeopleLink>
               ) : (
-                followersLabel(page.followers)
+                followersLabel(t, page.followers)
               )}
             </li>
             {page.website && (
@@ -127,7 +132,7 @@ async function PageMain({ params }: { params: Params }) {
         <Panel className="flex flex-col gap-2 p-5">
           <h2 className="text-h3 text-ink">About</h2>
           <p className="whitespace-pre-line text-md text-body">{page.about}</p>
-          <p className="text-xs text-secondary">On Charter Mission since {absoluteDate(page.createdAt)}</p>
+          <p className="text-xs text-secondary"><T vars={{ date: absoluteDate(intl, page.createdAt) }}>{"On Charter Mission since {date}"}</T></p>
         </Panel>
       )}
 

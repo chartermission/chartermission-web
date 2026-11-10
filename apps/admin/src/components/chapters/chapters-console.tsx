@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { AdminChapterRow, AdminChapterUpdateInput, Country } from "@chartermission/contracts";
+import type { AdminChapterRow, AdminChapterUpdateInput, ChapterPostApproval, ChapterPostsSettings, Country } from "@chartermission/contracts";
 import { Button, ChapterAvatar, ChapterCover, Chip, Icon, SegmentedControl, cn } from "@chartermission/ui";
 import { Field, FormModal, SelectBox } from "@/components/ambassadors/modal";
 import { TextField, inputClasses } from "@/components/form-field";
@@ -9,6 +9,7 @@ import { ReasonDialog } from "@/components/reason-dialog";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
+import { WEB_URL } from "@/lib/navigation";
 import { BulkPictureUpload } from "./bulk-upload";
 import { PictureField } from "./picture-field";
 
@@ -20,8 +21,25 @@ const numberFormat = new Intl.NumberFormat("en-US");
  * Chapter catalogue (GET /admin/chapters). Every change is audited by the API. Removing is only
  * allowed for chapters nobody has used yet; otherwise the API asks to deactivate instead.
  */
-export function ChaptersConsole({ initial, countries }: { initial: AdminChapterRow[]; countries: Country[] }) {
+export function ChaptersConsole({ initial, countries, postRule }: { initial: AdminChapterRow[]; countries: Country[]; postRule: ChapterPostsSettings }) {
   const [rows, setRows] = useState(initial);
+  const [rule, setRule] = useState<ChapterPostApproval>(postRule.approval);
+  const [ruleBusy, setRuleBusy] = useState(false);
+  const waiting = rows.reduce((sum, r) => sum + r.pendingPosts, 0);
+
+  async function changeRule(next: ChapterPostApproval) {
+    if (next === rule || ruleBusy) return;
+    setRuleBusy(true);
+    try {
+      const saved = await api<ChapterPostsSettings>("/admin/settings/chapter-posts", { method: "PUT", body: { approval: next } });
+      setRule(saved.approval);
+      toast(saved.approval === "review" ? "Members’ posts now wait for approval in every chapter that follows the platform rule" : "Members’ posts now appear straight away in every chapter that follows the platform rule");
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      setRuleBusy(false);
+    }
+  }
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [editing, setEditing] = useState<AdminChapterRow | null>(null);
@@ -60,10 +78,34 @@ export function ChaptersConsole({ initial, countries }: { initial: AdminChapterR
 
   return (
     <section className="flex flex-col gap-4">
+      <div aria-labelledby="post-rule" className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-card border border-line bg-card px-5 py-4">
+        <div className="flex max-w-[640px] flex-col gap-1">
+          <h2 id="post-rule" className="text-h3 text-ink">
+            Members’ posts in chapters
+          </h2>
+          <p className="text-sm text-secondary">
+            {rule === "review"
+              ? "A member’s post is seen only by them until the chapter’s Ambassadors, Chapter Leads or the Charter Mission team approve it."
+              : "A member’s post appears in the chapter as soon as it is posted. The chapter’s team can still send it back for review or remove it."}{" "}
+            Ambassadors, Chapter Leads and the team always post directly. A chapter can have its own rule: open it with Edit.
+            {waiting > 0 && ` ${numberFormat.format(waiting)} ${waiting === 1 ? "post is" : "posts are"} waiting for approval.`}
+          </p>
+        </div>
+        <SegmentedControl
+          label="Members’ posts in chapters"
+          size="small"
+          value={rule}
+          onChange={changeRule}
+          items={[
+            { value: "direct", label: "Appear straight away" },
+            { value: "review", label: "Wait for approval" },
+          ]}
+        />
+      </div>
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[240px] flex-1">
           <span className="sr-only">Search chapters</span>
-          <Icon name="search" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-secondary" />
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 left-3 my-auto h-fit text-secondary" />
           <input
             type="search"
             value={query}
@@ -142,7 +184,20 @@ export function ChaptersConsole({ initial, countries }: { initial: AdminChapterR
                       <span className="block text-xs text-secondary">{row.region === "Diaspora" ? "Diaspora" : row.region}</span>
                     </td>
                     <td className="py-3 pr-2.5 text-right text-body tabular-nums">{numberFormat.format(row.followers)}</td>
-                    <td className="py-3 pr-2.5 text-right text-body tabular-nums">{numberFormat.format(row.posts)}</td>
+                    <td className="py-3 pr-2.5 text-right text-body tabular-nums">
+                      {numberFormat.format(row.posts)}
+                      {row.pendingPosts > 0 && (
+                        <a
+                          href={`${WEB_URL}/chapters/${row.slug}#review`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block text-xs font-medium text-accent-hover hover:underline"
+                        >
+                          {numberFormat.format(row.pendingPosts)} to review
+                        </a>
+                      )}
+                      {row.postApproval && <span className="block text-xs text-secondary">{row.postApproval === "review" ? "Approval on" : "Approval off"}</span>}
+                    </td>
                     <td className="py-3 pr-2.5">
                       <Chip tone={active ? "success" : "neutral"}>{active ? "Active" : "Inactive"}</Chip>
                     </td>
@@ -297,6 +352,7 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
           photoUrl: photoUrl.trim() || null,
           photoCredit: String(data.get("photoCredit") ?? "").trim() || null,
           photoCreditUrl: String(data.get("photoCreditUrl") ?? "").trim() || null,
+          postApproval: data.get("postApproval") === "direct" ? "direct" : data.get("postApproval") === "review" ? "review" : null,
           ...(image !== undefined ? { imageFileId: image.fileId } : {}),
           ...(cover !== undefined ? { coverFileId: cover.fileId } : {}),
         };
@@ -324,6 +380,20 @@ function EditChapter({ row, onSaved, onClose }: { row: AdminChapterRow; onSaved:
           )}
         </Field>
       </div>
+      <Field label="Members’ posts" hint="Whether a member’s post appears in this chapter straight away or waits for the chapter team’s approval.">
+        {(id) => (
+          <SelectBox
+            id={id}
+            name="postApproval"
+            defaultValue={row.postApproval ?? "inherit"}
+            options={[
+              { value: "inherit", label: "Follow the platform rule" },
+              { value: "direct", label: "Appear straight away" },
+              { value: "review", label: "Wait for approval" },
+            ]}
+          />
+        )}
+      </Field>
       <PictureField
         label="Display picture"
         hint="Square, at least 800 × 800. Shown in a circle: keep the subject in the middle."

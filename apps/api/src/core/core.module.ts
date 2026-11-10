@@ -5,6 +5,7 @@ import { PageRefsService } from './page-refs.service.js';
 import { BadgesService } from './badges.service.js';
 import { RelationsService } from './relations.service.js';
 import { NotifyService } from './notify.service.js';
+import { ChapterRules } from './chapter-rules.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 import { QueueService } from '../infra/queue.service.js';
 import { EventsService } from '../infra/events.service.js';
@@ -27,6 +28,7 @@ const providers = [
   AuditService,
   AnalyticsService,
   SettingsService,
+  ChapterRules,
 ];
 
 /** Cross-cutting services available to every feature module without importing. */

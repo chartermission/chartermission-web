@@ -74,7 +74,7 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
 
       <div className="flex flex-wrap items-center gap-2">
         <form onSubmit={search} className="relative min-w-[220px] flex-1 sm:max-w-sm" role="search">
-          <Icon name="search" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-secondary" />
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 left-3 my-auto h-fit text-secondary" />
           <input
             type="search"
             value={q}

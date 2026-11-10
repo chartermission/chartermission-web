@@ -10,11 +10,13 @@ import { ErrorNotice } from "../errors";
 import { postHref } from "../links";
 import { toast } from "../toast";
 import { formatDay, requestMeta } from "./meta";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 const NOTE_MAX = 500;
 
 /** "I can help" with an optional note (PUT /posts/{id}/help). */
 function HelpDialog({ post, onClose, onOffered }: { post: PostView; onClose: () => void; onOffered: (post: PostView) => void }) {
+  const t = useT();
   const id = useId();
   const footer = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState("");
@@ -28,7 +30,7 @@ function HelpDialog({ post, onClose, onOffered }: { post: PostView; onClose: () 
     try {
       const updated = await api<PostView>(`/posts/${post.id}/help`, { method: "PUT", body: { note: note.trim() } });
       onOffered(updated);
-      toast.success(`${firstName} will see your offer to help`);
+      toast.success(t("{firstName} will see your offer to help", { firstName }));
       footer.current?.closest("dialog")?.close();
     } catch (e) {
       setError(e);
@@ -39,7 +41,7 @@ function HelpDialog({ post, onClose, onOffered }: { post: PostView; onClose: () 
   return (
     <Dialog
       title="Offer to help"
-      description={<>Let {post.author.name} know you can help with “{post.request?.title}”.</>}
+      description={<><T vars={{ name: post.author.name, title: post.request?.title }}>{"Let {name} know you can help with “{title}”."}</T></>}
       onClose={onClose}
       width={480}
       initialFocus="textarea"
@@ -94,6 +96,8 @@ export function RequestBlock({
   detail: boolean;
   onUpdated: (post: PostView) => void;
 }) {
+  const intl = useIntlTag();
+  const t = useT();
   const request = post.request!;
   const meta = requestMeta[request.category];
   const isOwn = !post.page && post.author.id === viewerId;
@@ -117,11 +121,11 @@ export function RequestBlock({
   const details: { icon: "map-pin" | "globe" | "calendar"; text: string }[] = [];
   if (request.location) details.push({ icon: "map-pin", text: request.location });
   if (request.remote) details.push({ icon: "globe", text: "Remote OK" });
-  if (request.closesOn) details.push({ icon: "calendar", text: `Respond by ${formatDay(request.closesOn)}` });
+  if (request.closesOn) details.push({ icon: "calendar", text: t("Respond by {date}", { date: formatDay(intl, request.closesOn) }) });
 
   return (
     <section
-      aria-label={`Looking for: ${request.title}`}
+      aria-label={t("Looking for: {title}", { title: request.title })}
       className={cn("flex w-full flex-col gap-3 rounded-[10px] border p-4", request.closed ? "border-line bg-muted/60" : "border-primary-tint bg-primary-tint-2")}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -200,7 +204,7 @@ export function RequestBlock({
               className="rounded-sm text-sm font-medium text-secondary hover:text-error hover:underline disabled:opacity-60"
             >
               {busy ? "Withdrawing…" : "Withdraw"}
-              <span className="sr-only"> your offer to help {post.author.name}</span>
+              <span className="sr-only"> <T vars={{ name: post.author.name }}>{"your offer to help {name}"}</T></span>
             </button>
           </>
         ) : (

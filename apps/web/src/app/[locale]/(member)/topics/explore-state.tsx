@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { usePathname } from "@/i18n/client";
+import { usePathname, useT } from "@/i18n/client";
 import { createContext, useCallback, useContext, useMemo, useState, useTransition, type ReactNode } from "react";
 import type { TopicSummary } from "@chartermission/contracts";
 import { Icon, buttonClasses, cn } from "@chartermission/ui";
@@ -77,6 +77,7 @@ export function useSessionFollowed(): TopicSummary[] {
 
 /** A topic's live follow state and follower count, with an optimistic toggle. */
 export function useTopicFollow(topic: TopicSummary) {
+  const t = useT();
   const { entries, set } = useStore();
   const [busy, setBusy] = useState(false);
   const entry = entries[topic.tag.toLowerCase()];
@@ -89,7 +90,7 @@ export function useTopicFollow(topic: TopicSummary) {
     set(topic, next);
     try {
       await api("/follows", { method: next ? "POST" : "DELETE", body: { targetType: "hashtag", targetId: topic.tag.toLowerCase() } });
-      toast.success(next ? `Following #${topic.tag}. Its posts will show up in your feed.` : `Unfollowed #${topic.tag}`);
+      toast.success(next ? t("Following #{tag}. Its posts will show up in your feed.", { tag: topic.tag }) : t("Unfollowed #{tag}", { tag: topic.tag }));
     } catch (e) {
       set(topic, !next);
       toast.error(e);

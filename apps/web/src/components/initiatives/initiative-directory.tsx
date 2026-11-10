@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { Button, FilterSelect, chipClasses } from "@chartermission/ui";
 import { initiativeStatusMeta, type DirectoryStatus } from "@/lib/mock/initiatives";
-import { InitiativeTile, type InitiativeSummary } from "./initiative-tile";
+import { InitiativeTile } from "./initiative-tile";
+import type { InitiativeSummary } from "./initiative-summary";
+import { useT } from "@/i18n/client";
 
 type StatusFilter = "all" | DirectoryStatus;
 
@@ -28,6 +30,7 @@ export function InitiativeDirectory({
   themes: string[];
   countries: string[];
 }) {
+  const t = useT();
   const [status, setStatus] = useState<StatusFilter>("all");
   const [theme, setTheme] = useState("");
   const [country, setCountry] = useState("");
@@ -87,7 +90,7 @@ export function InitiativeDirectory({
       </div>
 
       <p className="sr-only" role="status">
-        {results.length === 1 ? "1 initiative" : `${results.length} initiatives`}
+        {results.length === 1 ? "1 initiative" : t("{count} initiatives", { count: results.length })}
       </p>
 
       {results.length > 0 ? (

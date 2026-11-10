@@ -8,11 +8,13 @@ import { api, isApiError } from "@/lib/api/client";
 import { Field, FormAlert, PasswordInput, describedBy, retryMessage } from "@/components/auth/fields";
 import { PasswordRules, StrengthMeter, passwordRules } from "@/components/auth/password-rules";
 import { SettingsCard } from "./settings-card";
+import { useT } from "@/i18n/client";
 
 type FieldName = "currentPassword" | "newPassword" | "confirm";
 
 /** POST /me/password — keeps this session, signs out the others, sends a security email. */
 export function ChangePasswordForm({ name, email }: { name: string; email: string }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const [values, setValues] = useState({ currentPassword: "", newPassword: "", confirm: "" });
@@ -61,7 +63,7 @@ export function ChangePasswordForm({ name, email }: { name: string; email: strin
       });
       router.refresh();
     } catch (e) {
-      if (isApiError(e, "RATE_LIMITED")) setStatus({ tone: "error", text: retryMessage(e.retryAfter) });
+      if (isApiError(e, "RATE_LIMITED")) setStatus({ tone: "error", text: retryMessage(t, e.retryAfter) });
       else if (isApiError(e) && e.fields) setErrors(e.fields as Partial<Record<FieldName, string>>);
       else setStatus({ tone: "error", text: isApiError(e) ? e.message : "Something went wrong. Please try again." });
     } finally {

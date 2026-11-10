@@ -9,6 +9,7 @@ import { getMediaLimits } from "@/lib/media-limits";
 import { Dialog } from "@/components/social/dialog";
 import { errorMessage } from "@/components/social/error-message";
 import { inputClasses } from "@/components/auth/fields";
+import { T } from "@/i18n/client";
 
 type Status = "idle" | "uploading" | "processing" | "ready" | "error";
 
@@ -137,7 +138,7 @@ export function StoryComposer({ onClose, onPosted }: { onClose: () => void; onPo
       </p>
       {status === "uploading" && (
         <div className="flex flex-col gap-1" aria-live="polite">
-          <span className="text-xs text-secondary">Uploading {Math.round(progress * 100)}%</span>
+          <span className="text-xs text-secondary"><T vars={{ number: Math.round(progress * 100) }}>{"Uploading {number}%"}</T></span>
           <span className="h-1 w-full overflow-hidden rounded bg-muted" role="progressbar" aria-label="Upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
             <span className="block h-full rounded bg-primary-light" style={{ width: `${Math.round(progress * 100)}%` }} />
           </span>

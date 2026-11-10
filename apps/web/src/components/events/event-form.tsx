@@ -35,6 +35,7 @@ import type { CountryGroup } from "@/lib/taxonomies";
 import { uploadFile } from "@/lib/upload";
 import { dayKey, formatClock, formatDay, fromZonedInput, sameWallClock, timeZoneOptions, zoneAbbreviation, zoneCity } from "./time";
 import { useViewerZone } from "./use-viewer-zone";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 /* ---------------- Form state ---------------- */
 
@@ -391,11 +392,12 @@ function move<T>(list: T[], index: number, delta: number): T[] {
 
 /** Up / down / remove for speaker and agenda rows. */
 function RowControls({ index, count, noun, onMove, onRemove }: { index: number; count: number; noun: string; onMove: (delta: number) => void; onRemove: () => void }) {
+  const t = useT();
   return (
     <div className="flex shrink-0 items-center gap-0.5">
-      <IconButton label={`Move ${noun} up`} icon="chevron-down" flip onClick={() => onMove(-1)} disabled={index === 0} />
-      <IconButton label={`Move ${noun} down`} icon="chevron-down" onClick={() => onMove(1)} disabled={index === count - 1} />
-      <IconButton label={`Remove ${noun}`} icon="x" onClick={onRemove} danger />
+      <IconButton label={t("Move {noun} up", { noun })} icon="chevron-down" flip onClick={() => onMove(-1)} disabled={index === 0} />
+      <IconButton label={t("Move {noun} down", { noun })} icon="chevron-down" onClick={() => onMove(1)} disabled={index === count - 1} />
+      <IconButton label={t("Remove {noun}", { noun })} icon="x" onClick={onRemove} danger />
     </div>
   );
 }
@@ -461,6 +463,8 @@ const SUBMITTABLE = new Set(["draft", "changes_requested", "rejected", "unpublis
  * description. Validates with the contract's CreateEventInput before calling the API.
  */
 export function EventForm({ mode, event, viewer, hostOptions, categories, countryGroups }: EventFormProps) {
+  const intl = useIntlTag();
+  const t = useT();
   const router = useRouter();
   const uid = useId();
   const browserZone = useViewerZone();
@@ -645,7 +649,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
   const errorList = Object.entries(showErrors ? shownErrors : {});
 
   const hostChoices = [
-    ...(hostOptions.canHostAsMember ? [{ value: "member", title: `You (${viewer.name})`, description: "Hosted by you as a member", icon: "user" as const }] : []),
+    ...(hostOptions.canHostAsMember ? [{ value: "member", title: t("You ({name})", { name: viewer.name }), description: "Hosted by you as a member", icon: "user" as const }] : []),
     ...hostOptions.chapters.map((c) => ({ value: c.id, title: c.name, description: "A chapter you lead", icon: "building" as const })),
   ];
 
@@ -663,7 +667,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
         <div ref={summaryRef} tabIndex={-1} role="alert" className="flex flex-col gap-2 rounded-card border border-error/30 bg-error-light px-5 py-4 focus-visible:outline-2 focus-visible:outline-error">
           <p className="flex items-center gap-2 text-md font-semibold text-ink">
             <Icon name="alert" size={18} className="text-error" />
-            {errorList.length === 1 ? "One thing to fix" : `${errorList.length} things to fix`}
+            {errorList.length === 1 ? "One thing to fix" : t("{count} things to fix", { count: errorList.length })}
           </p>
           <ul className="flex list-disc flex-col gap-1 ps-9 text-sm text-body">
             {errorList.map(([path, message]) => (
@@ -698,7 +702,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
         <FieldShell id="title" label="Title" error={errorFor("title")}>
           <div className="relative">
             <TextInput id="title" value={s.title} onChange={(v) => set("title", v)} maxLength={EVENT_TITLE_MAX_CHARS + 20} error={errorFor("title")} placeholder="e.g. AfCFTA Rules of Origin Explained" className="pe-16" />
-            <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2">
+            <span className="pointer-events-none absolute end-3 inset-y-0 my-auto h-fit">
               <Counter value={s.title} max={EVENT_TITLE_MAX_CHARS} />
             </span>
           </div>
@@ -770,7 +774,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
               </div>
               <p className="text-xs text-secondary" aria-live="polite">
                 {cover.status === "uploading"
-                  ? `Uploading… ${Math.round(cover.progress * 100)}%`
+                  ? t("Uploading… {number}%", { number: Math.round(cover.progress * 100) })
                   : cover.status === "error"
                     ? <span className="text-error">{cover.error}</span>
                     : "JPEG, PNG or WebP, up to 5 MB. 1200 × 630 works best. Without one, the event gets the Charter Mission pattern."}
@@ -844,7 +848,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
                 }}
                 className={cn(buttonClasses({ variant: "secondary", size: "small" }), "shrink-0")}
               >
-                Use my zone ({zoneCity(browserZone)})
+                <T vars={{ zoneCity: zoneCity(browserZone) }}>{"Use my zone ({zoneCity})"}</T>
               </button>
             )}
           </div>
@@ -967,7 +971,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
           </label>
           {s.hasDeadline && (
             <div className="grid grid-cols-[1fr_140px] gap-3 max-sm:grid-cols-[1fr_110px]">
-              <FieldShell id="deadlineDate" label="Registration closes" error={errorFor("deadlineDate")} hint={`In the event’s time zone (${zoneAbbreviation(s.timezone)}).`}>
+              <FieldShell id="deadlineDate" label="Registration closes" error={errorFor("deadlineDate")} hint={t("In the event’s time zone ({zoneAbbreviation}).", { zoneAbbreviation: zoneAbbreviation(s.timezone) })}>
                 <TextInput id="deadlineDate" type="date" value={s.deadlineDate} max={s.startDate || undefined} onChange={(v) => set("deadlineDate", v)} error={errorFor("deadlineDate")} hint />
               </FieldShell>
               <FieldShell id="deadlineTime" label="Time">
@@ -987,7 +991,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink">
                     {speaker.member ? <Avatar name={speaker.member.name} src={speaker.member.avatarUrl ?? undefined} tone={speaker.member.tone} size={24} /> : <span className="flex size-6 items-center justify-center rounded-full bg-muted text-xs text-secondary">{index + 1}</span>}
-                    <span className="truncate">{speaker.name || `Speaker ${index + 1}`}</span>
+                    <span className="truncate">{speaker.name || t("Speaker {count}", { count: index + 1 })}</span>
                   </span>
                   <RowControls
                     index={index}
@@ -1046,7 +1050,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
       </Section>
 
       {/* Agenda */}
-      <Section id="agenda" title="Agenda" description={`Optional. Times are in ${zoneCity(s.timezone)} time (${zoneAbbreviation(s.timezone)}).`} icon="menu" aside={<span className="text-xs text-secondary">{s.agenda.length}/{EVENT_MAX_AGENDA_ITEMS}</span>}>
+      <Section id="agenda" title="Agenda" description={t("Optional. Times are in {zoneCity} time ({zoneAbbreviation}).", { zoneCity: zoneCity(s.timezone), zoneAbbreviation: zoneAbbreviation(s.timezone) })} icon="menu" aside={<span className="text-xs text-secondary">{s.agenda.length}/{EVENT_MAX_AGENDA_ITEMS}</span>}>
         {s.agenda.length > 0 && (
           <ol className="flex flex-col gap-3">
             {s.agenda.map((item, index) => {
@@ -1060,7 +1064,7 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
                           <select id={`agenda-${index}-date`} value={item.date || s.startDate} onChange={(e) => update({ date: e.target.value })} className={inputClasses(false, "cursor-pointer px-2")}>
                             {eventDays.map((d) => (
                               <option key={d} value={d}>
-                                {new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}
+                                {new Date(`${d}T12:00:00Z`).toLocaleDateString(intl, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}
                               </option>
                             ))}
                           </select>
@@ -1215,29 +1219,31 @@ export function EventForm({ mode, event, viewer, hostOptions, categories, countr
 
 /** "Shows as Sat 21 Nov, 21:00 in Dubai" under the time fields. */
 function TimePreview({ startsAt, endsAt, timezone, viewer }: { startsAt: string | null; endsAt: string | null; timezone: string; viewer: string | null }) {
+  const t = useT();
+  const intl = useIntlTag();
   if (!startsAt) return <p className="text-sm text-secondary">Pick a date to see how the time shows to members.</p>;
-  const eventLine = `${formatDay(startsAt, timezone)}, ${formatClock(startsAt, timezone)}${endsAt ? `–${formatClock(endsAt, timezone)}` : ""} ${zoneAbbreviation(timezone, startsAt)}`;
+  const eventLine = `${formatDay(startsAt, timezone, { intl })}, ${formatClock(startsAt, timezone)}${endsAt ? `–${formatClock(endsAt, timezone)}` : ""} ${zoneAbbreviation(timezone, startsAt)}`;
   const differs = viewer && !sameWallClock(viewer, timezone, startsAt);
   const examples = ["Africa/Lagos", "Africa/Nairobi", "Europe/London"].filter((z) => z !== timezone && z !== viewer && !sameWallClock(z, timezone, startsAt)).slice(0, 2);
   return (
     <div aria-live="polite" className="flex flex-col gap-1.5 rounded-card bg-primary-tint-2 px-4 py-3 text-sm">
       <p className="text-ink">
-        <span className="font-medium">{eventLine}</span> <span className="text-secondary">in {zoneCity(timezone)}</span>
+        <span className="font-medium">{eventLine}</span> <span className="text-secondary"><T vars={{ zoneCity: zoneCity(timezone) }}>{"in {zoneCity}"}</T></span>
       </p>
       {viewer && (
         <p className="text-body">
           {differs ? (
             <>
-              Shows as <strong className="font-medium text-ink">{formatDay(startsAt, viewer)}, {formatClock(startsAt, viewer)}</strong> in {zoneCity(viewer)} (your time)
+              Shows as <strong className="font-medium text-ink">{formatDay(startsAt, viewer, { intl })}, {formatClock(startsAt, viewer)}</strong> in {zoneCity(viewer)} (your time)
             </>
           ) : (
-            <>Same as your time zone ({zoneCity(viewer)}).</>
+            <><T vars={{ zoneCity: zoneCity(viewer) }}>{"Same as your time zone ({zoneCity})."}</T></>
           )}
         </p>
       )}
       {examples.length > 0 && (
         <p className="text-xs text-secondary">
-          {examples.map((z) => `${formatClock(startsAt, z)} in ${zoneCity(z)}`).join(" · ")}
+          {examples.map((z) => t("{clock} in {zoneCity}", { clock: formatClock(startsAt, z), zoneCity: zoneCity(z) })).join(" · ")}
         </p>
       )}
     </div>

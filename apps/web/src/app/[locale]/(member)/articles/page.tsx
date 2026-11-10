@@ -13,11 +13,15 @@ import { errorMessage } from "@/components/social/error-message";
 import { EmptyState, LoadingStatus, SectionError } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Articles",
-  description: "Long-form writing from Charter Mission members: guides, field notes and lessons from building across Africa.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Articles"),
+    description: t("Long-form writing from Charter Mission members: guides, field notes and lessons from building across Africa."),
+  };
+}
 
 type SearchParams = PageProps<"/[locale]/articles">["searchParams"];
 
@@ -42,9 +46,10 @@ async function WriteAction() {
 
 /** Featured article + popular list, then the top writers. */
 async function HubTop() {
+  const t = await getT();
   const viewer = await requireClientViewer("/articles");
   const hub = await getHub();
-  if (!hub.ok) return <SectionError message={`Featured articles couldn’t load. ${errorMessage(hub.error)}`} retryHref="/articles" />;
+  if (!hub.ok) return <SectionError message={t("Featured articles couldn’t load. {error}", { error: errorMessage(hub.error) })} retryHref="/articles" />;
   const { featured, popular, authors, total } = hub.data;
   if (!featured || total === 0) {
     return (

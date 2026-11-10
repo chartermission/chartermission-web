@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import type { PostView } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
+import { useT, T } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { confetti, pop } from "@/components/motion";
 import { ReportDialog } from "@/components/moderation/report-dialog";
@@ -68,6 +69,7 @@ export function PostCard({
   extraMenu?: (post: PostView) => MenuItem[];
 }) {
   const router = useRouter();
+  const t = useT();
   const id = useId();
   const [post, setPost] = useState(initial);
   const [reactions, setReactions] = useState<ReactionSnapshot>({
@@ -97,7 +99,7 @@ export function PostCard({
 
   // A post published as a page belongs to everyone who manages that page.
   const isOwn = post.page ? post.viewer.canEdit : post.author.id === viewer.id;
-  const subject = `${post.author.name}’s post`;
+  const subject = t("{name}’s post", { name: post.author.name });
   const long = post.body.length > CLAMP_AT && !expanded;
 
   function update(next: PostView) {
@@ -219,7 +221,7 @@ export function PostCard({
         </p>
       </div>
       <PostTypeChip type={post.type} className="mt-0.5" />
-      <Menu label={`More options for ${subject}`} items={menu} />
+      <Menu label={t("More options for {subject}", { subject })} items={menu} />
     </header>
   );
 
@@ -255,6 +257,24 @@ export function PostCard({
             <Link href="/settings/moderation" className="font-medium text-primary-light hover:underline">
               See why and how to appeal
             </Link>
+          </p>
+        </div>
+      )}
+      {post.status === "in_review" && (
+        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink">
+          <Icon name="clock" size={18} className="mt-0.5 shrink-0 text-info" />
+          <p>
+            {post.chapter ? t("Waiting for approval by the {chapter} team. Only you can see this post until then.", { chapter: post.chapter.name }) : t("Waiting for approval. Only you can see this post until then.")}
+            {post.chapterReview?.note ? <span className="mt-1 block text-secondary">{t("Note from the team: “{note}”", { note: post.chapterReview.note })}</span> : null}
+          </p>
+        </div>
+      )}
+      {post.status === "declined" && (
+        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-error-light px-3 py-2.5 text-sm text-ink">
+          <Icon name="eye-off" size={18} className="mt-0.5 shrink-0 text-error" />
+          <p>
+            {post.chapter ? t("The {chapter} team didn’t approve this post for the chapter. Only you can see it.", { chapter: post.chapter.name }) : t("This post wasn’t approved. Only you can see it.")}
+            {post.chapterReview?.note ? <span className="mt-1 block text-secondary">{t("Note from the team: “{note}”", { note: post.chapterReview.note })}</span> : null}
           </p>
         </div>
       )}
@@ -317,7 +337,7 @@ export function PostCard({
                     onClick={() => setExpanded(true)}
                     className="mt-1 rounded-sm text-sm font-medium text-secondary hover:text-primary hover:underline"
                   >
-                    See more<span className="sr-only"> of {subject}</span>
+                    See more<span className="sr-only"> <T vars={{ subject }}>{"of {subject}"}</T></span>
                   </button>
                 )}
               </div>
@@ -348,7 +368,7 @@ export function PostCard({
         >
           <Icon name="chart" size={14} />
           View analytics
-          <span className="sr-only"> for {subject}</span>
+          <span className="sr-only"> <T vars={{ subject }}>{"for {subject}"}</T></span>
         </Link>
       )}
 
@@ -417,7 +437,7 @@ export function PostCard({
         >
           <Icon name="share" size={18} />
           <span className="max-sm:sr-only">Share</span>
-          <span className="sr-only"> link to {subject}</span>
+          <span className="sr-only"> <T vars={{ subject }}>{"link to {subject}"}</T></span>
         </button>
       </footer>
 
@@ -445,12 +465,12 @@ export function PostCard({
       )}
       {modal === "mute" && (
         <ConfirmDialog
-          title={`Mute ${post.author.name}?`}
+          title={t("Mute {name}?", { name: post.author.name })}
           confirmLabel="Mute"
           onClose={() => setModal(null)}
           onConfirm={async () => {
             await api("/mutes", { method: "POST", body: { targetType: "member", targetId: post.author.id } });
-            removed(`${post.author.name} is muted. Their posts won’t appear in your feed.`, "author");
+            removed(t("{name} is muted. Their posts won’t appear in your feed.", { name: post.author.name }), "author");
           }}
         >
           Their posts won’t appear in your feed. They won’t be told, and you stay connected. Unmute any time from their profile.
@@ -458,13 +478,13 @@ export function PostCard({
       )}
       {modal === "block" && (
         <ConfirmDialog
-          title={`Block ${post.author.name}?`}
+          title={t("Block {name}?", { name: post.author.name })}
           confirmLabel="Block"
           danger
           onClose={() => setModal(null)}
           onConfirm={async () => {
             await api(`/blocks/${post.author.id}`, { method: "POST" });
-            removed(`${post.author.name} is blocked. You can unblock them in Settings → Blocked & muted.`, "author");
+            removed(t("{name} is blocked. You can unblock them in Settings → Blocked & muted.", { name: post.author.name }), "author");
           }}
         >
           You won’t see each other’s posts or profiles, and any connection or follow between you is removed. They aren’t told. <UnblockHint />

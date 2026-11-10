@@ -7,8 +7,12 @@ import { PrivacySettingsForm } from "@/components/settings/privacy-settings-form
 import { SettingsHeader, SettingsPageSkeleton } from "@/components/settings/settings-card";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { getTaxonomies } from "@/lib/taxonomies";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Privacy & visibility settings" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Privacy & visibility settings") };
+}
 
 async function PrivacyData() {
   const viewer = await requireViewer("/settings/privacy");

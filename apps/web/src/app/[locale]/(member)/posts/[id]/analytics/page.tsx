@@ -12,14 +12,20 @@ import { reactionKinds, reactionMeta } from "@/components/social/reaction-meta";
 import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { ApiError } from "@/lib/api/errors";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT, getIntlTag } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Post analytics" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Post analytics") };
+}
 
 type Props = PageProps<"/[locale]/posts/[id]/analytics">;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function Analytics({ params, searchParams }: Props) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const [{ id }, query] = await Promise.all([params, searchParams]);
   await requireViewer(`/posts/${id}/analytics`);
   if (!UUID.test(id)) notFound();
@@ -42,7 +48,7 @@ async function Analytics({ params, searchParams }: Props) {
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <h1 className="text-h2 text-ink">Post analytics</h1>
             <p className="text-sm text-secondary">
-              {post.page ? `Published as ${post.page.name}` : "Your post"} on {absoluteDate(post.createdAt)}
+              {post.page ? t("Published as {name}", { name: post.page.name }) : "Your post"} on {absoluteDate(intl, post.createdAt)}
             </p>
           </div>
           <RangeTabs days={days} hrefFor={(value) => `/posts/${post.id}/analytics?days=${value}`} />
@@ -110,7 +116,7 @@ async function Analytics({ params, searchParams }: Props) {
         <span>
           Only you{post.page ? " and the page’s other admins" : ""} can see these numbers. They are counts: Charter Mission never shows who viewed a post, and countries with
           fewer than three viewers are grouped as “Other”. A member counts as a new impression after 30 minutes; your own views aren’t counted.
-          {partialHistory && ` Views have been counted since ${absoluteDate(data.trackedSince)}, so earlier views of this post aren’t included.`}
+          {partialHistory && t("Views have been counted since {date}, so earlier views of this post aren’t included.", { date: absoluteDate(intl, data.trackedSince) })}
         </span>
       </p>
     </>

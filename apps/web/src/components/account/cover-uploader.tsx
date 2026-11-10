@@ -6,6 +6,7 @@ import { Button } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
 import { ImageCropDialog, assertCroppable } from "./image-crop-dialog";
+import { T } from "@/i18n/client";
 
 type Status =
   | { kind: "idle" }
@@ -109,7 +110,7 @@ export function CoverUploader({ coverUrl, onChange }: { coverUrl: string | null;
       </p>
       <div aria-live="polite" className="empty:hidden">
         {status.kind === "uploading" && (
-          <span className="text-xs text-secondary">Uploading… {Math.round(status.progress * 100)}%</span>
+          <span className="text-xs text-secondary"><T vars={{ number: Math.round(status.progress * 100) }}>{"Uploading… {number}%"}</T></span>
         )}
         {status.kind === "processing" && <span className="text-xs text-secondary">Checking your photo…</span>}
         {status.kind === "done" && <span className="text-xs text-success">{status.text}</span>}

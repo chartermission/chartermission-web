@@ -9,11 +9,13 @@ import { api, isApiError } from "@/lib/api/client";
 import { AuthStatus } from "./auth-shell";
 import { Field, FormAlert, PasswordInput, describedBy, retryMessage, textLinkClasses } from "./fields";
 import { PasswordRules, StrengthMeter, passwordRules } from "./password-rules";
+import { useT } from "@/i18n/client";
 
 type FieldName = "password" | "confirm";
 
 /** /reset-password?token= — choose a new password (POST /auth/password/reset); success signs out everywhere. */
 export function ResetPasswordForm({ token }: { token: string | null }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -55,7 +57,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
       setSubmitting(false);
       if (isApiError(error, "INVALID_TOKEN")) setInvalid(true);
       else if (isApiError(error) && error.fields?.password) setErrors({ password: error.fields.password });
-      else if (isApiError(error, "RATE_LIMITED")) setFormError(retryMessage(error.retryAfter));
+      else if (isApiError(error, "RATE_LIMITED")) setFormError(retryMessage(t, error.retryAfter));
       else setFormError(isApiError(error) ? error.message : "Something went wrong. Please try again.");
     }
   }

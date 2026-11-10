@@ -10,6 +10,7 @@ import { FormAlert, retryMessage } from "@/components/auth/fields";
 import { destinationFor } from "@/components/auth/destinations";
 import { formatDate } from "./format";
 import { POLICY_DOCS } from "./policy-links";
+import { useT } from "@/i18n/client";
 
 export type AcceptedPolicy = {
   policyType: PolicyType;
@@ -28,6 +29,7 @@ export function AcceptPolicies({
   next: string | null;
   upToDate: boolean;
 }) {
+  const t = useT();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function AcceptPolicies({
     } catch (e) {
       setBusy(false);
       if (isApiError(e, "UNAUTHENTICATED")) router.replace("/signin?next=/policies/accept");
-      else if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(e.retryAfter));
+      else if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(t, e.retryAfter));
       else setError(isApiError(e) ? e.message : "Something went wrong. Please try again.");
     }
   }
@@ -89,7 +91,7 @@ export function AcceptPolicies({
                 </Link>
                 <span className="text-xs text-secondary">
                   {policy.accepted
-                    ? `You accepted version ${policy.accepted.version} on ${formatDate(policy.accepted.acceptedAt)}`
+                    ? t("You accepted version {version} on {date}", { version: policy.accepted.version, date: formatDate(policy.accepted.acceptedAt) })
                     : "Not accepted yet"}
                 </span>
               </div>

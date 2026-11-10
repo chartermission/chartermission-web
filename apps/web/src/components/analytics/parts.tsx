@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Icon, cn, type IconName } from "@chartermission/ui";
+import type { Translate } from "@/i18n/translate";
 
 const number = new Intl.NumberFormat("en-GB");
 const compact = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 });
@@ -9,11 +10,11 @@ export const formatCount = (n: number) => (n >= 10_000 ? compact.format(n) : num
 export const formatRate = (rate: number) => `${(rate * 100).toFixed(rate > 0 && rate < 0.1 ? 1 : 0)}%`;
 
 /** "+12%" against the period before, or null when there is nothing to compare with. */
-export function change(current: number, previous: number): { text: string; up: boolean } | null {
+export function change(t: Translate, current: number, previous: number): { text: string; up: boolean } | null {
   if (!previous) return current ? { text: "New this period", up: true } : null;
   const delta = (current - previous) / previous;
   if (Math.abs(delta) < 0.005) return { text: "No change", up: true };
-  return { text: `${delta > 0 ? "+" : "−"}${Math.abs(delta * 100).toFixed(0)}% vs the period before`, up: delta > 0 };
+  return { text: t("{change}% vs the period before", { change: `${delta > 0 ? "+" : "−"}${Math.abs(delta * 100).toFixed(0)}` }), up: delta > 0 };
 }
 
 /** One headline number with its label and an optional note (how it is counted, or the change). */

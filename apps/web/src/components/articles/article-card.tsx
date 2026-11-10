@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { MemberRef, PostView } from "@chartermission/contracts";
@@ -8,11 +10,13 @@ import { articleHref, authorHref } from "@/components/social/links";
 import { coverAlt } from "@/components/social/post-types/article";
 import { Bone } from "@/components/social/skeletons";
 import { articleDate } from "./format";
+import { useT, useIntlTag } from "@/i18n/client";
 
 type Article = NonNullable<PostView["article"]>;
 
 /** Cover image, or the patterned brand placeholder when the article has none. */
 export function CoverImage({ article, className, eager = false, iconSize = 32 }: { article: Article; className?: string; eager?: boolean; iconSize?: number }) {
+  const t = useT();
   if (!article.coverUrl) {
     return (
       <BrandCover className={className}>
@@ -25,7 +29,7 @@ export function CoverImage({ article, className, eager = false, iconSize = 32 }:
       {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media */}
       <img
         src={article.coverUrl}
-        alt={coverAlt(article)}
+        alt={coverAlt(t, article)}
         className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
         loading={eager ? "eager" : "lazy"}
       />
@@ -35,9 +39,10 @@ export function CoverImage({ article, className, eager = false, iconSize = 32 }:
 
 /** "3 Nov" with the full date as a tooltip. */
 export function ArticleDate({ iso, className }: { iso: string; className?: string }) {
+  const intl = useIntlTag();
   return (
-    <time dateTime={iso} title={absoluteDate(iso)} className={className} suppressHydrationWarning>
-      {articleDate(iso)}
+    <time dateTime={iso} title={absoluteDate(intl, iso)} className={className} suppressHydrationWarning>
+      {articleDate(intl, iso)}
     </time>
   );
 }
@@ -152,5 +157,3 @@ export function ArticleCardSkeleton() {
   );
 }
 
-/** Responsive grid for article cards: three columns on desktop, two on tablets, one on phones. */
-export const articleGridClass = "grid grid-cols-3 gap-5 max-lg:grid-cols-2 max-sm:grid-cols-1 max-sm:gap-4";

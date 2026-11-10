@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, Icon, type ButtonProps } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { toast } from "@/components/social/toast";
+import { useT } from "@/i18n/client";
 
 /** Follow / Following for a page (POST / DELETE /follows with targetType "page"). */
 export function FollowPageButton({
@@ -19,6 +20,7 @@ export function FollowPageButton({
   block?: boolean;
   onChange?: (following: boolean) => void;
 }) {
+  const t = useT();
   const [following, setFollowing] = useState(initial);
   const [busy, setBusy] = useState(false);
 
@@ -30,7 +32,7 @@ export function FollowPageButton({
     try {
       await api("/follows", { method: next ? "POST" : "DELETE", body: { targetType: "page", targetId: page.id } });
       onChange?.(next);
-      if (next) toast.success(`You’re following ${page.name}. Its posts will appear in your feed.`);
+      if (next) toast.success(t("You’re following {name}. Its posts will appear in your feed.", { name: page.name }));
     } catch (e) {
       setFollowing(!next);
       toast.error(e);

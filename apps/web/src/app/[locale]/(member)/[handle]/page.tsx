@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
-import { PreviewAs, type MemberProfile, type Page, type PostView } from "@chartermission/contracts";
+import { PreviewAs, socialNetworkOf, type MemberProfile, type Page, type PostView } from "@chartermission/contracts";
 import { Chip, Icon, Panel, ProfileBadgeList, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { getClientViewer } from "@/components/social/data";
@@ -12,16 +12,18 @@ import { MemberAvatar } from "@/components/social/post-parts";
 import { PostStream } from "@/components/social/post-stream";
 import { SectionRail } from "@/components/social/section-nav";
 import { EmptyState, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
+import { T } from "@/i18n/client";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { ProfileActions } from "./profile-actions";
 import { ProfileHighlightsLoader } from "@/components/stories/stories-loader";
+import { getT, getIntlTag } from "@/i18n/server";
 
-export async function generateMetadata({ params }: PageProps<"/[locale]/members/[handle]">): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/[locale]/[handle]">): Promise<Metadata> {
   const { handle } = await params;
   return { title: handle };
 }
 
-type Props = Pick<PageProps<"/[locale]/members/[handle]">, "params" | "searchParams">;
+type Props = Pick<PageProps<"/[locale]/[handle]">, "params" | "searchParams">;
 
 const previewLabels: Record<PreviewAs, string> = {
   public: "a visitor who isn’t signed in",
@@ -29,8 +31,13 @@ const previewLabels: Record<PreviewAs, string> = {
   connection: "one of your connections",
 };
 
+/** A username, or a member id from an old link. Anything else at /{something} is simply not a page. */
+const LOOKS_LIKE_MEMBER = /^(?:[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
 async function loadProfile({ params, searchParams }: Props) {
-  const [{ handle }, sp, viewer] = await Promise.all([params, searchParams, getClientViewer()]);
+  const { handle } = await params;
+  if (!LOOKS_LIKE_MEMBER.test(handle)) notFound();
+  const [sp, viewer] = await Promise.all([searchParams, getClientViewer()]);
   const previewParam = PreviewAs.safeParse(Array.isArray(sp.preview) ? sp.preview[0] : sp.preview);
   const isSelf = viewer?.handle === handle.toLowerCase();
   const preview = isSelf && previewParam.success ? previewParam.data : null;
@@ -43,7 +50,7 @@ async function loadProfile({ params, searchParams }: Props) {
   if (!member) notFound();
   // A username the member used before: send the visitor to the current address.
   if (!preview && !/^[0-9a-f-]{36}$/i.test(handle) && handle.toLowerCase() !== member.handle.toLowerCase()) {
-    redirect(`/members/${member.handle}`);
+    redirect(`/${member.handle}`);
   }
   return { member, viewer, preview };
 }
@@ -73,12 +80,14 @@ function ChipList({ label, items }: { label: string; items?: { id: string; name:
   );
 }
 
-function monthLabel(value: string) {
+function monthLabel(intl: string, value: string) {
   const [year, month] = value.split("-").map(Number);
-  return new Date(Date.UTC(year!, (month ?? 1) - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+  return new Date(Date.UTC(year!, (month ?? 1) - 1, 1)).toLocaleDateString(intl, { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 async function ProfileMain(props: Props) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const { member, viewer, preview } = await loadProfile(props);
   const isSelf = member.relationship.self && !preview;
   const location = [member.city, member.country?.name].filter(Boolean).join(", ");
@@ -101,7 +110,7 @@ async function ProfileMain(props: Props) {
       `${member.counts.followers.toLocaleString("en-US")} follower${member.counts.followers === 1 ? "" : "s"}`
     ),
   });
-  facts.push({ icon: "calendar", content: `Joined ${absoluteDate(member.joinedAt)}` });
+  facts.push({ icon: "calendar", content: `Joined ${absoluteDate(intl, member.joinedAt)}` });
 
   const contact: { icon: IconName; label: string; value: ReactNode }[] = [];
   if (member.email) contact.push({ icon: "mail", label: "Email", value: <a href={`mailto:${member.email}`} className="text-primary-light hover:underline">{member.email}</a> });
@@ -115,17 +124,10 @@ async function ProfileMain(props: Props) {
         </a>
       ),
     });
-  for (const link of member.links ?? []) {
-    contact.push({
-      icon: "link",
-      label: link.label,
-      value: (
-        <a href={link.url} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-primary-light hover:underline">
-          {link.url.replace(/^https?:\/\//, "")}
-        </a>
-      ),
-    });
-  }
+  // Social and professional links, each named after its network when the address is a known one.
+  const links = (member.links ?? [])
+    .filter((link) => /^https?:\/\//i.test(link.url))
+    .map((link) => ({ url: link.url, name: link.label.trim() || socialNetworkOf(link.url)?.label || link.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]! }));
   const hasTags = !!(member.skills?.length || member.sectors?.length || member.interests?.length || member.languages?.length);
 
   return (
@@ -136,7 +138,7 @@ async function ProfileMain(props: Props) {
             <Icon name="eye" size={18} className="text-info" />
             You’re seeing your profile as {previewLabels[preview]} would. Hidden fields are left out.
           </span>
-          <Link href={`/members/${member.handle}`} className="font-medium text-primary-light hover:underline">
+          <Link href={`/${member.handle}`} className="font-medium text-primary-light hover:underline">
             Exit preview
           </Link>
         </div>
@@ -176,6 +178,39 @@ async function ProfileMain(props: Props) {
               </li>
             ))}
           </ul>
+          {(links.length > 0 || member.resume) && (
+            <ul className="flex flex-wrap items-center gap-2" aria-label="Links">
+              {member.resume && (
+                <li>
+                  <a
+                    href={member.resume.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={member.resume.name}
+                    className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-inverse hover:bg-primary-light"
+                  >
+                    <Icon name="book" size={14} />
+                    <T>Résumé</T>
+                    <span className="text-xs font-normal opacity-80">PDF</span>
+                  </a>
+                </li>
+              )}
+              {links.map((link) => (
+                <li key={link.url}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    title={link.url}
+                    className="flex items-center gap-1.5 rounded-full border border-line-strong px-3 py-1.5 text-sm font-medium text-ink hover:border-primary hover:text-primary"
+                  >
+                    <span dir="auto">{link.name}</span>
+                    <Icon name="arrow-up-right" size={14} className="text-secondary" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
           {member.relationship.blocked && (
             <p role="note" className="flex items-center gap-2 rounded-lg bg-error-light px-3 py-2 text-sm text-ink">
               <Icon name="shield" size={16} className="text-error" />
@@ -189,6 +224,31 @@ async function ProfileMain(props: Props) {
         <Suspense fallback={null}>
           <ProfileHighlightsLoader memberId={member.id} name={member.name} own={isSelf} />
         </Suspense>
+      )}
+
+      {member.introVideo && (
+        <Section title="Intro video">
+          <div dir="ltr" className="overflow-hidden rounded-[10px] bg-ink">
+            <video
+              src={member.introVideo.url}
+              poster={member.introVideo.posterUrl ?? undefined}
+              controls
+              playsInline
+              preload="metadata"
+              aria-label={t("{name}: intro video", { name: member.name })}
+              className="block max-h-[480px] w-full bg-ink object-contain"
+            />
+          </div>
+        </Section>
+      )}
+      {isSelf && !preview && !member.introVideo && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-dashed border-line-strong bg-card px-4 py-3 text-sm text-secondary">
+          <Icon name="video" size={16} />
+          <T>Introduce yourself with a short video, attach your résumé and add your social links.</T>
+          <Link href="/settings/profile#intro" className="font-medium text-primary-light hover:underline">
+            <T>Add them to your profile</T>
+          </Link>
+        </p>
       )}
 
       {member.bio && (
@@ -209,7 +269,7 @@ async function ProfileMain(props: Props) {
                   <span className="text-md font-medium text-ink">{role.title}</span>
                   <span className="text-sm text-body">{role.organisation}</span>
                   <span className="text-xs text-secondary">
-                    {monthLabel(role.startDate)} – {role.endDate ? monthLabel(role.endDate) : "Present"}
+                    {monthLabel(intl, role.startDate)} – {role.endDate ? monthLabel(intl, role.endDate) : "Present"}
                     {role.location ? ` · ${role.location}` : ""}
                   </span>
                   {role.description && <span className="mt-1 whitespace-pre-line text-sm text-body">{role.description}</span>}
@@ -286,6 +346,7 @@ async function MemberPosts({
   viewer: NonNullable<Awaited<ReturnType<typeof getClientViewer>>>;
   acceptNew: boolean;
 }) {
+  const t = await getT();
   const query = { author: memberId, limit: MEMBER_POSTS_PAGE };
   const page = await apiGet<Page<PostView>>("/feed", query).catch(() => undefined);
   return (
@@ -295,10 +356,10 @@ async function MemberPosts({
       initial={page}
       acceptNew={acceptNew}
       viewer={viewer}
-      label={`Posts by ${name}`}
+      label={t("Posts by {name}", { name })}
       empty={
         <EmptyState icon="message" title="No posts yet">
-          {acceptNew ? "Posts you share appear here." : `${name} hasn’t posted yet.`}
+          {acceptNew ? "Posts you share appear here." : t("{name} hasn’t posted yet.", { name })}
         </EmptyState>
       }
     />
@@ -326,7 +387,7 @@ async function ProfileRightRail(props: Props) {
 }
 
 /** Member profile — Figma "Web / Member profile" (node 9:860, body 9:913). Only fields the API returns are shown. */
-export default function MemberProfilePage({ params, searchParams }: PageProps<"/[locale]/members/[handle]">) {
+export default function MemberProfilePage({ params, searchParams }: PageProps<"/[locale]/[handle]">) {
   return (
     <PageColumns
       left={<SectionRail active="/network" />}

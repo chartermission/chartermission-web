@@ -4,7 +4,6 @@
  * Pure functions (no React), safe on the server and in the browser.
  */
 
-const LOCALE = "en-GB";
 
 /** Conventional abbreviations Intl doesn't produce in en-GB (it prints "GMT+1" for Lagos). */
 const KNOWN_ABBREVIATIONS: Record<string, string> = {
@@ -19,11 +18,11 @@ const KNOWN_ABBREVIATIONS: Record<string, string> = {
 };
 
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
-function formatter(timeZone: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  const key = `${timeZone}|${JSON.stringify(options)}`;
+function formatter(timeZone: string, options: Intl.DateTimeFormatOptions, locale = "en-GB"): Intl.DateTimeFormat {
+  const key = `${locale}|${timeZone}|${JSON.stringify(options)}`;
   let f = formatterCache.get(key);
   if (!f) {
-    f = new Intl.DateTimeFormat(LOCALE, { timeZone, ...options });
+    f = new Intl.DateTimeFormat(locale, { timeZone, ...options });
     formatterCache.set(key, f);
   }
   return f;
@@ -92,15 +91,15 @@ export function formatClock(iso: string, timeZone: string): string {
 }
 
 /** "Sat 21 Nov" (adds the year when it isn't the current one). */
-export function formatDay(iso: string, timeZone: string, { weekday = "short" }: { weekday?: "short" | "long" } = {}): string {
+export function formatDay(iso: string, timeZone: string, { weekday = "short", intl = "en-GB" }: { weekday?: "short" | "long"; intl?: string } = {}): string {
   const date = new Date(iso);
   const sameYear = formatter(timeZone, { year: "numeric" }).format(date) === formatter(timeZone, { year: "numeric" }).format(new Date());
-  return formatter(timeZone, { weekday, day: "numeric", month: "short", year: sameYear ? undefined : "numeric" }).format(date).replace(",", "");
+  return formatter(timeZone, { weekday, day: "numeric", month: "short", year: sameYear ? undefined : "numeric" }, intl).format(date).replace(",", "");
 }
 
 /** "Saturday 21 November 2026" */
-export function formatLongDay(iso: string, timeZone: string): string {
-  return formatter(timeZone, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(iso)).replace(",", "");
+export function formatLongDay(iso: string, timeZone: string, intl = "en-GB"): string {
+  return formatter(timeZone, { weekday: "long", day: "numeric", month: "long", year: "numeric" }, intl).format(new Date(iso)).replace(",", "");
 }
 
 /** "YYYY-MM-DD" of the instant in the zone. */
@@ -110,18 +109,19 @@ export function dayKey(iso: string | Date, timeZone: string): string {
 }
 
 /** { month: "NOV", day: "21", weekday: "Saturday" } for date badges. */
-export function badgeParts(iso: string, timeZone: string) {
+export function badgeParts(iso: string, timeZone: string, intl = "en-GB") {
   const date = new Date(iso);
+  const month = formatter(timeZone, { month: "short" }, intl).format(date).replace(".", "");
   return {
-    month: formatter(timeZone, { month: "short" }).format(date).slice(0, 3).toUpperCase(),
+    month: (intl.startsWith("en") ? month.slice(0, 3) : month).toUpperCase(),
     day: formatter(timeZone, { day: "2-digit" }).format(date),
-    weekday: formatter(timeZone, { weekday: "long" }).format(date),
+    weekday: formatter(timeZone, { weekday: "long" }, intl).format(date),
   };
 }
 
 /** "November 2026" in the zone — list group headings. */
-export function monthHeading(iso: string, timeZone: string): string {
-  return formatter(timeZone, { month: "long", year: "numeric" }).format(new Date(iso));
+export function monthHeading(iso: string, timeZone: string, intl = "en-GB"): string {
+  return formatter(timeZone, { month: "long", year: "numeric" }, intl).format(new Date(iso));
 }
 
 /** "Lagos" from "Africa/Lagos", "Port of Spain" from "America/Port_of_Spain". */
@@ -131,12 +131,12 @@ export function zoneCity(timeZone: string): string {
 }
 
 /** "18:00–20:00 WAT" (or "18:00 WAT – Sun 22 Nov 10:00 WAT" across days). */
-export function formatRange(startsAt: string, endsAt: string, timeZone: string): string {
+export function formatRange(startsAt: string, endsAt: string, timeZone: string, intl = "en-GB"): string {
   const abbr = zoneAbbreviation(timeZone, startsAt);
   if (dayKey(startsAt, timeZone) === dayKey(endsAt, timeZone)) {
     return `${formatClock(startsAt, timeZone)}–${formatClock(endsAt, timeZone)} ${abbr}`;
   }
-  return `${formatClock(startsAt, timeZone)} ${abbr} – ${formatDay(endsAt, timeZone)} ${formatClock(endsAt, timeZone)}`;
+  return `${formatClock(startsAt, timeZone)} ${abbr} – ${formatDay(endsAt, timeZone, { intl })} ${formatClock(endsAt, timeZone)}`;
 }
 
 /* ---------- Wall-clock ⇄ UTC for the host form ---------- */

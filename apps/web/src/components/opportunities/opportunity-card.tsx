@@ -10,9 +10,10 @@ import {
   type OpportunitySummary,
 } from "@chartermission/contracts";
 import { Chip, Icon, cn, type ChipTone } from "@chartermission/ui";
-import { addDays, formatDayMonth } from "@/components/discover/dates";
 import { toast } from "@/components/social/toast";
 import { api } from "@/lib/api/client";
+import { useT, useIntlTag } from "@/i18n/client";
+import { deadlineChip } from "./opportunity-dates";
 
 export const applicationTone: Record<ApplicationStatus, ChipTone> = {
   submitted: "info",
@@ -22,20 +23,10 @@ export const applicationTone: Record<ApplicationStatus, ChipTone> = {
   withdrawn: "neutral",
 };
 
-/** Today in UTC, matching the API's whole-day deadlines. */
-export const todayIso = () => new Date().toISOString().slice(0, 10);
-
-/** "Closes 14 Nov" (warning within a week), "Closed", or "Rolling". */
-export function deadlineChip(o: Pick<OpportunitySummary, "deadline" | "status">): { label: string; tone: ChipTone } {
-  if (o.status === "closed") return { label: "Closed", tone: "neutral" };
-  if (!o.deadline) return { label: "Rolling deadline", tone: "neutral" };
-  const today = todayIso();
-  if (o.deadline === today) return { label: "Closes today", tone: "warning" };
-  return { label: `Closes ${formatDayMonth(o.deadline)}`, tone: o.deadline <= addDays(today, 7) ? "warning" : "neutral" };
-}
 
 /** Save / Saved toggle (PUT / DELETE /bookmarks). */
 export function SaveOpportunityButton({ id, title, saved: initial, onChange }: { id: string; title: string; saved: boolean; onChange?: (saved: boolean) => void }) {
+  const t = useT();
   const [saved, setSaved] = useState(initial);
   async function toggle() {
     const next = !saved;
@@ -57,14 +48,16 @@ export function SaveOpportunityButton({ id, title, saved: initial, onChange }: {
       className={cn("rounded-md p-1 hover:bg-muted", saved ? "text-primary" : "text-secondary")}
     >
       <Icon name="bookmark" size={20} fill={saved ? "currentColor" : "none"} />
-      <span className="sr-only">{saved ? `Saved: ${title}` : `Save ${title}`}</span>
+      <span className="sr-only">{saved ? t("Saved: {title}", { title }) : t("Save {title}", { title })}</span>
     </button>
   );
 }
 
 /** One listing in a list: type, title, organisation and place, chips, save. */
 export function OpportunityListCard({ item, showStatus = false, onSavedChange }: { item: OpportunitySummary; showStatus?: boolean; onSavedChange?: (saved: boolean) => void }) {
-  const deadline = deadlineChip(item);
+  const intl = useIntlTag();
+  const t = useT();
+  const deadline = deadlineChip(intl, t, item);
   const chips: { label: string; tone: ChipTone }[] = [{ label: OPPORTUNITY_TYPE_LABELS[item.type], tone: "info" }];
   if (item.sector) chips.push({ label: item.sector.name, tone: "neutral" });
   chips.push(deadline);

@@ -16,6 +16,7 @@ import { CountrySelect } from "@/components/account/country-select";
 import { errorMessage } from "@/components/social/error-message";
 import { api, isApiError } from "@/lib/api/client";
 import type { CountryGroup } from "@/lib/taxonomies";
+import { T, useT } from "@/i18n/client";
 
 type Errors = Record<string, string>;
 
@@ -74,6 +75,7 @@ function StatusSection({
   defaultCountry: string | null;
   name: string;
 }) {
+  const t = useT();
   switch (view.status) {
     case "in_review":
       return <InReview view={view} />;
@@ -90,7 +92,7 @@ function StatusSection({
             <h2 className="text-h2 text-ink">Thank you for applying</h2>
             <p className="text-md text-body">
               We weren’t able to offer you an Ambassador role this time.
-              {view.reapplyFrom ? ` You can apply again from ${formatDate(view.reapplyFrom)}.` : ""} In the meantime, you can still
+              {view.reapplyFrom ? t("You can apply again from {date}.", { date: formatDate(view.reapplyFrom) }) : ""} In the meantime, you can still
               nominate someone you think would be a great fit.
             </p>
           </Panel>
@@ -311,14 +313,13 @@ function Onboarding({ view, onChange, name }: { view: MyAmbassadorView; onChange
           </Chip>
           <h2 className="text-h2 text-ink">Welcome, Ambassador-to-be</h2>
           <p className="text-md text-body">
-            You have been selected to lead the {view.country?.name} chapter. Finish these steps and your Ambassador badge goes live on your
-            profile.
+            <T vars={{ name: view.country?.name }}>{"You have been selected to lead the {name} chapter. Finish these steps and your Ambassador badge goes live on your profile."}</T>
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
           <p className="flex justify-between text-xs text-secondary">
             <span>
-              {ob.done} of {ob.total} steps done
+              <T vars={{ done: ob.done, count: ob.total }}>{"{done} of {count} steps done"}</T>
             </span>
             <span>{percent}%</span>
           </p>
@@ -384,7 +385,7 @@ function StepRow({ step, view }: { step: MyAmbassadorStep; view: MyAmbassadorVie
           </ul>
         )}
         {step.status === "waived" && <p className="text-xs text-secondary">Not needed for you</p>}
-        {done && step.completedAt && step.status === "done" && <p className="text-xs text-secondary">Done {formatDate(step.completedAt)}</p>}
+        {done && step.completedAt && step.status === "done" && <p className="text-xs text-secondary"><T vars={{ date: formatDate(step.completedAt) }}>{"Done {date}"}</T></p>}
       </div>
       {action && <div className="shrink-0 pt-0.5 text-sm">{action}</div>}
     </li>
@@ -440,7 +441,7 @@ function AgreementCard({ view, onChange, name }: { view: MyAmbassadorView; onCha
       </ol>
       {signed ? (
         <FormAlert tone="success">
-          Signed as “{signed.signedName}” on {formatDate(signed.signedAt)}.
+          <T vars={{ signedName: signed.signedName, date: formatDate(signed.signedAt) }}>{"Signed as “{signedName}” on {date}."}</T>
         </FormAlert>
       ) : (
         <form onSubmit={sign} noValidate className="flex flex-col gap-4">
@@ -492,23 +493,24 @@ function badgeFor(view: MyAmbassadorView, kind: RoleBadgeData["kind"]): RoleBadg
 }
 
 function Serving({ view }: { view: MyAmbassadorView }) {
+  const t = useT();
   const badge = badgeFor(view, view.founding ? "founding_ambassador" : "ambassador");
   return (
     <Panel className="flex flex-col gap-4 p-6">
       <RoleBadgePill badge={badge} />
       <div className="flex flex-col gap-1">
         <h2 className="text-h2 text-ink">
-          You are the {badge.label} for {view.country?.name}
+          <T vars={{ label: badge.label, name: view.country?.name }}>{"You are the {label} for {name}"}</T>
         </h2>
         <p className="text-md text-body">
-          {view.certifiedAt ? `Your badge went live on ${formatDate(view.certifiedAt)}. ` : ""}It shows next to your name across Charter
+          {view.certifiedAt ? t("Your badge went live on {date}.", { date: formatDate(view.certifiedAt) }) : ""}It shows next to your name across Charter
           Mission. Your community manager will share the chapter tools and next steps with you.
         </p>
       </div>
       <div className="flex flex-wrap gap-3">
         {view.chapter && (
           <Link href={`/chapters/${view.chapter.slug}`} className={buttonClasses()}>
-            Open {view.chapter.name}
+            <T vars={{ name: view.chapter.name }}>{"Open {name}"}</T>
           </Link>
         )}
         <a href="#agreement-summary" className={buttonClasses({ variant: "secondary" })}>
@@ -517,8 +519,7 @@ function Serving({ view }: { view: MyAmbassadorView }) {
       </div>
       {view.agreement && (
         <p id="agreement-summary" className="text-xs text-secondary">
-          Ambassador Agreement signed as “{view.agreement.signedName}” on {formatDate(view.agreement.signedAt)} (version{" "}
-          {view.agreement.version}).
+          <T vars={{ signedName: view.agreement.signedName, date: formatDate(view.agreement.signedAt), version: view.agreement.version }}>{"Ambassador Agreement signed as “{signedName}” on {date} (version {version})."}</T>
         </p>
       )}
     </Panel>
@@ -529,7 +530,7 @@ function Alumni({ view }: { view: MyAmbassadorView }) {
   return (
     <Panel className="flex flex-col gap-4 p-6">
       <RoleBadgePill badge={badgeFor(view, "alumni_ambassador")} />
-      <h2 className="text-h2 text-ink">Thank you for leading the {view.country?.name} chapter</h2>
+      <h2 className="text-h2 text-ink"><T vars={{ name: view.country?.name }}>{"Thank you for leading the {name} chapter"}</T></h2>
       <p className="text-md text-body">
         Your term has ended and your profile shows an Alumni Ambassador badge. If you would like to serve another term, talk to the
         community team. You can also nominate someone to take the chapter forward.
@@ -610,7 +611,7 @@ function NominateCard({ countryGroups, emailVerified }: { countryGroups: Country
       </div>
       {sent && (
         <FormAlert tone="success">
-          Thank you. Unless {sent} is already talking to us, we will email them an invitation to apply and mention that you nominated them.
+          <T vars={{ sent }}>{"Thank you. Unless {sent} is already talking to us, we will email them an invitation to apply and mention that you nominated them."}</T>
         </FormAlert>
       )}
       {message && <FormAlert tone="error">{message}</FormAlert>}

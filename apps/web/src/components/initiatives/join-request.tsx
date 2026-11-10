@@ -3,6 +3,7 @@
 import { createContext, useContext, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button, Icon, buttonClasses, cn, type ButtonSize, type ButtonVariant } from "@chartermission/ui";
 import { Modal } from "./modal";
+import { T, useT } from "@/i18n/client";
 
 type JoinTarget = {
   slug: string;
@@ -28,6 +29,7 @@ const NOTE_MAX = 500;
  * same dialog, optionally with a role preselected.
  */
 export function JoinRequestProvider({ initiative, children }: { initiative: JoinTarget; children: ReactNode }) {
+  const t = useT();
   const [isOpen, setOpen] = useState(false);
   const [roleId, setRoleId] = useState("");
   const [sent, setSent] = useState(false);
@@ -47,9 +49,9 @@ export function JoinRequestProvider({ initiative, children }: { initiative: Join
       <Modal
         open={isOpen}
         onClose={() => setOpen(false)}
-        title={sent ? "Request sent" : `Request to join ${initiative.title}`}
+        title={sent ? "Request sent" : t("Request to join {title}", { title: initiative.title })}
         description={
-          sent ? undefined : `Tell ${initiative.leadName} how you can help. Leads usually reply within 3 days.`
+          sent ? undefined : t("Tell {leadName} how you can help. Leads usually reply within 3 days.", { leadName: initiative.leadName })
         }
       >
         {sent ? (
@@ -88,6 +90,7 @@ function JoinForm({
   onCancel: () => void;
   onSent: () => void;
 }) {
+  const t = useT();
   const id = useId();
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const [note, setNote] = useState("");
@@ -97,7 +100,7 @@ function JoinForm({
     event.preventDefault();
     const trimmed = note.trim();
     if (trimmed.length < NOTE_MIN) {
-      setError(`Write at least ${NOTE_MIN} characters so the lead knows how you can help.`);
+      setError(t("Write at least {NOTEMIN} characters so the lead knows how you can help.", { NOTEMIN: NOTE_MIN }));
       noteRef.current?.focus();
       return;
     }
@@ -132,7 +135,7 @@ function JoinForm({
             <Icon
               name="chevron-down"
               size={16}
-              className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-secondary"
+              className="pointer-events-none absolute end-3 inset-y-0 my-auto h-fit text-secondary"
             />
           </span>
         </div>
@@ -154,7 +157,7 @@ function JoinForm({
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-note`} className="text-sm font-medium text-ink">
-          Note to {target.leadName}
+          <T vars={{ leadName: target.leadName }}>{"Note to {leadName}"}</T>
         </label>
         <textarea
           ref={noteRef}
@@ -180,7 +183,7 @@ function JoinForm({
             </p>
           ) : (
             <p id={`${id}-note-hint`} className="text-secondary">
-              At least {NOTE_MIN} characters.
+              <T vars={{ NOTEMIN: NOTE_MIN }}>{"At least {NOTEMIN} characters."}</T>
             </p>
           )}
           <span className="shrink-0 text-secondary" aria-hidden="true">

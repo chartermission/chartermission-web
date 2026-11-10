@@ -13,6 +13,7 @@ import { goingLabel } from "./event-meta";
 import { WhenBlock } from "./event-sections";
 import { formatClock, formatDay, zoneAbbreviation } from "./time";
 import { useNow, useViewerZone } from "./use-viewer-zone";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 function hostSite(url: string): string {
   try {
@@ -25,15 +26,17 @@ function hostSite(url: string): string {
 /** "Thu 20 Nov, 18:00" in the viewer's zone (event zone + abbreviation before hydration). */
 function useLocalMoment() {
   const viewer = useViewerZone();
+  const intl = useIntlTag();
   return (iso: string, fallbackZone: string) => {
     const zone = viewer ?? fallbackZone;
-    return `${formatDay(iso, zone)}, ${formatClock(iso, zone)}${viewer ? "" : ` ${zoneAbbreviation(zone, iso)}`}`;
+    return `${formatDay(iso, zone, { intl })}, ${formatClock(iso, zone)}${viewer ? "" : ` ${zoneAbbreviation(zone, iso)}`}`;
   };
 }
 
 function CapacityBar({ event }: { event: Pick<EventDetail, "capacity" | "registeredCount" | "waitlistCount" | "past" | "registrationMode" | "cancelledAt"> }) {
+  const t = useT();
   if (event.registrationMode === "external" || event.cancelledAt) return null;
-  const going = goingLabel(event);
+  const going = goingLabel(t, event);
   if (event.capacity === null || event.past) {
     return going ? (
       <p className="flex items-center gap-1.5 text-sm text-body">
@@ -49,10 +52,10 @@ function CapacityBar({ event }: { event: Pick<EventDetail, "capacity" | "registe
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium text-ink">
-          {event.registeredCount.toLocaleString("en")} / {event.capacity.toLocaleString("en")} registered
+          <T vars={{ count: event.registeredCount.toLocaleString("en"), count2: event.capacity.toLocaleString("en") }}>{"{count} / {count2} registered"}</T>
         </span>
         <span className={full ? "font-medium text-warning" : "text-secondary"}>
-          {full ? "Full" : `${(event.capacity - event.registeredCount).toLocaleString("en")} left`}
+          {full ? "Full" : t("{count} left", { count: (event.capacity - event.registeredCount).toLocaleString("en") })}
         </span>
       </div>
       <div
@@ -144,6 +147,7 @@ function JoinBlock({ event, isIn }: { event: EventDetail; isIn: boolean }) {
  * add to calendar, save and share.
  */
 export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
+  const t = useT();
   const router = useRouter();
   const moment = useLocalMoment();
   const [event, setEvent] = useState(initial);
@@ -170,7 +174,7 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
       apply(result);
       const message =
         result.status === "waitlisted"
-          ? `You’re on the waitlist${result.waitlistPosition ? ` at #${result.waitlistPosition}` : ""}. We’ll email you if a seat opens.`
+          ? (result.waitlistPosition ? t("You’re on the waitlist at #{position}. We’ll email you if a seat opens.", { position: result.waitlistPosition }) : t("You’re on the waitlist. We’ll email you if a seat opens."))
           : "You’re registered. We’ve emailed your confirmation with a calendar file.";
       toast.success(message);
       setAnnouncement(message);
@@ -249,7 +253,7 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
       </div>
     ) : (
       <Notice tone="neutral" icon="clock" title="Registration closed">
-        {event.deadline && Date.parse(event.deadline) < now ? `Registration closed on ${moment(event.deadline, event.timezone)}.` : "Registration for this event has closed."}
+        {event.deadline && Date.parse(event.deadline) < now ? t("Registration closed on {moment}.", { moment: moment(event.deadline, event.timezone) }) : "Registration for this event has closed."}
       </Notice>
     );
   } else if (status === "registered") {
@@ -260,7 +264,7 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
     );
   } else if (status === "waitlisted") {
     body = (
-      <Notice tone="warning" icon="clock" title={`You’re #${event.viewer.waitlistPosition ?? "?"} on the waitlist`}>
+      <Notice tone="warning" icon="clock" title={t("You’re #{count} on the waitlist", { count: event.viewer.waitlistPosition ?? "?" })}>
         If a seat opens you’ll get it automatically, and we’ll email you.
       </Notice>
     );
@@ -273,9 +277,9 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
         </Button>
         <p className="text-xs text-secondary">
           {full
-            ? `The event is full. ${event.waitlistCount ? `${event.waitlistCount} ahead of you — ` : ""}you’ll get a seat automatically if one opens.`
+            ? (event.waitlistCount ? t("The event is full. {count} ahead of you — you’ll get a seat automatically if one opens.", { count: event.waitlistCount }) : t("The event is full. You’ll get a seat automatically if one opens."))
             : event.deadline
-              ? `Registration closes ${moment(event.deadline, event.timezone)}.`
+              ? t("Registration closes {moment}.", { moment: moment(event.deadline, event.timezone) })
               : "Free for members. You can cancel any time before the start."}
         </p>
       </div>
@@ -287,7 +291,7 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
         {started
           ? "The event has started."
           : deadlinePassed
-            ? `Registration closed on ${moment(event.deadline!, event.timezone)}.`
+            ? t("Registration closed on {moment}.", { moment: moment(event.deadline!, event.timezone) })
             : event.spotsLeft === 0
               ? "Every seat is taken and there’s no waitlist."
               : "Registration isn’t open for this event."}

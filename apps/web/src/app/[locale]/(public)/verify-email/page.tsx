@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { VerifyEmail } from "@/components/auth/verify-email";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Verify your email", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Verify your email"), robots: { index: false } };
+}
 
 async function VerifyWithToken({ searchParams }: Pick<PageProps<"/[locale]/verify-email">, "searchParams">) {
   const raw = (await searchParams).token;

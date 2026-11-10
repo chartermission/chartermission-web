@@ -12,6 +12,8 @@ import { absoluteDateTime } from "@/components/social/format";
 import { activeUntil, type Viewer } from "@/components/social/viewer";
 import type { ComposeTool } from "@/components/compose/create-post-dialog";
 import { postTypeMeta } from "@/components/social/post-types/meta";
+import { T, useT, useIntlTag } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 /** What the composer opens with: a tool on a standard post, or another post type. */
 export type ComposeStart = { tool?: ComposeTool; type?: PostType };
@@ -27,11 +29,11 @@ const starts: { start: ComposeStart; icon: IconName; label: string; color: strin
 ];
 
 /** Why the viewer can't post right now, if anything (unverified, restricted or suspended). */
-export function blockedReason(viewer: Viewer) {
+export function blockedReason(intl: string, t: Translate, viewer: Viewer) {
   if (!viewer.emailVerified) return { kind: "verify" as const };
   if (viewer.status === "suspended") return { kind: "standing" as const, text: "Your account is suspended, so you can’t post." };
   const until = activeUntil(viewer.restrictions.postingUntil);
-  if (until) return { kind: "standing" as const, text: `You can’t post until ${absoluteDateTime(until)}.` };
+  if (until) return { kind: "standing" as const, text: t("You can’t post until {date}.", { date: absoluteDateTime(intl, until) }) };
   return null;
 }
 
@@ -83,7 +85,7 @@ function DraftLinks({ counts }: { counts: { drafts: number; scheduled: number } 
     <nav aria-label="Your unpublished posts" className="flex items-center gap-1.5">
       {counts.drafts > 0 && (
         <Link href="/drafts" className={link}>
-          Drafts ({counts.drafts})
+          <T vars={{ drafts: counts.drafts }}>{"Drafts ({drafts})"}</T>
         </Link>
       )}
       {counts.drafts > 0 && counts.scheduled > 0 && (
@@ -93,7 +95,7 @@ function DraftLinks({ counts }: { counts: { drafts: number; scheduled: number } 
       )}
       {counts.scheduled > 0 && (
         <Link href="/drafts?tab=scheduled" className={link}>
-          Scheduled ({counts.scheduled})
+          <T vars={{ scheduled: counts.scheduled }}>{"Scheduled ({scheduled})"}</T>
         </Link>
       )}
     </nav>
@@ -102,7 +104,9 @@ function DraftLinks({ counts }: { counts: { drafts: number; scheduled: number } 
 
 /** "Share an update" box at the top of the feed. Opens the create-post dialog. */
 export function Composer({ viewer, onOpen }: { viewer: Viewer; onOpen?: (start?: ComposeStart) => void }) {
-  const blocked = blockedReason(viewer);
+  const intl = useIntlTag();
+  const t = useT();
+  const blocked = blockedReason(intl, t, viewer);
   const counts = useDraftCounts();
   return (
     <Panel aria-label="Create a post" className="flex flex-col gap-3.5 p-4">

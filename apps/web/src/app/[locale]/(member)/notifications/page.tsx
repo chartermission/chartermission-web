@@ -9,8 +9,12 @@ import { requireClientViewer, settle } from "@/components/social/data";
 import { errorMessage } from "@/components/social/error-message";
 import { LoadingStatus, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Notifications" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Notifications") };
+}
 
 async function NotificationsMain({ searchParams }: { searchParams: PageProps<"/[locale]/notifications">["searchParams"] }) {
   const sp = await searchParams;

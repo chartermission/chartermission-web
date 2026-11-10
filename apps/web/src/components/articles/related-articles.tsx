@@ -2,7 +2,9 @@ import Link from "next/link";
 import type { PostView, RelatedArticles as Related } from "@chartermission/contracts";
 import { Icon } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
-import { ArticleCard, ArticleCardSkeleton, articleGridClass } from "./article-card";
+import { ArticleCard, ArticleCardSkeleton } from "./article-card";
+import { articleGridClass } from "./article-grid";
+import { getT } from "@/i18n/server";
 
 function Shelf({ id, title, action, posts }: { id: string; title: string; action?: { href: string; label: string }; posts: PostView[] }) {
   return (
@@ -30,14 +32,15 @@ function Shelf({ id, title, action, posts }: { id: string; title: string; action
 }
 
 /** "More from <author>" and "Related articles" below the reader (GET /articles/:id/related). */
-export function RelatedArticles({ related, author, authorLink }: { related: Related; author: PostView["author"]; /** The page, for an article published as one. */ authorLink?: string }) {
+export async function RelatedArticles({ related, author, authorLink }: { related: Related; author: PostView["author"]; /** The page, for an article published as one. */ authorLink?: string }) {
+  const t = await getT();
   const firstName = author.name.split(" ")[0] ?? author.name;
   return (
     <>
       {related.moreByAuthor.length > 0 && (
         <Shelf
           id="more-by-author"
-          title={`More from ${author.name}`}
+          title={t("More from {name}", { name: author.name })}
           action={authorLink ? { href: authorLink, label: "Open the page" } : { href: memberHref(author.handle), label: `${firstName}’s profile` }}
           posts={related.moreByAuthor}
         />

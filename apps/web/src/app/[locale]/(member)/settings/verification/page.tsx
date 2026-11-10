@@ -7,8 +7,12 @@ import { settle } from "@/components/social/data";
 import { errorMessage } from "@/components/social/error-message";
 import { PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Verification" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Verification") };
+}
 
 async function Verification() {
   const viewer = await requireViewer("/settings/verification");

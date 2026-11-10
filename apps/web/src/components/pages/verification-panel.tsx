@@ -16,6 +16,7 @@ import { ErrorNotice } from "@/components/social/errors";
 import { absoluteDate } from "@/components/social/format";
 import { toast } from "@/components/social/toast";
 import { api, isApiError } from "@/lib/api/client";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 const STATEMENT_MAX = 1000;
 
@@ -35,6 +36,8 @@ export function VerificationPanel({
   subject: "member" | "page";
   defaultName?: string;
 }) {
+  const intl = useIntlTag();
+  const t = useT();
   const id = useId();
   const [status, setStatus] = useState(initial);
   const [category, setCategory] = useState<VerificationCategory>(subject === "page" ? "organisation" : "individual");
@@ -96,7 +99,7 @@ export function VerificationPanel({
           <div className="flex flex-col gap-0.5">
             <p className="text-md font-medium text-ink">Your request is being reviewed</p>
             <p className="text-sm text-body">
-              Sent on {absoluteDate(request.createdAt)}. Reviews usually take a few working days; you’ll get a notification and an email with the outcome.
+              <T vars={{ date: absoluteDate(intl, request.createdAt) }}>{"Sent on {date}. Reviews usually take a few working days; you’ll get a notification and an email with the outcome."}</T>
             </p>
           </div>
         </div>
@@ -140,7 +143,7 @@ export function VerificationPanel({
       {request?.status === "declined" && (
         <FormAlert tone="warning">
           Your last request wasn’t approved{request.decisionNote ? `: “${request.decisionNote}”` : "."}{" "}
-          {status.canApplyAt ? `You can apply again from ${absoluteDate(status.canApplyAt)} (${VERIFICATION_REAPPLY_DAYS} days after a decision).` : "You can apply again now."}
+          {status.canApplyAt ? t("You can apply again from {date} ({VERIFICATIONREAPPLYDAYS} days after a decision).", { date: absoluteDate(intl, status.canApplyAt), VERIFICATIONREAPPLYDAYS: VERIFICATION_REAPPLY_DAYS }) : "You can apply again now."}
         </FormAlert>
       )}
 
@@ -226,12 +229,12 @@ export function VerificationPanel({
                   onChange={(event) => setLinks((current) => current.map((value, i) => (i === index ? event.target.value : value)))}
                   inputMode="url"
                   placeholder={index === 0 ? "Official website, LinkedIn, a press article or a registry entry" : "Another link (optional)"}
-                  aria-label={`Link ${index + 1}`}
+                  aria-label={t("Link {count}", { count: index + 1 })}
                   aria-invalid={errors.links ? true : undefined}
                   className={inputClasses(!!errors.links && index === 0, "flex-1")}
                 />
                 {links.length > 1 && (
-                  <Button variant="ghost" size="small" onClick={() => setLinks((current) => current.filter((_, i) => i !== index))} aria-label={`Remove link ${index + 1}`}>
+                  <Button variant="ghost" size="small" onClick={() => setLinks((current) => current.filter((_, i) => i !== index))} aria-label={t("Remove link {count}", { count: index + 1 })}>
                     <Icon name="x" size={16} />
                   </Button>
                 )}

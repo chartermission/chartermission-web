@@ -7,6 +7,7 @@ import { pop } from "@/components/motion";
 import { useRelationship } from "@/components/network/relationship";
 import { api } from "@/lib/api/client";
 import { toast } from "@/components/social/toast";
+import { useT } from "@/i18n/client";
 
 type Look = { size?: ButtonProps["size"]; block?: boolean; primary?: boolean; className?: string };
 
@@ -61,6 +62,7 @@ export function FollowMemberButton({ member, following, ...look }: Look & { memb
 
 /** Follow / Following toggle for a chapter. */
 export function FollowChapterButton({ chapter, following: initial, ...look }: Look & { chapter: ChapterRef; following: boolean }) {
+  const t = useT();
   const [following, setFollowing] = useState(initial);
   const [busy, setBusy] = useState(false);
   async function toggle() {
@@ -69,7 +71,7 @@ export function FollowChapterButton({ chapter, following: initial, ...look }: Lo
     try {
       await api("/follows", { method: next ? "POST" : "DELETE", body: { targetType: "chapter", targetId: chapter.id } });
       setFollowing(next);
-      toast.success(next ? `You’re following ${chapter.name}` : `You unfollowed ${chapter.name}`);
+      toast.success(next ? t("You’re following {name}", { name: chapter.name }) : t("You unfollowed {name}", { name: chapter.name }));
       return true;
     } catch (e) {
       toast.error(e);

@@ -13,9 +13,11 @@ import { announcePostCreated } from "@/components/social/post-events";
 import { toast } from "@/components/social/toast";
 import type { Viewer } from "@/components/social/viewer";
 import { FollowPageButton } from "./follow-page-button";
+import { useT } from "@/i18n/client";
 
 /** Header actions on a page: Follow for members; Create post, Edit and Analytics for its admins. */
 export function PageActions({ page, viewer }: { page: PageDetail; viewer: Viewer }) {
+  const t = useT();
   const router = useRouter();
   const [composing, setComposing] = useState(0);
 
@@ -31,7 +33,7 @@ export function PageActions({ page, viewer }: { page: PageDetail; viewer: Viewer
   function posted(post: PostView) {
     announcePostCreated(post);
     announceDraftsChanged();
-    toast.success(post.status === "pending_media" ? "Posted. Your files are being checked first." : `Posted as ${page.name}`);
+    toast.success(post.status === "pending_media" ? "Posted. Your files are being checked first." : t("Posted as {name}", { name: page.name }));
     router.refresh();
   }
 
@@ -60,7 +62,7 @@ export function PageActions({ page, viewer }: { page: PageDetail; viewer: Viewer
       )}
       {page.status === "active" && !page.viewer.role && <FollowPageButton page={page} following={page.following} size="default" onChange={() => router.refresh()} />}
       <Menu
-        label={`More actions for ${page.name}`}
+        label={t("More actions for {name}", { name: page.name })}
         items={menu}
         trigger={
           <span className="flex size-[42px] items-center justify-center rounded-lg border border-line-strong text-body">

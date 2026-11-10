@@ -16,8 +16,12 @@ import { FollowProvider } from "./explore-state";
 import { DiscoverTopics, TopicSearchResults, YourTopics } from "./topic-lists";
 import { TopicSearch } from "./topic-search";
 import { TrendingBoard } from "./trending-board";
+import { getT, getIntlTag } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Explore topics" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Explore topics") };
+}
 
 type SearchParams = PageProps<"/[locale]/topics">["searchParams"];
 
@@ -75,6 +79,8 @@ function PageHeader({ q }: { q: string }) {
 }
 
 async function ExploreMain({ searchParams }: { searchParams: SearchParams }) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const params = parseExplore(await searchParams);
   await requireClientViewer("/topics");
 
@@ -102,7 +108,7 @@ async function ExploreMain({ searchParams }: { searchParams: SearchParams }) {
   ]);
   const { scopes, active } = await scopeOptions(params, trending.ok ? trending.data : null);
   const computedAt = trending.ok ? trending.data.computedAt : null;
-  const ago = computedAt ? relativeTime(computedAt) : null;
+  const ago = computedAt ? relativeTime(intl, t, computedAt) : null;
 
   return (
     <>
@@ -113,7 +119,7 @@ async function ExploreMain({ searchParams }: { searchParams: SearchParams }) {
         window={params.window}
         scopes={scopes}
         active={active}
-        updated={ago ? (ago === "now" ? "Updated just now" : `Updated ${ago} ago`) : null}
+        updated={ago ? (ago === "now" ? "Updated just now" : t("Updated {ago} ago", { ago })) : null}
         error={trending.ok ? null : errorMessage(trending.error)}
       />
       <YourTopics

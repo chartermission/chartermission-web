@@ -9,8 +9,12 @@ import { canEditEvent } from "@/components/events/rules";
 import { EmptyState, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGetOrNull, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Edit event" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Edit event") };
+}
 
 async function EditMain({ params }: { params: PageProps<"/[locale]/events/[slug]/edit">["params"] }) {
   const { slug } = await params;

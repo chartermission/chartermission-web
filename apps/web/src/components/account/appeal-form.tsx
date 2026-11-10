@@ -6,12 +6,14 @@ import { CreateAppealInput, type AppealView } from "@chartermission/contracts";
 import { Button, cn } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { FormAlert, retryMessage } from "@/components/auth/fields";
+import { useT } from "@/i18n/client";
 
 const MIN = 20;
 const MAX = 2000;
 
 /** POST /appeals — one appeal per action (CM-ADM-06), reviewed by a different moderator. */
 export function AppealForm({ actionId }: { actionId: string }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const [statement, setStatement] = useState("");
@@ -40,7 +42,7 @@ export function AppealForm({ actionId }: { actionId: string }) {
         router.refresh();
         setFormError(e.message);
       } else if (isApiError(e) && e.fields?.statement) setError(e.fields.statement);
-      else if (isApiError(e, "RATE_LIMITED")) setFormError(retryMessage(e.retryAfter));
+      else if (isApiError(e, "RATE_LIMITED")) setFormError(retryMessage(t, e.retryAfter));
       else setFormError(isApiError(e) ? e.message : "Your appeal wasn’t sent. Please try again.");
     }
   }

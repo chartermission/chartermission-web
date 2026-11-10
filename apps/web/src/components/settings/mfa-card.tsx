@@ -8,11 +8,13 @@ import { api, isApiError } from "@/lib/api/client";
 import { PasswordConfirmDialog } from "@/components/account/password-confirm-dialog";
 import { Field, FormAlert, describedBy, inputClasses, retryMessage } from "@/components/auth/fields";
 import { SettingsCard } from "./settings-card";
+import { useT } from "@/i18n/client";
 
 type Stage = { kind: "idle" } | { kind: "setup"; data: MfaSetupResponse } | { kind: "done" };
 
 /** Optional TOTP for members (CM-AUTH-09): setup → scan QR → confirm a code; turn off with the password. */
 export function MfaCard({ enabled: initiallyEnabled, required }: { enabled: boolean; required: boolean }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const [enabled, setEnabled] = useState(initiallyEnabled);
@@ -54,7 +56,7 @@ export function MfaCard({ enabled: initiallyEnabled, required }: { enabled: bool
       router.refresh();
     } catch (e) {
       if (isApiError(e, "INVALID_MFA_CODE")) setCodeError(e.message);
-      else if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(e.retryAfter));
+      else if (isApiError(e, "RATE_LIMITED")) setError(retryMessage(t, e.retryAfter));
       else setError(isApiError(e) ? e.message : "Something went wrong. Please try again.");
     } finally {
       setBusy(false);

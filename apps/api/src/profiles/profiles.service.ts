@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, gt, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type {
   ChapterRef,
   ExperienceItem,
@@ -16,7 +16,7 @@ import { InjectDb, type Db } from '../db/db.module.js';
 import { chapters, connections, files, follows, handleHistory, memberProfiles, posts, profileExperiences, users } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { BadgesService } from '../core/badges.service.js';
-import { MembersService, mediaUrl, toneFor } from '../core/members.service.js';
+import { MembersService, mediaUrl, posterUrl, toneFor } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { AppError, Errors } from '../common/errors.js';
 import { HANDLE_CHANGE_DAYS, HANDLE_HOLD_DAYS, RESERVED_HANDLES } from './handles.js';
@@ -62,6 +62,8 @@ const profileColumns = {
   links: memberProfiles.links,
   avatarFileId: memberProfiles.avatarFileId,
   coverFileId: memberProfiles.coverFileId,
+  introVideoFileId: memberProfiles.introVideoFileId,
+  resumeFileId: memberProfiles.resumeFileId,
   avatarTone: memberProfiles.avatarTone,
   profileVisibility: memberProfiles.profileVisibility,
   fieldVisibility: memberProfiles.fieldVisibility,
@@ -89,6 +91,8 @@ export type ProfileRow = {
   links: { label: string; url: string }[];
   avatarFileId: string | null;
   coverFileId: string | null;
+  introVideoFileId: string | null;
+  resumeFileId: string | null;
   avatarTone: string;
   profileVisibility: string;
   fieldVisibility: Record<string, string>;
@@ -230,12 +234,32 @@ export class ProfilesService {
     if (show('organisation') && row.organisation) out.organisation = row.organisation;
     if (show('website') && row.website) out.website = row.website;
     if (show('links')) out.links = row.links ?? [];
+    if (show('introVideo') || show('resume')) {
+      const media = await this.profileMedia(row);
+      if (show('introVideo') && media.introVideo) out.introVideo = { url: media.introVideo.url, posterUrl: media.introVideo.posterUrl, durationSeconds: media.introVideo.durationSeconds };
+      if (show('resume') && media.resume) out.resume = { url: media.resume.url, name: media.resume.name, sizeBytes: media.resume.sizeBytes };
+    }
     if (show('skills')) out.skills = tax.skills;
     if (show('sectors')) out.sectors = tax.sectors;
     if (show('interests')) out.interests = tax.interests;
     if (show('languages')) out.languages = tax.languages;
     if (show('experience')) out.experience = experience;
     return out;
+  }
+
+  /** The intro video and résumé behind a profile, when each is present and has passed its checks. */
+  private async profileMedia(row: Pick<ProfileRow, 'introVideoFileId' | 'resumeFileId'>) {
+    const ids = [row.introVideoFileId, row.resumeFileId].filter((x): x is string => !!x);
+    const rows = ids.length ? await this.db.select().from(files).where(inArray(files.id, ids)) : [];
+    const clean = (id: string | null) => rows.find((f) => f.id === id && f.scanStatus === 'clean');
+    const video = clean(row.introVideoFileId);
+    const resume = clean(row.resumeFileId);
+    return {
+      introVideo: video
+        ? { fileId: video.id, url: mediaUrl(video.id)!, posterUrl: posterUrl(video), durationSeconds: video.durationMs !== null ? video.durationMs / 1000 : null }
+        : null,
+      resume: resume ? { fileId: resume.id, url: mediaUrl(resume.id)!, name: resume.originalName ?? 'resume.pdf', sizeBytes: resume.sizeBytes } : null,
+    };
   }
 
   private async experience(userId: string): Promise<ExperienceItem[]> {
@@ -298,9 +322,10 @@ export class ProfilesService {
   /** GET /me/profile */
   async own(userId: string): Promise<OwnProfile> {
     const row = await this.rowFor(userId);
-    const [tax, experience] = await Promise.all([
+    const [tax, experience, media] = await Promise.all([
       this.taxonomy.forUsers([userId]).then((m) => m.get(userId)!),
       this.experience(userId),
+      this.profileMedia(row),
     ]);
     return {
       handle: row.handle,
@@ -315,6 +340,8 @@ export class ProfilesService {
       organisation: row.organisation,
       website: row.website,
       links: row.links ?? [],
+      introVideo: media.introVideo,
+      resume: media.resume,
       skills: tax.skills,
       sectors: tax.sectors,
       interests: tax.interests,
@@ -368,6 +395,14 @@ export class ProfilesService {
       if (input.coverFileId) await this.assertOwnImage(userId, input.coverFileId, 'profile_cover', 'coverFileId');
       set.coverFileId = input.coverFileId;
     }
+    if (input.introVideoFileId !== undefined) {
+      if (input.introVideoFileId) await this.assertOwnFile(userId, input.introVideoFileId, 'profile_video', 'introVideoFileId', 'Upload your video first, and wait until it has finished processing');
+      set.introVideoFileId = input.introVideoFileId;
+    }
+    if (input.resumeFileId !== undefined) {
+      if (input.resumeFileId) await this.assertOwnFile(userId, input.resumeFileId, 'profile_resume', 'resumeFileId', 'Upload your résumé as a PDF first');
+      set.resumeFileId = input.resumeFileId;
+    }
 
     const taxonomies = {
       skills: input.skillIds !== undefined ? await this.taxonomy.validate('skills', input.skillIds, 'skillIds') : undefined,
@@ -406,7 +441,7 @@ export class ProfilesService {
             );
           }
         }
-        for (const fileId of [input.avatarFileId, input.coverFileId]) {
+        for (const fileId of [input.avatarFileId, input.coverFileId, input.introVideoFileId, input.resumeFileId]) {
           if (!fileId) continue;
           await tx
             .update(files)
@@ -485,6 +520,15 @@ export class ProfilesService {
   /** avatarFileId must be the member's own, clean, avatar-purpose upload (CM-PRF-07). */
   private async assertAvatar(userId: string, fileId: string) {
     await this.assertOwnImage(userId, fileId, 'avatar', 'avatarFileId');
+  }
+
+  private async assertOwnFile(userId: string, fileId: string, purpose: 'profile_video' | 'profile_resume', field: string, message: string) {
+    const [file] = await this.db
+      .select({ ownerId: files.ownerId, purpose: files.purpose, scanStatus: files.scanStatus })
+      .from(files)
+      .where(eq(files.id, fileId))
+      .limit(1);
+    if (!file || file.ownerId !== userId || file.purpose !== purpose || file.scanStatus !== 'clean') throw Errors.validation({ [field]: message });
   }
 
   private async assertOwnImage(userId: string, fileId: string, purpose: 'avatar' | 'profile_cover', field: string) {

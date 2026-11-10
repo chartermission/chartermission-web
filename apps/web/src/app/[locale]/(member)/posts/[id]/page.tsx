@@ -16,17 +16,19 @@ import { stripMarkdown } from "@/components/social/post-types/markdown";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { ArticleRedirect } from "./article-redirect";
 import { Comments } from "./comments";
+import { getT } from "@/i18n/server";
 
 type Params = PageProps<"/[locale]/posts/[id]">["params"];
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/posts/[id]">): Promise<Metadata> {
+  const t = await getT();
   const { id } = await params;
   if (!isUuid(id)) return { title: "Post" };
   const post = await apiGetOrNull<PostView>(`/posts/${id}`).catch(() => null);
   if (!post) return { title: "Post" };
   if (post.article) return { title: post.article.title, description: post.article.subtitle ?? stripMarkdown(post.body).slice(0, 160) };
   const lead = post.celebration?.headline ?? post.request?.title ?? stripMarkdown(post.body).slice(0, 70);
-  return { title: lead ? `${post.author.name}: ${lead}` : `Post by ${post.author.name}` };
+  return { title: lead ? `${post.author.name}: ${lead}` : t("Post by {name}", { name: post.author.name }) };
 }
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -40,6 +42,7 @@ async function loadPost(params: Params) {
 }
 
 async function PostMain({ params }: { params: Params }) {
+  const t = await getT();
   const { id } = await params;
   const viewer = await requireClientViewer(`/posts/${id}`);
   const post = await loadPost(params);
@@ -51,7 +54,7 @@ async function PostMain({ params }: { params: Params }) {
     isOwnRequest ? apiGet<HelpOfferView[]>(`/posts/${post.id}/help`).catch(() => null) : Promise.resolve(null),
   ]);
   const heading =
-    post.type === "question" ? `Question from ${post.author.name}` : post.type === "request" ? `${post.author.name} is looking for help` : `Post by ${post.author.name}`;
+    post.type === "question" ? t("Question from {name}", { name: post.author.name }) : post.type === "request" ? t("{name} is looking for help", { name: post.author.name }) : t("Post by {name}", { name: post.author.name });
   return (
     <>
       {/* Articles use their title as the page heading. */}
@@ -70,6 +73,7 @@ async function PostMain({ params }: { params: Params }) {
 }
 
 async function PostRightRail({ params }: { params: Params }) {
+  const t = await getT();
   const post = await loadPost(params).catch(() => null);
   if (!post || post.type === "article") return null;
   const firstTag = post.hashtags[0];
@@ -83,7 +87,7 @@ async function PostRightRail({ params }: { params: Params }) {
       {author && <AuthorCard member={author} />}
       {tags.length > 0 && (
         <Panel className="flex flex-col gap-3 p-5">
-          <h2 className="text-h3 text-ink">{topic ? `More like #${topic.tag}` : "Topics in this post"}</h2>
+          <h2 className="text-h3 text-ink">{topic ? t("More like #{tag}", { tag: topic.tag }) : "Topics in this post"}</h2>
           <ul className="flex flex-wrap gap-2">
             {tags.map((tag) => (
               <li key={tag}>

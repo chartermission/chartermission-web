@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { usePathname } from "@/i18n/client";
+import { usePathname, T } from "@/i18n/client";
 import { useCallback, useState, useTransition } from "react";
 import type { EventSummary, Page } from "@chartermission/contracts";
 import { Panel, SegmentedControl, buttonClasses, cn } from "@chartermission/ui";
@@ -91,7 +91,7 @@ function List({ initial, role, when }: { initial: Page<EventSummary>; role: MyRo
                       )}
                       {event.registrationMode === "internal" && (event.status === "published" || event.status === "archived") && (
                         <Link href={`${eventHref(event)}/registrations`} className={cn(buttonClasses({ variant: "ghost", size: "small" }), "max-sm:hidden")}>
-                          Registrations<span className="sr-only"> for {event.title}</span>
+                          Registrations<span className="sr-only"> <T vars={{ title: event.title }}>{"for {title}"}</T></span>
                         </Link>
                       )}
                     </>

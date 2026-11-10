@@ -7,6 +7,7 @@ import { Button, Icon, chipClasses, cn } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { VerifyPrompt, RestrictedPrompt } from "@/components/account/verify-prompt";
 import { SettingsCard } from "./settings-card";
+import { useT } from "@/i18n/client";
 
 const TAG = /^[A-Za-z0-9_]{2,50}$/;
 
@@ -16,6 +17,7 @@ const toTopic = (follow: FollowView): Topic => ({ id: follow.targetId, display: 
 
 /** Followed hashtags — target of the feed rail's "Manage" link (/settings#topics). */
 export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
+  const t = useT();
   const [topics, setTopics] = useState<Topic[]>(initial.items.map(toTopic));
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [draft, setDraft] = useState("");
@@ -31,7 +33,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
       return;
     }
     if (topics.some((topic) => topic.id === tag.toLowerCase())) {
-      setError(`You already follow #${tag}.`);
+      setError(t("You already follow #{tag}.", { tag }));
       return;
     }
     setBusy(true);
@@ -40,7 +42,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
       await api("/follows", { method: "POST", body: { targetType: "hashtag", targetId: tag } });
       setTopics((prev) => [{ id: tag.toLowerCase(), display: tag }, ...prev]);
       setDraft("");
-      setStatus(`You now follow #${tag}.`);
+      setStatus(t("You now follow #{tag}.", { tag }));
     } catch (e) {
       if (isApiError(e, "EMAIL_NOT_VERIFIED")) setBlocked({ kind: "verify" });
       else if (isApiError(e, "ACCOUNT_RESTRICTED") || isApiError(e, "ACCOUNT_SUSPENDED"))
@@ -56,7 +58,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
     setTopics((prev) => prev.filter((item) => item.id !== topic.id));
     try {
       await api("/follows", { method: "DELETE", body: { targetType: "hashtag", targetId: topic.id } });
-      setStatus(`You unfollowed #${topic.display}.`);
+      setStatus(t("You unfollowed #{display}.", { display: topic.display }));
     } catch (e) {
       setTopics(previous);
       setError(isApiError(e) ? e.message : "Something went wrong. Please try again.");
@@ -94,7 +96,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
                 <button
                   type="button"
                   onClick={() => void unfollow(topic)}
-                  aria-label={`Unfollow #${topic.display}`}
+                  aria-label={t("Unfollow #{display}", { display: topic.display })}
                   className="rounded-full p-0.5 hover:bg-accent/15 focus-visible:outline-2 focus-visible:outline-primary-light"
                 >
                   <Icon name="x" size={14} />
@@ -119,7 +121,7 @@ export function FollowedTopics({ initial }: { initial: Page<FollowView> }) {
           <span className="relative flex w-[280px] max-w-full">
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 start-3 -translate-y-1/2 text-sm text-secondary"
+              className="pointer-events-none absolute inset-y-0 my-auto h-fit start-3 text-sm text-secondary"
             >
               #
             </span>

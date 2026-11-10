@@ -6,12 +6,16 @@ import { LoadError } from "@/components/account/load-error";
 import { settle } from "@/components/account/settle";
 import { SignUpForm } from "@/components/public/signup-form";
 import { getTaxonomies, groupCountries } from "@/lib/taxonomies";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Create your account",
-  description:
-    "Join Charter Mission free: connect with professionals in 54 countries and the diaspora, find reviewed opportunities and start or join initiatives.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Create your account"),
+    description:
+      t("Join Charter Mission free: connect with professionals in 54 countries and the diaspora, find reviewed opportunities and start or join initiatives."),
+  };
+}
 
 async function SignUpFormWithCountries() {
   const result = await settle(getTaxonomies());

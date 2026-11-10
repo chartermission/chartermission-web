@@ -5,8 +5,12 @@ import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { destinationFor, safeNext } from "@/components/auth/destinations";
 import { MfaSetupForm } from "@/components/auth/mfa-setup-form";
 import { getViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Set up two-step verification" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Set up two-step verification") };
+}
 
 async function SetupStep({ searchParams }: Pick<PageProps<"/[locale]/signin/mfa-setup">, "searchParams">) {
   const params = await searchParams;

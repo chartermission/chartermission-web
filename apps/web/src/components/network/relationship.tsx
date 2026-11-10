@@ -5,6 +5,7 @@ import type { ConnectionView, Relationship } from "@chartermission/contracts";
 import { Button, cn, type ButtonProps } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { toast } from "@/components/social/toast";
+import { T, useT } from "@/i18n/client";
 
 export type RelationshipState = Pick<Relationship, "connection" | "connectionId" | "following">;
 
@@ -18,6 +19,7 @@ export function canConnectWith(member: Member, relationship?: Pick<Relationship,
 
 /** Connection and follow mutations shared by profile headers, directory cards and suggestions. */
 export function useRelationship(member: Member, initial: RelationshipState) {
+  const t = useT();
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -46,7 +48,7 @@ export function useRelationship(member: Member, initial: RelationshipState) {
           const view = await api<ConnectionView>("/connections", { method: "POST", body: { memberId: member.id, note: note || undefined } });
           return { connection: view.status === "accepted" ? "connected" : "pending_outgoing", connectionId: view.id };
         },
-        `Connection request sent to ${member.name}`,
+        t("Connection request sent to {name}", { name: member.name }),
       ),
     withdraw: () =>
       run(
@@ -64,7 +66,7 @@ export function useRelationship(member: Member, initial: RelationshipState) {
           await api(`/connections/${state.connectionId}/accept`, { method: "POST" });
           return { connection: "connected" };
         },
-        `You and ${member.name} are now connected`,
+        t("You and {name} are now connected", { name: member.name }),
       ),
     decline: () =>
       run(
@@ -82,7 +84,7 @@ export function useRelationship(member: Member, initial: RelationshipState) {
           await api(`/connections/${state.connectionId}`, { method: "DELETE" });
           return { connection: "none", connectionId: null };
         },
-        `Removed ${member.name} from your connections`,
+        t("Removed {name} from your connections", { name: member.name }),
       ),
     follow: () =>
       run("follow", async () => {
@@ -119,7 +121,7 @@ export function ConnectControl({
   if (state.connection === "connected") {
     return (
       <Button variant="secondary" size={size} block={block} disabled title="Messaging arrives in a later release">
-        Message<span className="sr-only"> {member.name} (coming later)</span>
+        Message<span className="sr-only"> <T vars={{ name: member.name }}>{"{name} (coming later)"}</T></span>
       </Button>
     );
   }
@@ -127,10 +129,10 @@ export function ConnectControl({
     return (
       <div className={cn("flex gap-2", block && "w-full")}>
         <Button size={size} block={block} disabled={!!busy} onClick={() => controls.accept()}>
-          Accept<span className="sr-only"> {member.name}’s request</span>
+          Accept<span className="sr-only"> <T vars={{ name: member.name }}>{"{name}’s request"}</T></span>
         </Button>
         <Button variant="secondary" size={size} block={block} disabled={!!busy} onClick={() => controls.decline()}>
-          Decline<span className="sr-only"> {member.name}’s request</span>
+          Decline<span className="sr-only"> <T vars={{ name: member.name }}>{"{name}’s request"}</T></span>
         </Button>
       </div>
     );
@@ -149,7 +151,7 @@ export function ConnectControl({
       >
         <span className="group-hover:hidden group-focus-visible:hidden">Pending</span>
         <span className="hidden group-hover:inline group-focus-visible:inline">Withdraw</span>
-        <span className="sr-only"> request to {member.name}</span>
+        <span className="sr-only"> <T vars={{ name: member.name }}>{"request to {name}"}</T></span>
       </Button>
     );
   }
@@ -162,7 +164,7 @@ export function ConnectControl({
       onClick={() => (onConnectWithNote ? onConnectWithNote() : controls.connect())}
     >
       {busy === "connect" ? "Sending…" : "Connect"}
-      <span className="sr-only"> with {member.name}</span>
+      <span className="sr-only"> <T vars={{ name: member.name }}>{"with {name}"}</T></span>
     </Button>
   );
 }

@@ -5,6 +5,7 @@ import { usePathname } from "@/i18n/client";
 import { useState, useTransition, type FormEvent } from "react";
 import { OPPORTUNITY_TYPE_LABELS, OpportunityType, type OpportunitiesQuery } from "@chartermission/contracts";
 import { Button, Divider } from "@chartermission/ui";
+import { filtersHref } from "./opportunity-href";
 import { CheckRow, FilterGroup, RemovableChip, SearchField, SelectField } from "@/components/discover/filter-controls";
 
 type Option = { value: string; label: string };
@@ -20,19 +21,6 @@ export const SORTS: Option[] = [
   { value: "closing", label: "Closing soon" },
 ];
 
-/** The URL query for a set of filters (defaults left out). */
-export function filtersHref(path: string, q: Partial<OpportunitiesQuery>) {
-  const params = new URLSearchParams();
-  if (q.q) params.set("q", q.q);
-  if (q.type) params.set("type", q.type);
-  if (q.country) params.set("country", q.country);
-  if (q.remote) params.set("remote", "true");
-  if (q.sector) params.set("sector", q.sector);
-  if (q.deadline && q.deadline !== "any") params.set("deadline", q.deadline);
-  if (q.sort && q.sort !== "newest") params.set("sort", q.sort);
-  const s = params.toString();
-  return s ? `${path}?${s}` : path;
-}
 
 /** Search box and filter panel; every change updates the URL (the server renders the results). */
 export function OpportunityFilters({ query, countries, sectors }: { query: OpportunitiesQuery; countries: Option[]; sectors: Option[] }) {

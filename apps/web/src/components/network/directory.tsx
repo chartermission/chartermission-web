@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { usePathname } from "@/i18n/client";
+import { usePathname, useT } from "@/i18n/client";
 import { useState, useTransition, type FormEvent } from "react";
 import type { DirectoryMember, DirectoryQuery, Page, Taxonomies } from "@chartermission/contracts";
 import { Button, Icon, Panel, cn } from "@chartermission/ui";
@@ -31,6 +31,7 @@ export function Directory({
   initial: Page<DirectoryMember>;
   taxonomies: Pick<Taxonomies, "countries" | "sectors" | "skills">;
 }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
@@ -149,7 +150,7 @@ export function Directory({
 
       <section aria-label="Members" aria-busy={pending || loading} className={cn("flex w-full min-w-0 flex-1 flex-col gap-4", pending && "opacity-60")}>
         <p className="text-md font-medium text-ink" aria-live="polite">
-          {items.length === 0 ? "No members found" : `Showing ${items.length}${cursor ? "+" : ""} member${items.length === 1 ? "" : "s"}`}
+          {items.length === 0 ? "No members found" : (cursor ? t("Showing {count}+ members", { count: items.length }) : t("Showing {count} members", { count: items.length }))}
         </p>
         {items.length > 0 ? (
           <ul className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3">

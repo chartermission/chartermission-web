@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { EventSummary } from "@chartermission/contracts";
 import { Chip, Icon, buttonClasses, cn } from "@chartermission/ui";
+import { useT } from "@/i18n/client";
 import { BrandCover } from "@/components/illustrations";
 import { Bone } from "@/components/social/skeletons";
 import {
@@ -45,7 +46,8 @@ export function EventCover({ event, className, children }: { event: Pick<EventSu
 /** Grid card — Figma "Event card" instances in node 10:1372. */
 export function EventGridCard({ event, showLifecycle = false }: { event: EventSummary; showLifecycle?: boolean }) {
   const action = cardAction(event);
-  const going = goingLabel(event);
+  const t = useT();
+  const going = goingLabel(t, event);
   const cancelled = Boolean(event.cancelledAt);
   return (
     <article className="group relative flex w-full flex-col overflow-hidden rounded-card border border-line bg-card transition-shadow hover:shadow-[0px_8px_24px_0px_rgba(26,32,44,0.08)]">
@@ -117,7 +119,8 @@ export function EventGridCardSkeleton() {
 /** Featured event banner — Figma node 10:1333. */
 export function FeaturedEvent({ event }: { event: EventSummary }) {
   const action = cardAction(event);
-  const going = goingLabel(event);
+  const t = useT();
+  const going = goingLabel(t, event);
   return (
     <article className="relative isolate flex items-center gap-6 overflow-hidden rounded-2xl bg-linear-to-r from-primary-dark to-primary-light p-7 max-sm:flex-col-reverse max-sm:items-stretch max-sm:gap-4 max-sm:p-5">
       {event.coverUrl && (
@@ -171,7 +174,8 @@ export function FeaturedEvent({ event }: { event: EventSummary }) {
 
 /** Compact row for My events, the rail and the calendar's day list. */
 export function EventRow({ event, showLifecycle = false, trailing }: { event: EventSummary; showLifecycle?: boolean; trailing?: React.ReactNode }) {
-  const going = goingLabel(event);
+  const t = useT();
+  const going = goingLabel(t, event);
   return (
     <article className="relative flex items-start gap-4 px-5 py-4 max-sm:gap-3 max-sm:px-4">
       <EventDateBadge startsAt={event.startsAt} timezone={event.timezone} tone="accent" size="small" className="w-12" />

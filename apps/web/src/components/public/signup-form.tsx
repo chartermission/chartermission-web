@@ -21,6 +21,7 @@ import {
   textLinkClasses,
 } from "@/components/auth/fields";
 import { PasswordRules, StrengthMeter, passwordRules } from "@/components/auth/password-rules";
+import { useT } from "@/i18n/client";
 
 type FieldName = keyof SignUpInput;
 type Values = { name: string; email: string; password: string; country: string; acceptTerms: boolean };
@@ -55,6 +56,7 @@ function validate(values: Values): Errors {
 
 /** Sign-up form (Figma 17:1544) wired to POST /auth/register. */
 export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] }) {
+  const t = useT();
   const id = useId();
   const fieldId = (field: string) => `${id}-${field}`;
   const router = useRouter();
@@ -105,7 +107,7 @@ export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] })
     } catch (error) {
       setSubmitting(false);
       if (isApiError(error, "RATE_LIMITED")) {
-        setFormError(retryMessage(error.retryAfter, "Too many sign-up attempts from this network."));
+        setFormError(retryMessage(t, error.retryAfter, "Too many sign-up attempts from this network."));
       } else if (isApiError(error) && error.fields && Object.keys(error.fields).length > 0) {
         const fields = error.fields as Errors;
         setServerErrors(fields);
@@ -232,7 +234,7 @@ export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] })
           <Icon
             name="chevron-down"
             size={18}
-            className="pointer-events-none absolute top-1/2 end-3.5 -translate-y-1/2 text-secondary"
+            className="pointer-events-none absolute inset-y-0 my-auto h-fit end-3.5 text-secondary"
           />
         </div>
       </Field>

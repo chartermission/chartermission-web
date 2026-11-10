@@ -12,6 +12,7 @@ import { relativeTime } from "@/components/social/format";
 import { memberHref } from "@/components/social/links";
 import { toast } from "@/components/social/toast";
 import { HighlightPicker } from "./highlight-picker";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 export type StoryGroup = { key: string; author: MemberRef; stories: StoryView[]; title?: string };
 
@@ -41,6 +42,8 @@ export function StoryViewer({
   /** The owner viewing one of their highlights. */
   highlightActions?: { onEdit: () => void; onDelete: () => void };
 }) {
+  const intl = useIntlTag();
+  const t = useT();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [list, setList] = useState(groups);
@@ -211,7 +214,7 @@ export function StoryViewer({
     }
   }
 
-  const label = group?.title ? `${group.title} highlight` : group ? `${group.author.name}’s story` : "Story";
+  const label = group?.title ? t("{title} highlight", { title: group.title }) : group ? t("{name}’s story", { name: group.author.name }) : "Story";
 
   return (
     <dialog
@@ -246,7 +249,7 @@ export function StoryViewer({
               <img
                 key={story.id}
                 src={story.media.url}
-                alt={story.caption ?? `Photo story from ${group.author.name}`}
+                alt={story.caption ?? t("Photo story from {name}", { name: group.author.name })}
                 onLoad={() => setReadyId(story.id)}
                 onError={() => setReadyId(story.id)}
                 className="absolute inset-0 size-full object-contain"
@@ -278,7 +281,7 @@ export function StoryViewer({
                   <span className="truncate text-sm font-semibold">{group.title ?? group.author.name}</span>
                 </Link>
                 <time dateTime={story.createdAt} className="shrink-0 text-xs text-inverse/75" suppressHydrationWarning>
-                  {relativeTime(story.createdAt)}
+                  {relativeTime(intl, t, story.createdAt)}
                 </time>
                 <span className="ms-auto flex shrink-0 items-center gap-1">
                   {story.media.kind === "video" && (
@@ -304,7 +307,7 @@ export function StoryViewer({
             <div className="relative z-20 mt-auto flex flex-col gap-3 bg-gradient-to-t from-ink/80 to-transparent px-4 pb-4 pt-10">
               {story.moderationState && story.moderationState !== "visible" && (
                 <p className="rounded-md bg-warning px-3 py-2 text-xs text-ink">
-                  Only you can see this story: it was {story.moderationState} by a moderator.
+                  <T vars={{ moderationState: story.moderationState }}>{"Only you can see this story: it was {moderationState} by a moderator."}</T>
                 </p>
               )}
               {story.caption && <p className="whitespace-pre-line break-words text-sm">{story.caption}</p>}
@@ -359,7 +362,7 @@ export function StoryViewer({
                     {v.member.name}
                   </Link>
                   <time dateTime={v.viewedAt} className="shrink-0 text-xs text-secondary" suppressHydrationWarning>
-                    {relativeTime(v.viewedAt)}
+                    {relativeTime(intl, t, v.viewedAt)}
                   </time>
                 </li>
               ))}
@@ -396,7 +399,7 @@ export function StoryViewer({
         </ConfirmDialog>
       )}
       {sub === "report" && story && (
-        <ReportDialog targetType="story" targetId={story.id} subject={`${story.author.name}’s story`} onClose={() => setSub(null)} />
+        <ReportDialog targetType="story" targetId={story.id} subject={t("{name}’s story", { name: story.author.name })} onClose={() => setSub(null)} />
       )}
     </dialog>
   );

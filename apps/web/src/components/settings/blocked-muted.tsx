@@ -7,13 +7,14 @@ import { Avatar, Button, Icon, chipClasses } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { formatDate } from "@/components/account/format";
 import { SettingsCard } from "./settings-card";
+import { useT } from "@/i18n/client";
 
 function MemberRow({ member, meta, action }: { member: MemberRef; meta: string; action: ReactNode }) {
   return (
     <li className="flex items-center gap-3 py-3.5">
       <Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} size={40} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <Link href={`/members/${member.handle}`} className="truncate text-sm font-medium text-ink hover:underline">
+        <Link href={`/${member.handle}`} className="truncate text-sm font-medium text-ink hover:underline">
           {member.name}
         </Link>
         <span className="truncate text-xs text-secondary">{meta}</span>
@@ -25,6 +26,7 @@ function MemberRow({ member, meta, action }: { member: MemberRef; meta: string; 
 
 /** Blocked members (GET /me/blocks, DELETE /blocks/{id}). */
 export function BlockedList({ initial }: { initial: BlockView[] }) {
+  const t = useT();
   const [items, setItems] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
@@ -37,7 +39,7 @@ export function BlockedList({ initial }: { initial: BlockView[] }) {
       setItems((prev) => prev.filter((item) => item.member.id !== block.member.id));
       setStatus({
         tone: "success",
-        text: `You unblocked ${block.member.name}. They can see your profile and contact you again.`,
+        text: t("You unblocked {name}. They can see your profile and contact you again.", { name: block.member.name }),
       });
     } catch (e) {
       setStatus({ tone: "error", text: isApiError(e) ? e.message : "Something went wrong. Please try again." });
@@ -62,7 +64,7 @@ export function BlockedList({ initial }: { initial: BlockView[] }) {
           <MemberRow
             key={block.member.id}
             member={block.member}
-            meta={`Blocked ${formatDate(block.createdAt)}`}
+            meta={t("Blocked {date}", { date: formatDate(block.createdAt) })}
             action={
               <Button variant="secondary" size="small" disabled={busy !== null} onClick={() => void unblock(block)}>
                 {busy === block.member.id ? "Unblocking…" : "Unblock"}
@@ -83,6 +85,7 @@ export function BlockedList({ initial }: { initial: BlockView[] }) {
 
 /** Muted members and hashtags (GET /me/mutes, DELETE /mutes). */
 export function MutedList({ initial }: { initial: MuteView[] }) {
+  const t = useT();
   const [items, setItems] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
@@ -97,7 +100,7 @@ export function MutedList({ initial }: { initial: MuteView[] }) {
     try {
       await api("/mutes", { method: "DELETE", body: { targetType: mute.targetType, targetId: mute.targetId } });
       setItems((prev) => prev.filter((item) => `${item.targetType}:${item.targetId}` !== key));
-      setStatus({ tone: "success", text: `You unmuted ${label}.` });
+      setStatus({ tone: "success", text: t("You unmuted {label}.", { label }) });
     } catch (e) {
       setStatus({ tone: "error", text: isApiError(e) ? e.message : "Something went wrong. Please try again." });
     } finally {
@@ -118,7 +121,7 @@ export function MutedList({ initial }: { initial: MuteView[] }) {
           <MemberRow
             key={mute.targetId}
             member={mute.member}
-            meta={`Muted ${formatDate(mute.createdAt)}`}
+            meta={t("Muted {date}", { date: formatDate(mute.createdAt) })}
             action={
               <Button variant="secondary" size="small" disabled={busy !== null} onClick={() => void unmute(mute)}>
                 {busy === `member:${mute.targetId}` ? "Unmuting…" : "Unmute"}
@@ -139,7 +142,7 @@ export function MutedList({ initial }: { initial: MuteView[] }) {
                   type="button"
                   onClick={() => void unmute(mute)}
                   disabled={busy !== null}
-                  aria-label={`Unmute #${mute.targetId}`}
+                  aria-label={t("Unmute #{targetId}", { targetId: mute.targetId })}
                   className="rounded-full p-0.5 hover:bg-line focus-visible:outline-2 focus-visible:outline-primary-light"
                 >
                   <Icon name="x" size={14} />

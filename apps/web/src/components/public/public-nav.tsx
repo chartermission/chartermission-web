@@ -39,7 +39,7 @@ async function NavActions() {
   if (!viewer) return <SignedOutActions />;
   return (
     <>
-      <Link href={`/members/${viewer.handle}`} className="flex items-center gap-2.5 rounded-full py-1 pe-3 ps-1 text-sm font-medium text-inverse hover:bg-white/10 max-sm:pe-1">
+      <Link href={`/${viewer.handle}`} className="flex items-center gap-2.5 rounded-full py-1 pe-3 ps-1 text-sm font-medium text-inverse hover:bg-white/10 max-sm:pe-1">
         <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} size={32} />
         <span className="max-w-[160px] truncate max-sm:sr-only">{viewer.name}</span>
       </Link>

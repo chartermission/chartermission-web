@@ -176,7 +176,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
                 </option>
               ))}
             </select>
-            <Icon name="chevron-down" size={14} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-secondary" />
+            <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 right-3 my-auto h-fit text-secondary" />
           </span>
           <p id="pages-policy-hint" className="text-xs text-secondary">
             {policy.hint}
@@ -225,7 +225,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
         </div>
         <label className="relative ml-auto min-w-[220px]">
           <span className="sr-only">Search pages</span>
-          <Icon name="search" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-secondary" />
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 left-3 my-auto h-fit text-secondary" />
           <input type="search" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Search by name" className={inputClasses(false, "pl-9")} />
         </label>
         <Button size="small" onClick={() => setEditing("new")}>
@@ -273,7 +273,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
                     <p className="text-xs text-secondary">
                       Owner:{" "}
                       {page.owner ? (
-                        <a href={webHref(`/members/${page.owner.handle}`)} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline">
+                        <a href={webHref(`/${page.owner.handle}`)} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline">
                           {page.owner.name}
                         </a>
                       ) : (

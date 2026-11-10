@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { MyAmbassadorView } from "@chartermission/contracts";
 import { Icon, Panel, buttonClasses } from "@chartermission/ui";
 import { apiGet } from "@/lib/api/server";
+import { T } from "@/i18n/client";
 
 /** Home-feed reminder while the viewer is onboarding as an Ambassador. Renders nothing otherwise. */
 export async function AmbassadorOnboardingNotice() {
@@ -16,9 +17,9 @@ export async function AmbassadorOnboardingNotice() {
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="text-sm font-medium text-ink">
-          Your Ambassador onboarding for {view.country?.name}: {done} of {total} steps done
+          <T vars={{ name: view.country?.name, done, count: total }}>{"Your Ambassador onboarding for {name}: {done} of {count} steps done"}</T>
         </p>
-        <p className="text-sm text-secondary">{next}. Your badge goes live when every step is done.</p>
+        <p className="text-sm text-secondary"><T vars={{ next }}>{"{next}. Your badge goes live when every step is done."}</T></p>
       </div>
       <Link href="/ambassadors" className={buttonClasses({ size: "small" })}>
         Continue

@@ -3,8 +3,10 @@ import { eq } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { platformSettings } from '../db/schema.js';
 import {
+  CHAPTER_POSTS_DEFAULTS,
   LEARNING_ACCESS_DEFAULTS,
   PAGES_SETTINGS_DEFAULTS,
+  type ChapterPostsSettings,
   type LearningAccessRules,
   type MediaSettings,
   type PagesSettings,
@@ -23,11 +25,13 @@ export const SETTING_DEFAULTS = {
   /** Charter Center courses (our course ids) every new Ambassador completes during onboarding. */
   ambassador_training: { courseIds: [] as string[] },
   /** Longest uploaded video, in seconds: feed posts and stories (admin console, Media settings). */
-  media_limits: { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60 } satisfies MediaSettings,
+  media_limits: { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60, introVideoMaxSeconds: 300 } satisfies MediaSettings,
   /** What members must do before Learning opens (admin console, E-learning access). */
   learning_access: LEARNING_ACCESS_DEFAULTS as LearningAccessRules,
   /** Who may create pages from the member app (admin console, Pages). */
   pages: PAGES_SETTINGS_DEFAULTS as PagesSettings,
+  /** Whether members' posts go straight into a chapter or wait for its team's approval (admin console, Chapters). */
+  chapter_posts: CHAPTER_POSTS_DEFAULTS as ChapterPostsSettings,
 };
 
 type SettingKey = keyof typeof SETTING_DEFAULTS;

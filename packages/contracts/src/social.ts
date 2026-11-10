@@ -267,6 +267,24 @@ export type ArticleState = {
   coverAlt: string | null;
 };
 
+/**
+ * "pending_media": files are still being checked. "in_review": waiting for the chapter team to
+ * approve it. "declined": not approved, or taken out of the chapter. Only "published" posts are
+ * seen by other members.
+ */
+export const PostStatus = z.enum(["published", "pending_media", "in_review", "declined"]);
+export type PostStatus = z.infer<typeof PostStatus>;
+
+export const ChapterReviewInfo = z.object({
+  state: z.enum(["pending", "approved", "declined"]),
+  /** The reviewer's note to the author. */
+  note: z.string().nullable(),
+  /** Who decided or held it, for the chapter team; null for the author's own view. */
+  by: MemberRef.nullable(),
+  at: z.string().nullable(),
+});
+export type ChapterReviewInfo = z.infer<typeof ChapterReviewInfo>;
+
 export type PostView = {
   id: string;
   /**
@@ -293,7 +311,9 @@ export type PostView = {
   /** One level only: a repost of a repost shows the original. Null when the original was removed. */
   repostOf: PostView | null;
   isRepost: boolean;
-  status: "published" | "pending_media";
+  status: PostStatus;
+  /** Chapter approval, shown to the author and the chapter's reviewers; absent when the post never needed it. */
+  chapterReview?: ChapterReviewInfo;
   createdAt: string;
   editedAt: string | null;
   counts: { reactions: number; comments: number; reposts: number };
@@ -347,7 +367,8 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     linkPreview: LinkPreview.nullable(),
     repostOf: PostView.nullable(),
     isRepost: z.boolean(),
-    status: z.enum(["published", "pending_media"]),
+    status: PostStatus,
+    chapterReview: ChapterReviewInfo.optional(),
     createdAt: z.string(),
     editedAt: z.string().nullable(),
     counts: z.object({ reactions: z.number().int(), comments: z.number().int(), reposts: z.number().int() }),
@@ -779,12 +800,14 @@ export const UploadPurpose = z.enum([
   "chapter_cover",
   "page_logo",
   "page_cover",
+  "profile_video",
+  "profile_resume",
 ]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
 
 /** Videos phones and cameras record: MP4 (H.264/HEVC), QuickTime (iPhone .mov) and WebM. All are converted to MP4. */
 export const VIDEO_MIMES = ["video/mp4", "video/quicktime", "video/webm"] as const;
-export const isVideoPurpose = (p: UploadPurpose) => p === "post_video" || p === "story_video";
+export const isVideoPurpose = (p: UploadPurpose) => p === "post_video" || p === "story_video" || p === "profile_video";
 
 export const UPLOAD_LIMITS = {
   avatar: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
@@ -805,6 +828,10 @@ export const UPLOAD_LIMITS = {
   /** Page logo (square) and page cover (wide 4:1 banner). Page admins and staff. */
   page_logo: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   page_cover: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  /** A member's intro video for their profile. Length is capped separately (MediaSettings.introVideoMaxSeconds). */
+  profile_video: { maxBytes: 800 * 1024 * 1024, mimes: VIDEO_MIMES },
+  /** A member's résumé or CV, shown on their profile to the people they choose. PDF only. */
+  profile_resume: { maxBytes: 5 * 1024 * 1024, mimes: ["application/pdf"] },
 } as const;
 
 /**
@@ -814,6 +841,8 @@ export const UPLOAD_LIMITS = {
 export const MediaSettings = z.object({
   postVideoMaxSeconds: z.number().int().min(10, "At least 10 seconds").max(3600, "At most 60 minutes"),
   storyVideoMaxSeconds: z.number().int().min(5, "At least 5 seconds").max(180, "At most 3 minutes"),
+  /** Intro videos on member profiles. */
+  introVideoMaxSeconds: z.number().int().min(10, "At least 10 seconds").max(900, "At most 15 minutes"),
 });
 export type MediaSettings = z.infer<typeof MediaSettings>;
 

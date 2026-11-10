@@ -106,6 +106,7 @@ export const en = {
     drafts: "Drafts",
     analytics: "Analytics",
     alerts: "Alerts",
+    messages: "Messages",
   },
   public: {
     signIn: "Sign in",

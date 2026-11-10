@@ -1,7 +1,7 @@
 import type { IconName } from "@chartermission/ui";
 
 /** Keys under `nav.` in the message files. */
-export type NavKey = "home" | "articles" | "network" | "opportunities" | "initiatives" | "events" | "learning" | "chapters" | "ambassadors" | "pages" | "saved" | "drafts" | "analytics" | "alerts";
+export type NavKey = "home" | "articles" | "network" | "opportunities" | "initiatives" | "events" | "learning" | "chapters" | "ambassadors" | "pages" | "saved" | "drafts" | "analytics" | "alerts" | "messages";
 
 /** Member section navigation, shared by SideNav and SectionNav. `label` is the English name; show t(`nav.${key}`). */
 export const sectionNavItems: { href: string; key: NavKey; label: string; icon: IconName }[] = [

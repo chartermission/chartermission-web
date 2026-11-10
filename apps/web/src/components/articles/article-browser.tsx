@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { usePathname } from "@/i18n/client";
+import { usePathname, useT } from "@/i18n/client";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { ArticleSort, ArticlesHub, Page, PostView } from "@chartermission/contracts";
 import { Icon, SegmentedControl, buttonClasses, cn } from "@chartermission/ui";
@@ -11,7 +11,8 @@ import { staggerStyle } from "@/components/motion";
 import { ErrorNotice } from "@/components/social/errors";
 import { EmptyState } from "@/components/social/skeletons";
 import type { Viewer } from "@/components/social/viewer";
-import { ArticleCard, ArticleCardSkeleton, articleGridClass } from "./article-card";
+import { ArticleCard, ArticleCardSkeleton } from "./article-card";
+import { articleGridClass } from "./article-grid";
 import { ARTICLES_PAGE } from "./format";
 import { WriteArticleButton } from "./write-article-button";
 
@@ -38,6 +39,7 @@ function ArticleGrid({
   viewer: Viewer;
   onClear: () => void;
 }) {
+  const t = useT();
   const [posts, setPosts] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [loading, setLoading] = useState(false);
@@ -68,7 +70,7 @@ function ArticleGrid({
         setAdded((current) => ({ ...current, ...Object.fromEntries(page.items.map((p, order) => [p.id, order])) }));
         setCursor(page.nextCursor);
         const count = page.items.length;
-        setAnnouncement(`${count === 1 ? "1 more article" : `${count} more articles`} loaded.${page.nextCursor ? "" : " That’s every article."}`);
+        setAnnouncement(`${t("{count} more articles loaded.", { count })}${page.nextCursor ? "" : ` ${t("That’s every article.")}`}`);
         const first = page.items[0];
         if (fromButton && first) {
           requestAnimationFrame(() => gridRef.current?.querySelector<HTMLAnchorElement>(`[data-article-id="${CSS.escape(first.id)}"] h3 a`)?.focus());
@@ -81,7 +83,7 @@ function ArticleGrid({
         setLoading(false);
       }
     },
-    [sort, tag],
+    [sort, tag, t],
   );
 
   useEffect(() => {
@@ -94,7 +96,7 @@ function ArticleGrid({
 
   if (!posts.length) {
     return tag ? (
-      <EmptyState icon="search" title={`No articles tagged #${tag} yet`} actions={
+      <EmptyState icon="search" title={t("No articles tagged #{tag} yet", { tag })} actions={
         <button type="button" onClick={onClear} className={buttonClasses({ variant: "secondary", size: "small" })}>
           Show all articles
         </button>
@@ -173,6 +175,7 @@ export function ArticleBrowser({
   topics: Topic[];
   viewer: Viewer;
 }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
@@ -190,7 +193,7 @@ export function ArticleBrowser({
 
   const chips: Topic[] = tag && !topics.some((t) => t.tag.toLowerCase() === tag.toLowerCase()) ? [{ tag, articles: 0 }, ...topics] : topics;
   const isActive = (t: string) => shown.tag?.toLowerCase() === t.toLowerCase();
-  const heading = `${shown.sort === "popular" ? "Popular" : "Latest"} articles${shown.tag ? ` on #${shown.tag}` : ""}`;
+  const heading = (shown.tag ? (shown.sort === "popular" ? t("Popular articles on #{tag}", { tag: shown.tag }) : t("Latest articles on #{tag}", { tag: shown.tag })) : shown.sort === "popular" ? t("Popular articles") : t("Latest articles"));
 
   return (
     <section aria-labelledby="all-articles" id="all" className="flex scroll-mt-24 flex-col gap-4">
@@ -256,7 +259,7 @@ export function ArticleBrowser({
         )}
       </div>
       <p role="status" aria-live="polite" className="sr-only">
-        {pending ? `Loading ${heading.toLowerCase()}` : ""}
+        {pending ? t("Loading {lowerCase}", { lowerCase: heading.toLowerCase() }) : ""}
       </p>
     </section>
   );

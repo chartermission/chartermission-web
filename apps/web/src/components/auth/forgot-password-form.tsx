@@ -8,6 +8,7 @@ import { api, isApiError } from "@/lib/api/client";
 import { AuthStatus } from "./auth-shell";
 import { DevMailbox } from "./dev-mailbox";
 import { Field, FormAlert, describedBy, inputClasses, retryMessage, textLinkClasses } from "./fields";
+import { useT } from "@/i18n/client";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -16,6 +17,7 @@ const isDev = process.env.NODE_ENV === "development";
  * account (enumeration safety); only a 429 is shown differently.
  */
 export function ForgotPasswordForm() {
+  const t = useT();
   const id = useId();
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string>();
@@ -44,7 +46,7 @@ export function ForgotPasswordForm() {
       setSentTo(parsed.data.email);
     } catch (error) {
       if (isApiError(error, "RATE_LIMITED")) {
-        setFormError(retryMessage(error.retryAfter, "You’ve asked for several reset links in the last hour."));
+        setFormError(retryMessage(t, error.retryAfter, "You’ve asked for several reset links in the last hour."));
       } else if (isApiError(error) && error.fields?.email) {
         setEmailError(error.fields.email);
       } else {

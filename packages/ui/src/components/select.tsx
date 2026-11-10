@@ -25,7 +25,7 @@ export function FilterSelect({
           </option>
         ))}
       </select>
-      <Icon name="chevron-down" size={14} className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary" />
+      <Icon name="chevron-down" size={14} className="pointer-events-none absolute end-2.5 inset-y-0 my-auto h-fit text-secondary" />
     </span>
   );
 }

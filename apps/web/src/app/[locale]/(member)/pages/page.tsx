@@ -11,11 +11,15 @@ import { errorMessage } from "@/components/social/error-message";
 import { LoadingStatus, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Pages",
-  description: "Organisations, companies and initiatives on Charter Mission. Follow a page to see its updates in your feed.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Pages"),
+    description: t("Organisations, companies and initiatives on Charter Mission. Follow a page to see its updates in your feed."),
+  };
+}
 
 /** "Create a page", unless the platform keeps page creation to staff. */
 async function CreateAction() {

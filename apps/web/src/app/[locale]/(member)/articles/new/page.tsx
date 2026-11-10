@@ -5,23 +5,29 @@ import { Suspense } from "react";
 import type { DraftView } from "@chartermission/contracts";
 import { Icon, Panel } from "@chartermission/ui";
 import { ArticleWriter } from "@/components/articles/article-writer";
-import { articleBlockedReason } from "@/components/articles/write-article-button";
+import { articleBlockedReason } from "@/components/articles/article-blocked";
 import { requireClientViewer } from "@/components/social/data";
 import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGetOrNull } from "@/lib/api/server";
+import { getT, getIntlTag } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Write an article" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Write an article") };
+}
 
 type SearchParams = PageProps<"/[locale]/articles/new">["searchParams"];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function Writer({ searchParams }: { searchParams: SearchParams }) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const params = await searchParams;
   const draftId = Array.isArray(params.draft) ? params.draft[0] : params.draft;
   const viewer = await requireClientViewer(draftId ? `/articles/new?draft=${draftId}` : "/articles/new");
-  const blocked = articleBlockedReason(viewer);
+  const blocked = articleBlockedReason(intl, t, viewer);
   if (blocked) {
     return (
       <Panel className="flex flex-col items-start gap-3 p-6">

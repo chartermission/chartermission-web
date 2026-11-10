@@ -174,6 +174,10 @@ export class PostSerializer {
           canViewAnalytics: !!viewer && own && !r.repostOfId,
         },
       };
+      // The author sees where their post stands with the chapter; reviewers get the full record from the review queue.
+      if (r.chapterReview && own && r.status !== 'published') {
+        view.chapterReview = { state: r.chapterReview as 'pending' | 'approved' | 'declined', note: r.chapterReviewNote, by: null, at: r.chapterReviewAt?.toISOString() ?? null };
+      }
       if (r.moderationState !== 'visible' && (own || isModerator(viewer))) {
         view.moderationState = r.moderationState as NonNullable<PostView['moderationState']>;
       }

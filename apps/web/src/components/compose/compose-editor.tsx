@@ -5,6 +5,7 @@ import { POST_MAX_CHARS, type DirectoryMember, type HashtagSuggestion, type Page
 import { Avatar, Icon, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { tokenize } from "@/components/social/rich-text";
+import { T, useT } from "@/i18n/client";
 
 type Token = { trigger: "#" | "@"; query: string; start: number; end: number };
 
@@ -93,6 +94,7 @@ export function ComposeEditor({
   placeholder?: string;
   maxLength?: number;
 }) {
+  const t = useT();
   const id = useId();
   const token = useMemo(() => tokenAt(value, caret), [value, caret]);
   const { items: suggestions } = useSuggestions(token);
@@ -181,7 +183,7 @@ export function ComposeEditor({
       </div>
 
       <p className="sr-only" role="status" aria-live="polite">
-        {open ? `${suggestions.length} ${kindLabel} suggestions. Use up and down arrows, Enter to insert, Escape to dismiss.` : ""}
+        {open ? t("{count} {kindLabel} suggestions. Use up and down arrows, Enter to insert, Escape to dismiss.", { count: suggestions.length, kindLabel }) : ""}
       </p>
 
       {open && (
@@ -207,7 +209,7 @@ export function ComposeEditor({
                   <span className="flex min-w-0 items-center gap-2">
                     <Icon name="hash" size={16} className="shrink-0 text-primary-light" />
                     <span className="truncate text-sm font-medium text-ink">#{suggestion.tag}</span>
-                    <span className="shrink-0 text-xs text-secondary">{suggestion.posts.toLocaleString("en-US")} posts</span>
+                    <span className="shrink-0 text-xs text-secondary"><T vars={{ count: suggestion.posts.toLocaleString("en-US") }}>{"{count} posts"}</T></span>
                   </span>
                   {suggestion.trending && (
                     <span className="flex shrink-0 items-center gap-1 text-xs text-accent-hover">

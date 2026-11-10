@@ -6,9 +6,11 @@ import { Button, Chip, Icon } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { describeUserAgent, formatDateTime } from "@/components/account/format";
 import { SettingsCard } from "./settings-card";
+import { T, useT } from "@/i18n/client";
 
 /** Active sessions (GET /me/sessions) with "this device" and sign-out of the others (DELETE /me/sessions/{id}). */
 export function SessionsList({ initial }: { initial: SessionView[] }) {
+  const t = useT();
   const [sessions, setSessions] = useState(initial);
   const [busy, setBusy] = useState<string | "others" | null>(null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
@@ -31,7 +33,7 @@ export function SessionsList({ initial }: { initial: SessionView[] }) {
     setStatus(
       failed.length
         ? { tone: "error", text: "That session couldn’t be signed out. Please try again." }
-        : { tone: "success", text: `Signed out ${describeUserAgent(session.userAgent)}.` },
+        : { tone: "success", text: t("Signed out {describeUserAgent}.", { describeUserAgent: describeUserAgent(session.userAgent) }) },
     );
   }
 
@@ -44,7 +46,7 @@ export function SessionsList({ initial }: { initial: SessionView[] }) {
       failed.length
         ? {
             tone: "error",
-            text: `${failed.length} session${failed.length === 1 ? "" : "s"} couldn’t be signed out. Please try again.`,
+            text: t("{count} sessions couldn’t be signed out. Please try again.", { count: failed.length }),
           }
         : { tone: "success", text: "All other sessions were signed out." },
     );
@@ -78,7 +80,7 @@ export function SessionsList({ initial }: { initial: SessionView[] }) {
               )}
             </span>
             <span className="text-xs text-secondary">
-              Signed in {formatDateTime(session.createdAt)} · Last active {formatDateTime(session.lastSeenAt)}
+              <T vars={{ dateTime: formatDateTime(session.createdAt), dateTime2: formatDateTime(session.lastSeenAt) }}>{"Signed in {dateTime} · Last active {dateTime2}"}</T>
             </span>
           </div>
           {!session.current && (

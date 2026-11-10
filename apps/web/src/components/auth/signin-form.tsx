@@ -8,6 +8,7 @@ import { Button } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { Field, FormAlert, PasswordInput, describedBy, inputClasses, retryMessage, textLinkClasses } from "./fields";
 import { destinationFor } from "./destinations";
+import { useT } from "@/i18n/client";
 
 export type SignInNotice = "reset" | "deleted" | "signedout" | "verified" | "expired";
 
@@ -26,6 +27,7 @@ type FieldName = "email" | "password";
 
 /** Sign in — POST /auth/login with the member audience, then route by onboarding and policy state. */
 export function SignInForm({ next, notice }: { next: string | null; notice: SignInNotice | null }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -73,7 +75,7 @@ export function SignInForm({ next, notice }: { next: string | null; notice: Sign
       setSubmitting(false);
       if (isApiError(error, "RATE_LIMITED")) {
         setFormError({
-          text: retryMessage(error.retryAfter, "Sign-in is paused for this account after too many failed attempts."),
+          text: retryMessage(t, error.retryAfter, "Sign-in is paused for this account after too many failed attempts."),
           locked: true,
         });
       } else if (isApiError(error, "VALIDATION_FAILED") && error.fields) {

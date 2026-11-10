@@ -76,10 +76,10 @@ export const requestMeta: Record<RequestCategory, { label: string; icon: IconNam
 export const requestCategories = Object.keys(requestMeta) as RequestCategory[];
 
 /** "27 Nov 2026" for a YYYY-MM-DD date, without shifting it across time zones. */
-export function formatDay(isoDay: string): string {
+export function formatDay(intl: string, isoDay: string): string {
   const [y, m, d] = isoDay.split("-").map(Number);
   if (!y || !m || !d) return isoDay;
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(intl, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 /** Today as YYYY-MM-DD in the viewer's time zone. */

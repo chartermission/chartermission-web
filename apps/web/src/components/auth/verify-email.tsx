@@ -9,6 +9,7 @@ import { AuthStatus } from "./auth-shell";
 import { destinationFor } from "./destinations";
 import { FormAlert, retryMessage } from "./fields";
 import { ResendVerification } from "./resend-verification";
+import { useT } from "@/i18n/client";
 
 type State =
   | { kind: "verifying" }
@@ -27,6 +28,7 @@ async function currentViewer(): Promise<SessionUser | null> {
 
 /** /verify-email?token= — POST /auth/verify once on arrival, then continue or offer a new link. */
 export function VerifyEmail({ token }: { token: string | null }) {
+  const t = useT();
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "verifying" });
   const started = useRef(false);
@@ -47,7 +49,7 @@ export function VerifyEmail({ token }: { token: string | null }) {
         const viewer = await currentViewer();
         setState(viewer?.emailVerified ? { kind: "already", viewer } : { kind: "invalid", viewer });
       } else if (isApiError(error, "RATE_LIMITED")) {
-        setState({ kind: "error", message: retryMessage(error.retryAfter) });
+        setState({ kind: "error", message: retryMessage(t, error.retryAfter) });
       } else {
         setState({ kind: "error", message: isApiError(error) ? error.message : "Something went wrong. Please try again." });
       }

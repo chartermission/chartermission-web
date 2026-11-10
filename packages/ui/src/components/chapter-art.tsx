@@ -4,76 +4,22 @@ import { AFRICA_MAP_SRC } from "./africa-map";
 import { flagColours } from "./flag-colours";
 
 /*
- * Generated chapter artwork, from Figma "Brand Kit / 02 · Profile pictures / Avatar · Chapter"
- * (green tile, deco rings, logo mark, country name, "Chapter" in orange). Each chapter gets its own
- * accent: the brand stripe in the country's flag colours, and on the cover a pin on the Africa map.
+ * Generated chapter artwork, kept deliberately quiet: the display picture is the country code over
+ * a stripe in the flag's colours, and the cover is a photograph of the country (or, where there is
+ * none yet, the Africa map with the country pinned) with the same stripe along its foot. Neither
+ * carries wording: the chapter's name is always printed beside them, in the reader's language.
  * Uploaded pictures (imageUrl / coverUrl) replace the generated art.
  */
 
-const GREEN = "#046D35";
 const GREEN_DEEP = "#024A22";
-const GREEN_LIGHT = "#0A8A47";
 const ORANGE = "#FF9A1F";
+/** Pale backdrop behind generated art: light enough to sit on a white page header. */
+const PAPER = "#EEF4F0";
+const PAPER_LINE = "#D9E6DE";
 
 /** "Nigeria Chapter" → "Nigeria", "UK Diaspora Chapter" → "UK Diaspora". */
 export function chapterLabel(name: string): string {
   return name.replace(/\s+chapter$/i, "").trim() || name;
-}
-
-/** One or two lines for the name, balanced at a space for long names. */
-function nameLines(label: string, maxOneLine: number): string[] {
-  if (label.length <= maxOneLine || !label.includes(" ")) return [label];
-  const words = label.split(" ");
-  let best: [string, string] = [label, ""];
-  let bestDiff = Infinity;
-  for (let i = 1; i < words.length; i++) {
-    const a = words.slice(0, i).join(" ");
-    const b = words.slice(i).join(" ");
-    const diff = Math.abs(a.length - b.length);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = [a, b];
-    }
-  }
-  return best;
-}
-
-/** Font size so the longest line fits `width` (Inter Bold ≈ 0.6 em per character). */
-const fit = (lines: string[], width: number, max: number) => Math.min(max, Math.floor(width / (Math.max(...lines.map((l) => l.length)) * 0.6)));
-
-/** The logo mark (tile, C and Africa map) at the given box, for use inside other SVGs. */
-function MarkArt({ x, y, size, uid }: { x: number; y: number; size: number; uid: string }) {
-  return (
-    <svg x={x} y={y} width={size} height={size} viewBox="0 0 32 32" fill="none">
-      <defs>
-        <linearGradient id={`${uid}-tile`} x1="28" y1="2" x2="4" y2="30" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#067239" />
-          <stop offset="1" stopColor={GREEN_DEEP} />
-        </linearGradient>
-        <linearGradient id={`${uid}-arc`} x1="6.8" y1="16" x2="24" y2="16" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ED0918" />
-          <stop offset="0.55" stopColor="#FF3A12" />
-          <stop offset="1" stopColor="#FF8A00" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M24 0H8C3.58172 0 0 3.58172 0 8V24C0 28.4183 3.58172 32 8 32H24C28.4183 32 32 28.4183 32 24V8C32 3.58172 28.4183 0 24 0Z"
-        fill={`url(#${uid}-tile)`}
-      />
-      <path
-        d="M24 0.5H8C3.85786 0.5 0.5 3.85786 0.5 8V24C0.5 28.1421 3.85786 31.5 8 31.5H24C28.1421 31.5 31.5 28.1421 31.5 24V8C31.5 3.85786 28.1421 0.5 24 0.5Z"
-        stroke="white"
-        strokeOpacity="0.35"
-      />
-      <image href={AFRICA_MAP_SRC} x="10.55" y="9.36" width="12.809" height="13.8" preserveAspectRatio="xMidYMid meet" />
-      <path
-        d="M23.962 9.282C21.276 6.224 16.980 5.145 13.168 6.571C9.356 7.996 6.821 11.629 6.800 15.699C6.779 19.768 9.275 23.428 13.072 24.893C16.869 26.358 21.176 25.324 23.894 22.295"
-        stroke={`url(#${uid}-arc)`}
-        strokeWidth="3.3"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
 }
 
 /** Brand stripe (Figma "Brand stripe"): equal segments, here in the country's flag colours. */
@@ -99,11 +45,10 @@ function FlagStripe({ colours, x, y, width, height, rounded = 0 }: { colours: st
 }
 
 /**
- * Chapter display picture (800 × 800 design, square). Show it in a circle or rounded tile with
- * `className` (e.g. "rounded-full"); everything important sits inside the central 640 px.
+ * Chapter display picture (800 × 800 design, square): the country code over the flag stripe on a
+ * pale tile. Show it in a circle or rounded tile with `className` (e.g. "rounded-full").
  */
 export function ChapterAvatar({
-  name,
   countryCode,
   src,
   size = 48,
@@ -119,87 +64,39 @@ export function ChapterAvatar({
   /** Accessible name; omit for decorative use next to the chapter name. */
   title?: string;
 }) {
-  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- permission-checked API media
       <img src={src} alt={title ?? ""} width={size} height={size} className={cn("shrink-0 object-cover", className)} />
     );
   }
-  const label = chapterLabel(name);
-  // Below 72 px the name can't be read: show the country code large instead (same tile, stripe and rings).
-  if (size < 72) {
-    const colours = flagColours(countryCode);
-    return (
-      <svg
-        viewBox="0 0 800 800"
-        width={size}
-        height={size}
-        role={title ? "img" : undefined}
-        aria-label={title}
-        aria-hidden={title ? undefined : true}
-        className={cn("shrink-0", className)}
-      >
-        {title && <title>{title}</title>}
-        <rect width="800" height="800" fill={GREEN} />
-        <circle cx="640" cy="120" r="160" fill="none" stroke={GREEN_LIGHT} strokeOpacity="0.7" strokeWidth="14" />
-        <circle cx="640" cy="120" r="300" fill="none" stroke={GREEN_LIGHT} strokeOpacity="0.7" strokeWidth="14" />
-        <text
-          x="400"
-          y="475"
-          textAnchor="middle"
-          fontFamily="Inter, 'Inter Variable', system-ui, sans-serif"
-          fontSize="300"
-          fontWeight="800"
-          fill="#FFFFFF"
-          letterSpacing="-0.02em"
-        >
-          {countryCode.toUpperCase()}
-        </text>
-        <FlagStripe colours={colours} x={220} y={560} width={360} height={56} rounded={28} />
-      </svg>
-    );
-  }
-  const lines = nameLines(label, 12);
-  const font = fit(lines, 560, lines.length > 1 ? 68 : 84);
   const colours = flagColours(countryCode);
-  const nameTop = 448;
-  const lineGap = font * 1.08;
-  const chapterY = nameTop + font * 0.82 + (lines.length - 1) * lineGap + 70;
   return (
     <svg
       viewBox="0 0 800 800"
       width={size}
       height={size}
+      direction="ltr"
       role={title ? "img" : undefined}
       aria-label={title}
       aria-hidden={title ? undefined : true}
       className={cn("shrink-0", className)}
     >
       {title && <title>{title}</title>}
-      <rect width="800" height="800" fill={GREEN} />
-      <circle cx="640" cy="120" r="160" fill="none" stroke={GREEN_LIGHT} strokeOpacity="0.6" strokeWidth="3" />
-      <circle cx="640" cy="120" r="300" fill="none" stroke={GREEN_LIGHT} strokeOpacity="0.6" strokeWidth="3" />
-      <MarkArt x={300} y={lines.length > 1 ? 170 : 207.5} size={200} uid={uid} />
-      <g fontFamily="Inter, 'Inter Variable', system-ui, sans-serif" textAnchor="middle">
-        {lines.map((line, i) => (
-          <text
-            key={i}
-            x="400"
-            y={(lines.length > 1 ? nameTop - 38 : nameTop) + font * 0.82 + i * lineGap}
-            fontSize={font}
-            fontWeight="700"
-            fill="#FFFFFF"
-            letterSpacing="-0.01em"
-          >
-            {line}
-          </text>
-        ))}
-        <text x="400" y={lines.length > 1 ? chapterY - 38 : chapterY} fontSize="44" fontWeight="600" fill={ORANGE}>
-          Chapter
-        </text>
-      </g>
-      <FlagStripe colours={colours} x={280} y={lines.length > 1 ? chapterY - 4 : chapterY + 34} width={240} height={16} rounded={8} />
+      <rect width="800" height="800" fill={PAPER} />
+      <text
+        x="400"
+        y="455"
+        textAnchor="middle"
+        fontFamily="Inter, 'Inter Variable', system-ui, sans-serif"
+        fontSize="290"
+        fontWeight="800"
+        fill={GREEN_DEEP}
+        letterSpacing="-0.02em"
+      >
+        {countryCode.toUpperCase()}
+      </text>
+      <FlagStripe colours={colours} x={220} y={540} width={360} height={56} rounded={28} />
     </svg>
   );
 }
@@ -219,7 +116,7 @@ const CENTRES: Record<string, [number, number]> = {
 };
 
 /** Map box for the cover (Africa map PNG 128 × 138, spanning roughly 17.5°W–51.5°E, 37.5°N–35°S). */
-const MAP = { x: 1150, y: 40, w: 296, h: 320 };
+const MAP = { x: 652, y: 28, w: 296, h: 320 };
 function pin(code: string): { x: number; y: number } | null {
   const c = CENTRES[code.toUpperCase()];
   if (!c) return null;
@@ -237,47 +134,10 @@ export function chapterPhotoSrc(url: string, width = 1600): string {
   return `${url.split("?")[0]}?auto=format&fit=crop&w=${width}&h=${Math.round(width / 4)}&q=70`;
 }
 
-/** The cover with a country photograph: photo, green wash from the reading side, title and flag stripe. */
-function PhotoCover({ name, countryCode, photo, className }: { name: string; countryCode: string; photo: { url: string; credit?: string | null }; className?: string }) {
-  const label = chapterLabel(name);
-  const diaspora = /diaspora/i.test(label);
-  const place = label.replace(/\s+diaspora$/i, "");
-  const colours = flagColours(countryCode);
-  const headSize = Math.min(64, Math.floor(1000 / (`Find your people in ${place}`.length * 0.56)));
-  const wash = `cover-wash-${countryCode}`;
-  return (
-    <svg viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" className={cn("block h-full w-full", className)}>
-      <defs>
-        <linearGradient id={wash} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor={GREEN} stopOpacity="0.96" />
-          <stop offset="0.45" stopColor={GREEN} stopOpacity="0.82" />
-          <stop offset="0.75" stopColor={GREEN} stopOpacity="0.3" />
-          <stop offset="1" stopColor={GREEN} stopOpacity="0.1" />
-        </linearGradient>
-      </defs>
-      <rect width="1600" height="400" fill={GREEN} />
-      <image href={chapterPhotoSrc(photo.url)} x="0" y="0" width="1600" height="400" preserveAspectRatio="xMidYMid slice" />
-      <rect width="1600" height="400" fill={`url(#${wash})`} />
-      <g fontFamily="Inter, 'Inter Variable', system-ui, sans-serif">
-        <text x="96" y="150" fontSize="22" fontWeight="600" letterSpacing="0.08em" fill="#FFFFFF" fillOpacity="0.85">
-          {diaspora ? "CHARTER MISSION · DIASPORA CHAPTER" : "CHARTER MISSION · CHAPTER"}
-        </text>
-        <text x="96" y={150 + 24 + headSize} fontSize={headSize} fontWeight="700" fill="#FFFFFF" letterSpacing="-0.01em">
-          Find your people in <tspan fill={ORANGE}>{place}</tspan>
-        </text>
-        <text x="96" y={150 + 24 + headSize + 56} fontSize="26" fill="#FFFFFF" fillOpacity="0.9">
-          {diaspora ? "Africans abroad, connected to home · chartermission.com" : "Connect, learn and act together · chartermission.com"}
-        </text>
-      </g>
-      <FlagStripe colours={colours} x={0} y={382} width={1600} height={18} />
-    </svg>
-  );
-}
-
 /**
- * Chapter page cover (1600 × 400 design, 4:1): green with deco rings, the Africa network map with
- * the chapter's country pinned (diaspora chapters show the map unpinned), the line "Find your people
- * in {country}" with the country highlighted in orange, and the brand stripe in flag colours.
+ * Chapter page cover (1600 × 400 design, 4:1). With a photograph: the photograph, a soft shade at
+ * its foot and the flag stripe. Without one: the Africa network map on a pale ground, with the
+ * chapter's country pinned (diaspora chapters show the map unpinned).
  */
 export function ChapterCover({
   name,
@@ -289,46 +149,53 @@ export function ChapterCover({
   name: string;
   countryCode: string;
   src?: string | null;
-  /** A photograph of the country. It sits behind the title, under a green wash that keeps the text readable. */
+  /** A photograph of the country, shown as it is. */
   photo?: { url: string; credit?: string | null } | null;
   className?: string;
 }) {
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element -- permission-checked API media
     return <img src={src} alt="" className={cn("h-full w-full object-cover", className)} />;
   }
-  if (photo) return <PhotoCover name={name} countryCode={countryCode} photo={photo} className={className} />;
-  const label = chapterLabel(name);
-  const diaspora = /diaspora/i.test(label);
-  const place = label.replace(/\s+diaspora$/i, "");
   const colours = flagColours(countryCode);
+  if (photo) {
+    return (
+      <svg viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" direction="ltr" aria-hidden="true" className={cn("block h-full w-full", className)}>
+        <defs>
+          <linearGradient id={`${uid}-shade`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0.55" stopColor="#000000" stopOpacity="0" />
+            <stop offset="1" stopColor="#000000" stopOpacity="0.35" />
+          </linearGradient>
+        </defs>
+        <rect width="1600" height="400" fill={PAPER} />
+        <image href={chapterPhotoSrc(photo.url)} x="0" y="0" width="1600" height="400" preserveAspectRatio="xMidYMid slice" />
+        <rect width="1600" height="400" fill={`url(#${uid}-shade)`} />
+        <FlagStripe colours={colours} x={0} y={388} width={1600} height={12} />
+      </svg>
+    );
+  }
+  const diaspora = /diaspora/i.test(chapterLabel(name));
   const p = diaspora ? null : pin(countryCode);
-  const headSize = Math.min(64, Math.floor(1000 / ((`Find your people in ${place}`.length) * 0.56)));
   return (
-    <svg viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" className={cn("block h-full w-full", className)}>
-      <rect width="1600" height="400" fill={GREEN} />
-      <circle cx="1460" cy="40" r="130" fill="none" stroke={GREEN_LIGHT} strokeOpacity="0.6" strokeWidth="3" />
-      <circle cx="1460" cy="40" r="240" fill="none" stroke={GREEN_LIGHT} strokeOpacity="0.6" strokeWidth="3" />
-      <circle cx="1460" cy="40" r="360" fill="none" stroke={GREEN_LIGHT} strokeOpacity="0.6" strokeWidth="3" />
-      <image href={AFRICA_MAP_SRC} x={MAP.x} y={MAP.y} width={MAP.w} height={MAP.h} preserveAspectRatio="xMidYMid meet" opacity={p ? 0.9 : 1} />
+    <svg viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" direction="ltr" aria-hidden="true" className={cn("block h-full w-full", className)}>
+      <defs>
+        <filter id={`${uid}-lift`} x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="10" stdDeviation="14" floodColor={GREEN_DEEP} floodOpacity="0.2" />
+        </filter>
+      </defs>
+      <rect width="1600" height="400" fill={PAPER} />
+      {[150, 260, 380, 520].map((r) => (
+        <circle key={r} cx="800" cy="190" r={r} fill="none" stroke={PAPER_LINE} strokeWidth="2" />
+      ))}
+      <image href={AFRICA_MAP_SRC} x={MAP.x} y={MAP.y} width={MAP.w} height={MAP.h} preserveAspectRatio="xMidYMid meet" filter={`url(#${uid}-lift)`} />
       {p && (
         <g>
           <circle cx={p.x} cy={p.y} r="22" fill={ORANGE} opacity="0.25" />
           <circle cx={p.x} cy={p.y} r="11" fill={ORANGE} stroke="#FFFFFF" strokeWidth="3" />
         </g>
       )}
-      <g fontFamily="Inter, 'Inter Variable', system-ui, sans-serif">
-        <text x="96" y="150" fontSize="22" fontWeight="600" letterSpacing="0.08em" fill="#FFFFFF" fillOpacity="0.8">
-          {diaspora ? "CHARTER MISSION · DIASPORA CHAPTER" : "CHARTER MISSION · CHAPTER"}
-        </text>
-        <text x="96" y={150 + 24 + headSize} fontSize={headSize} fontWeight="700" fill="#FFFFFF" letterSpacing="-0.01em">
-          Find your people in <tspan fill={ORANGE}>{place}</tspan>
-        </text>
-        <text x="96" y={150 + 24 + headSize + 56} fontSize="26" fill="#FFFFFF" fillOpacity="0.85">
-          {diaspora ? "Africans abroad, connected to home · chartermission.com" : "Connect, learn and act together · chartermission.com"}
-        </text>
-      </g>
-      <FlagStripe colours={colours} x={0} y={382} width={1600} height={18} />
+      <FlagStripe colours={colours} x={0} y={388} width={1600} height={12} />
     </svg>
   );
 }

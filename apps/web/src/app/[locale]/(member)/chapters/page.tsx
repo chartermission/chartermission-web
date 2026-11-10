@@ -11,8 +11,12 @@ import { errorMessage } from "@/components/social/error-message";
 import { LoadingStatus, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { settle } from "@/components/social/data";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Chapters" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Chapters") };
+}
 
 const numberFormat = new Intl.NumberFormat("en-GB");
 

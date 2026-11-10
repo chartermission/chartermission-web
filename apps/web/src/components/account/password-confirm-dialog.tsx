@@ -5,6 +5,7 @@ import { Button } from "@chartermission/ui";
 import { isApiError } from "@/lib/api/client";
 import { Field, FormAlert, PasswordInput, describedBy, retryMessage } from "@/components/auth/fields";
 import { Dialog, dangerButtonClasses } from "./dialog";
+import { useT } from "@/i18n/client";
 
 /**
  * Sensitive account actions re-check the password (deactivate, reactivate, delete, MFA off).
@@ -30,6 +31,7 @@ export function PasswordConfirmDialog({
   children?: ReactNode;
   onConfirm: (password: string) => Promise<void>;
 }) {
+  const t = useT();
   const id = useId();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>();
@@ -57,7 +59,7 @@ export function PasswordConfirmDialog({
       await onConfirm(password);
       setPassword("");
     } catch (e) {
-      if (isApiError(e, "RATE_LIMITED")) setFormError(retryMessage(e.retryAfter));
+      if (isApiError(e, "RATE_LIMITED")) setFormError(retryMessage(t, e.retryAfter));
       else if (isApiError(e) && e.fields?.password) setError(e.fields.password);
       else setFormError(isApiError(e) ? e.message : "Something went wrong. Please try again.");
     } finally {

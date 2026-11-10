@@ -11,6 +11,7 @@ import { memberHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import { toast } from "@/components/social/toast";
 import { api, isApiError } from "@/lib/api/client";
+import { useT } from "@/i18n/client";
 
 type Pending = { kind: "remove" | "leave" | "transfer"; admin: PageAdminView } | { kind: "delete" } | null;
 
@@ -19,6 +20,7 @@ type Pending = { kind: "remove" | "leave" | "transfer"; admin: PageAdminView } |
  * removes admins, can hand the page to another admin, and can delete it.
  */
 export function PageAdmins({ page, viewerId }: { page: PageDetail; viewerId: string }) {
+  const t = useT();
   const router = useRouter();
   const id = useId();
   const [admins, setAdmins] = useState(page.admins ?? []);
@@ -127,13 +129,13 @@ export function PageAdmins({ page, viewerId }: { page: PageDetail; viewerId: str
 
       {pending?.kind === "delete" && (
         <ConfirmDialog
-          title={`Delete ${page.name}?`}
+          title={t("Delete {name}?", { name: page.name })}
           confirmLabel="Delete page"
           danger
           onClose={() => setPending(null)}
           onConfirm={async () => {
             await api(base, { method: "DELETE" });
-            toast.success(`${page.name} was deleted`);
+            toast.success(t("{name} was deleted", { name: page.name }));
             router.push("/pages");
             router.refresh();
           }}
@@ -145,10 +147,10 @@ export function PageAdmins({ page, viewerId }: { page: PageDetail; viewerId: str
         <ConfirmDialog
           title={
             pending.kind === "transfer"
-              ? `Make ${pending.admin.member.name} the owner?`
+              ? t("Make {name} the owner?", { name: pending.admin.member.name })
               : pending.kind === "leave"
-                ? `Stop managing ${page.name}?`
-                : `Remove ${pending.admin.member.name} as an admin?`
+                ? t("Stop managing {name}?", { name: page.name })
+                : t("Remove {name} as an admin?", { name: pending.admin.member.name })
           }
           confirmLabel={pending.kind === "transfer" ? "Make owner" : pending.kind === "leave" ? "Leave" : "Remove"}
           danger={pending.kind !== "transfer"}
@@ -157,12 +159,12 @@ export function PageAdmins({ page, viewerId }: { page: PageDetail; viewerId: str
             const userId = pending.admin.member.id;
             if (pending.kind === "transfer") {
               setAdmins(await api<PageAdminView[]>(`${base}/owner`, { method: "POST", body: { userId } }));
-              toast.success(`${pending.admin.member.name} now owns the page. You’re still an admin.`);
+              toast.success(t("{name} now owns the page. You’re still an admin.", { name: pending.admin.member.name }));
               router.refresh();
             } else {
               const next = await api<PageAdminView[]>(`${base}/admins/${userId}`, { method: "DELETE" });
               if (pending.kind === "leave") {
-                toast.success(`You no longer manage ${page.name}`);
+                toast.success(t("You no longer manage {name}", { name: page.name }));
                 router.push(base);
                 router.refresh();
               } else {

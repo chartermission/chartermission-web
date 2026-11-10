@@ -4,6 +4,7 @@ import { useId } from "react";
 import type { DraftView, PostType } from "@chartermission/contracts";
 import { Button, Icon, cn, type IconName } from "@chartermission/ui";
 import { LocalDateTime, TimeAgo } from "./local-time";
+import { T } from "@/i18n/client";
 
 const typeMeta: Record<PostType, { label: string; icon: IconName }> = {
   standard: { label: "Post", icon: "message" },
@@ -100,7 +101,7 @@ export function DraftCard({ draft, busy, onAction }: { draft: DraftView; busy: D
                 ) : (
                   <span className="flex size-full items-center justify-center text-secondary" title="This image is still being checked">
                     <Icon name="image" size={20} />
-                    <span className="sr-only">Image ({file.name ?? "attachment"}) still being checked</span>
+                    <span className="sr-only"><T vars={{ count: file.name ?? "attachment" }}>{"Image ({count}) still being checked"}</T></span>
                   </span>
                 )}
               </li>

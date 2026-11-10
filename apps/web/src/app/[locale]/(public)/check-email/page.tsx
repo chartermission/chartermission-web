@@ -3,8 +3,12 @@ import { Suspense } from "react";
 import { DevMailboxQuery } from "@chartermission/contracts";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { CheckEmail } from "@/components/auth/check-email";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Check your email", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Check your email"), robots: { index: false } };
+}
 
 async function CheckEmailWithParams({ searchParams }: Pick<PageProps<"/[locale]/check-email">, "searchParams">) {
   const raw = (await searchParams).email;

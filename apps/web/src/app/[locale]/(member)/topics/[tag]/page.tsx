@@ -10,9 +10,11 @@ import { topicHref } from "@/components/social/links";
 import { SectionRail } from "@/components/social/section-nav";
 import { EmptyState, LoadingStatus, PanelSkeleton, PostSkeleton } from "@/components/social/skeletons";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
-import { activityDays } from "./activity-chart";
+import { activityDays } from "./activity-days";
 import { TopicHeader } from "./topic-header";
 import { TopicTabs } from "./topic-tabs";
+import { T } from "@/i18n/client";
+import { getT, getIntlTag } from "@/i18n/server";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/topics/[tag]">): Promise<Metadata> {
   const { tag } = await params;
@@ -35,26 +37,28 @@ async function loadTopic(params: Params) {
 }
 
 async function TopicMain({ params }: { params: Params }) {
+  const intl = await getIntlTag();
+  const t = await getT();
   const slug = await slugOf(params);
   const viewer = await requireClientViewer(`/topics/${slug}`);
   const topic = await loadTopic(params);
   const top = await apiGet<Page<PostView>>(`/topics/${encodeURIComponent(slug)}/posts`, { sort: "top" }).catch(() => null);
   const empty = (title: string) => (
     <EmptyState icon="hash" title={title}>
-      Use #{topic.tag} in a post to start the conversation.
+      <T vars={{ tag: topic.tag }}>{"Use #{tag} in a post to start the conversation."}</T>
     </EmptyState>
   );
   return (
     <>
-      <TopicHeader topic={topic} days={activityDays(new Date())} />
+      <TopicHeader topic={topic} days={activityDays(intl, t, new Date())} />
       <TopicTabs
         tag={topic.tag}
         initialTop={top}
         viewer={viewer}
         empties={{
-          top: empty(`No posts tagged #${topic.tag} yet`),
-          latest: empty(`No posts tagged #${topic.tag} yet`),
-          media: empty(`No images or documents tagged #${topic.tag} yet`),
+          top: empty(t("No posts tagged #{tag} yet", { tag: topic.tag })),
+          latest: empty(t("No posts tagged #{tag} yet", { tag: topic.tag })),
+          media: empty(t("No images or documents tagged #{tag} yet", { tag: topic.tag })),
         }}
       />
     </>

@@ -9,6 +9,7 @@ import { api } from "@/lib/api/client";
 import { ErrorNotice } from "@/components/social/errors";
 import { MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { toast } from "@/components/social/toast";
+import { useT } from "@/i18n/client";
 
 type Filter = NotificationsQuery["filter"];
 
@@ -79,6 +80,7 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
  * (POST /notifications/read), "Load more". router.refresh() clears the top-nav badge.
  */
 export function NotificationList({ initial, initialFilter, unread: initialUnread }: { initial: Page<NotificationView>; initialFilter: Filter; unread: number }) {
+  const t = useT();
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [items, setItems] = useState(initial.items);
@@ -156,7 +158,7 @@ export function NotificationList({ initial, initialFilter, unread: initialUnread
         </div>
         <div className="flex items-center gap-3">
           <p className="text-sm text-secondary" aria-live="polite">
-            {unread > 0 ? `${unread} unread` : "All caught up"}
+            {unread > 0 ? t("{unread} unread", { unread }) : "All caught up"}
           </p>
           <Button variant="secondary" size="small" onClick={markAll} disabled={unread === 0 && items.every((n) => n.read)}>
             <Icon name="check" size={16} />

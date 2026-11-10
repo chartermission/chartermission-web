@@ -14,6 +14,8 @@ import { SettingsSelect, VisibilitySelect } from "./controls";
 import { ProfilePreview } from "./profile-preview";
 import { SaveBar } from "./save-bar";
 import { SettingsCard, ToggleRow } from "./settings-card";
+import type { Translate } from "@/i18n/translate";
+import { useT } from "@/i18n/client";
 
 type State = {
   profileVisibility: ProfileVisibility;
@@ -35,6 +37,8 @@ const fieldLabels: Record<ProfileField, string> = {
   interests: "Interests",
   languages: "Languages",
   experience: "Experience",
+  introVideo: "Intro video",
+  resume: "Résumé",
   network: "Connections and followers",
 };
 
@@ -60,7 +64,7 @@ function stateFrom(profile: OwnProfile): State {
 
 const names = (items: { name: string }[]) => items.map((item) => item.name).join(", ");
 
-function fieldValue(field: ProfileField, profile: OwnProfile, email: string, countryName: string | null): string {
+function fieldValue(t: Translate, field: ProfileField, profile: OwnProfile, email: string, countryName: string | null): string {
   switch (field) {
     case "email":
       return email;
@@ -73,11 +77,15 @@ function fieldValue(field: ProfileField, profile: OwnProfile, email: string, cou
     case "website":
       return profile.website ?? "";
     case "links":
-      return profile.links.length ? `${profile.links.length} link${profile.links.length === 1 ? "" : "s"}` : "";
+      return profile.links.length ? t("{count} links", { count: profile.links.length }) : "";
     case "experience":
-      return profile.experience.length ? `${profile.experience.length} role${profile.experience.length === 1 ? "" : "s"}` : "";
+      return profile.experience.length ? t("{count} roles", { count: profile.experience.length }) : "";
     case "network":
       return "The lists of your connections, your followers and who you follow";
+    case "introVideo":
+      return profile.introVideo ? "Your intro video" : "";
+    case "resume":
+      return profile.resume ? profile.resume.name : "";
     default:
       return names(profile[field]);
   }
@@ -93,6 +101,7 @@ export function PrivacySettingsForm({
   email: string;
   countryName: string | null;
 }) {
+  const t = useT();
   const [saved, setSaved] = useState<State>(() => stateFrom(profile));
   const [state, setState] = useState<State>(saved);
   const [saving, setSaving] = useState(false);
@@ -157,7 +166,7 @@ export function PrivacySettingsForm({
           aside={<span className="text-label text-secondary max-sm:hidden">Who can see it</span>}
         >
           {ProfileField.options.map((field) => {
-            const value = fieldValue(field, profile, email, countryName);
+            const value = fieldValue(t, field, profile, email, countryName);
             return (
               <li key={field} className="flex items-center gap-4 py-3 max-sm:flex-col max-sm:items-start max-sm:gap-2">
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -222,7 +231,7 @@ export function PrivacySettingsForm({
       <ProfilePreview
         refreshKey={previewKey}
         unsaved={dirty}
-        filled={ProfileField.options.filter((field) => fieldValue(field, profile, email, countryName) !== "")}
+        filled={ProfileField.options.filter((field) => fieldValue(t, field, profile, email, countryName) !== "")}
       />
     </div>
   );

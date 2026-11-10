@@ -2,6 +2,7 @@
 
 import { useState, type ChangeEvent, type InputHTMLAttributes, type ReactNode } from "react";
 import { Icon, cn, type IconName } from "@chartermission/ui";
+import type { Translate } from "@/i18n/translate";
 
 export const boxClasses = (invalid: boolean) =>
   cn(
@@ -176,11 +177,11 @@ export function FormAlert({
 }
 
 /** "Try again in N minutes" from a 429's retryAfter (seconds). */
-export function retryMessage(retryAfter?: number, prefix = "Too many attempts.") {
-  if (!retryAfter || retryAfter <= 0) return `${prefix} Try again later.`;
-  if (retryAfter < 60) return `${prefix} Try again in ${retryAfter} second${retryAfter === 1 ? "" : "s"}.`;
+export function retryMessage(t: Translate, retryAfter?: number, prefix = "Too many attempts.") {
+  if (!retryAfter || retryAfter <= 0) return t("{prefix} Try again later.", { prefix });
+  if (retryAfter < 60) return t("{prefix} Try again in {count} seconds.", { prefix, count: retryAfter });
   const minutes = Math.ceil(retryAfter / 60);
-  return `${prefix} Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+  return t("{prefix} Try again in {count} minutes.", { prefix, count: minutes });
 }
 
 export const textLinkClasses = "font-medium text-primary-light underline-offset-2 hover:underline";

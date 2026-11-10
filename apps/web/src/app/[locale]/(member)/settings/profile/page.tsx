@@ -5,11 +5,16 @@ import type { OwnProfile } from "@chartermission/contracts";
 import { LoadError } from "@/components/account/load-error";
 import { settle } from "@/components/account/settle";
 import { ProfileForm } from "@/components/settings/profile-form";
+import { ProfileMedia } from "@/components/settings/profile-media";
 import { SettingsHeader, SettingsPageSkeleton } from "@/components/settings/settings-card";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { getTaxonomies, groupCountries } from "@/lib/taxonomies";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Edit profile" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Edit profile") };
+}
 
 async function Profile() {
   const viewer = await requireViewer("/settings/profile");
@@ -17,12 +22,15 @@ async function Profile() {
   if (!result.ok) return <LoadError title="Your profile didn’t load" message={result.error.message} />;
   const [profile, taxonomies] = result.data;
   return (
-    <ProfileForm
-      profile={profile}
-      taxonomies={taxonomies}
-      countryGroups={groupCountries(taxonomies.countries)}
-      tone={viewer.tone}
-    />
+    <>
+      <ProfileForm
+        profile={profile}
+        taxonomies={taxonomies}
+        countryGroups={groupCountries(taxonomies.countries)}
+        tone={viewer.tone}
+      />
+      <ProfileMedia profile={profile} />
+    </>
   );
 }
 

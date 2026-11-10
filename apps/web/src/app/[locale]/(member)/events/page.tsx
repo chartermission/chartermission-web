@@ -15,11 +15,15 @@ import { Toaster } from "@/components/social/toast";
 import { apiGet } from "@/lib/api/server";
 import { getTaxonomies } from "@/lib/taxonomies";
 import { EventsBrowser, MyEventsLink, type FilterOptions } from "./events-browser";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Events",
-  description: "Online, in-person and hybrid events from Charter Mission members, chapters and partner organisations.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Events"),
+    description: t("Online, in-person and hybrid events from Charter Mission members, chapters and partner organisations."),
+  };
+}
 
 /** "Your registrations": the viewer's next registered or waitlisted events. */
 async function Registrations() {

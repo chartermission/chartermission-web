@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import { VIDEO_PROVIDER_LABELS, formatDuration, type AttachmentView, type LinkPreview, type VideoEmbed } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
+import { useT } from "@/i18n/client";
 
 /** Tallest a video may be in a post; portrait videos narrow instead of growing. */
 const MAX_HEIGHT = 520;
@@ -18,7 +19,8 @@ function frame(width: number | null, height: number | null): CSSProperties {
  * autoplay; only the metadata loads until the member presses play, to spare mobile data.
  */
 export function UploadedVideo({ video, className }: { video: AttachmentView; className?: string }) {
-  const label = `Video${video.durationSeconds ? `, ${formatDuration(video.durationSeconds)}` : ""}${video.name ? `: ${video.name}` : ""}`;
+  const t = useT();
+  const label = `${t("Video")}${video.durationSeconds ? `, ${formatDuration(video.durationSeconds)}` : ""}${video.name ? `: ${video.name}` : ""}`;
   return (
     <div dir="ltr" className={cn("flex w-full justify-center overflow-hidden rounded-[10px] bg-ink", className)}>
       <video
@@ -41,9 +43,10 @@ export function UploadedVideo({ video, className }: { video: AttachmentView; cla
  * tracking until then).
  */
 export function VideoEmbedPlayer({ preview, embed }: { preview: LinkPreview; embed: VideoEmbed }) {
+  const t = useT();
   const [playing, setPlaying] = useState(false);
   const provider = VIDEO_PROVIDER_LABELS[embed.provider];
-  const title = preview.title ?? `${provider} video`;
+  const title = preview.title ?? t("{provider} video", { provider });
   const still = preview.imageUrl ?? embed.thumbnailUrl;
   const src = `${embed.embedUrl}${embed.embedUrl.includes("?") ? "&" : "?"}autoplay=1`;
   return (

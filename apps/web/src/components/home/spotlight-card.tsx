@@ -3,18 +3,21 @@
 import Link from "next/link";
 import type { SpotlightMoment } from "@chartermission/contracts";
 import { Icon, buttonClasses, chipClasses, RoleBadgeIcon } from "@chartermission/ui";
-import { plural } from "@/components/social/format";
+
 import { memberHref, postHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import type { Viewer } from "@/components/social/viewer";
 import { FollowMemberButton } from "./follow-buttons";
 import { MomentCard } from "./moment-card";
 import { countryName } from "./moment-parts";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 /** Member spotlight: who they are, what they work on, their latest post, Follow / View profile. */
 export function SpotlightCard({ moment, viewer }: { moment: SpotlightMoment; viewer: Viewer }) {
+  const t = useT();
+  const intl = useIntlTag();
   const { member, recentPost } = moment;
-  const country = countryName(member.countryCode);
+  const country = countryName(member.countryCode, intl);
   const self = member.id === viewer.id;
   return (
     <MomentCard id={moment.id} label="Member spotlight" icon="user" iconTone="text-accent">
@@ -41,9 +44,9 @@ export function SpotlightCard({ moment, viewer }: { moment: SpotlightMoment; vie
                   </span>
                 )}
                 {country && <span aria-hidden="true">·</span>}
-                <span>{plural(member.followers, "follower")}</span>
+                <span>{t("{count} followers", { count: member.followers })}</span>
                 <span aria-hidden="true">·</span>
-                <span>{plural(member.posts, "post")}</span>
+                <span>{t("{count} posts", { count: member.posts })}</span>
               </p>
             </div>
           </div>
@@ -73,7 +76,7 @@ export function SpotlightCard({ moment, viewer }: { moment: SpotlightMoment; vie
           <div className="flex flex-wrap gap-3">
             {!self && <FollowMemberButton member={member} following={member.isFollowing} primary />}
             <Link href={memberHref(member.handle)} className={buttonClasses({ variant: "secondary", size: "small" })}>
-              View profile<span className="sr-only"> of {member.name}</span>
+              View profile<span className="sr-only"> <T vars={{ name: member.name }}>{"of {name}"}</T></span>
             </Link>
           </div>
         </>

@@ -143,7 +143,7 @@ export function LeadDetailView({ initial, team, countries }: { initial: AdminLea
               </Row>
               <Row label="Member account">
                 {lead.member ? (
-                  <a href={webHref(`/members/${lead.member.handle}`)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                  <a href={webHref(`/${lead.member.handle}`)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
                     @{lead.member.handle} <Icon name="external" size={12} />
                   </a>
                 ) : (

@@ -9,8 +9,12 @@ import { requireClientViewer, settle } from "@/components/social/data";
 import { errorMessage } from "@/components/social/error-message";
 import { EmptyState, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "My opportunities" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("My opportunities") };
+}
 
 type Tab = "posted" | "applied" | "saved";
 const TABS: { value: Tab; label: string }[] = [

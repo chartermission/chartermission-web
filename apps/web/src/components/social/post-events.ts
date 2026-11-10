@@ -16,3 +16,18 @@ export function onPostCreated(listener: Listener) {
 export function announcePostCreated(post: PostView) {
   listeners.forEach((listener) => listener(post));
 }
+
+/** The same for a post taken out of view (held or removed by a chapter's team): open lists drop it. */
+type RemovedListener = (postId: string) => void;
+const removedListeners = new Set<RemovedListener>();
+
+export function onPostRemoved(listener: RemovedListener) {
+  removedListeners.add(listener);
+  return () => {
+    removedListeners.delete(listener);
+  };
+}
+
+export function announcePostRemoved(postId: string) {
+  removedListeners.forEach((listener) => listener(postId));
+}

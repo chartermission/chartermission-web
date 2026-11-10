@@ -11,6 +11,7 @@ import { PasswordConfirmDialog } from "@/components/account/password-confirm-dia
 import { POLICY_DOCS } from "@/components/account/policy-links";
 import { describedBy } from "@/components/auth/fields";
 import { SettingsCard } from "./settings-card";
+import { T } from "@/i18n/client";
 
 /** Consent history (GET /me/consents, append-only, CM-AUTH-06). */
 export function ConsentHistory({ consents }: { consents: ConsentRecordView[] }) {
@@ -185,7 +186,7 @@ export function DataActions({ status }: { status: AccountStatus }) {
       >
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${id}-reason`} className="flex justify-between text-sm font-medium text-ink">
-            Why are you leaving? <span className="text-xs font-normal text-secondary">Optional · {reason.length}/500</span>
+            Why are you leaving? <span className="text-xs font-normal text-secondary"><T vars={{ count: reason.length }}>{"Optional · {count}/500"}</T></span>
           </label>
           <textarea
             id={`${id}-reason`}

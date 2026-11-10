@@ -8,6 +8,7 @@ import { api } from "@/lib/api/client";
 import { errorMessage } from "./social/errors";
 import { topicHref } from "./social/links";
 import { exploreHref } from "@/app/[locale]/(member)/topics/explore-params";
+import { useT } from "@/i18n/client";
 
 const windows = [
   { value: "24h", label: "24h" },
@@ -29,6 +30,7 @@ export function TrendingTopics({
   /** The viewer's country, for the second scope. */
   country: { code: string; name: string } | null;
 }) {
+  const t = useT();
   const scopes: Scope[] = [
     { key: "global", label: "Africa", scope: "global" },
     ...(country ? [{ key: country.code, label: country.name, scope: "country" as const, scopeId: country.code }] : []),
@@ -93,7 +95,7 @@ export function TrendingTopics({
           </p>
         ) : items.length === 0 ? (
           <p className="py-3 text-sm text-secondary">
-            {scope.scope === "country" ? `Nothing is trending in ${scope.label} yet.` : "Nothing is trending yet."} Topics appear here once several
+            {scope.scope === "country" ? t("Nothing is trending in {label} yet.", { label: scope.label }) : "Nothing is trending yet."} Topics appear here once several
             members post about them.
           </p>
         ) : (
@@ -105,8 +107,8 @@ export function TrendingTopics({
                   <TrendingItem
                     rank={topic.rank}
                     tag={topic.tag}
-                    context={topic.pinned ? `${topic.context} · Featured` : topic.context}
-                    stats={`${topic.posts.toLocaleString("en-US")} posts · ${topic.velocityPct >= 0 ? "+" : ""}${topic.velocityPct}% ${window === "24h" ? "today" : "this week"}`}
+                    context={topic.pinned ? t("{context} · Featured", { context: topic.context }) : topic.context}
+                    stats={`${t("{count} posts", { count: topic.posts })} · ${topic.velocityPct >= 0 ? "+" : ""}${topic.velocityPct}% ${window === "24h" ? t("today") : t("this week")}`}
                     href={topicHref(topic.tag)}
                     linkAs={Link}
                   />

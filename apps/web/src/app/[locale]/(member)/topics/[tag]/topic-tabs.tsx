@@ -5,6 +5,7 @@ import type { Page, PostView } from "@chartermission/contracts";
 import { cn } from "@chartermission/ui";
 import { PostStream } from "@/components/social/post-stream";
 import type { Viewer } from "@/components/social/viewer";
+import { useT } from "@/i18n/client";
 
 const tabs = [
   { value: "top", label: "Top" },
@@ -26,6 +27,7 @@ export function TopicTabs({
   viewer: Viewer;
   empties: Record<TabValue, ReactNode>;
 }) {
+  const t = useT();
   const [active, setActive] = useState<TabValue>("top");
   const id = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -45,7 +47,7 @@ export function TopicTabs({
 
   return (
     <>
-      <div role="tablist" aria-label={`#${tag} posts`} className="flex gap-6 border-b border-line" onKeyDown={onKeyDown}>
+      <div role="tablist" aria-label={t("#{tag} posts", { tag })} className="flex gap-6 border-b border-line" onKeyDown={onKeyDown}>
         {tabs.map((tab, index) => {
           const selected = tab.value === active;
           return (
@@ -77,7 +79,7 @@ export function TopicTabs({
           initial={active === "top" && initialTop ? initialTop : undefined}
           viewer={viewer}
           empty={empties[active]}
-          label={`${tabs.find((t) => t.value === active)!.label} posts tagged #${tag}`}
+          label={t("{label} posts tagged #{tag}", { label: t(tabs.find((tab) => tab.value === active)!.label), tag })}
         />
       </div>
     </>

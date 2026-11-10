@@ -4,26 +4,27 @@ import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
 import { handleHistory, memberProfiles } from '../db/schema.js';
 
-/** Handles that would collide with routes or impersonate the platform. */
+/**
+ * Usernames nobody can take. A profile lives at chartermission.com/{username}, so every first
+ * path segment the site uses, or may come to use, is kept back, along with names that would pass
+ * for the platform itself. When a new top-level page is added to the web app, add its name here.
+ */
 export const RESERVED_HANDLES = new Set([
-  'me',
-  'admin',
-  'administrator',
-  'api',
-  'suggestions',
-  'settings',
-  'support',
-  'help',
-  'moderator',
-  'staff',
-  'system',
-  'root',
-  'null',
-  'undefined',
-  'charter-mission',
-  'chartermission',
-  'official',
-  'deleted-member',
+  // Pages of the web app today
+  'ambassadors', 'analytics', 'appeals', 'articles', 'bookmarks', 'chapters', 'drafts', 'events', 'feed', 'initiatives',
+  'learning', 'members', 'network', 'nominate', 'notifications', 'onboarding', 'opportunities', 'pages', 'posts', 'search',
+  'settings', 'stories', 'topics', 'check-email', 'forgot-password', 'guidelines', 'policies', 'privacy', 'reset-password',
+  'sign-in', 'signin', 'signup', 'terms', 'verify-email', 'brand', 'api', 'sso',
+  // Likely future pages and technical paths
+  'about', 'account', 'accounts', 'app', 'apps', 'assets', 'auth', 'billing', 'blog', 'careers', 'cdn', 'chat', 'community',
+  'contact', 'courses', 'dashboard', 'discover', 'docs', 'donate', 'download', 'email', 'explore', 'faq', 'favicon', 'files',
+  'fonts', 'forum', 'groups', 'home', 'images', 'img', 'inbox', 'index', 'invite', 'jobs', 'join', 'legal', 'login', 'logout',
+  'mail', 'manifest', 'media', 'messages', 'mobile', 'new', 'news', 'partners', 'people', 'press', 'pricing', 'profile',
+  'public', 'register', 'robots', 'rss', 'security', 'shop', 'sitemap', 'static', 'status', 'store', 'team', 'uploads',
+  'user', 'users', 'verify', 'www',
+  // Names that would pass for the platform or its people
+  'me', 'admin', 'administrator', 'suggestions', 'support', 'help', 'moderator', 'moderators', 'staff', 'system', 'root',
+  'null', 'undefined', 'charter-mission', 'chartermission', 'charter-center', 'chartercenter', 'official', 'deleted-member',
 ]);
 
 const MAX = 30;

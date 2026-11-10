@@ -11,6 +11,7 @@ import { toast } from "@/components/social/toast";
 import { api } from "@/lib/api/client";
 import { formatClock, formatDay } from "./time";
 import { useNow, useViewerZone } from "./use-viewer-zone";
+import { useT, useIntlTag } from "@/i18n/client";
 
 type Tab = RegistrationStatus;
 
@@ -57,7 +58,9 @@ function downloadCsv(event: EventDetail, rows: RegistrationView[], label: string
 
 /** Host view of an event's registrations: counts, tabs, search, attendance, CSV export. */
 export function RegistrationsView({ event }: { event: EventDetail }) {
+  const t = useT();
   const zone = useViewerZone() ?? event.timezone;
+  const intl = useIntlTag();
   const [rows, setRows] = useState<RegistrationView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>("registered");
@@ -101,7 +104,7 @@ export function RegistrationsView({ event }: { event: EventDetail }) {
     try {
       const updated = await api<RegistrationView>(`/events/${event.id}/registrations/${row.member.id}/attendance`, { method: "PUT", body: { attended } });
       setRows((current) => (current ?? []).map((r) => (r.member.id === row.member.id ? updated : r)));
-      toast.success(attended ? `${row.member.name} marked as attended` : `${row.member.name} moved back to registered`);
+      toast.success(attended ? t("{name} marked as attended", { name: row.member.name }) : t("{name} moved back to registered", { name: row.member.name }));
     } catch (e) {
       toast.error(e);
     } finally {
@@ -109,7 +112,7 @@ export function RegistrationsView({ event }: { event: EventDetail }) {
     }
   }
 
-  const when = (iso: string) => `${formatDay(iso, zone)}, ${formatClock(iso, zone)}`;
+  const when = (iso: string) => `${formatDay(iso, zone, { intl })}, ${formatClock(iso, zone)}`;
   const seats = counts.registered + counts.attended;
   const tiles = [
     { label: "Seats taken", value: rows ? `${seats}${event.capacity ? ` / ${event.capacity}` : ""}` : "–", icon: "users" as const },
@@ -194,16 +197,16 @@ export function RegistrationsView({ event }: { event: EventDetail }) {
                   </div>
                   <span className="text-xs text-secondary max-sm:order-last max-sm:w-full max-sm:ps-[52px]">
                     {row.status === "cancelled" && row.cancelledAt
-                      ? `Cancelled ${when(row.cancelledAt)}`
+                      ? t("Cancelled {when}", { when: when(row.cancelledAt) })
                       : row.status === "attended" && row.attendedAt
-                        ? `Attended · registered ${when(row.registeredAt)}`
+                        ? t("Attended · registered {when}", { when: when(row.registeredAt) })
                         : row.promotedAt
-                          ? `Promoted from waitlist ${when(row.promotedAt)}`
-                          : `Registered ${when(row.registeredAt)}`}
+                          ? t("Promoted from waitlist {when}", { when: when(row.promotedAt) })
+                          : t("Registered {when}", { when: when(row.registeredAt) })}
                   </span>
                   {(row.status === "registered" || row.status === "attended") &&
                     (started ? (
-                      <Button size="small" variant={row.status === "attended" ? "ghost" : "secondary"} disabled={pending === row.member.id} onClick={() => setAttendance(row, row.status !== "attended")} aria-label={row.status === "attended" ? `Undo attendance for ${row.member.name}` : `Mark ${row.member.name} as attended`}>
+                      <Button size="small" variant={row.status === "attended" ? "ghost" : "secondary"} disabled={pending === row.member.id} onClick={() => setAttendance(row, row.status !== "attended")} aria-label={row.status === "attended" ? t("Undo attendance for {name}", { name: row.member.name }) : t("Mark {name} as attended", { name: row.member.name })}>
                         {row.status === "attended" ? (
                           <>
                             <Icon name="check" size={16} className="text-success" />
@@ -222,7 +225,7 @@ export function RegistrationsView({ event }: { event: EventDetail }) {
           ) : (
             <div className="flex flex-col items-center gap-1 px-6 py-12 text-center">
               <Icon name="users" size={24} className="text-disabled" />
-              <p className="text-md font-medium text-ink">{q ? "Nobody matches that name" : `No ${tabs.find((t) => t.value === tab)!.label.toLowerCase()} members`}</p>
+              <p className="text-md font-medium text-ink">{q ? "Nobody matches that name" : t("No {kind} members", { kind: t(tabs.find((x) => x.value === tab)!.label).toLowerCase() })}</p>
               {tab === "attended" && !started && <p className="text-sm text-secondary">You can mark attendance once the event has started.</p>}
             </div>
           )}

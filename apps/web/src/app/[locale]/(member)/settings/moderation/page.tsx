@@ -6,8 +6,12 @@ import { settle } from "@/components/account/settle";
 import { ModerationActions, MyReports } from "@/components/settings/moderation-history";
 import { SettingsCardSkeleton, SettingsHeader } from "@/components/settings/settings-card";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Moderation & reports" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Moderation & reports") };
+}
 
 async function Actions() {
   const result = await settle(apiGet<MyModerationAction[]>("/me/moderation-actions"));

@@ -1,4 +1,5 @@
 import { Icon, cn } from "@chartermission/ui";
+import { T } from "@/i18n/client";
 
 export const STEP_LABELS = ["About you", "Topics", "Skills", "Community"] as const;
 
@@ -7,7 +8,7 @@ export function OnboardingProgress({ current }: { current: number }) {
   return (
     <nav aria-label="Onboarding progress" className="flex flex-col gap-2">
       <p className="text-sm text-secondary">
-        Step {current + 1} of {STEP_LABELS.length}
+        <T vars={{ count: current + 1, count2: STEP_LABELS.length }}>{"Step {count} of {count2}"}</T>
       </p>
       <ol className="grid grid-cols-4 gap-2">
         {STEP_LABELS.map((label, index) => {

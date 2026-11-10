@@ -1,3 +1,5 @@
+/** @jsxImportSource react */
+// What members write is shown as written: this file opts out of the translating JSX runtime (see i18n/jsx).
 import Link from "next/link";
 import { Fragment } from "react";
 import type { MemberRef } from "@chartermission/contracts";

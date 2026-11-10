@@ -38,7 +38,7 @@ describe('Chapters: pages, members and Ambassador pins', () => {
     expect(page.team.map((m) => m.member.id)).toContain(ambassador.id);
     expect(page.team.find((m) => m.member.id === ambassador.id)?.label).toMatch(/Ambassador/);
     expect(page.recentMembers.map((m) => m.id)).toContain(member.id);
-    expect(page.viewer).toEqual({ following: true, canManage: false, canHostAsChapter: false });
+    expect(page.viewer).toEqual({ following: true, canManage: false, canHostAsChapter: false, banned: false });
     expect((await ambassador.get('/chapters/nigeria').expect(200)).body.viewer).toMatchObject({ canManage: true, canHostAsChapter: true });
     await member.get('/chapters/atlantis').expect(404);
 

@@ -4,19 +4,24 @@ import { Suspense } from "react";
 import { OpportunitiesQuery, type OpportunitySummary, type Page } from "@chartermission/contracts";
 import { Icon, Panel, buttonClasses } from "@chartermission/ui";
 import { PageHeader, PageShell } from "@/components/discover/page-shell";
-import { deadlineChip } from "@/components/opportunities/opportunity-card";
-import { OpportunityFilterPanel, OpportunityFilters, OpportunitySortSelect, filtersHref } from "@/components/opportunities/opportunity-filters";
+import { deadlineChip } from "@/components/opportunities/opportunity-dates";
+import { OpportunityFilterPanel, OpportunityFilters, OpportunitySortSelect } from "@/components/opportunities/opportunity-filters";
+import { filtersHref } from "@/components/opportunities/opportunity-href";
 import { OpportunityList } from "@/components/opportunities/opportunity-list";
 import { requireClientViewer, settle } from "@/components/social/data";
 import { errorMessage } from "@/components/social/error-message";
 import { Bone, EmptyState, LoadingStatus, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet } from "@/lib/api/server";
 import { getTaxonomies } from "@/lib/taxonomies";
+import { getT, getIntlTag } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Opportunities",
-  description: "Jobs, fellowships, grants and calls for partners posted by Charter Mission members.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Opportunities"),
+    description: t("Jobs, fellowships, grants and calls for partners posted by Charter Mission members."),
+  };
+}
 
 type SearchParams = PageProps<"/[locale]/opportunities">["searchParams"];
 
@@ -31,6 +36,8 @@ function apiQuery(q: OpportunitiesQuery) {
 }
 
 async function SavedRail() {
+  const intl = await getIntlTag();
+  const t = await getT();
   const saved = await apiGet<Page<OpportunitySummary>>("/me/opportunities", { tab: "saved", limit: 5 }).catch(() => null);
   return (
     <Panel className="flex flex-col gap-3 p-5">
@@ -46,7 +53,7 @@ async function SavedRail() {
             <li key={item.id}>
               <Link href={`/opportunities/${item.slug}`} className="group flex min-w-0 flex-col">
                 <span className="text-sm font-medium text-ink group-hover:underline">{item.title}</span>
-                <span className="text-xs text-secondary">{deadlineChip(item).label}</span>
+                <span className="text-xs text-secondary">{deadlineChip(intl, t, item).label}</span>
               </Link>
             </li>
           ))}

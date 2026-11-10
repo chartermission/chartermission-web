@@ -7,6 +7,7 @@ import { Avatar, Button, Icon, cn } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { RestrictedPrompt, VerifyPrompt } from "@/components/account/verify-prompt";
 import { ChipPicker } from "./chip-picker";
+import { T } from "@/i18n/client";
 
 type ConnectState = "idle" | "sending" | "sent";
 
@@ -134,7 +135,7 @@ export function CommunityStep({
                       onClick={() => void sendRequest(member)}
                     >
                       {state === "sent" ? "Request sent" : state === "sending" ? "Sending…" : "Connect"}
-                      <span className="sr-only"> with {member.name}</span>
+                      <span className="sr-only"> <T vars={{ name: member.name }}>{"with {name}"}</T></span>
                     </Button>
                   </div>
                 </li>

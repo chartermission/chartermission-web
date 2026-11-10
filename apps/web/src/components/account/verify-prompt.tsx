@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Icon, cn } from "@chartermission/ui";
 import { ResendVerification } from "@/components/auth/resend-verification";
+import { T } from "@/i18n/client";
 
 /** Shown instead of a generic error when an action returns 403 EMAIL_NOT_VERIFIED. */
 export function VerifyPrompt({ action = "do this", className }: { action?: string; className?: string }) {
@@ -11,7 +12,7 @@ export function VerifyPrompt({ action = "do this", className }: { action?: strin
       <Icon name="mail" size={16} className="mt-px shrink-0 text-info" />
       <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
         <p>
-          <strong className="font-medium text-ink">Verify your email to {action}.</strong> Open the link we emailed you, or send a
+          <strong className="font-medium text-ink"><T vars={{ action }}>{"Verify your email to {action}."}</T></strong> Open the link we emailed you, or send a
           new one.
         </p>
         <ResendVerification size="small" label="Resend verification email" />

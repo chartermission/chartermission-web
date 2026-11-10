@@ -1,15 +1,15 @@
+"use client";
+
 import Link from "next/link";
 import { PAGE_CATEGORY_LABELS, type PageSummary } from "@chartermission/contracts";
 import { Chip, Icon } from "@chartermission/ui";
 import { pageHref } from "@/components/social/links";
 import { FollowPageButton } from "./follow-page-button";
 import { PageLogo } from "./page-logo";
+import { followersLabel } from "./followers-label";
+import { useT } from "@/i18n/client";
 
-const numberFormat = new Intl.NumberFormat("en-GB");
 
-export function followersLabel(count: number) {
-  return `${numberFormat.format(count)} follower${count === 1 ? "" : "s"}`;
-}
 
 /** Name with the verified tick and the "Official" tag for Charter Mission's own pages. */
 export function PageName({ page, className }: { page: Pick<PageSummary, "name" | "verified" | "official">; className?: string }) {
@@ -30,6 +30,7 @@ const statusChip: Partial<Record<PageSummary["status"], { tone: "warning" | "err
 
 /** A page in the directory grid: logo, name, what it is, followers and Follow. */
 export function PageCard({ page, role }: { page: PageSummary; role?: string }) {
+  const t = useT();
   const status = statusChip[page.status];
   return (
     <article className="relative flex h-full flex-col gap-3 rounded-card border border-line bg-card p-4 transition-shadow hover:shadow-[0_4px_16px_rgb(15_42_42/0.08)]">
@@ -49,7 +50,7 @@ export function PageCard({ page, role }: { page: PageSummary; role?: string }) {
       </div>
       {page.tagline && <p className="line-clamp-2 text-sm text-body">{page.tagline}</p>}
       <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-        <span className="text-xs text-secondary">{followersLabel(page.followers)}</span>
+        <span className="text-xs text-secondary">{followersLabel(t, page.followers)}</span>
         <span className="relative z-10 flex items-center gap-2">
           {status && <Chip tone={status.tone} className="px-2! py-0.5! text-xs!">{status.label}</Chip>}
           {role ? (

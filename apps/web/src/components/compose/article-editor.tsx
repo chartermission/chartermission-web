@@ -4,6 +4,7 @@ import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type Reac
 import { ARTICLE_MAX_CHARS, ARTICLE_MIN_CHARS, readingMinutes, type MemberRef } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
 import { Markdown } from "@/components/social/post-types/markdown";
+import { T, useT } from "@/i18n/client";
 
 type Action = "h2" | "h3" | "bold" | "italic" | "ul" | "ol" | "quote" | "link";
 
@@ -133,6 +134,7 @@ export function ArticleEditor({
   /** On the full writing page: the editor fills most of the screen. */
   tall?: boolean;
 }) {
+  const t = useT();
   const id = useId();
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef ?? ownRef;
@@ -213,8 +215,8 @@ export function ArticleEditor({
                   setFocusIndex(index);
                   run(item.action);
                 }}
-                aria-label={item.shortcut ? `${item.label} (Ctrl+${item.shortcut})` : item.label}
-                title={item.shortcut ? `${item.label} (⌘/Ctrl+${item.shortcut})` : item.label}
+                aria-label={item.shortcut ? t("{label} (Ctrl+{shortcut})", { label: item.label, shortcut: item.shortcut }) : item.label}
+                title={item.shortcut ? t("{label} (⌘/Ctrl+{shortcut})", { label: item.label, shortcut: item.shortcut }) : item.label}
                 className="flex size-8 items-center justify-center rounded-md text-body hover:bg-card hover:text-primary hover:shadow-[0px_1px_3px_0px_rgba(0,0,0,0.06)]"
               >
                 {item.glyph}
@@ -289,7 +291,7 @@ export function ArticleEditor({
       <div id={`${id}-meta`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line px-4 py-2 text-xs text-secondary">
         <span>
           {words.toLocaleString("en-US")} word{words === 1 ? "" : "s"} · {minutes} min read
-          {tooShort && <span className="text-warning"> · {(ARTICLE_MIN_CHARS - count).toLocaleString("en-US")} more characters needed</span>}
+          {tooShort && <span className="text-warning"> <T vars={{ count: (ARTICLE_MIN_CHARS - count).toLocaleString("en-US") }}>{"· {count} more characters needed"}</T></span>}
         </span>
         <span className={cn(count >= ARTICLE_MAX_CHARS ? "text-error" : nearLimit ? "text-warning" : undefined)}>
           {count.toLocaleString("en-US")} / {ARTICLE_MAX_CHARS.toLocaleString("en-US")}

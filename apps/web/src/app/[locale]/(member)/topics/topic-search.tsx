@@ -51,7 +51,7 @@ export function TopicSearch({ q }: { q: string }) {
       <label htmlFor={`${id}-q`} className="sr-only">
         Search topics
       </label>
-      <Icon name="search" size={18} className="pointer-events-none absolute start-3.5 top-1/2 -translate-y-1/2 text-secondary" />
+      <Icon name="search" size={18} className="pointer-events-none absolute start-3.5 inset-y-0 my-auto h-fit text-secondary" />
       <input
         id={`${id}-q`}
         type="search"
@@ -74,7 +74,7 @@ export function TopicSearch({ q }: { q: string }) {
           "[&::-webkit-search-cancel-button]:appearance-none",
         )}
       />
-      <span className="absolute end-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+      <span className="absolute end-2 inset-y-0 my-auto h-fit flex items-center gap-1">
         {pending && (
           <span aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-line-strong border-t-primary-light" />
         )}

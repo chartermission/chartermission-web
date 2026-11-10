@@ -6,8 +6,12 @@ import { AccountOverview } from "@/components/settings/account-overview";
 import { FollowedTopics } from "@/components/settings/followed-topics";
 import { SettingsHeader, SettingsPageSkeleton } from "@/components/settings/settings-card";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Account settings" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Account settings") };
+}
 
 async function AccountSections() {
   const viewer = await requireViewer("/settings");

@@ -11,10 +11,12 @@ import { ErrorNotice } from "@/components/social/errors";
 import { memberHref } from "@/components/social/links";
 import { MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { toast } from "@/components/social/toast";
+import { T, useT } from "@/i18n/client";
 
 type Filter = ConnectionsQuery["filter"];
 
 function Row({ connection, filter, onDone }: { connection: ConnectionView; filter: Filter; onDone: (id: string, message: string) => void }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const { member } = connection;
@@ -46,17 +48,17 @@ function Row({ connection, filter, onDone }: { connection: ConnectionView; filte
       <div className="flex gap-2 max-sm:w-full max-sm:justify-end">
         {filter === "incoming" && (
           <>
-            <Button variant="secondary" size="small" disabled={busy} onClick={() => act(`/connections/${connection.id}/decline`, "POST", `Declined ${member.name}’s request`)}>
+            <Button variant="secondary" size="small" disabled={busy} onClick={() => act(`/connections/${connection.id}/decline`, "POST", t("Declined {name}’s request", { name: member.name }))}>
               Decline<span className="sr-only"> {member.name}</span>
             </Button>
-            <Button size="small" disabled={busy} onClick={() => act(`/connections/${connection.id}/accept`, "POST", `You and ${member.name} are now connected`)}>
+            <Button size="small" disabled={busy} onClick={() => act(`/connections/${connection.id}/accept`, "POST", t("You and {name} are now connected", { name: member.name }))}>
               Accept<span className="sr-only"> {member.name}</span>
             </Button>
           </>
         )}
         {filter === "outgoing" && (
           <Button variant="secondary" size="small" disabled={busy} onClick={() => act(`/connections/${connection.id}/withdraw`, "POST", "Request withdrawn")}>
-            Withdraw<span className="sr-only"> request to {member.name}</span>
+            Withdraw<span className="sr-only"> <T vars={{ name: member.name }}>{"request to {name}"}</T></span>
           </Button>
         )}
         {filter === "connected" && (
@@ -72,12 +74,12 @@ function Row({ connection, filter, onDone }: { connection: ConnectionView; filte
       </div>
       {confirming && (
         <ConfirmDialog
-          title={`Remove ${member.name}?`}
+          title={t("Remove {name}?", { name: member.name })}
           confirmLabel="Remove"
           onClose={() => setConfirming(false)}
           onConfirm={async () => {
             await api(`/connections/${connection.id}`, { method: "DELETE" });
-            onDone(connection.id, `Removed ${member.name} from your connections`);
+            onDone(connection.id, t("Removed {name} from your connections", { name: member.name }));
           }}
         >
           They won’t be told. You can send a new request later.

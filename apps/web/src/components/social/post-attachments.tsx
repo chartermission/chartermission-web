@@ -3,6 +3,7 @@ import { Icon } from "@chartermission/ui";
 import { ImageGrid } from "@/components/gallery/image-grid";
 import { UploadedVideo } from "@/components/video/video-player";
 import { formatBytes } from "./format";
+import { T } from "@/i18n/client";
 
 /**
  * Up to 4 images as a gallery that opens a lightbox, or one PDF tile (CM-FED-01). Images use the
@@ -31,7 +32,7 @@ export function PostAttachments({ attachments, bleedClassName }: { attachments: 
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="truncate text-sm font-medium text-ink">{doc.name ?? "Document"}</span>
-            <span className="text-xs text-secondary">PDF · {formatBytes(doc.sizeBytes)}</span>
+            <span className="text-xs text-secondary"><T vars={{ count: formatBytes(doc.sizeBytes) }}>{"PDF · {count}"}</T></span>
           </span>
           <Icon name="external" size={18} className="shrink-0 text-secondary" />
           <span className="sr-only">(opens in a new tab)</span>

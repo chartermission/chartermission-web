@@ -103,6 +103,7 @@ export const fr: Localized = {
     drafts: "Brouillons",
     analytics: "Statistiques",
     alerts: "Alertes",
+    messages: "Messages",
   },
   public: {
     signIn: "Se connecter",

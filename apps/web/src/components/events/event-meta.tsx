@@ -6,6 +6,8 @@ import { Avatar, Chip, Icon, cn, type ChipTone } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { badgeParts, dayKey, formatClock, formatDay, sameWallClock, zoneAbbreviation, zoneCity } from "./time";
 import { useViewerZone } from "./use-viewer-zone";
+import { useT, useIntlTag } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 /* Shared bits of event UI: time in two zones, date badges, format/status chips, host line. */
 
@@ -25,11 +27,13 @@ export const eventHref = (event: Pick<EventSummary, "slug">) => `/events/${event
 
 /** The event's own time, then the viewer's when the clocks differ. */
 export function useEventTimes(startsAt: string, timezone: string) {
+  const t = useT();
+  const intl = useIntlTag();
   const viewer = useViewerZone();
   const event = `${formatClock(startsAt, timezone)} ${zoneAbbreviation(timezone, startsAt)}`;
   if (!viewer || sameWallClock(viewer, timezone, startsAt)) return { event, local: null, viewer };
   const shiftedDay = dayKey(startsAt, viewer) !== dayKey(startsAt, timezone);
-  const local = `${shiftedDay ? `${formatDay(startsAt, viewer)}, ` : ""}${formatClock(startsAt, viewer)} your time`;
+  const local = t("{time} your time", { time: `${shiftedDay ? `${formatDay(startsAt, viewer, { intl })}, ` : ""}${formatClock(startsAt, viewer)}` });
   return { event, local, viewer };
 }
 
@@ -50,10 +54,12 @@ export function EventWhen({
   className?: string;
   localClassName?: string;
 }) {
+  const t = useT();
+  const intl = useIntlTag();
   const { event, local } = useEventTimes(startsAt, timezone);
   return (
-    <time dateTime={startsAt} className={className} title={`${zoneCity(timezone)} time`}>
-      {withDay && `${formatDay(startsAt, timezone)} · `}
+    <time dateTime={startsAt} className={className} title={t("{zoneCity} time", { zoneCity: zoneCity(timezone) })}>
+      {withDay && `${formatDay(startsAt, timezone, { intl })} · `}
       {event}
       {local && (stacked ? <span className={cn("block", localClassName)}>{local}</span> : <span className={localClassName}> · {local}</span>)}
     </time>
@@ -76,7 +82,7 @@ export function EventDateBadge({
   className?: string;
 }) {
   const zone = useViewerZone() ?? timezone;
-  const badge = badgeParts(startsAt, zone);
+  const badge = badgeParts(startsAt, zone, useIntlTag());
   return (
     <span
       aria-hidden="true"
@@ -188,7 +194,7 @@ export function LifecycleChip({ status, className }: { status: EventStatus; clas
 export type Availability = { label: string; tone: "neutral" | "success" | "warning" | "error"; icon: "users" | "alert" | "clock" | "check" | "x" };
 
 /** One line about the seats: "12 spots left", "Full — join waitlist", "Registration closed"… */
-export function availability(event: EventSummary): Availability | null {
+export function availability(t: Translate, event: EventSummary): Availability | null {
   if (event.cancelledAt) return { label: "Cancelled", tone: "error", icon: "x" };
   if (event.past) return { label: "This event has ended", tone: "neutral", icon: "check" };
   if (event.status !== "published" && event.status !== "archived") return null;
@@ -199,7 +205,7 @@ export function availability(event: EventSummary): Availability | null {
   if (!event.registrationOpen) return { label: full ? "Full" : "Registration closed", tone: "neutral", icon: "clock" };
   if (full) return { label: "Full — join waitlist", tone: "warning", icon: "clock" };
   if (event.spotsLeft !== null) {
-    return { label: `${event.spotsLeft} ${event.spotsLeft === 1 ? "spot" : "spots"} left`, tone: event.spotsLeft <= 10 ? "warning" : "neutral", icon: "users" };
+    return { label: t("{count} spots left", { count: event.spotsLeft }), tone: event.spotsLeft <= 10 ? "warning" : "neutral", icon: "users" };
   }
   return { label: "Open to all", tone: "neutral", icon: "users" };
 }
@@ -212,7 +218,8 @@ const availabilityText: Record<Availability["tone"], string> = {
 };
 
 export function AvailabilityNote({ event, className }: { event: EventSummary; className?: string }) {
-  const a = availability(event);
+  const t = useT();
+  const a = availability(t, event);
   if (!a) return null;
   return (
     <span className={cn("flex items-center gap-1 text-xs font-medium", availabilityText[a.tone], className)}>
@@ -223,10 +230,10 @@ export function AvailabilityNote({ event, className }: { event: EventSummary; cl
 }
 
 /** "312 going" — attended counts once the event has ended. */
-export function goingLabel(event: Pick<EventSummary, "registeredCount" | "past" | "registrationMode">): string | null {
+export function goingLabel(t: Translate, event: Pick<EventSummary, "registeredCount" | "past" | "registrationMode">): string | null {
   if (event.registrationMode === "external") return null;
-  if (event.registeredCount === 0) return event.past ? null : "Be the first to register";
-  return `${event.registeredCount.toLocaleString("en")} ${event.past ? "went" : "going"}`;
+  if (event.registeredCount === 0) return event.past ? null : t("Be the first to register");
+  return event.past ? t("{count} went", { count: event.registeredCount }) : t("{count} going", { count: event.registeredCount });
 }
 
 /** The card's button: what the viewer can do from a list. */

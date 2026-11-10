@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { PolicyPage } from "@/components/public/policy-page";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Privacy Notice", description: "How Charter Mission handles your personal data." };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Privacy Notice"), description: t("How Charter Mission handles your personal data.") };
+}
 
 export default function PrivacyPage() {
   return (

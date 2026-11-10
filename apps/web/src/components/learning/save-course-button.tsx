@@ -5,6 +5,7 @@ import { Icon, buttonClasses, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { pop } from "@/components/motion";
 import { toast } from "@/components/social/toast";
+import { useT } from "@/i18n/client";
 
 /*
  * Saved state per course, shared by every button on the page (a featured tile and the same
@@ -47,6 +48,7 @@ export function SaveCourseButton({
   size?: "default" | "small";
   className?: string;
 }) {
+  const t = useT();
   const isSaved = useCourseSaved(course.id, course.saved);
   const [busy, setBusy] = useState(false);
   const iconRef = useRef<HTMLSpanElement>(null);
@@ -79,7 +81,7 @@ export function SaveCourseButton({
       <button
         type="button"
         aria-pressed={isSaved}
-        aria-label={`Save ${course.title}`}
+        aria-label={t("Save {title}", { title: course.title })}
         title={isSaved ? "Saved" : "Save course"}
         onClick={toggle}
         className={cn(

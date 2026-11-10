@@ -353,7 +353,7 @@ function TrainingSection({ initial, catalogue }: { initial: AmbassadorTrainingVi
                   </option>
                 ))}
               </select>
-              <Icon name="chevron-down" size={14} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-secondary" />
+              <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 right-3 my-auto h-fit text-secondary" />
             </span>
             <button
               type="button"

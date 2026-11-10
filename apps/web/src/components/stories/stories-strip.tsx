@@ -7,6 +7,7 @@ import { api } from "@/lib/api/client";
 import { StoryComposer } from "./story-composer";
 import { StoryRing, storyRingSize } from "./story-ring";
 import { StoryViewer, type StoryGroup } from "./story-viewer";
+import { useT } from "@/i18n/client";
 
 type Me = Pick<MemberRef, "id" | "name" | "avatarUrl" | "tone">;
 
@@ -15,6 +16,7 @@ type Me = Pick<MemberRef, "id" | "name" | "avatarUrl" | "tone">;
  * to or follow, unseen first. Opens the full-screen viewer or the story composer.
  */
 export function StoriesStrip({ initial, me, canPost }: { initial: StoryTray; me: Me; canPost: boolean }) {
+  const t = useT();
   const [tray, setTray] = useState(initial);
   const [open, setOpen] = useState<number | null>(null);
   const [composing, setComposing] = useState(false);
@@ -82,7 +84,7 @@ export function StoriesStrip({ initial, me, canPost }: { initial: StoryTray; me:
               type="button"
               onClick={() => setOpen(index + offset)}
               className="flex rounded-full focus-visible:outline-2 focus-visible:outline-primary-light"
-              aria-label={`View ${item.author.name}’s story${item.hasUnseen ? " (new)" : ""}`}
+              aria-label={(item.hasUnseen ? t("View {name}’s story (new)", { name: item.author.name }) : t("View {name}’s story", { name: item.author.name }))}
             >
               <StoryRing member={item.author} unseen={item.hasUnseen} />
             </button>

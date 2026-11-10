@@ -7,6 +7,7 @@ import { api, isApiError } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
 import { ResendVerification } from "@/components/auth/resend-verification";
 import { ImageCropDialog, assertCroppable } from "./image-crop-dialog";
+import { T } from "@/i18n/client";
 
 type Status =
   | { kind: "idle" }
@@ -125,7 +126,7 @@ export function AvatarUploader({
         <div aria-live="polite" className="w-full empty:hidden">
           {status.kind === "uploading" && (
             <div className="flex w-full max-w-[240px] flex-col gap-1">
-              <span className="text-xs text-secondary">Uploading… {Math.round(status.progress * 100)}%</span>
+              <span className="text-xs text-secondary"><T vars={{ number: Math.round(status.progress * 100) }}>{"Uploading… {number}%"}</T></span>
               <span className="h-1 w-full overflow-hidden rounded-full bg-muted">
                 <span className="block h-full bg-primary transition-[width]" style={{ width: `${status.progress * 100}%` }} />
               </span>

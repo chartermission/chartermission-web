@@ -18,8 +18,12 @@ import { EmptyState, LoadingStatus, PanelSkeleton, PostSkeleton, SectionError } 
 import { apiGet } from "@/lib/api/server";
 import { getTaxonomies } from "@/lib/taxonomies";
 import { FeedComposer } from "./feed-composer";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Home" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Home") };
+}
 
 type SearchParams = PageProps<"/[locale]/feed">["searchParams"];
 

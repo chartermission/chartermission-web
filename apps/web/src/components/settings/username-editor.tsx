@@ -9,13 +9,13 @@ import { FieldError, inputClasses } from "@/components/auth/fields";
 import { toast } from "@/components/social/toast";
 import { api } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
-import { useLocale, useT } from "@/i18n/client";
+import { useLocale, useT, T } from "@/i18n/client";
 import { INTL_LOCALE } from "@/i18n/config";
 
 type Check = { state: "idle" } | { state: "checking" } | { state: "free" } | { state: "taken"; reason: string } | { state: "invalid" };
 
 /**
- * The member's username: the name in their profile address (/members/{username}) and in
+ * The member's username: the name in their profile address (/{username}) and in
  * @mentions. It can be changed once every 30 days; the old address keeps redirecting to the
  * new one, and nobody else can take the old name for six months.
  */
@@ -90,12 +90,12 @@ export function UsernameEditor({ handle, availableAt }: { handle: string; availa
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-medium text-ink">{t("username.label")}</span>
           <span className="text-sm text-body" dir="ltr">
-            @{current} <span className="text-secondary">· /members/{current}</span>
+            @{current} <span className="text-secondary">· <span dir="ltr"><T vars={{ current }}>{"chartermission.com/{current}"}</T></span></span>
           </span>
           {lockedDate && <span className="text-xs text-secondary">{t("username.lockedUntil", { date: lockedDate })}</span>}
         </div>
         <div className="flex items-center gap-4">
-          <Link href={`/members/${current}`} className="text-sm font-medium text-primary-light hover:underline">
+          <Link href={`/${current}`} className="text-sm font-medium text-primary-light hover:underline">
             {t("username.viewProfile")}
           </Link>
           {!editing && !lockedDate && (
@@ -119,7 +119,7 @@ export function UsernameEditor({ handle, availableAt }: { handle: string; availa
           </label>
           <div className="flex flex-wrap items-start gap-2">
             <div className="relative min-w-0 flex-1 basis-64" dir="ltr">
-              <span aria-hidden className="pointer-events-none absolute top-1/2 start-3.5 -translate-y-1/2 text-sm text-secondary">
+              <span aria-hidden className="pointer-events-none absolute inset-y-0 my-auto h-fit start-3.5 text-sm text-secondary">
                 @
               </span>
               <input
@@ -132,10 +132,10 @@ export function UsernameEditor({ handle, availableAt }: { handle: string; availa
                 spellCheck={false}
                 maxLength={30}
                 aria-invalid={!!message}
-                aria-describedby={`${id}-help ${id}-status`}
+                aria-describedby={t("{id}-help {id2}-status", { id, id2: id })}
                 className={inputClasses(!!message, "ps-8 pe-9")}
               />
-              <span className="absolute top-1/2 end-3 -translate-y-1/2">
+              <span className="absolute inset-y-0 my-auto h-fit end-3">
                 {check.state === "checking" && <span className="block size-4 animate-spin rounded-full border-2 border-line border-t-primary" aria-hidden />}
                 {check.state === "free" && <Icon name="check" size={16} className="text-success" />}
                 {(check.state === "taken" || check.state === "invalid") && <Icon name="x" size={16} className="text-error" />}

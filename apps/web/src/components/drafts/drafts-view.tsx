@@ -16,6 +16,7 @@ import type { Viewer } from "@/components/social/viewer";
 import { api } from "@/lib/api/client";
 import { DraftCard, type DraftAction } from "./draft-card";
 import { announceDraftsChanged } from "./drafts-events";
+import { T, useT } from "@/i18n/client";
 
 export type DraftsTab = "drafts" | "scheduled";
 type Counts = { drafts: number; scheduled: number };
@@ -61,6 +62,7 @@ function Tabs({ tab, counts }: { tab: DraftsTab; counts: Counts }) {
  * Publish now, Unschedule and Delete act in place.
  */
 export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { tab: DraftsTab; initial: Page<DraftView>; counts: Counts; viewer: Viewer }) {
+  const t = useT();
   const router = useRouter();
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
@@ -99,7 +101,7 @@ export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { ta
           return [...current, ...page.items.filter((d) => !seen.has(d.id))];
         });
         setCursor(page.nextCursor);
-        setAnnouncement(`${added.length} more loaded.${page.nextCursor ? "" : " That’s everything."}`);
+        setAnnouncement(`${t("{count} more loaded.", { count: added.length })}${page.nextCursor ? "" : ` ${t("That’s everything.")}`}`);
         const first = added[0];
         if (fromButton && first) {
           requestAnimationFrame(() => {
@@ -118,7 +120,7 @@ export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { ta
         setLoading(false);
       }
     },
-    [tab],
+    [tab, t],
   );
 
   useEffect(() => {
@@ -177,7 +179,13 @@ export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { ta
 
   function posted(post: PostView) {
     announcePostCreated(post);
-    toast.success(post.status === "pending_media" ? "Posted. Your files are being checked; others will see the post once that finishes." : "Your post is live");
+    toast.success(
+      post.status === "pending_media"
+        ? "Posted. Your files are being checked; others will see the post once that finishes."
+        : post.status === "in_review"
+          ? "Sent to the chapter team for approval. You’ll be told when it’s live."
+          : "Your post is live",
+    );
   }
 
   async function act(draft: DraftView, action: DraftAction) {
@@ -235,7 +243,7 @@ export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { ta
               ) : undefined
             }
           >
-            Choose a date and time in the composer to publish a post later, up to {SCHEDULE_MAX_DAYS} days ahead. It appears here until it goes live.
+            <T vars={{ SCHEDULEMAXDAYS: SCHEDULE_MAX_DAYS }}>{"Choose a date and time in the composer to publish a post later, up to {SCHEDULEMAXDAYS} days ahead. It appears here until it goes live."}</T>
           </EmptyState>
         )
       ) : (
@@ -267,7 +275,7 @@ export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { ta
       {!cursor && items.length > 0 && (
         <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-secondary">
           <Icon name="check" size={14} />
-          {items.length === 1 ? `1 ${noun}` : `${items.length} ${noun}s`}
+          {items.length === 1 ? `1 ${noun}` : t("{count} {noun}s", { count: items.length, noun })}
           {tab === "scheduled" ? " · times shown in your time zone" : ""}
         </p>
       )}

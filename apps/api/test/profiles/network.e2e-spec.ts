@@ -42,7 +42,7 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
     expect(accepted.body).toMatchObject({ status: 'accepted', direction: 'incoming' });
     await b.post(`/connections/${req.body.id}/accept`).expect(409);
     const [acceptNote] = await notificationsFor(t, a.id, 'connection_accepted');
-    expect((acceptNote!.data as { href: string }).href).toBe(`/members/${b.handle}`);
+    expect((acceptNote!.data as { href: string }).href).toBe(`/${b.handle}`);
     expect(await count(t.db, s.analyticsEvents, eq(s.analyticsEvents.name, 'connection_requested'))).toBe(1);
     expect(await count(t.db, s.analyticsEvents, eq(s.analyticsEvents.name, 'connection_accepted'))).toBe(1);
 

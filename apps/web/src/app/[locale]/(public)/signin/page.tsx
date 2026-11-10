@@ -4,11 +4,15 @@ import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { safeNext } from "@/components/auth/destinations";
 import { RedirectIfSignedIn } from "@/components/auth/redirect-if-signed-in";
 import { SignInForm, type SignInNotice } from "@/components/auth/signin-form";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Sign in",
-  description: "Sign in to Charter Mission to see your feed, network and opportunities.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Sign in"),
+    description: t("Sign in to Charter Mission to see your feed, network and opportunities."),
+  };
+}
 
 const notices: SignInNotice[] = ["reset", "deleted", "signedout", "verified", "expired"];
 

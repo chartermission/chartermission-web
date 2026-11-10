@@ -8,20 +8,22 @@ import { Dialog } from "@/components/social/dialog";
 import { ErrorNotice } from "@/components/social/errors";
 import { todayIso } from "@/components/social/post-types/meta";
 import { inputClasses } from "./type-fields";
+import { T, useT, useIntlTag } from "@/i18n/client";
+import type { Translate } from "@/i18n/translate";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const localTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 /** "Asia/Dubai (GMT+4)" for the viewer's time zone. */
-export function timeZoneLabel(at = new Date()): string {
+export function timeZoneLabel(intl: string, at = new Date()): string {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const short = new Intl.DateTimeFormat("en-GB", { timeZoneName: "short" }).formatToParts(at).find((p) => p.type === "timeZoneName")?.value;
+  const short = new Intl.DateTimeFormat(intl, { timeZoneName: "short" }).formatToParts(at).find((p) => p.type === "timeZoneName")?.value;
   return short && short !== zone ? `${zone.replace(/_/g, " ")} (${short})` : zone;
 }
 
 /** "Thu 5 Nov 2026, 09:00 GMT+4" */
-export function scheduleLabel(iso: string): string {
-  return new Date(iso).toLocaleString("en-GB", {
+export function scheduleLabel(intl: string, iso: string): string {
+  return new Date(iso).toLocaleString(intl, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -40,10 +42,10 @@ function combine(date: string, time: string): Date | null {
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
-function check(value: Date | null, now: number): string | null {
+function check(t: Translate, value: Date | null, now: number): string | null {
   if (!value) return "Choose a date and time.";
-  if (value.getTime() < now + SCHEDULE_MIN_MINUTES * 60_000) return `Pick a time at least ${SCHEDULE_MIN_MINUTES} minutes from now.`;
-  if (value.getTime() > now + SCHEDULE_MAX_DAYS * 24 * 3600_000) return `Posts can be scheduled up to ${SCHEDULE_MAX_DAYS} days ahead.`;
+  if (value.getTime() < now + SCHEDULE_MIN_MINUTES * 60_000) return t("Pick a time at least {count} minutes from now.", { count: SCHEDULE_MIN_MINUTES });
+  if (value.getTime() > now + SCHEDULE_MAX_DAYS * 24 * 3600_000) return t("Posts can be scheduled up to {count} days ahead.", { count: SCHEDULE_MAX_DAYS });
   return null;
 }
 
@@ -89,6 +91,8 @@ export function ScheduleDialog({
   onClose: () => void;
   confirmLabel?: string;
 }) {
+  const intl = useIntlTag();
+  const t = useT();
   const id = useId();
   const footerRef = useRef<HTMLDivElement>(null);
   const [now] = useState(() => new Date());
@@ -102,7 +106,7 @@ export function ScheduleDialog({
   const at = combine(date, time);
 
   async function confirm() {
-    const problem = check(at, Date.now());
+    const problem = check(t, at, Date.now());
     setFieldError(problem);
     setError(null);
     if (problem || !at) return;
@@ -122,7 +126,7 @@ export function ScheduleDialog({
       description={
         <span className="flex items-center gap-1.5">
           <Icon name="globe" size={14} />
-          Times are in your time zone: {timeZoneLabel(at ?? now)}
+          Times are in your time zone: {timeZoneLabel(intl, at ?? now)}
         </span>
       }
       onClose={onClose}
@@ -213,14 +217,14 @@ export function ScheduleDialog({
           <p className="flex items-center gap-2 rounded-lg bg-primary-tint-2 px-3 py-2.5 text-sm text-ink">
             <Icon name="calendar" size={16} className="shrink-0 text-primary-light" />
             <span>
-              Posts <span className="font-medium">{scheduleLabel(at.toISOString())}</span>
+              Posts <span className="font-medium">{scheduleLabel(intl, at.toISOString())}</span>
             </span>
           </p>
         ) : null}
         {error ? <ErrorNotice error={error} /> : null}
       </div>
       <p className="text-xs text-secondary">
-        Between {SCHEDULE_MIN_MINUTES} minutes and {SCHEDULE_MAX_DAYS} days from now. You can change or cancel it from Drafts until it goes out.
+        <T vars={{ SCHEDULEMINMINUTES: SCHEDULE_MIN_MINUTES, SCHEDULEMAXDAYS: SCHEDULE_MAX_DAYS }}>{"Between {SCHEDULEMINMINUTES} minutes and {SCHEDULEMAXDAYS} days from now. You can change or cancel it from Drafts until it goes out."}</T>
       </p>
     </Dialog>
   );

@@ -11,8 +11,13 @@ import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGet, apiGetOrNull, requireViewer } from "@/lib/api/server";
 import { getTaxonomies, groupCountries } from "@/lib/taxonomies";
+import { T } from "@/i18n/client";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Manage page" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Manage page") };
+}
 
 type Params = PageProps<"/[locale]/pages/[slug]/edit">["params"];
 
@@ -31,9 +36,9 @@ async function Manage({ params }: { params: Params }) {
       </Link>
       <Panel className="flex flex-col gap-5 p-6 max-sm:p-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-h2 text-ink">Manage {page.name}</h1>
+          <h1 className="text-h2 text-ink"><T vars={{ name: page.name }}>{"Manage {name}"}</T></h1>
           <p className="text-sm text-secondary">
-            The page’s address is chartermission.com/pages/{page.slug} and stays the same when you rename it.
+            <T vars={{ slug: page.slug }}>{"The page’s address is chartermission.com/pages/{slug} and stays the same when you rename it."}</T>
           </p>
         </div>
         <PageForm page={page} countries={groupCountries(taxonomies.countries)} />

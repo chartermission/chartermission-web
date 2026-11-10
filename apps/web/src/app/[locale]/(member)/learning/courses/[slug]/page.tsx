@@ -17,6 +17,8 @@ import { Markdown, stripMarkdown } from "@/components/social/post-types/markdown
 import { Bone, LoadingStatus } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGet, apiGetOrNull, requireViewer } from "@/lib/api/server";
+import { T } from "@/i18n/client";
+import { getIntlTag } from "@/i18n/server";
 
 type Params = PageProps<"/[locale]/learning/courses/[slug]">["params"];
 
@@ -58,7 +60,8 @@ function Fact({ icon, label, children }: { icon: IconName; label: string; childr
 }
 
 /** Start learning (or the broken-link notice), save, share and the course facts. */
-function CourseActions({ course }: { course: CourseDetail }) {
+async function CourseActions({ course }: { course: CourseDetail }) {
+  const intl = await getIntlTag();
   return (
     <Panel className="flex flex-col overflow-hidden">
       <CourseThumbnail course={course} eager iconSize={36} className="h-[180px] max-lg:h-[140px] max-sm:hidden" />
@@ -112,7 +115,7 @@ function CourseActions({ course }: { course: CourseDetail }) {
             <Icon name="repeat" size={14} className="shrink-0" />
             Last updated on Charter Center{" "}
             <time dateTime={course.sourceUpdatedAt} suppressHydrationWarning>
-              {absoluteDate(course.sourceUpdatedAt)}
+              {absoluteDate(intl, course.sourceUpdatedAt)}
             </time>
           </p>
         )}
@@ -131,7 +134,7 @@ async function RelatedCourses({ course }: { course: CourseDetail }) {
     <section aria-labelledby="related-courses" className="flex flex-col gap-4 border-t border-line pt-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 id="related-courses" className="text-h2 text-ink max-sm:text-h3">
-          More in {topic.name}
+          <T vars={{ name: topic.name }}>{"More in {name}"}</T>
         </h2>
         <Link href={`/learning?topic=${encodeURIComponent(topic.slug)}#courses`} className="flex items-center gap-1 rounded-sm text-sm font-medium text-primary-light hover:underline">
           See all {topic.name} courses

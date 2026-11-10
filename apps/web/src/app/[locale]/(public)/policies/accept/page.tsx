@@ -7,8 +7,12 @@ import { LoadError } from "@/components/account/load-error";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { safeNext } from "@/components/auth/destinations";
 import { apiGet, getViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Review our updated policies", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Review our updated policies"), robots: { index: false } };
+}
 
 async function AcceptWithSession({ searchParams }: Pick<PageProps<"/[locale]/policies/accept">, "searchParams">) {
   const raw = (await searchParams).next;

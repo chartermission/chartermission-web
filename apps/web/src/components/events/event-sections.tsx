@@ -6,6 +6,7 @@ import { Avatar, Icon, Panel, cn } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { dayKey, formatClock, formatDay, formatLongDay, formatRange, sameWallClock, zoneAbbreviation, zoneCity } from "./time";
 import { useViewerZone } from "./use-viewer-zone";
+import { T, useIntlTag } from "@/i18n/client";
 
 /* Read-only sections of the event page: when, speakers, agenda, where. */
 
@@ -23,6 +24,7 @@ export function SectionHeading({ id, children, aside }: { id: string; children: 
 /** Date and time in the event's zone and, when different, the viewer's. */
 export function WhenBlock({ event }: { event: Pick<EventDetail, "startsAt" | "endsAt" | "timezone"> }) {
   const viewer = useViewerZone();
+  const intl = useIntlTag();
   const differs = viewer && !sameWallClock(viewer, event.timezone, event.startsAt);
   return (
     <div className="flex items-start gap-3">
@@ -30,16 +32,16 @@ export function WhenBlock({ event }: { event: Pick<EventDetail, "startsAt" | "en
         <Icon name="calendar" size={20} />
       </span>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <p className="text-md font-medium text-ink">{formatLongDay(event.startsAt, event.timezone)}</p>
+        <p className="text-md font-medium text-ink">{formatLongDay(event.startsAt, event.timezone, intl)}</p>
         <p className="text-sm text-body">
-          <time dateTime={event.startsAt}>{formatRange(event.startsAt, event.endsAt, event.timezone)}</time>
-          <span className="text-secondary"> · {zoneCity(event.timezone)} time</span>
+          <time dateTime={event.startsAt}>{formatRange(event.startsAt, event.endsAt, event.timezone, intl)}</time>
+          <span className="text-secondary"> <T vars={{ zoneCity: zoneCity(event.timezone) }}>{"· {zoneCity} time"}</T></span>
         </p>
         {differs && viewer && (
           <p className="text-sm text-body">
-            {dayKey(event.startsAt, viewer) !== dayKey(event.startsAt, event.timezone) && `${formatDay(event.startsAt, viewer)}, `}
-            {formatRange(event.startsAt, event.endsAt, viewer)}
-            <span className="text-secondary"> · your time ({zoneCity(viewer)})</span>
+            {dayKey(event.startsAt, viewer) !== dayKey(event.startsAt, event.timezone) && `${formatDay(event.startsAt, viewer, { intl })}, `}
+            {formatRange(event.startsAt, event.endsAt, viewer, intl)}
+            <span className="text-secondary"> <T vars={{ zoneCity: zoneCity(viewer) }}>{"· your time ({zoneCity})"}</T></span>
           </p>
         )}
       </div>
@@ -83,6 +85,7 @@ export function SpeakersGrid({ speakers }: { speakers: EventSpeaker[] }) {
 /** Agenda timeline: each slot in the event's time and the viewer's (CM-EVT-08 keeps it after the event). */
 export function AgendaTimeline({ agenda, timezone }: { agenda: AgendaItem[]; timezone: string }) {
   const viewer = useViewerZone();
+  const intl = useIntlTag();
   const multiDay = agenda.length > 1 && dayKey(agenda[0]!.startsAt, timezone) !== dayKey(agenda[agenda.length - 1]!.startsAt, timezone);
   return (
     <ol className="relative flex flex-col">
@@ -92,7 +95,7 @@ export function AgendaTimeline({ agenda, timezone }: { agenda: AgendaItem[]; tim
         const last = index === agenda.length - 1;
         return (
           <li key={`${item.startsAt}-${index}`} className="flex flex-col">
-            {showDay && <p className="mb-3 text-label uppercase text-secondary">{formatLongDay(item.startsAt, timezone)}</p>}
+            {showDay && <p className="mb-3 text-label uppercase text-secondary">{formatLongDay(item.startsAt, timezone, intl)}</p>}
             <div className="flex gap-4 max-sm:gap-3">
               <div className="flex w-[104px] shrink-0 flex-col items-end pt-0.5 text-end max-sm:w-[76px]">
                 <time dateTime={item.startsAt} className="text-sm font-semibold text-ink">
@@ -100,7 +103,7 @@ export function AgendaTimeline({ agenda, timezone }: { agenda: AgendaItem[]; tim
                   {item.endsAt && <span className="font-normal text-secondary">–{formatClock(item.endsAt, timezone)}</span>}
                 </time>
                 <span className="text-xs text-secondary">{zoneAbbreviation(timezone, item.startsAt)}</span>
-                {differs && viewer && <span className="text-xs text-secondary">{formatClock(item.startsAt, viewer)} yours</span>}
+                {differs && viewer && <span className="text-xs text-secondary"><T vars={{ clock: formatClock(item.startsAt, viewer) }}>{"{clock} yours"}</T></span>}
               </div>
               <div className="relative flex flex-col items-center" aria-hidden="true">
                 <span className="mt-1.5 size-2.5 shrink-0 rounded-full border-2 border-accent bg-card" />
@@ -156,7 +159,7 @@ export function WhereBlock({ event, countryName }: { event: Pick<EventDetail, "v
             <Icon name="video" size={20} />
           </span>
           <div className="flex min-w-0 flex-col gap-0.5">
-            <p className="text-md font-medium text-ink">Online · {event.online.platform}</p>
+            <p className="text-md font-medium text-ink"><T vars={{ platform: event.online.platform }}>{"Online · {platform}"}</T></p>
             <p className="text-sm text-secondary">
               {event.past
                 ? "The online session has ended."

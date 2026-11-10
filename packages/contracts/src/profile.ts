@@ -19,6 +19,9 @@ export const ProfileField = z.enum([
   "interests",
   "languages",
   "experience",
+  /** The intro video and the résumé at the top of the profile. */
+  "introVideo",
+  "resume",
   /** Who can open the lists of this member's connections, followers and the members they follow. */
   "network",
 ]);
@@ -40,11 +43,51 @@ export const DEFAULT_FIELD_VISIBILITY: Record<ProfileField, FieldVisibility> = {
   interests: "members",
   languages: "members",
   experience: "members",
+  introVideo: "members",
+  // A résumé carries contact details: connections only until the member chooses otherwise.
+  resume: "connections",
   network: "members",
 };
 
 export const ProfileLink = z.object({ label: z.string().max(40), url: z.string().url().max(300) });
 export type ProfileLink = z.infer<typeof ProfileLink>;
+export const PROFILE_LINKS_MAX = 10;
+
+/**
+ * Networks members commonly link to. Used to offer a ready-made row in the profile editor and to
+ * name a link from its address on the profile ("linkedin.com/in/…" → LinkedIn).
+ */
+export const SOCIAL_NETWORKS = [
+  { key: "linkedin", label: "LinkedIn", hosts: ["linkedin.com"], example: "https://www.linkedin.com/in/your-name" },
+  { key: "x", label: "X (Twitter)", hosts: ["x.com", "twitter.com"], example: "https://x.com/your-name" },
+  { key: "facebook", label: "Facebook", hosts: ["facebook.com", "fb.com"], example: "https://www.facebook.com/your-name" },
+  { key: "instagram", label: "Instagram", hosts: ["instagram.com"], example: "https://www.instagram.com/your-name" },
+  { key: "youtube", label: "YouTube", hosts: ["youtube.com", "youtu.be"], example: "https://www.youtube.com/@your-channel" },
+  { key: "tiktok", label: "TikTok", hosts: ["tiktok.com"], example: "https://www.tiktok.com/@your-name" },
+  { key: "github", label: "GitHub", hosts: ["github.com"], example: "https://github.com/your-name" },
+  { key: "whatsapp", label: "WhatsApp", hosts: ["wa.me", "whatsapp.com"], example: "https://wa.me/234800000000" },
+  { key: "telegram", label: "Telegram", hosts: ["t.me", "telegram.me"], example: "https://t.me/your-name" },
+] as const;
+export type SocialNetwork = (typeof SOCIAL_NETWORKS)[number];
+
+/** The network a link points to, from its address; null for any other site. */
+export function socialNetworkOf(url: string): SocialNetwork | null {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+  return SOCIAL_NETWORKS.find((n) => n.hosts.some((h) => host === h || host.endsWith(`.${h}`))) ?? null;
+}
+
+/** A member's intro video, once it has been converted and checked. */
+export const ProfileVideo = z.object({ url: z.string(), posterUrl: z.string().nullable(), durationSeconds: z.number().nullable() });
+export type ProfileVideo = z.infer<typeof ProfileVideo>;
+
+/** A member's résumé (PDF). */
+export const ProfileResume = z.object({ url: z.string(), name: z.string(), sizeBytes: z.number().int() });
+export type ProfileResume = z.infer<typeof ProfileResume>;
 
 export const ExperienceItem = z.object({
   id: z.string().uuid().optional(),
@@ -92,6 +135,8 @@ export const MemberProfile = MemberRef.extend({
   organisation: z.string().optional(),
   website: z.string().optional(),
   links: z.array(ProfileLink).optional(),
+  introVideo: ProfileVideo.optional(),
+  resume: ProfileResume.optional(),
   skills: z.array(TaxonomyItem).optional(),
   sectors: z.array(TaxonomyItem).optional(),
   interests: z.array(TaxonomyItem).optional(),
@@ -119,6 +164,9 @@ export const OwnProfile = z.object({
   organisation: z.string().nullable(),
   website: z.string().nullable(),
   links: z.array(ProfileLink),
+  /** With the file id, so the editor can keep or replace it. Null when there is none. */
+  introVideo: ProfileVideo.extend({ fileId: z.string().uuid() }).nullable(),
+  resume: ProfileResume.extend({ fileId: z.string().uuid() }).nullable(),
   skills: z.array(TaxonomyItem),
   sectors: z.array(TaxonomyItem),
   interests: z.array(TaxonomyItem),
@@ -153,7 +201,7 @@ export const UpdateProfileInput = z
     bio: z.string().trim().max(2000).nullable(),
     organisation: z.string().trim().max(120).nullable(),
     website: z.string().trim().url().max(300).nullable(),
-    links: z.array(ProfileLink).max(6),
+    links: z.array(ProfileLink).max(PROFILE_LINKS_MAX),
     skillIds: z.array(z.string()).max(30),
     sectorIds: z.array(z.string()).max(10),
     interestIds: z.array(z.string()).max(20),
@@ -162,6 +210,10 @@ export const UpdateProfileInput = z
     avatarFileId: z.string().uuid().nullable(),
     /** A clean profile_cover upload of the member's own, or null to remove it. */
     coverFileId: z.string().uuid().nullable(),
+    /** A finished profile_video upload of the member's own, or null to remove it. */
+    introVideoFileId: z.string().uuid().nullable(),
+    /** A checked profile_resume upload (PDF) of the member's own, or null to remove it. */
+    resumeFileId: z.string().uuid().nullable(),
   })
   .partial();
 export type UpdateProfileInput = z.infer<typeof UpdateProfileInput>;

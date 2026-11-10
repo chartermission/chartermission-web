@@ -8,8 +8,12 @@ import { ApplicantsView } from "@/components/opportunities/applicants-view";
 import { requireClientViewer } from "@/components/social/data";
 import { PanelSkeleton } from "@/components/social/skeletons";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Applicants" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Applicants") };
+}
 
 async function Applicants({ params }: Pick<PageProps<"/[locale]/opportunities/[slug]/applicants">, "params">) {
   const { slug } = await params;

@@ -5,6 +5,7 @@ import { ResendVerificationInput } from "@chartermission/contracts";
 import { Button, cn } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { Field, FormAlert, describedBy, inputClasses, retryMessage } from "./fields";
+import { useT } from "@/i18n/client";
 
 const COOLDOWN_SECONDS = 30;
 
@@ -32,6 +33,7 @@ export function ResendVerification({
   className?: string;
   onSent?: () => void;
 }) {
+  const t = useT();
   const id = useId();
   const [email, setEmail] = useState(knownEmail ?? "");
   const [emailError, setEmailError] = useState<string | undefined>();
@@ -65,14 +67,14 @@ export function ResendVerification({
       setStatus({
         tone: "success",
         text: body.email
-          ? `If ${body.email} needs verifying, a new link is on its way. Links expire after 24 hours.`
+          ? t("If {email} needs verifying, a new link is on its way. Links expire after 24 hours.", { email: body.email })
           : "A new verification link is on its way. Links expire after 24 hours.",
       });
       setCooldown(COOLDOWN_SECONDS);
       onSent?.();
     } catch (error) {
       if (isApiError(error, "RATE_LIMITED")) {
-        setStatus({ tone: "error", text: retryMessage(error.retryAfter, "You’ve asked for several links in the last hour.") });
+        setStatus({ tone: "error", text: retryMessage(t, error.retryAfter, "You’ve asked for several links in the last hour.") });
         setCooldown(error.retryAfter && error.retryAfter < 3600 ? error.retryAfter : COOLDOWN_SECONDS);
       } else if (isApiError(error) && error.fields?.email) {
         setEmailError(error.fields.email);
@@ -94,7 +96,7 @@ export function ResendVerification({
       aria-busy={sending || undefined}
       className={cn(askEmail && "w-full")}
     >
-      {sending ? "Sending…" : cooldown > 0 && status?.tone === "success" ? `Sent · resend in ${cooldown}s` : label}
+      {sending ? "Sending…" : cooldown > 0 && status?.tone === "success" ? t("Sent · resend in {cooldown}s", { cooldown }) : label}
     </Button>
   );
 

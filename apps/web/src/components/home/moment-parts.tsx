@@ -1,22 +1,21 @@
 import type { MemberRef } from "@chartermission/contracts";
 import { Avatar, cn } from "@chartermission/ui";
+import { countryNameOf } from "@/i18n/places";
 
-const regionNames = typeof Intl !== "undefined" && "DisplayNames" in Intl ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
-
-/** "NG" → "Nigeria" (falls back to the code). */
-export function countryName(code: string | null | undefined): string | null {
-  if (!code) return null;
-  try {
-    return regionNames?.of(code.toUpperCase()) ?? code;
-  } catch {
-    return code;
-  }
+/** "NG" → "Nigeria" in the page language (falls back to the code). */
+export function countryName(code: string | null | undefined, intl = "en-GB"): string | null {
+  return countryNameOf(code, intl);
 }
 
-const words = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const wordsCache = new Map<string, Intl.RelativeTimeFormat>();
 
-/** "today", "yesterday", "3 days ago", "2 weeks ago". */
-export function daysAgo(iso: string, now = Date.now()): string {
+/** "today", "yesterday", "3 days ago", "2 weeks ago", in the page language. */
+export function daysAgo(iso: string, intl = "en-GB", now = Date.now()): string {
+  let words = wordsCache.get(intl);
+  if (!words) {
+    words = new Intl.RelativeTimeFormat(intl, { numeric: "auto" });
+    wordsCache.set(intl, words);
+  }
   const days = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 86_400_000));
   if (days < 14) return words.format(-days, "day");
   return words.format(-Math.floor(days / 7), "week");

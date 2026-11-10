@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
+  PROFILE_LINKS_MAX,
+  SOCIAL_NETWORKS,
   UpdateProfileInput,
+  socialNetworkOf,
   type ExperienceItem,
   type OwnProfile,
   type ProfileLink,
@@ -20,6 +23,7 @@ import { Field, describedBy, inputClasses } from "@/components/auth/fields";
 import { ChipPicker } from "@/components/onboarding/chip-picker";
 import { SaveBar } from "./save-bar";
 import { SettingsCard } from "./settings-card";
+import { T, useT } from "@/i18n/client";
 
 type Draft = {
   name: string;
@@ -122,6 +126,7 @@ export function ProfileForm({
   countryGroups: CountryGroup[];
   tone: AvatarTone;
 }) {
+  const t = useT();
   const id = useId();
   const router = useRouter();
   const [saved, setSaved] = useState<Draft>(() => draftFrom(profile));
@@ -245,7 +250,7 @@ export function ProfileForm({
         <p className="text-sm text-secondary">
           {completeness.missing.length === 0
             ? "Your profile is complete. Members can see who you are and what you work on."
-            : `Add ${completeness.missing.map((key) => missingLabels[key] ?? key).join(", ")} to help members find you.`}
+            : t("Add {fields} to help members find you.", { fields: completeness.missing.map((key) => t(missingLabels[key] ?? key)).join(", ") })}
         </p>
       </Panel>
 
@@ -302,11 +307,26 @@ export function ProfileForm({
         </Field>
       </Section>
 
-      <Section id="links" title="Links" description="Professional and social links, up to 6.">
-        {draft.links.length === 0 && <p className="text-sm text-secondary">No links yet.</p>}
+      <Section id="links" title="Social and professional links" description={t("Your LinkedIn, X, Instagram and other pages, shown on your profile. Up to {PROFILELINKSMAX}.", { PROFILELINKSMAX: PROFILE_LINKS_MAX })}>
+        {draft.links.length === 0 && <p className="text-sm text-secondary">No links yet. Pick a network to add yours.</p>}
+        {draft.links.length < PROFILE_LINKS_MAX && (
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Add a link">
+            {SOCIAL_NETWORKS.filter((network) => !draft.links.some((link) => socialNetworkOf(link.url)?.key === network.key || link.label.trim().toLowerCase() === network.label.toLowerCase())).map((network) => (
+              <button
+                key={network.key}
+                type="button"
+                onClick={() => update({ links: [...draft.links, { label: network.label, url: "" }] })}
+                className="flex items-center gap-1 rounded-full border border-line-strong px-3 py-1 text-sm text-body hover:bg-muted"
+              >
+                <Icon name="plus" size={14} />
+                {network.label}
+              </button>
+            ))}
+          </div>
+        )}
         {draft.links.map((link, index) => (
           <fieldset key={index} className="grid grid-cols-[160px_1fr_auto] items-start gap-2 max-sm:grid-cols-[1fr_auto]">
-            <legend className="sr-only">Link {index + 1}</legend>
+            <legend className="sr-only"><T vars={{ count: index + 1 }}>{"Link {count}"}</T></legend>
             <div className="flex flex-col gap-1 max-sm:col-span-2">
               <label htmlFor={`${id}-link-${index}-label`} className="sr-only">
                 Label
@@ -330,7 +350,8 @@ export function ProfileForm({
               <input
                 id={`${id}-link-${index}-url`}
                 type="url"
-                placeholder="https://"
+                placeholder={SOCIAL_NETWORKS.find((network) => network.label.toLowerCase() === link.label.trim().toLowerCase())?.example ?? "https://"}
+                dir="ltr"
                 value={link.url}
                 onChange={(e) => update({ links: draft.links.map((l, i) => (i === index ? { ...l, url: e.target.value } : l)) })}
                 aria-invalid={err(`links.${index}.url`) ? true : undefined}
@@ -346,14 +367,14 @@ export function ProfileForm({
             <Button
               variant="ghost"
               className="h-11"
-              aria-label={`Remove link ${index + 1}`}
+              aria-label={t("Remove link {count}", { count: index + 1 })}
               onClick={() => update({ links: draft.links.filter((_, i) => i !== index) })}
             >
               <Icon name="x" size={16} />
             </Button>
           </fieldset>
         ))}
-        {draft.links.length < 6 && (
+        {draft.links.length < PROFILE_LINKS_MAX && (
           <Button
             variant="secondary"
             size="small"
@@ -361,7 +382,7 @@ export function ProfileForm({
             onClick={() => update({ links: [...draft.links, { label: "", url: "" }] })}
           >
             <Icon name="plus" size={14} />
-            Add link
+            Add another link
           </Button>
         )}
       </Section>
@@ -411,8 +432,8 @@ export function ProfileForm({
             <fieldset key={item.id ?? `new-${index}`} className="flex flex-col gap-3 rounded-lg border border-line p-4">
               <legend className="px-1 text-sm font-medium text-ink">
                 {item.title || item.organisation
-                  ? `${item.title || "Role"}${item.organisation ? ` · ${item.organisation}` : ""}`
-                  : `Role ${index + 1}`}
+                  ? `${item.title || t("Role")}${item.organisation ? ` · ${item.organisation}` : ""}`
+                  : t("Role {count}", { count: index + 1 })}
               </legend>
               <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
                 <Field id={`${id}-${key("title")}`} label="Title" error={err(key("title"))}>

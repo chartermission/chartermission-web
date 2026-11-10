@@ -103,6 +103,7 @@ export const ar: Localized = {
     drafts: "المسودات",
     analytics: "الإحصاءات",
     alerts: "التنبيهات",
+    messages: "الرسائل",
   },
   public: {
     signIn: "تسجيل الدخول",

@@ -1,5 +1,6 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { Icon, chipClasses, cn } from "@chartermission/ui";
+import { useT } from "@/i18n/client";
 
 /*
  * Form controls for the directory filter panels (Figma Opportunities 10:977,
@@ -89,7 +90,7 @@ export function SelectField({
           </option>
         ))}
       </select>
-      <Icon name="chevron-down" size={16} className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-secondary" />
+      <Icon name="chevron-down" size={16} className="pointer-events-none absolute end-3 inset-y-0 my-auto h-fit text-secondary" />
     </label>
   );
 }
@@ -144,10 +145,11 @@ export function ToggleChip({
 
 /** Removable active-filter pill ("Jobs ✕"). */
 export function RemovableChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  const t = useT();
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-tint py-[5px] ps-3 pe-2 text-sm font-medium text-primary">
       {label}
-      <button type="button" onClick={onRemove} aria-label={`Remove filter: ${label}`} className="rounded-full hover:bg-primary/10">
+      <button type="button" onClick={onRemove} aria-label={t("Remove filter: {label}", { label })} className="rounded-full hover:bg-primary/10">
         <Icon name="x" size={14} />
       </button>
     </span>

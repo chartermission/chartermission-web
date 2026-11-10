@@ -16,12 +16,15 @@ import { relativeTime } from "@/components/social/format";
 import { toast } from "@/components/social/toast";
 import { api, isApiError } from "@/lib/api/client";
 import { SaveOpportunityButton, applicationTone } from "./opportunity-card";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 /**
  * The listing's action panel. Applicants: apply with a note, see their status, withdraw.
  * Poster: applicants link, edit, close or reopen, delete.
  */
 export function OpportunityActions({ opportunity: initial }: { opportunity: OpportunityDetail }) {
+  const intl = useIntlTag();
+  const t = useT();
   const router = useRouter();
   const [o, setO] = useState(initial);
   const [note, setNote] = useState("");
@@ -37,7 +40,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
     event.preventDefault();
     const trimmed = note.trim();
     if (trimmed.length < OPPORTUNITY_LIMITS.noteMin) {
-      setNoteError(`Tell the poster why you’re a fit in at least ${OPPORTUNITY_LIMITS.noteMin} characters`);
+      setNoteError(t("Tell the poster why you’re a fit in at least {noteMin} characters", { noteMin: OPPORTUNITY_LIMITS.noteMin }));
       document.getElementById("apply-note")?.focus();
       return;
     }
@@ -74,7 +77,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
       <Panel className="flex flex-col gap-4 p-5">
         <h2 className="text-h3 text-ink">Your listing</h2>
         <p className="text-sm text-secondary">
-          {o.applicationCount} {o.applicationCount === 1 ? "applicant" : "applicants"} · posted {relativeTime(o.createdAt)}
+          {o.applicationCount} {o.applicationCount === 1 ? "applicant" : "applicants"} · posted {relativeTime(intl, t, o.createdAt)}
         </p>
         {o.moderationState !== "visible" && (
           <p className="flex items-start gap-2 rounded-lg bg-error-light p-3 text-sm text-body">
@@ -127,7 +130,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone={applicationTone[activeApp.status]}>{APPLICATION_STATUS_LABELS[activeApp.status]}</Chip>
-            <span className="text-xs text-secondary">Sent {relativeTime(activeApp.createdAt)}</span>
+            <span className="text-xs text-secondary"><T vars={{ time: relativeTime(intl, t, activeApp.createdAt) }}>{"Sent {time}"}</T></span>
           </div>
           <blockquote className="whitespace-pre-line rounded-lg bg-muted p-3 text-sm text-body">{activeApp.note}</blockquote>
           <p className="text-xs text-secondary">
@@ -147,7 +150,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
         applying ? (
           <form onSubmit={apply} noValidate className="flex flex-col gap-3">
             <label htmlFor="apply-note" className="text-sm font-medium text-ink">
-              Note to {o.poster.name}
+              <T vars={{ name: o.poster.name }}>{"Note to {name}"}</T>
             </label>
             <textarea
               id="apply-note"
@@ -167,7 +170,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
               )}
             />
             <p id="apply-note-help" className={cn("text-xs", noteError ? "text-error" : "text-secondary")}>
-              {noteError ?? `Your profile goes with your note. ${note.length} / ${OPPORTUNITY_LIMITS.note}`}
+              {noteError ?? t("Your profile goes with your note. {count} / {note}", { count: note.length, note: OPPORTUNITY_LIMITS.note })}
             </p>
             {error ? <ErrorNotice error={error} /> : null}
             <div className="flex gap-2">
@@ -181,7 +184,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
           </form>
         ) : (
           <>
-            <p className="text-sm text-secondary">Apply with your Charter Mission profile and a short note. Only {o.poster.name} sees your application.</p>
+            <p className="text-sm text-secondary"><T vars={{ name: o.poster.name }}>{"Apply with your Charter Mission profile and a short note. Only {name} sees your application."}</T></p>
             <Button block onClick={() => setApplying(true)}>
               {app?.status === "withdrawn" ? "Apply again" : "Apply now"}
             </Button>

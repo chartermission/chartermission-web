@@ -7,6 +7,7 @@ import { api } from "@/lib/api/client";
 import { burst, pop } from "@/components/motion";
 import { reactionKinds, reactionMeta } from "./reaction-meta";
 import { toast } from "./toast";
+import { useT } from "@/i18n/client";
 
 export { reactionKinds, reactionMeta };
 
@@ -63,6 +64,7 @@ export function ReactionButton({
   /** The viewer added or switched to `kind` (not called on removal), e.g. for confetti. */
   onReacted?: (kind: ReactionKind) => void;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const iconRef = useRef<HTMLSpanElement>(null);
@@ -185,7 +187,7 @@ export function ReactionButton({
       {open && (
         <div
           role="group"
-          aria-label={`React to ${subject}`}
+          aria-label={t("React to {subject}", { subject })}
           className={cn(
             "reaction-float absolute bottom-full start-0 z-30 flex items-center rounded-full border border-line bg-card shadow-[0_8px_24px_rgb(15_42_42/0.16)]",
             compact ? "mb-1.5 gap-1 p-1" : "mb-2 gap-1.5 p-1.5",
@@ -199,7 +201,7 @@ export function ReactionButton({
                 key={kind}
                 type="button"
                 aria-pressed={active}
-                aria-label={active ? `Remove ${meta.label}` : meta.label}
+                aria-label={active ? t("Remove {label}", { label: meta.label }) : meta.label}
                 onClick={() => choose(kind)}
                 style={{ animationDelay: `${index * 45}ms` }}
                 className={cn(

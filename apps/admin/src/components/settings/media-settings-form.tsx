@@ -11,6 +11,7 @@ type Field = { key: keyof MediaSettings; label: string; note: string; min: numbe
 const FIELDS: Field[] = [
   { key: "postVideoMaxSeconds", label: "Feed post videos", note: "Longest video a member can upload to a post.", min: 10, max: 3600 },
   { key: "storyVideoMaxSeconds", label: "Story videos", note: "Longest video in a story.", min: 5, max: 180 },
+  { key: "introVideoMaxSeconds", label: "Profile intro videos", note: "Longest intro video a member can put on their profile.", min: 10, max: 900 },
 ];
 
 /**
@@ -22,6 +23,7 @@ export function MediaSettingsForm({ initial }: { initial: MediaSettings }) {
   const [draft, setDraft] = useState<Record<keyof MediaSettings, string>>({
     postVideoMaxSeconds: String(initial.postVideoMaxSeconds),
     storyVideoMaxSeconds: String(initial.storyVideoMaxSeconds),
+    introVideoMaxSeconds: String(initial.introVideoMaxSeconds),
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

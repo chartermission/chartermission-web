@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { usePathname } from "@/i18n/client";
+import { usePathname, useT, useIntlTag } from "@/i18n/client";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { EVENT_FORMAT_LABELS, EventFormat, type EventCategory, type EventSummary, type Page } from "@chartermission/contracts";
 import { FilterSelect, Icon, buttonClasses, cn, type IconName } from "@chartermission/ui";
@@ -34,10 +34,10 @@ const whenTabs: { value: EventFilters["when"]; label: string }[] = [
 const PREFETCH_MARGIN = "0px 0px 800px 0px";
 
 /** Cards grouped under month headings in the viewer's zone. */
-function groupByMonth(events: EventSummary[], zone: string | null) {
+function groupByMonth(events: EventSummary[], zone: string | null, intl: string) {
   const groups: { key: string; label: string; events: EventSummary[] }[] = [];
   for (const event of events) {
-    const label = monthHeading(event.startsAt, zone ?? event.timezone);
+    const label = monthHeading(event.startsAt, zone ?? event.timezone, intl);
     const last = groups[groups.length - 1];
     if (last?.label === label) last.events.push(event);
     else groups.push({ key: `${label}-${groups.length}`, label, events: [event] });
@@ -47,6 +47,8 @@ function groupByMonth(events: EventSummary[], zone: string | null) {
 
 /** Cursor-paginated list for one filter set. Remounted (keyed) when the filters change. */
 function EventList({ initial, filters, excludeId, onReset }: { initial: Page<EventSummary>; filters: EventFilters; excludeId: string | null; onReset: () => void }) {
+  const t = useT();
+  const intl = useIntlTag();
   const zone = useViewerZone();
   const [events, setEvents] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
@@ -72,7 +74,7 @@ function EventList({ initial, filters, excludeId, onReset }: { initial: Page<Eve
         });
         setAdded((current) => ({ ...current, ...Object.fromEntries(page.items.map((e, order) => [e.id, order])) }));
         setCursor(page.nextCursor);
-        setAnnouncement(`${page.items.length} more events loaded.${page.nextCursor ? "" : " That’s every event."}`);
+        setAnnouncement(`${t("{count} more events loaded.", { count: page.items.length })}${page.nextCursor ? "" : ` ${t("That’s every event.")}`}`);
       } catch (e) {
         setError(e);
         setAnnouncement("");
@@ -81,7 +83,7 @@ function EventList({ initial, filters, excludeId, onReset }: { initial: Page<Eve
         setLoading(false);
       }
     },
-    [filters],
+    [filters, t],
   );
 
   useEffect(() => {
@@ -94,8 +96,8 @@ function EventList({ initial, filters, excludeId, onReset }: { initial: Page<Eve
 
   const visible = useMemo(() => events.filter((e) => e.id !== excludeId), [events, excludeId]);
   const groups = useMemo(
-    () => (filters.when === "past" ? (visible.length ? [{ key: "past", label: "Past events", events: visible }] : []) : groupByMonth(visible, zone)),
-    [visible, zone, filters.when],
+    () => (filters.when === "past" ? (visible.length ? [{ key: "past", label: "Past events", events: visible }] : []) : groupByMonth(visible, zone, intl)),
+    [visible, zone, intl, filters.when],
   );
 
   if (!visible.length && !excludeId) {

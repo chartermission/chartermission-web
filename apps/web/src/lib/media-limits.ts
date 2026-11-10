@@ -3,7 +3,7 @@
 import type { MediaSettings } from "@chartermission/contracts";
 import { api } from "@/lib/api/client";
 
-const FALLBACK: MediaSettings = { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60 };
+const FALLBACK: MediaSettings = { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60, introVideoMaxSeconds: 300 };
 let cached: Promise<MediaSettings> | null = null;
 
 /** Video length limits set by admins (GET /uploads/limits), fetched once per page load. */

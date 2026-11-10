@@ -5,7 +5,8 @@ import type { PostView } from "./social.js";
 /*
  * Chapters (one per country). Members join a chapter by following it. Serving Ambassadors
  * and Chapter Leads run the chapter page: they host events as the chapter, pin up to three
- * posts and edit the About text.
+ * posts, edit the About text and moderate the chapter (approve, hold or remove posts, bar
+ * members from the chapter and report fraud to the platform team).
  */
 
 /** Most posts a chapter can pin at once. */
@@ -42,6 +43,10 @@ export type ChapterDetail = ChapterSummary & {
   team: ChapterTeamMember[];
   /** Pinned posts, newest pin first (at most CHAPTER_PIN_LIMIT). */
   pinned: PostView[];
+  /** Who pinned each post and when. Only for the chapter team; empty for everyone else. */
+  pins: ChapterPin[];
+  /** "review": members' posts wait for the chapter team's approval before they appear here. */
+  postApproval: ChapterPostApproval;
   /** Newest followers, for the header and Members preview. */
   recentMembers: MemberRef[];
   /** Other active chapters in the same region. */
@@ -53,8 +58,57 @@ export type ChapterDetail = ChapterSummary & {
     canManage: boolean;
     /** Can propose an event hosted by this chapter. */
     canHostAsChapter: boolean;
+    /** Barred from this chapter by its team: can read it, but can't join or post. */
+    banned: boolean;
   };
+  /** For the chapter team: posts waiting for approval and members barred. Null for everyone else. */
+  moderation: { pendingPosts: number; bannedMembers: number } | null;
 };
+
+export const ChapterPostApproval = z.enum(["direct", "review"]);
+export type ChapterPostApproval = z.infer<typeof ChapterPostApproval>;
+
+export type ChapterPin = { postId: string; pinnedBy: MemberRef | null; pinnedAt: string };
+
+/** Platform setting (GET/PUT /admin/settings/chapter-posts): the rule for chapters that don't set their own. */
+export const ChapterPostsSettings = z.object({ approval: ChapterPostApproval });
+export type ChapterPostsSettings = z.infer<typeof ChapterPostsSettings>;
+export const CHAPTER_POSTS_DEFAULTS: ChapterPostsSettings = { approval: "direct" };
+
+export const CHAPTER_NOTE_MAX_CHARS = 500;
+const ReviewNote = z.string().trim().max(CHAPTER_NOTE_MAX_CHARS, `Keep it under ${CHAPTER_NOTE_MAX_CHARS} characters`);
+
+/**
+ * POST /chapters/{slug}/posts/{postId}/review — the chapter team's decision on a post.
+ * approve: show it in the chapter. decline: turn down a waiting post. hold: take a live post back
+ * for review. remove: take a live post out of the chapter for good. A note is sent to the author.
+ */
+export const ChapterPostReviewInput = z.object({
+  action: z.enum(["approve", "decline", "hold", "remove"]),
+  note: ReviewNote.optional(),
+});
+export type ChapterPostReviewInput = z.infer<typeof ChapterPostReviewInput>;
+
+/** GET /chapters/{slug}/review — posts waiting for approval, oldest first. */
+export type ChapterReviewQueue = { items: PostView[] };
+
+/** POST /chapters/{slug}/bans */
+export const ChapterBanInput = z.object({ userId: z.string().uuid(), reason: ReviewNote.optional() });
+export type ChapterBanInput = z.infer<typeof ChapterBanInput>;
+
+/** GET /chapters/{slug}/bans */
+export type ChapterBan = { member: MemberRef; bannedBy: MemberRef | null; reason: string | null; createdAt: string };
+
+/**
+ * POST /chapters/{slug}/fraud-reports — the chapter team flags a post or a member to the platform's
+ * moderators as suspected fraud. It joins the moderation queue at high priority.
+ */
+export const ChapterFraudReportInput = z.object({
+  targetType: z.enum(["post", "member"]),
+  targetId: z.string().uuid(),
+  detail: z.string().trim().min(10, "Say what makes you suspect fraud (at least 10 characters)").max(1000),
+});
+export type ChapterFraudReportInput = z.infer<typeof ChapterFraudReportInput>;
 
 /** POST /chapters/{slug}/pins */
 export const PinChapterPostInput = z.object({ postId: z.string().uuid() });

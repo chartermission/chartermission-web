@@ -3,6 +3,9 @@ import type { LearningAccess, LearningRequirement } from "@chartermission/contra
 import { Chip, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
 import { PageShell } from "@/components/discover/page-shell";
 import { BrandPattern } from "@/components/illustrations";
+import { T } from "@/i18n/client";
+import { getT } from "@/i18n/server";
+import type { Translate } from "@/i18n/translate";
 
 const ACTION: Record<LearningRequirement["key"], string> = {
   profile_info: "Edit profile",
@@ -13,14 +16,35 @@ const ACTION: Record<LearningRequirement["key"], string> = {
   connections: "Find people",
 };
 
-function detail(r: LearningRequirement): string | null {
-  if (r.key === "profile_info" && !r.done && r.missing?.length) return `Still to add: ${r.missing.join(", ")}.`;
-  if (r.target > 1) return `${r.current.toLocaleString("en-US")} of ${r.target.toLocaleString("en-US")}`;
+/** The requirement in the page language (the API sends English). */
+function title(t: Translate, r: LearningRequirement): string {
+  switch (r.key) {
+    case "profile_info":
+      return t("Fill in your profile");
+    case "photo":
+      return t("Add a profile photo");
+    case "cover_photo":
+      return t("Add a cover photo");
+    case "chapter":
+      return t("Join a chapter");
+    case "posts":
+      return r.target === 1 ? t("Share your first post") : t("Share {count} posts", { count: r.target });
+    case "connections":
+      return t("Connect with {count} members", { count: r.target });
+    default:
+      return r.label;
+  }
+}
+
+function detail(t: Translate, r: LearningRequirement): string | null {
+  if (r.key === "profile_info" && !r.done && r.missing?.length) return t("Still to add: {list}.", { list: r.missing.map((field) => t(field)).join(", ") });
+  if (r.target > 1) return t("{current} of {target}", { current: r.current, target: r.target });
   return null;
 }
 
-function Requirement({ r }: { r: LearningRequirement }) {
-  const extra = detail(r);
+async function Requirement({ r }: { r: LearningRequirement }) {
+  const t = await getT();
+  const extra = detail(t, r);
   const counted = r.target > 1;
   return (
     <li className="flex items-center gap-4 px-5 py-4 max-sm:px-4">
@@ -35,8 +59,8 @@ function Requirement({ r }: { r: LearningRequirement }) {
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className={cn("text-md font-medium", r.done ? "text-secondary line-through decoration-1" : "text-ink")}>
-          {r.label}
-          <span className="sr-only">{r.done ? " (done)" : " (to do)"}</span>
+          {title(t, r)}
+          <span className="sr-only">{r.done ? ` (${t("done")})` : ` (${t("to do")})`}</span>
         </span>
         {extra && !r.done && <span className="text-sm text-secondary">{extra}</span>}
         {counted && !r.done && (
@@ -55,7 +79,8 @@ function Requirement({ r }: { r: LearningRequirement }) {
 }
 
 /** Shown instead of Learning until the member meets the admin-set unlock rules (GET /learning/access). */
-export function LockedLearning({ access }: { access: LearningAccess }) {
+export async function LockedLearning({ access }: { access: LearningAccess }) {
+  const t = await getT();
   const total = access.requirements.length;
   const done = access.requirements.filter((r) => r.done).length;
   const percent = total ? Math.round((done / total) * 100) : 0;
@@ -88,13 +113,13 @@ export function LockedLearning({ access }: { access: LearningAccess }) {
               aria-valuemin={0}
               aria-valuemax={total}
               aria-valuenow={done}
-              aria-valuetext={`${done} of ${total} steps done`}
+              aria-valuetext={t("{done} of {total} steps done", { done, total })}
               className="h-2 w-full max-w-[320px] overflow-hidden rounded-full bg-inverse/20"
             >
               <span className="block h-full rounded-full bg-inverse" style={{ width: `${percent}%` }} />
             </span>
             <span className="text-sm font-medium text-inverse">
-              {done} of {total} done
+              <T vars={{ done, count: total }}>{"{done} of {count} done"}</T>
             </span>
           </div>
         </div>

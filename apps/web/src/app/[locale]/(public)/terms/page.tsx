@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PolicyPage } from "@/components/public/policy-page";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Terms of Use", description: "The terms for using Charter Mission." };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Terms of Use"), description: t("The terms for using Charter Mission.") };
+}
 
 export default function TermsPage() {
   return (

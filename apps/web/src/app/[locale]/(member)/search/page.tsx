@@ -11,10 +11,15 @@ import { requireClientViewer } from "@/components/social/data";
 import { topicHref } from "@/components/social/links";
 import { EmptyState, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Search" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Search") };
+}
 
 async function SearchResults({ searchParams }: { searchParams: PageProps<"/[locale]/search">["searchParams"] }) {
+  const t = await getT();
   const sp = await searchParams;
   const q = (Array.isArray(sp.q) ? sp.q[0] : sp.q)?.trim().slice(0, 100) ?? "";
   await requireClientViewer(`/search?q=${encodeURIComponent(q)}`);
@@ -95,7 +100,7 @@ async function SearchResults({ searchParams }: { searchParams: PageProps<"/[loca
       {tags.length === 0 && memberItems.length === 0 && (
         <EmptyState
           icon="search"
-          title={`No results for “${q}”`}
+          title={t("No results for “{term}”", { term: q })}
           actions={
             <Link href="/network?tab=directory" className={buttonClasses({ variant: "secondary", size: "small" })}>
               Browse the directory

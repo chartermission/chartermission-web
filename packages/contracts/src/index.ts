@@ -21,3 +21,4 @@ export * from "./chapters.js";
 export * from "./opportunities.js";
 export * from "./catalogue.js";
 export * from "./pages.js";
+export * from "./messages.js";

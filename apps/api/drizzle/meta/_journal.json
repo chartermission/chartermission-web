@@ -99,6 +99,20 @@
       "when": 1794325741649,
       "tag": "0013_staff_handles_trim_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794334922602,
+      "tag": "0014_chapter_moderation",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794335858174,
+      "tag": "0015_profile_media_messages",
+      "breakpoints": true
     }
   ]
 }

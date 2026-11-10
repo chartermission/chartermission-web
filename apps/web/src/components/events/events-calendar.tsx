@@ -13,6 +13,7 @@ import { apiFilters, type EventFilters } from "./filters";
 import { dateHeading, monthKey, monthLabel, monthOf, monthWeeks, nextDate, shiftMonth, weekdayShort } from "./month-grid";
 import { dayKey, formatClock, fromZonedInput } from "./time";
 import { useViewerZone } from "./use-viewer-zone";
+import { T, useT, useIntlTag } from "@/i18n/client";
 
 const pillTone: Record<EventSummary["format"], string> = {
   online: "bg-info-light text-info",
@@ -24,6 +25,7 @@ type Loaded<T> = { key: string; data: T } | { key: string; error: unknown };
 
 /** Events that start on one day in the viewer's zone (GET /events with from/to). */
 function DayList({ day, zone, filters }: { day: string; zone: string; filters: EventFilters }) {
+  const intl = useIntlTag();
   const key = `${day}|${zone}|${JSON.stringify(apiFilters(filters))}`;
   const [state, setState] = useState<Loaded<EventSummary[]> | null>(null);
   useEffect(() => {
@@ -42,7 +44,7 @@ function DayList({ day, zone, filters }: { day: string; zone: string; filters: E
   return (
     <Panel aria-labelledby="calendar-day-heading" className="flex flex-col">
       <h3 id="calendar-day-heading" className="px-5 pt-4 pb-2 text-h3 text-ink">
-        {dateHeading(day)}
+        {dateHeading(intl, day)}
       </h3>
       <div aria-live="polite">
         {!current ? (
@@ -72,6 +74,8 @@ function DayList({ day, zone, filters }: { day: string; zone: string; filters: E
 
 /** Month grid (GET /events/calendar) bucketed in the viewer's zone, with the selected day's events below. */
 export function EventsCalendar({ filters, onNavigate }: { filters: EventFilters; onNavigate: (patch: Partial<EventFilters>) => void }) {
+  const intl = useIntlTag();
+  const t = useT();
   const zone = useViewerZone();
   const today = zone ? dayKey(new Date(), zone) : null;
   const month = filters.month ? monthOf(filters.month) : today ? monthOf(today) : null;
@@ -94,20 +98,20 @@ export function EventsCalendar({ filters, onNavigate }: { filters: EventFilters;
 
   const current = state?.key === key ? state : null;
   const days = current && "data" in current ? new Map(current.data.days.map((d) => [d.date, d])) : new Map();
-  const label = monthLabel(month);
+  const label = monthLabel(intl, month);
   const selected = filters.day && filters.day.startsWith(monthKey(month)) ? filters.day : null;
   const total = current && "data" in current ? current.data.total : null;
 
   return (
     <div className="flex flex-col gap-5">
-      <Panel aria-label={`Events in ${label}`} className="flex flex-col gap-4 p-5 max-sm:p-3">
+      <Panel aria-label={t("Events in {label}", { label })} className="flex flex-col gap-4 p-5 max-sm:p-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col">
             <h2 className="text-h3 text-ink" aria-live="polite">
               {label}
             </h2>
             <p className="text-xs text-secondary">
-              {total === null ? "Loading…" : `${total} ${total === 1 ? "event" : "events"} · times in your zone (${zone.replace(/_/g, " ")})`}
+              {total === null ? "Loading…" : t("{count} events · times in your zone ({zone})", { count: total, zone: zone.replace(/_/g, " ") })}
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -156,7 +160,7 @@ export function EventsCalendar({ filters, onNavigate }: { filters: EventFilters;
                             type="button"
                             onClick={() => onNavigate({ day: isSelected ? null : date })}
                             aria-pressed={isSelected}
-                            aria-label={`${dateHeading(date)}${count ? `, ${count} ${count === 1 ? "event" : "events"}` : ""}`}
+                            aria-label={(count ? t("{date}, {count} events", { date: dateHeading(intl, date), count }) : dateHeading(intl, date))}
                             className={cn(
                               "flex size-6 items-center justify-center self-start rounded-full text-xs hover:bg-muted max-sm:self-center",
                               isToday ? "bg-primary font-semibold text-inverse hover:bg-primary-light" : "text-secondary",
@@ -186,7 +190,7 @@ export function EventsCalendar({ filters, onNavigate }: { filters: EventFilters;
                           ))}
                           {count > (entry?.events.length ?? 0) && (
                             <button type="button" onClick={() => onNavigate({ day: date })} className="self-start rounded px-1 text-xs font-medium text-primary-light hover:underline max-sm:hidden">
-                              +{count - entry!.events.length} more
+                              <T vars={{ count: count - entry!.events.length }}>{"+{count} more"}</T>
                             </button>
                           )}
                         </div>

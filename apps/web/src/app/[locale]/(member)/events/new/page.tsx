@@ -3,8 +3,12 @@ import { Suspense } from "react";
 import { EventFormLoader, FormShell } from "@/components/events/form-page";
 import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Host an event" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Host an event") };
+}
 
 /** Host flow: create an event (draft → submit for review or publish). */
 export default function NewEventPage() {

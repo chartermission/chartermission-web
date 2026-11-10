@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import type { ChapterDetail, EventSummary, MemberRef, Page, PostView } from "@chartermission/contracts";
 import { ChapterAvatar, ChapterCover, Icon, Panel, buttonClasses, chipClasses, type IconName } from "@chartermission/ui";
 import { ChapterAbout, ChapterFeed, ChapterMembers, InviteButton, JoinChapterButton } from "@/components/chapters/chapter-actions";
+import { ChapterReview } from "@/components/chapters/chapter-moderation";
 import { TabList, TabPanel, Tabs } from "@/components/chapters/tabs";
 import { EventRow } from "@/components/events/event-cards";
 import { RailEventList } from "@/components/events/rail-events";
@@ -12,6 +13,8 @@ import { requireClientViewer } from "@/components/social/data";
 import { AuthorName, MemberAvatar } from "@/components/social/post-parts";
 import { EmptyState } from "@/components/social/skeletons";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
+import { T } from "@/i18n/client";
+import { getT } from "@/i18n/server";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/chapters/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -19,7 +22,6 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/chapters
   return chapter ? { title: chapter.name, description: chapter.about ?? undefined } : { title: "Chapter" };
 }
 
-const numberFormat = new Intl.NumberFormat("en-GB");
 const EMPTY: Page<never> = { items: [], nextCursor: null };
 
 /** Chapter page — Figma "Web / Chapter page" (node 18:2157), on GET /chapters/{slug}. */
@@ -36,7 +38,7 @@ function ChapterSkeleton() {
   return (
     <div aria-busy="true">
       <span className="sr-only">Loading chapter…</span>
-      <div className="h-[175px] bg-gradient-to-r from-primary-dark to-primary-light" />
+      <div className="h-[175px] animate-pulse border-b border-line bg-card" />
       <div className="mx-auto flex w-full max-w-[1240px] gap-6 px-4 pb-12 pt-6">
         <div className="h-[420px] flex-1 animate-pulse rounded-card border border-line bg-card" />
         <div className="hidden h-[420px] w-[400px] animate-pulse rounded-card border border-line bg-card lg:block" />
@@ -46,6 +48,7 @@ function ChapterSkeleton() {
 }
 
 async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]">, "params">) {
+  const t = await getT();
   const slug = (await params).slug.toLowerCase();
   const viewer = await requireClientViewer(`/chapters/${slug}`);
   const chapter = await apiGetOrNull<ChapterDetail>(`/chapters/${encodeURIComponent(slug)}`);
@@ -60,19 +63,21 @@ async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]
 
   const meta: { icon: IconName; label: string }[] = [
     { icon: "map-pin", label: chapter.countryName },
-    { icon: "users", label: `${numberFormat.format(chapter.counts.followers)} ${chapter.counts.followers === 1 ? "member" : "members"}` },
-    { icon: "calendar", label: `${chapter.counts.upcomingEvents} upcoming ${chapter.counts.upcomingEvents === 1 ? "event" : "events"}` },
+    { icon: "users", label: t("{count} members", { count: chapter.counts.followers }) },
+    { icon: "calendar", label: t("{count} upcoming events", { count: chapter.counts.upcomingEvents }) },
   ];
   const tabs = [
     { value: "feed", label: "Feed" },
-    { value: "events", label: `Events (${hostedHere.length})` },
+    { value: "events", label: t("Events ({count})", { count: hostedHere.length }) },
     { value: "members", label: "Members" },
     { value: "about", label: "About" },
+    // The chapter team's queue of posts waiting for approval.
+    ...(chapter.viewer.canManage ? [{ value: "review", label: chapter.moderation?.pendingPosts ? t("Review ({count})", { count: chapter.moderation.pendingPosts }) : "Review" }] : []),
   ];
 
   return (
     <Tabs values={tabs.map((tab) => tab.value)} defaultValue="feed">
-      <header className="bg-gradient-to-r from-primary-dark to-primary-light">
+      <header className="border-b border-line bg-card">
         <div className="mx-auto w-full max-w-[1240px] px-4 max-sm:px-0">
           <div className="relative aspect-[4/1] max-h-[300px] w-full overflow-hidden rounded-b-2xl max-sm:rounded-none">
             <ChapterCover name={chapter.name} countryCode={chapter.countryCode} src={chapter.coverUrl} photo={chapter.photo} />
@@ -81,9 +86,9 @@ async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]
                 href={chapter.photo.creditUrl ?? "https://unsplash.com"}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="absolute end-2 bottom-3 rounded bg-black/45 px-1.5 py-0.5 text-[10px] text-white/90 hover:bg-black/65 hover:text-white max-sm:bottom-2"
+                className="absolute end-2 bottom-2.5 rounded bg-black/45 px-1.5 py-0.5 text-[10px] text-white/90 hover:bg-black/65 hover:text-white max-sm:bottom-2"
               >
-                Photo: {chapter.photo.credit} / Unsplash
+                <T vars={{ credit: chapter.photo.credit }}>{"Photo: {credit} / Unsplash"}</T>
               </a>
             )}
           </div>
@@ -96,13 +101,13 @@ async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]
                 countryCode={chapter.countryCode}
                 src={chapter.imageUrl}
                 size={88}
-                className="-mt-14 rounded-2xl border-4 border-card bg-card shadow-sm max-sm:-mt-10 max-sm:size-[72px]"
+                className="relative z-10 -mt-14 rounded-2xl border-4 border-card bg-card shadow-[0_2px_10px_rgb(15_42_42/0.12)] max-sm:-mt-10 max-sm:size-[72px]"
               />
               <div className="flex flex-col gap-1.5">
-                <h1 className="text-h1 text-inverse">{chapter.name}</h1>
+                <h1 className="text-h1 text-ink">{chapter.name}</h1>
                 <ul className="flex flex-wrap gap-x-4 gap-y-1">
                   {meta.map((item) => (
-                    <li key={item.icon} className="flex items-center gap-1.5 text-sm text-primary-tint">
+                    <li key={item.icon} className="flex items-center gap-1.5 text-sm text-secondary">
                       <Icon name={item.icon} size={16} />
                       {item.label}
                     </li>
@@ -111,11 +116,11 @@ async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <JoinChapterButton chapter={chapter} following={chapter.viewer.following} />
+              <JoinChapterButton chapter={chapter} following={chapter.viewer.following} banned={chapter.viewer.banned} />
               <InviteButton slug={chapter.slug} />
             </div>
           </div>
-          <TabList label={`${chapter.name} sections`} tabs={tabs} tone="inverse" />
+          <TabList label={t("{name} sections", { name: chapter.name })} tabs={tabs} />
         </div>
       </header>
 
@@ -151,14 +156,20 @@ async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]
                 </EmptyState>
               )}
               <Link href={`/events?chapter=${chapter.slug}`} className="self-start text-sm font-medium text-primary-light hover:underline">
-                See all {chapter.name} events
+                <T vars={{ name: chapter.name }}>{"See all {name} events"}</T>
               </Link>
             </Panel>
           </TabPanel>
           <TabPanel value="members">
             <h2 className="sr-only">Members</h2>
-            <ChapterMembers slug={chapter.slug} initial={members} />
+            <ChapterMembers slug={chapter.slug} name={chapter.name} initial={members} canManage={chapter.viewer.canManage} viewerId={viewer.id} teamIds={chapter.team.map((m) => m.member.id)} />
           </TabPanel>
+          {chapter.viewer.canManage && (
+            <TabPanel value="review">
+              <h2 className="sr-only">Review</h2>
+              <ChapterReview chapter={{ slug: chapter.slug, name: chapter.name }} viewer={viewer} />
+            </TabPanel>
+          )}
           <TabPanel value="about">
             <ChapterAbout slug={chapter.slug} name={chapter.name} about={chapter.about} hashtag={chapter.hashtag} canEdit={chapter.viewer.canManage} />
           </TabPanel>

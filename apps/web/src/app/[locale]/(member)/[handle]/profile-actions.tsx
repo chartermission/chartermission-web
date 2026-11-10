@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import type { MemberProfile, PreviewAs } from "@chartermission/contracts";
+import type { ConversationView, MemberProfile, PreviewAs } from "@chartermission/contracts";
 import { Button, Icon, buttonClasses } from "@chartermission/ui";
+import { useT } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConnectControl, FollowControl, canConnectWith, useRelationship } from "@/components/network/relationship";
@@ -21,12 +22,45 @@ const previewLabels: Record<PreviewAs, string> = {
   connection: "Preview as a connection",
 };
 
+/** Opens the private conversation with this member. Messages are for connections, so others see why it is off. */
+function MessageButton({ memberId, connected }: { memberId: string; connected: boolean }) {
+  const t = useT();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  async function open() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const conversation = await api<ConversationView>("/messages/conversations", { method: "POST", body: { memberId } });
+      router.push(`/messages/${conversation.id}`);
+    } catch (e) {
+      toast.error(e);
+      setBusy(false);
+    }
+  }
+  if (!connected) {
+    return (
+      <Button variant="secondary" disabled title={t("You can message members you’re connected with")}>
+        <Icon name="message" size={16} />
+        {t("Message")}
+      </Button>
+    );
+  }
+  return (
+    <Button variant="secondary" onClick={open} aria-busy={busy}>
+      <Icon name="message" size={16} />
+      {t("Message")}
+    </Button>
+  );
+}
+
 function ConnectDialog({ name, onClose, onSend }: { name: string; onClose: () => void; onSend: (note: string) => Promise<boolean> }) {
+  const t = useT();
   const id = useId();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <Dialog title={`Connect with ${name}`} description="Add a note to say how you know each other (optional)." onClose={onClose} width={480} initialFocus="textarea">
+    <Dialog title={t("Connect with {name}", { name })} description="Add a note to say how you know each other (optional)." onClose={onClose} width={480} initialFocus="textarea">
       <form
         className="flex flex-col gap-3"
         onSubmit={async (event) => {
@@ -47,7 +81,7 @@ function ConnectDialog({ name, onClose, onSend }: { name: string; onClose: () =>
           onChange={(event) => setNote(event.target.value.slice(0, NOTE_MAX))}
           maxLength={NOTE_MAX}
           rows={4}
-          placeholder={`Hi ${name.split(" ")[0]}, …`}
+          placeholder={t("Hi {value}, …", { value: name.split(" ")[0] })}
           aria-describedby={`${id}-count`}
           className="w-full resize-y rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
         />
@@ -69,6 +103,7 @@ function ConnectDialog({ name, onClose, onSend }: { name: string; onClose: () =>
 
 /** Profile header actions for another member, or Edit / Preview for the viewer's own profile. */
 export function ProfileActions({ member, canPost }: { member: MemberProfile; canPost: boolean }) {
+  const t = useT();
   const router = useRouter();
   const controls = useRelationship(member, member.relationship);
   const [muted, setMuted] = useState(member.relationship.muted);
@@ -90,7 +125,7 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
           }
           items={(Object.keys(previewLabels) as PreviewAs[]).map((as) => ({
             label: previewLabels[as],
-            onSelect: () => router.push(`/members/${member.handle}?preview=${as}`),
+            onSelect: () => router.push(`/${member.handle}?preview=${as}`),
           }))}
         />
       </div>
@@ -104,7 +139,7 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
         onClick={async () => {
           try {
             await api(`/blocks/${member.id}`, { method: "DELETE" });
-            toast.success(`Unblocked ${member.name}`);
+            toast.success(t("Unblocked {name}", { name: member.name }));
             router.refresh();
           } catch (e) {
             toast.error(e);
@@ -119,7 +154,7 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
   async function toggleMute() {
     try {
       await api("/mutes", { method: muted ? "DELETE" : "POST", body: { targetType: "member", targetId: member.id } });
-      toast.success(muted ? `Unmuted ${member.name}` : `Muted ${member.name}. Their posts won’t appear in your feed.`);
+      toast.success(muted ? t("Unmuted {name}", { name: member.name }) : t("Muted {name}. Their posts won’t appear in your feed.", { name: member.name }));
       setMuted(!muted);
     } catch (e) {
       toast.error(e);
@@ -145,14 +180,9 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
       )}
       {/* Official accounts are follow-only, so Follow is the main action there. */}
       <FollowControl member={member} controls={controls} size="default" prominent={!connectable} />
-      {connectable && (
-        <Button variant="secondary" disabled title="Messaging arrives in a later release">
-          Message
-          <span className="sr-only"> (coming in a later release)</span>
-        </Button>
-      )}
+      {connectable && <MessageButton memberId={member.id} connected={controls.state.connection === "connected"} />}
       <Menu
-        label={`More actions for ${member.name}`}
+        label={t("More actions for {name}", { name: member.name })}
         items={menu}
         trigger={
           <span className="flex size-[42px] items-center justify-center rounded-lg border border-line-strong text-body">
@@ -161,10 +191,10 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
         }
       />
       {modal === "connect" && <ConnectDialog name={member.name} onClose={() => setModal(null)} onSend={(note) => controls.connect(note)} />}
-      {modal === "report" && <ReportDialog targetType="member" targetId={member.id} subject={`${member.name}’s profile`} onClose={() => setModal(null)} />}
+      {modal === "report" && <ReportDialog targetType="member" targetId={member.id} subject={t("{name}’s profile", { name: member.name })} onClose={() => setModal(null)} />}
       {modal === "remove" && (
         <ConfirmDialog
-          title={`Remove ${member.name} from your connections?`}
+          title={t("Remove {name} from your connections?", { name: member.name })}
           confirmLabel="Remove"
           onClose={() => setModal(null)}
           onConfirm={async () => {
@@ -176,13 +206,13 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
       )}
       {modal === "block" && (
         <ConfirmDialog
-          title={`Block ${member.name}?`}
+          title={t("Block {name}?", { name: member.name })}
           confirmLabel="Block"
           danger
           onClose={() => setModal(null)}
           onConfirm={async () => {
             await api(`/blocks/${member.id}`, { method: "POST" });
-            toast.success(`${member.name} is blocked. You can unblock them in Settings → Blocked & muted.`);
+            toast.success(t("{name} is blocked. You can unblock them in Settings → Blocked & muted.", { name: member.name }));
             // Their profile is no longer available to you, so leave it.
             router.replace("/feed");
           }}

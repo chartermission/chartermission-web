@@ -6,8 +6,12 @@ import { settle } from "@/components/account/settle";
 import { BlockedList, MutedList } from "@/components/settings/blocked-muted";
 import { SettingsCardSkeleton, SettingsHeader } from "@/components/settings/settings-card";
 import { apiGet } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Blocked & muted" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Blocked & muted") };
+}
 
 async function Blocks() {
   const result = await settle(apiGet<BlockView[]>("/me/blocks"));

@@ -8,8 +8,12 @@ import { MfaCard } from "@/components/settings/mfa-card";
 import { SessionsList } from "@/components/settings/sessions-list";
 import { SettingsCardSkeleton, SettingsHeader } from "@/components/settings/settings-card";
 import { apiGet, requireViewer } from "@/lib/api/server";
+import { getT } from "@/i18n/server";
 
-export const metadata: Metadata = { title: "Security & sign-in" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Security & sign-in") };
+}
 
 
 async function Sessions() {
