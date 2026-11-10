@@ -1,3 +1,4 @@
+import { ROLES } from '../core/permissions.js';
 import { Injectable } from '@nestjs/common';
 import type { Response } from 'express';
 import { and, desc, eq, gte, isNull, like, lt, type SQL } from 'drizzle-orm';
@@ -69,6 +70,7 @@ const AREA_LABELS: Record<string, string> = {
   moderation: 'Moderation',
   trending: 'Trending',
   audit: 'Audit log',
+  role: 'Roles',
 };
 
 /**
@@ -87,6 +89,11 @@ export function auditSummary(
         ? (MEMBER_PAST[verb] ?? ACTION_PAST[verb as ModerationActionKind])
         : ACTION_PAST[verb as ModerationActionKind];
     return `${past} ${target}`.trim();
+  }
+  const role = /^role\.(granted|revoked)\.(\w+)$/.exec(row.action);
+  if (role) {
+    const name = ROLES[role[2]!]?.name ?? role[2];
+    return role[1] === 'granted' ? `Gave ${target} the ${name} role` : `Took the ${name} role from ${target}`;
   }
   const self = !!row.actorId && row.targetType === 'user' && row.targetId === row.actorId;
   /** "Did X" for self-service, "Did X for @handle" when someone else's account was the target. */

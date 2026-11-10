@@ -9,6 +9,7 @@ import {
   AdminMembersQuery,
   AdminSetFeaturedInput,
   AdminSetOfficialInput,
+  AdminSetRoleInput,
   AdminSetVerifiedInput,
   AdminTopicCreateInput,
   AdminTopicsQuery,
@@ -196,6 +197,12 @@ export class AdminMembersController {
     @Req() req: AppRequest,
   ): Promise<AdminMemberRow> {
     return this.members.award(ctx, id, input, clientIp(req));
+  }
+
+  @Put(':id/roles')
+  @Access('admin', 'roles.manage')
+  role(@Auth() ctx: AuthContext, @Param('id') id: string, @ZBody(AdminSetRoleInput) input: AdminSetRoleInput, @Req() req: AppRequest): Promise<AdminMemberRow> {
+    return this.members.setRole(ctx, id, input, clientIp(req));
   }
 
   @Delete(':id/badges/:badgeId')

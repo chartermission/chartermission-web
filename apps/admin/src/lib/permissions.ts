@@ -29,6 +29,8 @@ export const PERM = {
   membersManage: "members.manage",
   /** Badge catalogue. Platform Admin and above. */
   badgesManage: "badges.manage",
+  rolesManage: "roles.manage",
+  superadminAssign: "superadmin.assign",
   /** Pages: create, review the ones members create, verify, suspend, remove. Platform Admin and above. */
   pagesManage: "pages.manage",
 } as const;

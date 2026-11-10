@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import type { AdminBadge, AdminMemberRow, AdminMembersQuery, Page } from "@chartermission/contracts";
+import type { AdminAssignableRole, AdminBadge, AdminMemberRow, AdminMembersQuery, Page } from "@chartermission/contracts";
 import { Avatar, Button, Chip, Icon, ProfileBadgeChip, SegmentedControl, cn } from "@chartermission/ui";
 import { FormModal, selectClasses } from "@/components/ambassadors/modal";
 import { inputClasses } from "@/components/form-field";
@@ -15,7 +15,27 @@ import { WEB_URL } from "@/lib/navigation";
 type Filter = Exclude<AdminMembersQuery["filter"], "badge"> | `badge:${string}`;
 
 /** Members (GET /admin/members): search, then verify, feature in sign-up suggestions or award badges. */
-export function MembersConsole({ initial, badges, canManageBadges }: { initial: Page<AdminMemberRow>; badges: AdminBadge[]; canManageBadges: boolean }) {
+/** Who may change roles in the console, and whether that includes Super Admin. */
+export type AccessRights = { viewerId: string; canManageRoles: boolean; canAssignSuperAdmin: boolean };
+
+const ROLE_INFO: { role: AdminAssignableRole; name: string; description: string; console: boolean }[] = [
+  { role: "moderator", name: "Moderator", description: "Works the report queue: hides and removes content, warns, restricts and suspends members.", console: true },
+  { role: "platform_admin", name: "Platform Admin", description: "Everything in the console except Super Admin: members, chapters, events, pages, settings.", console: true },
+  { role: "super_admin", name: "Super Admin", description: "Everything, including giving and taking away Super Admin.", console: true },
+  { role: "event_host", name: "Event Host", description: "Publishes events without review (no console access).", console: false },
+];
+
+export function MembersConsole({
+  initial,
+  badges,
+  canManageBadges,
+  access,
+}: {
+  initial: Page<AdminMemberRow>;
+  badges: AdminBadge[];
+  canManageBadges: boolean;
+  access: AccessRights;
+}) {
   const [page, setPage] = useState(initial);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -97,6 +117,7 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
   }
 
   const activeBadges = badges.filter((b) => b.status === "active");
+  const [accessFor, setAccessFor] = useState<AdminMemberRow | null>(null);
 
   return (
     <section className="flex flex-col gap-4">
@@ -189,8 +210,13 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
                             {row.countryCode && ` · ${row.countryCode}`}
                             {row.status !== "active" && ` · ${row.status}`}
                           </span>
-                          {(row.featured || row.staff || row.official) && (
+                          {(row.featured || row.staff || row.official || row.roles.length > 0) && (
                             <span className="mt-1 flex flex-wrap gap-1">
+                              {ROLE_INFO.filter((r) => row.roles.includes(r.role)).map((r) => (
+                                <Chip key={r.role} tone={r.console ? "success" : "neutral"}>
+                                  {r.name}
+                                </Chip>
+                              ))}
                               {row.featured && <Chip tone="info">Suggested on sign-up</Chip>}
                               {row.official && <Chip tone="warning">Official account · follow only</Chip>}
                               {row.staff && !row.official && <Chip tone="neutral">Team member</Chip>}
@@ -225,6 +251,11 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
                         <Button variant="ghost" size="small" disabled={busy} onClick={() => setBadgeFor(row)}>
                           Badges
                         </Button>
+                        {access.canManageRoles && row.id !== access.viewerId && (
+                          <Button variant="ghost" size="small" disabled={busy} onClick={() => setAccessFor(row)}>
+                            Access
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -264,6 +295,18 @@ export function MembersConsole({ initial, badges, canManageBadges }: { initial: 
             await set(row, "official", !row.official);
           }}
           onClose={() => setOfficialFor(null)}
+        />
+      )}
+      {accessFor && (
+        <MemberAccess
+          member={accessFor}
+          canAssignSuperAdmin={access.canAssignSuperAdmin}
+          onSaved={(row) => {
+            replace(row);
+            setAccessFor(null);
+            toast(`Access updated for ${row.name}.`);
+          }}
+          onClose={() => setAccessFor(null)}
         />
       )}
       {badgeFor && (
@@ -358,6 +401,67 @@ function AwardBadges({
         <span className="text-label text-ink">Note for the audit log (optional)</span>
         <input name="note" maxLength={200} className={inputClasses(false)} placeholder="Why this badge was awarded" />
       </label>
+    </FormModal>
+  );
+}
+
+/** Team access: console roles (two-step verification required at their next sign-in) and Event Host. */
+function MemberAccess({
+  member,
+  canAssignSuperAdmin,
+  onSaved,
+  onClose,
+}: {
+  member: AdminMemberRow;
+  canAssignSuperAdmin: boolean;
+  onSaved: (row: AdminMemberRow) => void;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const held = new Set(member.roles);
+  return (
+    <FormModal
+      title={`Access for ${member.name}`}
+      description="Console roles let them sign in to this admin console; they will set up two-step verification at their first sign-in, and we email them. Every change is in the audit log."
+      submitLabel="Save access"
+      busy={busy}
+      error={error}
+      onClose={onClose}
+      onSubmit={async (data) => {
+        setBusy(true);
+        setError(null);
+        const want = new Set(data.getAll("role").map(String) as AdminAssignableRole[]);
+        try {
+          let row = member;
+          for (const { role } of ROLE_INFO) {
+            if (role === "super_admin" && !canAssignSuperAdmin) continue;
+            if (want.has(role) !== held.has(role)) {
+              row = await api<AdminMemberRow>(`/admin/members/${member.id}/roles`, { method: "PUT", body: { role, granted: want.has(role) } });
+            }
+          }
+          onSaved(row);
+        } catch (e) {
+          setError(errorMessage(e));
+          setBusy(false);
+        }
+      }}
+    >
+      <fieldset className="flex flex-col gap-2">
+        <legend className="sr-only">Roles</legend>
+        {ROLE_INFO.map((r) => {
+          const locked = r.role === "super_admin" && !canAssignSuperAdmin;
+          return (
+            <label key={r.role} className={cn("flex items-start gap-3 rounded-lg border border-line px-3 py-2.5", locked ? "opacity-60" : "cursor-pointer hover:bg-surface")}>
+              <input type="checkbox" name="role" value={r.role} defaultChecked={held.has(r.role)} disabled={locked} className="mt-1 size-4 accent-primary" />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-ink">{r.name}</span>
+                <span className="text-xs text-secondary">{locked ? "Only a Super Admin can change this." : r.description}</span>
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
     </FormModal>
   );
 }

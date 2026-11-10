@@ -20,7 +20,14 @@ async function Members() {
   } catch (e) {
     return <LoadError message={e instanceof ApiError ? e.message : "Members couldn’t be loaded."} />;
   }
-  return <MembersConsole initial={data[0]} badges={data[1]} canManageBadges={can(viewer, PERM.badgesManage)} />;
+  return (
+    <MembersConsole
+      initial={data[0]}
+      badges={data[1]}
+      canManageBadges={can(viewer, PERM.badgesManage)}
+      access={{ viewerId: viewer.id, canManageRoles: can(viewer, PERM.rolesManage), canAssignSuperAdmin: can(viewer, PERM.superadminAssign) }}
+    />
+  );
 }
 
 /** Member controls: verified tick, badges and who's suggested to people signing up. */
@@ -29,7 +36,7 @@ export default function MembersPage() {
     <>
       <PageHeader
         title="Members"
-        description="Verify members, award badges and choose who is suggested to new members when they sign up. Every change is in the audit log."
+        description="Verify members, award badges, give team access (moderator, admin) and choose who is suggested to new members when they sign up. Every change is in the audit log."
       />
       <Suspense fallback={<SkeletonTable label="Loading members" rows={8} />}>
         <Members />

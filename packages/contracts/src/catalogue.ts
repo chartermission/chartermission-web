@@ -216,8 +216,18 @@ export type AdminMemberRow = {
   /** Suggested first to new members during sign-up. */
   featured: boolean;
   badges: ProfileBadge[];
+  /** Platform-wide roles the member holds (moderator, platform_admin, super_admin, event_host). */
+  roles: AdminAssignableRole[];
   joinedAt: string;
 };
+
+/** Roles an admin can give or take away from a member's row in the console (roles.manage). */
+export const AdminAssignableRole = z.enum(["event_host", "moderator", "platform_admin", "super_admin"]);
+export type AdminAssignableRole = z.infer<typeof AdminAssignableRole>;
+
+/** PUT /admin/members/{id}/roles (roles.manage; super_admin also needs superadmin.assign) */
+export const AdminSetRoleInput = z.object({ role: AdminAssignableRole, granted: z.boolean() });
+export type AdminSetRoleInput = z.infer<typeof AdminSetRoleInput>;
 
 /** PUT /admin/members/{id}/verified (members.manage) */
 export const AdminSetVerifiedInput = z.object({ verified: z.boolean() });

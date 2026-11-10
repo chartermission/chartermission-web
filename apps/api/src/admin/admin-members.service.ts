@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import type {
+  AdminAssignableRole,
+  AdminSetRoleInput,
   AdminAwardBadgeInput,
   AdminBadge,
   AdminBadgeInput,
@@ -12,12 +14,16 @@ import type {
   Page,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { badges, featuredMembers, memberBadges, memberProfiles, users } from '../db/schema.js';
+import { badges, featuredMembers, memberBadges, memberProfiles, roles, userRoles, users } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { closeStaffConnections } from '../profiles/staff-connections.js';
 import { Errors } from '../common/errors.js';
+import { MailService } from '../infra/mail.service.js';
+import { adminUrl, renderEmail } from '../infra/mail-layout.js';
+import { PRIVILEGED_ROLES, ROLES } from '../core/permissions.js';
+import { can } from '../core/policy.js';
 import { isUniqueViolation, likePrefix, uuidOr404 } from '../moderation/util.js';
 
 type BadgeRow = typeof badges.$inferSelect;
@@ -37,7 +43,74 @@ export class AdminMembersService {
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly audit: AuditService,
+    private readonly mail: MailService,
   ) {}
+
+  /* ------------------------------ Roles ------------------------------ */
+
+  /**
+   * PUT /admin/members/{id}/roles. Gives or takes away a platform-wide role. Only Super Admins can
+   * give or take away Super Admin; nobody changes their own roles; the last Super Admin stays.
+   * Console roles mark the account as team (staff) and need two-step verification at sign-in.
+   */
+  async setRole(ctx: AuthContext, rawId: string, input: AdminSetRoleInput, ip?: string): Promise<AdminMemberRow> {
+    const before = await this.row(rawId);
+    if (before.id === ctx.user.id) throw Errors.forbidden('You can’t change your own roles');
+    if (input.role === 'super_admin' && !can(ctx.user, 'superadmin.assign')) throw Errors.forbidden('Only a Super Admin can give or take away Super Admin');
+    if (before.status === 'deleted' || before.status === 'deletion_pending') throw Errors.conflict('This account is closed or being deleted');
+    const held = before.roles.includes(input.role);
+    if (held === input.granted) return before;
+
+    const [role] = await this.db.select({ id: roles.id }).from(roles).where(eq(roles.key, input.role)).limit(1);
+    if (!role) throw Errors.notFound('That role');
+    await this.db.transaction(async (tx) => {
+      if (input.granted) {
+        await tx.insert(userRoles).values({ userId: before.id, roleId: role.id, grantedBy: ctx.user.id });
+      } else {
+        if (input.role === 'super_admin') {
+          const [{ n }] = await tx
+            .select({ n: sql<number>`count(distinct ${userRoles.userId})::int` })
+            .from(userRoles)
+            .innerJoin(roles, eq(roles.id, userRoles.roleId))
+            .where(and(eq(roles.key, 'super_admin'), isNull(userRoles.revokedAt)));
+          if (n <= 1) throw Errors.conflict('This is the last Super Admin. Make someone else a Super Admin first.');
+        }
+        await tx
+          .update(userRoles)
+          .set({ revokedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(userRoles.userId, before.id), eq(userRoles.roleId, role.id), isNull(userRoles.scopeType), isNull(userRoles.revokedAt)));
+      }
+      // Team flag: on while they hold any console role.
+      const remaining = input.granted ? [...before.roles, input.role] : before.roles.filter((r) => r !== input.role);
+      const staff = remaining.some((r) => PRIVILEGED_ROLES.includes(r));
+      if (staff !== before.staff) await tx.update(users).set({ isStaff: staff, updatedAt: new Date() }).where(eq(users.id, before.id));
+    });
+    await this.audit.record({
+      actorId: ctx.user.id,
+      action: `role.${input.granted ? 'granted' : 'revoked'}.${input.role}`,
+      targetType: 'user',
+      targetId: before.id,
+      before: { role: input.role, held },
+      after: { role: input.role, held: input.granted },
+      ip,
+    });
+    if (input.granted && PRIVILEGED_ROLES.includes(input.role)) {
+      const name = ROLES[input.role]?.name ?? input.role;
+      const { text, html } = renderEmail({
+        heading: `You are now a ${name} on Charter Mission`,
+        paragraphs: [
+          `A Charter Mission administrator gave your account ${name} access to the admin console.`,
+          'Sign in with your usual email and password. The first time, you will be asked to set up an authenticator app for two-step verification.',
+        ],
+        button: { label: 'Open the admin console', url: adminUrl('/signin') },
+        footer: 'You received this email because a Charter Mission administrator changed your access.',
+      });
+      await this.mail
+        .send({ to: before.email, userId: before.id, template: 'admin.role_granted', subject: `You now have ${name} access to Charter Mission`, text, html, transactional: true })
+        .catch(() => undefined);
+    }
+    return this.row(before.id);
+  }
 
   /* ------------------------------ Badge catalogue ------------------------------ */
 
@@ -272,6 +345,7 @@ export class AdminMembersService {
         avatarFileId: memberProfiles.avatarFileId,
         countryCode: memberProfiles.countryCode,
         featured: sql<boolean>`exists (select 1 from ${featuredMembers} fm where fm.user_id = ${users.id})`,
+        roles: sql<string[]>`coalesce((select array_agg(distinct r.key) from ${userRoles} ur join ${roles} r on r.id = ur.role_id where ur.user_id = ${users.id} and ur.revoked_at is null and ur.scope_type is null and r.key in ('event_host','moderator','platform_admin','super_admin')), '{}')`,
       })
       .from(users)
       .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
@@ -306,6 +380,7 @@ export class AdminMembersService {
         official: r.isOfficial,
         featured: r.featured,
         badges: byUser.get(r.id) ?? [],
+        roles: (r.roles ?? []) as AdminAssignableRole[],
         joinedAt: r.createdAt.toISOString(),
       }));
   }
