@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SHARE_IMAGE } from "@/lib/share-image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
@@ -33,7 +34,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/learning
   const { slug } = await params;
   const path = await getPath(slug).catch(() => null);
   if (!path) return { title: "Learning path" };
-  return { title: path.title, description: path.description.slice(0, 160), openGraph: { title: path.title, description: path.description.slice(0, 160) } };
+  return { title: path.title, description: path.description.slice(0, 160), openGraph: { images: [SHARE_IMAGE], title: path.title, description: path.description.slice(0, 160) } };
 }
 
 async function PathHeader({ path }: { path: LearningPath }) {

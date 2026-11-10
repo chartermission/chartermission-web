@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SHARE_IMAGE } from "@/lib/share-image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
@@ -33,7 +34,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/articles
   return {
     title: post.article.title,
     description,
-    openGraph: { type: "article", title: post.article.title, description, publishedTime: post.createdAt, authors: [post.author.name] },
+    openGraph: { images: [SHARE_IMAGE], type: "article", title: post.article.title, description, publishedTime: post.createdAt, authors: [post.author.name] },
   };
 }
 

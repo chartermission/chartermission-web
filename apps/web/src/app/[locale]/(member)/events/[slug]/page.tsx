@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SHARE_IMAGE } from "@/lib/share-image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/events/[
     title: event.title,
     description: event.summary,
     // No og:image: media is only served to signed-in members, so link previews couldn't load the cover anyway.
-    openGraph: { type: "website", title: event.title, description: event.summary },
+    openGraph: { images: [SHARE_IMAGE], type: "website", title: event.title, description: event.summary },
   };
 }
 

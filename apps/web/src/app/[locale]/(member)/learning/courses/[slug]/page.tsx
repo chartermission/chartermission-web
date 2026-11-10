@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SHARE_IMAGE } from "@/lib/share-image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, cache, type ReactNode } from "react";
@@ -35,7 +36,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/learning
   const course = await getCourse(slug).catch(() => null);
   if (!course) return { title: "Course" };
   const description = stripMarkdown(course.description).replace(/\s+/g, " ").trim().slice(0, 160);
-  return { title: course.title, description, openGraph: { title: course.title, description } };
+  return { title: course.title, description, openGraph: { images: [SHARE_IMAGE], title: course.title, description } };
 }
 
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
