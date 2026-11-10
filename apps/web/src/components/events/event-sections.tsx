@@ -7,6 +7,7 @@ import { memberHref } from "@/components/social/links";
 import { dayKey, formatClock, formatDay, formatLongDay, formatRange, sameWallClock, zoneAbbreviation, zoneCity } from "./time";
 import { useViewerZone } from "./use-viewer-zone";
 import { T, useIntlTag } from "@/i18n/client";
+import { ProfileLink } from "@/components/social/post-parts";
 
 /* Read-only sections of the event page: when, speakers, agenda, where. */
 
@@ -60,7 +61,13 @@ function SpeakerCard({ speaker }: { speaker: EventSpeaker }) {
   );
   return (
     <li className="relative flex items-center gap-3 rounded-card border border-line bg-card p-4 transition-colors has-[a:hover]:border-line-strong">
-      <Avatar name={speaker.name} src={speaker.avatarUrl ?? undefined} tone={speaker.member?.tone ?? "tint"} size={56} />
+      {speaker.member ? (
+        <ProfileLink href={memberHref(speaker.member.handle)}>
+          <Avatar name={speaker.name} src={speaker.avatarUrl ?? undefined} tone={speaker.member?.tone ?? "tint"} size={56} />
+        </ProfileLink>
+      ) : (
+        <Avatar name={speaker.name} src={speaker.avatarUrl ?? undefined} tone="tint" size={56} />
+      )}
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="flex items-center gap-1 text-md font-medium text-ink">
           <span className="truncate">{name}</span>

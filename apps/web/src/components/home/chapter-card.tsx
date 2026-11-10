@@ -55,7 +55,7 @@ export function ChapterCard({ moment }: { moment: ChapterHighlightMoment }) {
                 Top post this week
               </p>
               <div className="flex items-center gap-2">
-                <MemberAvatar member={topPost.author} size={24} />
+                <MemberAvatar member={topPost.author} size={24} link />
                 <Link href={memberHref(topPost.author.handle)} className="relative z-10 truncate text-sm font-medium text-ink hover:underline">
                   {topPost.author.name}
                 </Link>

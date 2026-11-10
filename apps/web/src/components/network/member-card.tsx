@@ -5,6 +5,7 @@ import type { DirectoryMember } from "@chartermission/contracts";
 import { Avatar, Icon, RoleBadgeIcon } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { ConnectControl, FollowControl, canConnectWith, useRelationship } from "./relationship";
+import { ProfileLink } from "@/components/social/post-parts";
 
 /**
  * Directory member card — Figma "Member card" (node 17:84) as used on /network,
@@ -15,7 +16,9 @@ export function DirectoryMemberCard({ member, reason }: { member: DirectoryMembe
   const self = member.relationship.self;
   return (
     <article className="flex w-full flex-col items-center gap-2 rounded-card border border-line bg-card px-4 py-5">
-      <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={56} tone={member.tone} />
+      <ProfileLink href={memberHref(member.handle)}>
+<Avatar name={member.name} src={member.avatarUrl ?? undefined} size={56} tone={member.tone} />
+</ProfileLink>
       <p className="flex items-center gap-1">
         <Link href={memberHref(member.handle)} className="text-center text-md font-medium text-ink hover:underline">
           {member.name}

@@ -184,7 +184,7 @@ async function ChapterView({ params }: Pick<PageProps<"/[locale]/chapters/[slug]
               <ul className="flex flex-col gap-3">
                 {chapter.team.map(({ member, label }) => (
                   <li key={member.id} className="flex items-center gap-2.5">
-                    <MemberAvatar member={member} size={32} />
+                    <MemberAvatar member={member} size={32} link />
                     <div className="flex min-w-0 flex-1 flex-col">
                       <AuthorName member={member} className="text-sm" />
                       <span className="text-xs text-secondary">{label}</span>

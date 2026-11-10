@@ -55,7 +55,7 @@ export function PageAdmins({ page, viewerId }: { page: PageDetail; viewerId: str
           const self = admin.member.id === viewerId;
           return (
             <li key={admin.member.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
-              <MemberAvatar member={admin.member} size={40} />
+              <MemberAvatar member={admin.member} size={40} link />
               <div className="flex min-w-0 flex-1 flex-col">
                 <Link href={memberHref(admin.member.handle)} className="truncate text-sm font-medium text-ink hover:underline">
                   {admin.member.name}

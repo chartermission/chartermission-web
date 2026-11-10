@@ -7,6 +7,8 @@ import { Avatar, Icon, cn, type AvatarTone, type IconName } from "@chartermissio
 import { api } from "@/lib/api/client";
 import { useT } from "@/i18n/client";
 import { LanguageMenuItems } from "@/i18n/language-menu";
+import { ProfileLink } from "@/components/social/post-parts";
+import { memberHref } from "@/components/social/links";
 
 export interface UserMenuViewer {
   name: string;
@@ -131,7 +133,9 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
           className="absolute top-[calc(100%+8px)] end-0 z-40 flex w-64 flex-col gap-0.5 rounded-card border border-line bg-card p-1.5 shadow-[0px_12px_32px_0px_rgba(26,32,44,0.14)]"
         >
           <div className="flex items-center gap-3 px-3 py-2.5" role="none">
-            <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} size={40} />
+            <ProfileLink href={memberHref(viewer.handle)}>
+<Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} size={40} />
+</ProfileLink>
             <div className="flex min-w-0 flex-col">
               <span className="truncate text-sm font-medium text-ink">{viewer.name}</span>
               <span className="truncate text-xs text-secondary">@{viewer.handle}</span>

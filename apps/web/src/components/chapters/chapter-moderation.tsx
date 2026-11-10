@@ -286,7 +286,7 @@ export function ChapterBans({ slug }: { slug: string }) {
       <ul className="flex flex-col divide-y divide-line">
         {bans.map((ban) => (
           <li key={ban.member.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
-            <MemberAvatar member={ban.member} size={32} />
+            <MemberAvatar member={ban.member} size={32} link />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <AuthorName member={ban.member} className="text-sm" />
               <p className="text-xs text-secondary">

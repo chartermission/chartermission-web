@@ -12,6 +12,7 @@ import { api } from "@/lib/api/client";
 import { formatClock, formatDay } from "./time";
 import { useNow, useViewerZone } from "./use-viewer-zone";
 import { useT, useIntlTag } from "@/i18n/client";
+import { ProfileLink } from "@/components/social/post-parts";
 
 type Tab = RegistrationStatus;
 
@@ -188,7 +189,9 @@ export function RegistrationsView({ event }: { event: EventDetail }) {
               {visible.map((row) => (
                 <li key={row.member.id} className="flex items-center gap-3 px-5 py-3.5 max-sm:flex-wrap max-sm:px-3">
                   {row.status === "waitlisted" && <span className="w-7 shrink-0 text-center text-sm font-semibold text-warning">#{row.position}</span>}
-                  <Avatar name={row.member.name} src={row.member.avatarUrl ?? undefined} tone={row.member.tone} size={40} />
+                  <ProfileLink href={memberHref(row.member.handle)}>
+<Avatar name={row.member.name} src={row.member.avatarUrl ?? undefined} tone={row.member.tone} size={40} />
+</ProfileLink>
                   <div className="flex min-w-0 flex-1 flex-col">
                     <Link href={memberHref(row.member.handle)} className="truncate text-sm font-medium text-ink hover:underline">
                       {row.member.name}

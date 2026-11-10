@@ -19,6 +19,7 @@ import type { Viewer } from "@/components/social/viewer";
 import { PeopleLink } from "@/components/people/people-link";
 import { EmojiPicker, insertAtCaret } from "@/components/social/emoji-picker";
 import { useT, T } from "@/i18n/client";
+import { ProfileLink } from "@/components/social/post-parts";
 
 type Sort = "relevant" | "newest";
 
@@ -83,7 +84,9 @@ function CommentForm({
   return (
     <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-1.5">
       <div className="flex items-start gap-2.5">
-        <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} size={32} tone={viewer.tone} />
+        <ProfileLink href={memberHref(viewer.handle)}>
+<Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} size={32} tone={viewer.tone} />
+</ProfileLink>
         <div
           className={cn(
             "flex min-w-0 flex-1 flex-col gap-2 rounded-[18px] bg-muted px-3.5 py-2 focus-within:ring-2",

@@ -7,6 +7,7 @@ import { FollowControl, useRelationship } from "@/components/network/relationshi
 import { memberHref } from "@/components/social/links";
 import { staggerStyle } from "@/components/motion";
 import type { Viewer } from "@/components/social/viewer";
+import { ProfileLink } from "@/components/social/post-parts";
 
 type Writer = ArticlesHub["authors"][number];
 
@@ -19,7 +20,9 @@ function WriterCard({ writer, viewer, index }: { writer: Writer; viewer: Viewer;
       className="motion-fade-up relative flex w-full flex-col items-center gap-2 rounded-card border border-line bg-card px-4 pt-5 pb-4 text-center max-md:w-[188px] max-md:shrink-0 max-md:snap-start"
       style={staggerStyle(index, { step: 50, max: 5 })}
     >
-      <Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} size={56} />
+      <ProfileLink href={memberHref(member.handle)}>
+<Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} size={56} />
+</ProfileLink>
       <div className="flex w-full min-w-0 flex-col gap-0.5">
         <p className="flex items-center justify-center gap-1">
           <Link href={memberHref(member.handle)} className="truncate text-md font-medium text-ink hover:underline">

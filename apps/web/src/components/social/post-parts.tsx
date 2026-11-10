@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type React from "react";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
 import { Avatar, Icon, cn, RoleBadgeIcon } from "@chartermission/ui";
 import { PeopleLink } from "@/components/people/people-link";
@@ -34,8 +35,41 @@ export function TimeAgo({ iso, className }: { iso: string; className?: string })
   );
 }
 
-export function MemberAvatar({ member, size = 40 }: { member: Pick<MemberRef, "name" | "avatarUrl" | "tone">; size?: 24 | 32 | 40 | 56 | 96 }) {
-  return <Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} size={size} />;
+/**
+ * A member's photo. With `link`, it opens their profile (the viewer's own included); leave it
+ * off where the photo already sits inside a link or a button.
+ */
+export function MemberAvatar({
+  member,
+  size = 40,
+  link = false,
+  className,
+}: {
+  member: Pick<MemberRef, "name" | "avatarUrl" | "tone"> & { handle?: string | null };
+  size?: 24 | 32 | 40 | 56 | 96;
+  link?: boolean;
+  className?: string;
+}) {
+  const avatar = <Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} size={size} />;
+  if (!link || !member.handle) return avatar;
+  return (
+    <ProfileLink href={memberHref(member.handle)} className={className}>
+      {avatar}
+    </ProfileLink>
+  );
+}
+
+/**
+ * Makes a profile photo open the profile. The name beside it is the link people tab to and
+ * screen readers announce, so the photo's link is a pointer shortcut only (out of the tab order).
+ * It sits above a card's stretched link (`relative z-10`).
+ */
+export function ProfileLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} tabIndex={-1} aria-hidden="true" className={cn("relative z-10 shrink-0 rounded-full transition-opacity hover:opacity-90", className)}>
+      {children}
+    </Link>
+  );
 }
 
 export function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
@@ -81,7 +115,7 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
   return (
     <div className="relative flex w-full flex-col gap-2 rounded-[10px] border border-line p-4 hover:bg-surface">
       <div className="flex items-center gap-2">
-        <MemberAvatar member={original.author} size={24} />
+        <MemberAvatar member={original.author} size={24} link />
         <span className="truncate text-sm font-medium text-ink">{original.author.name}</span>
         {original.author.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
         <RoleBadgeIcon badge={original.author.badge} size={14} />

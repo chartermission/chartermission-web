@@ -70,7 +70,7 @@ async function Detail({ params }: Pick<PageProps<"/[locale]/opportunities/[slug]
         </Panel>
 
         <Panel className="flex items-center gap-3 p-5">
-          <MemberAvatar member={o.poster} />
+          <MemberAvatar member={o.poster} link />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-xs text-secondary">Posted by</span>
             <AuthorName member={o.poster} />

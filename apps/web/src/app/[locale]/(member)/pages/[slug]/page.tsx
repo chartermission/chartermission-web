@@ -158,7 +158,7 @@ async function PageRightRail({ params }: { params: Params }) {
       <ul className="flex flex-col gap-3">
         {page.admins.map((admin) => (
           <li key={admin.member.id} className="flex items-center gap-2.5">
-            <MemberAvatar member={admin.member} size={32} />
+            <MemberAvatar member={admin.member} size={32} link />
             <Link href={memberHref(admin.member.handle)} className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:underline">
               {admin.member.name}
             </Link>

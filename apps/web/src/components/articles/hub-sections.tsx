@@ -8,6 +8,7 @@ import { articleHref, authorHref } from "@/components/social/links";
 import { Bone } from "@/components/social/skeletons";
 import { ArticleCounts, ArticleDate, CoverImage } from "./article-card";
 import { T } from "@/i18n/client";
+import { ProfileLink } from "@/components/social/post-parts";
 
 /** The featured article: large cover, title, subtitle, author, date and reading time. */
 export function FeaturedArticle({ post }: { post: PostView }) {
@@ -35,7 +36,9 @@ export function FeaturedArticle({ post }: { post: PostView }) {
         {article.subtitle && <p className="line-clamp-2 text-h3 font-normal text-body max-sm:text-md">{article.subtitle}</p>}
         <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-2">
           <div className="flex min-w-0 items-center gap-3">
-            <Avatar name={post.author.name} src={post.author.avatarUrl ?? undefined} tone={post.author.tone} size={40} />
+            <ProfileLink href={authorHref(post)}>
+<Avatar name={post.author.name} src={post.author.avatarUrl ?? undefined} tone={post.author.tone} size={40} />
+</ProfileLink>
             <div className="flex min-w-0 flex-col">
               <p className="flex items-center gap-1">
                 <Link href={authorHref(post)} className="relative z-10 truncate text-md font-medium text-ink hover:underline">

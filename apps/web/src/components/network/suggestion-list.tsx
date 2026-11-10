@@ -5,13 +5,16 @@ import type { SuggestedMember } from "@chartermission/contracts";
 import { Avatar } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { ConnectControl, FollowControl, useRelationship } from "./relationship";
+import { ProfileLink } from "@/components/social/post-parts";
 
 function SuggestionRow({ member }: { member: SuggestedMember }) {
   const controls = useRelationship(member, { connection: "none", connectionId: null, following: false });
   return (
     <li className="flex flex-col gap-2">
       <div className="flex items-center gap-2.5">
-        <Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} />
+        <ProfileLink href={memberHref(member.handle)}>
+<Avatar name={member.name} src={member.avatarUrl ?? undefined} tone={member.tone} />
+</ProfileLink>
         <Link href={memberHref(member.handle)} className="group flex min-w-0 flex-1 flex-col gap-px">
           <span className="truncate text-sm font-medium text-ink group-hover:underline">{member.name}</span>
           {member.headline && <span className="truncate text-xs text-secondary">{member.headline}</span>}

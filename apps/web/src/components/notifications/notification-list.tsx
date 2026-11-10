@@ -38,9 +38,9 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
   const text = item.segments.map((s) => s.text).join("");
   return (
     <li className={cn("relative flex items-start gap-3 px-5 py-4 max-sm:px-4", !item.read && "bg-primary-tint-2")}>
-      <span className="relative shrink-0" aria-hidden="true">
+      <span className="relative shrink-0">
         {item.icon === "avatar" && actor ? (
-          <MemberAvatar member={actor} size={40} />
+          <MemberAvatar member={actor} size={40} link />
         ) : (
           <span className={cn("flex size-10 items-center justify-center rounded-full", icon.className)}>
             <Icon name={icon.name} size={20} />

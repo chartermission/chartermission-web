@@ -11,6 +11,7 @@ import { coverAlt } from "@/components/social/post-types/article";
 import { Bone } from "@/components/social/skeletons";
 import { articleDate } from "./format";
 import { useT, useIntlTag } from "@/i18n/client";
+import { ProfileLink } from "@/components/social/post-parts";
 
 type Article = NonNullable<PostView["article"]>;
 
@@ -51,7 +52,9 @@ export function ArticleDate({ iso, className }: { iso: string; className?: strin
 export function ArticleMeta({ author, post, size = 24, className }: { author: MemberRef; post: PostView; size?: 24 | 32 | 40; className?: string }) {
   return (
     <div className={cn("flex min-w-0 items-center gap-2 text-xs text-secondary", className)}>
-      <Avatar name={author.name} src={author.avatarUrl ?? undefined} tone={author.tone} size={size} />
+      <ProfileLink href={authorHref(post)}>
+<Avatar name={author.name} src={author.avatarUrl ?? undefined} tone={author.tone} size={size} />
+</ProfileLink>
       <p className="flex min-w-0 flex-wrap items-center gap-x-1">
         <Link href={authorHref(post)} className="relative z-10 truncate font-medium text-ink hover:underline">
           {author.name}

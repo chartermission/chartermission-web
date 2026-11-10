@@ -14,6 +14,8 @@ import type { ComposeTool } from "@/components/compose/create-post-dialog";
 import { postTypeMeta } from "@/components/social/post-types/meta";
 import { T, useT, useIntlTag } from "@/i18n/client";
 import type { Translate } from "@/i18n/translate";
+import { ProfileLink } from "@/components/social/post-parts";
+import { memberHref } from "@/components/social/links";
 
 /** What the composer opens with: a tool on a standard post, or another post type. */
 export type ComposeStart = { tool?: ComposeTool; type?: PostType };
@@ -111,7 +113,9 @@ export function Composer({ viewer, onOpen }: { viewer: Viewer; onOpen?: (start?:
   return (
     <Panel aria-label="Create a post" className="flex flex-col gap-3.5 p-4">
       <div className="flex items-center gap-3">
-        <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} />
+        <ProfileLink href={memberHref(viewer.handle)}>
+<Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} />
+</ProfileLink>
         <button
           type="button"
           disabled={!!blocked}

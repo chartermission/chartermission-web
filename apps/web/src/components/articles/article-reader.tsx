@@ -25,6 +25,7 @@ import { BrandCover } from "@/components/illustrations";
 import { articleLongDate, withoutTrailingTags } from "./format";
 import { ReadingProgress } from "./reading-progress";
 import { T, useT, useIntlTag } from "@/i18n/client";
+import { ProfileLink } from "@/components/social/post-parts";
 
 type Modal = "report" | "delete" | "block" | "mute" | "repost" | null;
 
@@ -292,7 +293,9 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
 
         {author && (
           <section aria-labelledby="about-author" className="flex items-start gap-4 rounded-card border border-line bg-surface p-5 max-sm:flex-col max-sm:gap-3 max-sm:px-4">
-            <Avatar name={author.name} src={author.avatarUrl ?? undefined} tone={author.tone} size={56} />
+            <ProfileLink href={memberHref(author.handle)}>
+<Avatar name={author.name} src={author.avatarUrl ?? undefined} tone={author.tone} size={56} />
+</ProfileLink>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <p className="text-label text-secondary">Written by</p>
               <h2 id="about-author" className="flex items-center gap-1 text-h3 text-ink">

@@ -14,7 +14,7 @@ export function MemberRow({ member, avatarBadge }: { member: DirectoryMember; av
   return (
     <li className="flex flex-wrap items-center gap-3 px-5 py-3.5 max-sm:px-4">
       <span className="relative shrink-0">
-        <MemberAvatar member={member} size={40} />
+        <MemberAvatar member={member} size={40} link />
         {avatarBadge}
       </span>
       <div className="flex min-w-0 flex-1 flex-col">

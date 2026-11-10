@@ -8,6 +8,7 @@ import { badgeParts, dayKey, formatClock, formatDay, sameWallClock, zoneAbbrevia
 import { useViewerZone } from "./use-viewer-zone";
 import { useT, useIntlTag } from "@/i18n/client";
 import type { Translate } from "@/i18n/translate";
+import { ProfileLink } from "@/components/social/post-parts";
 
 /* Shared bits of event UI: time in two zones, date badges, format/status chips, host line. */
 
@@ -128,7 +129,7 @@ export function HostLine({ host, size = 24, prefix = "Hosted by", className, lin
     );
   return (
     <span className={cn("flex min-w-0 items-center gap-2 text-sm text-secondary", className)}>
-      {avatar}
+      {href ? <ProfileLink href={href}>{avatar}</ProfileLink> : avatar}
       <span className="min-w-0 truncate">
         {prefix}{" "}
         {href ? (

@@ -34,7 +34,7 @@ function Row({ connection, filter, onDone }: { connection: ConnectionView; filte
 
   return (
     <li className="flex flex-wrap items-center gap-3 px-5 py-4 max-sm:px-4">
-      <MemberAvatar member={member} size={56} />
+      <MemberAvatar member={member} size={56} link />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <Link href={memberHref(member.handle)} className="truncate text-md font-medium text-ink hover:underline">
           {member.name}

@@ -13,6 +13,7 @@ import { memberHref } from "@/components/social/links";
 import { toast } from "@/components/social/toast";
 import { HighlightPicker } from "./highlight-picker";
 import { T, useT, useIntlTag } from "@/i18n/client";
+import { ProfileLink } from "@/components/social/post-parts";
 
 export type StoryGroup = { key: string; author: MemberRef; stories: StoryView[]; title?: string };
 
@@ -357,7 +358,9 @@ export function StoryViewer({
             <ul className="flex flex-col gap-3">
               {viewers.map((v) => (
                 <li key={v.member.id} className="flex items-center gap-3">
-                  <Avatar name={v.member.name} src={v.member.avatarUrl ?? undefined} tone={v.member.tone} size={32} />
+                  <ProfileLink href={memberHref(v.member.handle)}>
+<Avatar name={v.member.name} src={v.member.avatarUrl ?? undefined} tone={v.member.tone} size={32} />
+</ProfileLink>
                   <Link href={memberHref(v.member.handle)} className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:underline">
                     {v.member.name}
                   </Link>

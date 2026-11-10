@@ -15,7 +15,7 @@ export function AuthorCard({ member }: { member: MemberProfile }) {
     <Panel className="flex flex-col gap-3 p-5">
       <h2 className="sr-only">About the author</h2>
       <div className="flex items-center gap-3">
-        <MemberAvatar member={member} size={56} />
+        <MemberAvatar member={member} size={56} link />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <p className="flex items-center gap-1 text-md font-medium text-ink">
             {member.name}
