@@ -6,8 +6,13 @@ import { ambassadorLeads, chapters, countries, memberProfiles, roles, userRoles,
 import { env } from '../config/env.js';
 
 /** Public URL for a stored file, served by the media endpoint (permission-checked there). */
+/**
+ * Media links are root-relative (/api/v1/media/{id}): the web and admin apps both proxy /api/v1, so
+ * each serves media from its own origin with its own session cookie. An absolute link on the web
+ * domain would not carry the admin session, and media is only served to signed-in viewers.
+ */
 export function mediaUrl(fileId: string | null | undefined): string | null {
-  return fileId ? `${env().API_PUBLIC_URL.replace(/\/$/, '')}/media/${fileId}` : null;
+  return fileId ? `${new URL(env().API_PUBLIC_URL).pathname.replace(/\/$/, '')}/media/${fileId}` : null;
 }
 
 /** The still frame of a processed video, or null. */

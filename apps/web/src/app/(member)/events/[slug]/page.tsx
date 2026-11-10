@@ -33,7 +33,8 @@ export async function generateMetadata({ params }: PageProps<"/events/[slug]">):
   return {
     title: event.title,
     description: event.summary,
-    openGraph: { type: "website", title: event.title, description: event.summary, images: event.coverUrl ? [event.coverUrl] : undefined },
+    // No og:image: media is only served to signed-in members, so link previews couldn't load the cover anyway.
+    openGraph: { type: "website", title: event.title, description: event.summary },
   };
 }
 
