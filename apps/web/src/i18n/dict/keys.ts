@@ -1218,6 +1218,7 @@ export const KEYS: readonly string[] = [
   "Jobs, fellowships, grants and calls for partners from the community. Apply with your profile in a couple of clicks.",
   "Jobs, fellowships, grants and calls for partners posted by Charter Mission members.",
   "Jobs, fellowships, grants and calls for partners, posted by members and organisations. Apply without leaving the platform.",
+  "Join",
   "Join a chapter",
   "Join a chapter to see its posts, events and members in your feed.",
   "Join chapter",

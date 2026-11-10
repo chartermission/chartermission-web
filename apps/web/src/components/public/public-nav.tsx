@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Avatar, Icon, Logo, buttonClasses, cn } from "@chartermission/ui";
 import { getViewer } from "@/lib/api/server";
 import { T } from "@/i18n/client";
-import { LanguageSwitcher } from "@/i18n/language-menu";
+import { LanguageList, LanguageSwitcher } from "@/i18n/language-menu";
 
 /** Landing-page sections the nav links scroll to. */
 export const publicNavLinks = [
@@ -23,8 +23,18 @@ function SignedOutActions() {
       <Link href="/signin" className={cn(ghostOnDark, "max-sm:hidden")}>
         <T k="public.signIn" />
       </Link>
-      <Link href="/signup" className={buttonClasses({ variant: "accent", className: "max-sm:px-3.5!" })}>
-        <T k="public.joinFree" />
+      <Link
+        href="/signup"
+        className={buttonClasses({
+          variant: "accent",
+          className: "max-sm:px-3.5!",
+        })}
+      >
+        <span className="max-sm:hidden">
+          <T k="public.joinFree" />
+        </span>
+        {/* The full label doesn't fit a phone's header in every language. */}
+        <span className="whitespace-nowrap sm:hidden">{"Join"}</span>
       </Link>
     </>
   );
@@ -39,13 +49,33 @@ async function NavActions() {
   if (!viewer) return <SignedOutActions />;
   return (
     <>
-      <Link href={`/${viewer.handle}`} className="flex items-center gap-2.5 rounded-full py-1 pe-3 ps-1 text-sm font-medium text-inverse hover:bg-white/10 max-sm:pe-1">
-        <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} tone={viewer.tone} size={32} />
-        <span className="max-w-[160px] truncate max-sm:sr-only">{viewer.name}</span>
+      <Link
+        href={`/${viewer.handle}`}
+        className="flex items-center gap-2.5 rounded-full py-1 pe-3 ps-1 text-sm font-medium text-inverse hover:bg-white/10 max-sm:pe-1"
+      >
+        <Avatar
+          name={viewer.name}
+          src={viewer.avatarUrl ?? undefined}
+          tone={viewer.tone}
+          size={32}
+        />
+        <span className="max-w-[160px] truncate max-sm:sr-only">
+          {viewer.name}
+        </span>
       </Link>
-      <Link href="/feed" className={buttonClasses({ variant: "accent", className: "max-sm:px-3.5!" })}>
-        <span className="max-sm:hidden"><T k="public.goToFeed" /></span>
-        <span className="sm:hidden"><T k="public.feed" /></span>
+      <Link
+        href="/feed"
+        className={buttonClasses({
+          variant: "accent",
+          className: "max-sm:px-3.5!",
+        })}
+      >
+        <span className="max-sm:hidden">
+          <T k="public.goToFeed" />
+        </span>
+        <span className="sm:hidden">
+          <T k="public.feed" />
+        </span>
         <Icon name="chevron-right" size={18} />
       </Link>
     </>
@@ -58,15 +88,24 @@ async function NavActions() {
  */
 export function PublicNav({ className }: { className?: string }) {
   return (
-    <header className={cn("flex items-center justify-between gap-4 py-5", className)}>
-      <Link href="/" aria-label="Charter Mission home" className="flex rounded-lg">
+    <header
+      className={cn("flex items-center justify-between gap-4 py-5", className)}
+    >
+      <Link
+        href="/"
+        aria-label="Charter Mission home"
+        className="flex rounded-lg"
+      >
         <Logo theme="dark" />
       </Link>
       <nav aria-label="Main" className="max-lg:hidden">
         <ul className="flex items-center gap-7 text-sm font-medium text-primary-tint">
           {publicNavLinks.map((link) => (
             <li key={link.label}>
-              <Link href={link.href} className="rounded-sm hover:text-inverse hover:underline">
+              <Link
+                href={link.href}
+                className="rounded-sm hover:text-inverse hover:underline"
+              >
                 <T k={`public.nav.${link.key}`} />
               </Link>
             </li>
@@ -84,19 +123,31 @@ export function PublicNav({ className }: { className?: string }) {
             <Icon name="x" size={22} className="hidden group-open:block" />
             <span className="sr-only">Menu</span>
           </summary>
-          <nav aria-label="Sections" className="absolute top-full end-0 z-20 mt-2 w-60 rounded-card border border-line bg-card p-2 shadow-[0_16px_40px_rgba(0,0,0,0.25)]">
+          <nav
+            aria-label="Sections"
+            className="absolute top-full end-0 z-20 mt-2 w-60 rounded-card border border-line bg-card p-2 shadow-[0_16px_40px_rgba(0,0,0,0.25)]"
+          >
             <ul className="flex flex-col">
               {publicNavLinks.map((link) => (
                 <li key={link.label}>
-                  <Link href={link.href} className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink hover:bg-muted">
+                  <Link
+                    href={link.href}
+                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ink hover:bg-muted"
+                  >
                     <T k={`public.nav.${link.key}`} />
                   </Link>
                 </li>
               ))}
               <li className="mt-1 border-t border-line pt-1 sm:hidden">
-                <Link href="/signin" className="block rounded-lg px-3 py-2.5 text-sm font-medium text-primary hover:bg-muted">
+                <Link
+                  href="/signin"
+                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-primary hover:bg-muted"
+                >
                   <T k="public.signIn" />
                 </Link>
+              </li>
+              <li className="mt-1 border-t border-line pt-1 sm:hidden">
+                <LanguageList />
               </li>
             </ul>
           </nav>

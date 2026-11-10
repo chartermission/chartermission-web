@@ -1220,6 +1220,7 @@ export const fr: Dict = {
   "Jobs, fellowships, grants and calls for partners from the community. Apply with your profile in a couple of clicks.": "Emplois, bourses, subventions et appels à partenaires de la communauté. Postulez avec votre profil en quelques clics.",
   "Jobs, fellowships, grants and calls for partners posted by Charter Mission members.": "Emplois, bourses, subventions et appels à partenaires publiés par les membres de Charter Mission.",
   "Jobs, fellowships, grants and calls for partners, posted by members and organisations. Apply without leaving the platform.": "Emplois, bourses, subventions et appels à partenaires, publiés par des membres et des organisations. Postulez sans quitter la plateforme.",
+  "Join": "Rejoindre",
   "Join a chapter": "Rejoignez une section",
   "Join a chapter to see its posts, events and members in your feed.": "Rejoignez une section pour voir ses publications, ses événements et ses membres dans votre fil.",
   "Join chapter": "Rejoindre la section",

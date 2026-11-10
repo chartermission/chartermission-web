@@ -9,13 +9,19 @@ import {
   type OwnProfile,
   type Taxonomies,
 } from "@chartermission/contracts";
-import { Button, Icon, Panel, type AvatarTone } from "@chartermission/ui";
+import { Button, Icon, Panel, type AvatarTone, cn } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import type { CountryGroup } from "@/lib/taxonomies";
 import { AvatarUploader } from "@/components/account/avatar-uploader";
 import { CountrySelect } from "@/components/account/country-select";
 import { RestrictedPrompt } from "@/components/account/verify-prompt";
-import { Field, FormAlert, describedBy, inputClasses, retryMessage } from "@/components/auth/fields";
+import {
+  Field,
+  FormAlert,
+  describedBy,
+  inputClasses,
+  retryMessage,
+} from "@/components/auth/fields";
 import { ChipPicker } from "./chip-picker";
 import { CommunityStep } from "./community-step";
 import { OnboardingProgress } from "./progress";
@@ -37,7 +43,12 @@ type Draft = {
   followedMemberIds: string[];
 };
 
-type FieldErrors = Partial<Record<"headline" | "countryCode" | "city" | "organisation" | "hashtag", string>>;
+type FieldErrors = Partial<
+  Record<
+    "headline" | "countryCode" | "city" | "organisation" | "hashtag",
+    string
+  >
+>;
 
 const LAST = ONBOARDING_STEPS.length - 1;
 const HASHTAG = /^[A-Za-z0-9_]{2,50}$/;
@@ -45,23 +56,33 @@ const HASHTAG = /^[A-Za-z0-9_]{2,50}$/;
 const stepCopy: Record<StepKey, { title: string; description: string }> = {
   about: {
     title: "Tell members about yourself",
-    description: "A headline and location help people know who you are and where you work.",
+    description:
+      "A headline and location help people know who you are and where you work.",
   },
   topics: {
     title: "What do you care about?",
-    description: "Pick interests and hashtags to shape your feed. You can change them any time.",
+    description:
+      "Pick interests and hashtags to shape your feed. You can change them any time.",
   },
   skills: {
     title: "Your skills and sectors",
-    description: "These help members with shared work find you, and power your suggestions.",
+    description:
+      "These help members with shared work find you, and power your suggestions.",
   },
-  community: { title: "Find your people", description: "Follow members and chapters to fill your feed from day one." },
+  community: {
+    title: "Find your people",
+    description: "Follow members and chapters to fill your feed from day one.",
+  },
 };
 
-const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((value) => b.includes(value));
+const sameSet = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((value) => b.includes(value));
 const lower = (values: string[]) => values.map((value) => value.toLowerCase());
 
-function draftFrom(state: OnboardingState, profile: Pick<OwnProfile, "organisation" | "languages">): Draft {
+function draftFrom(
+  state: OnboardingState,
+  profile: Pick<OwnProfile, "organisation" | "languages">,
+): Draft {
   return {
     headline: state.data.headline ?? "",
     countryCode: state.data.countryCode ?? "",
@@ -87,7 +108,10 @@ export function OnboardingWizard({
 }: {
   initial: OnboardingState;
   profile: Pick<OwnProfile, "organisation" | "languages" | "avatarUrl">;
-  taxonomies: Pick<Taxonomies, "interests" | "skills" | "sectors" | "languages" | "chapters">;
+  taxonomies: Pick<
+    Taxonomies,
+    "interests" | "skills" | "sectors" | "languages" | "chapters"
+  >;
   countryGroups: CountryGroup[];
   viewer: { name: string; tone: AvatarTone; emailVerified: boolean };
 }) {
@@ -102,7 +126,10 @@ export function OnboardingWizard({
   const [saved, setSaved] = useState<Draft>(() => draftFrom(initial, profile));
   const [suggestions] = useState(initial.suggestions);
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<{ text: string; restricted?: boolean } | null>(null);
+  const [formError, setFormError] = useState<{
+    text: string;
+    restricted?: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState<"save" | "skip" | null>(null);
   const [customTag, setCustomTag] = useState("");
   const [extraTags, setExtraTags] = useState<string[]>([]);
@@ -126,34 +153,69 @@ export function OnboardingWizard({
   function validate(): FieldErrors {
     const next: FieldErrors = {};
     if (step === "about") {
-      if (draft.headline.trim().length > 120) next.headline = "Use 120 characters or fewer";
-      if (draft.city.trim().length > 80) next.city = "Use 80 characters or fewer";
-      if (draft.organisation.trim().length > 120) next.organisation = "Use 120 characters or fewer";
+      if (draft.headline.trim().length > 120)
+        next.headline = "Use 120 characters or fewer";
+      if (draft.city.trim().length > 80)
+        next.city = "Use 80 characters or fewer";
+      if (draft.organisation.trim().length > 120)
+        next.organisation = "Use 120 characters or fewer";
     }
     return next;
   }
 
-  async function unfollowRemoved(type: "hashtag" | "member" | "chapter", before: string[], after: string[]) {
+  async function unfollowRemoved(
+    type: "hashtag" | "member" | "chapter",
+    before: string[],
+    after: string[],
+  ) {
     const keep = type === "hashtag" ? lower(after) : after;
-    const removed = before.filter((value) => !keep.includes(type === "hashtag" ? value.toLowerCase() : value));
+    const removed = before.filter(
+      (value) =>
+        !keep.includes(type === "hashtag" ? value.toLowerCase() : value),
+    );
     await Promise.all(
       removed.map((targetId) =>
-        api("/follows", { method: "DELETE", body: { targetType: type, targetId } }).catch(() => undefined),
+        api("/follows", {
+          method: "DELETE",
+          body: { targetType: type, targetId },
+        }).catch(() => undefined),
       ),
     );
   }
 
   async function sideEffects() {
-    if (step === "about" && draft.organisation.trim() !== saved.organisation.trim()) {
-      await api("/me/profile", { method: "PATCH", body: { organisation: draft.organisation.trim() || null } });
+    if (
+      step === "about" &&
+      draft.organisation.trim() !== saved.organisation.trim()
+    ) {
+      await api("/me/profile", {
+        method: "PATCH",
+        body: { organisation: draft.organisation.trim() || null },
+      });
     }
-    if (step === "topics") await unfollowRemoved("hashtag", saved.followedHashtags, draft.followedHashtags);
+    if (step === "topics")
+      await unfollowRemoved(
+        "hashtag",
+        saved.followedHashtags,
+        draft.followedHashtags,
+      );
     if (step === "skills" && !sameSet(draft.languageIds, saved.languageIds)) {
-      await api("/me/profile", { method: "PATCH", body: { languageIds: draft.languageIds } });
+      await api("/me/profile", {
+        method: "PATCH",
+        body: { languageIds: draft.languageIds },
+      });
     }
     if (step === "community") {
-      await unfollowRemoved("member", saved.followedMemberIds, draft.followedMemberIds);
-      await unfollowRemoved("chapter", saved.followedChapterIds, draft.followedChapterIds);
+      await unfollowRemoved(
+        "member",
+        saved.followedMemberIds,
+        draft.followedMemberIds,
+      );
+      await unfollowRemoved(
+        "chapter",
+        saved.followedChapterIds,
+        draft.followedChapterIds,
+      );
     }
   }
 
@@ -161,12 +223,22 @@ export function OnboardingWizard({
     if (action === "skip") return { step, action, data: {} };
     const data: OnboardingUpdateInput["data"] =
       step === "about"
-        ? { headline: draft.headline.trim() || null, countryCode: draft.countryCode || null, city: draft.city.trim() || null }
+        ? {
+            headline: draft.headline.trim() || null,
+            countryCode: draft.countryCode || null,
+            city: draft.city.trim() || null,
+          }
         : step === "topics"
-          ? { interestIds: draft.interestIds, followedHashtags: draft.followedHashtags }
+          ? {
+              interestIds: draft.interestIds,
+              followedHashtags: draft.followedHashtags,
+            }
           : step === "skills"
             ? { skillIds: draft.skillIds, sectorIds: draft.sectorIds }
-            : { followedChapterIds: draft.followedChapterIds, followedMemberIds: draft.followedMemberIds };
+            : {
+                followedChapterIds: draft.followedChapterIds,
+                followedMemberIds: draft.followedMemberIds,
+              };
     return { step, action, data };
   }
 
@@ -182,7 +254,10 @@ export function OnboardingWizard({
     setFormError(null);
     try {
       if (action === "save") await sideEffects();
-      const state = await api<OnboardingState>("/me/onboarding", { method: "PUT", body: payload(action) });
+      const state = await api<OnboardingState>("/me/onboarding", {
+        method: "PUT",
+        body: payload(action),
+      });
       const follows = {
         followedHashtags: state.data.followedHashtags,
         followedMemberIds: state.data.followedMemberIds,
@@ -191,7 +266,9 @@ export function OnboardingWizard({
       setSaved((prev) => ({
         ...prev,
         ...follows,
-        ...(action === "save" ? { organisation: draft.organisation, languageIds: draft.languageIds } : {}),
+        ...(action === "save"
+          ? { organisation: draft.organisation, languageIds: draft.languageIds }
+          : {}),
       }));
       if (action === "save") setDraft((prev) => ({ ...prev, ...follows }));
       if (index >= LAST) {
@@ -206,12 +283,19 @@ export function OnboardingWizard({
       if (isApiError(error, "VALIDATION_FAILED") && error.fields) {
         setErrors(error.fields as FieldErrors);
         setFormError({ text: error.message });
-      } else if (isApiError(error, "ACCOUNT_SUSPENDED") || isApiError(error, "ACCOUNT_DEACTIVATED")) {
+      } else if (
+        isApiError(error, "ACCOUNT_SUSPENDED") ||
+        isApiError(error, "ACCOUNT_DEACTIVATED")
+      ) {
         setFormError({ text: error.message, restricted: true });
       } else if (isApiError(error, "RATE_LIMITED")) {
         setFormError({ text: retryMessage(t, error.retryAfter) });
       } else {
-        setFormError({ text: isApiError(error) ? error.message : "Something went wrong. Please try again." });
+        setFormError({
+          text: isApiError(error)
+            ? error.message
+            : "Something went wrong. Please try again.",
+        });
       }
     }
   }
@@ -219,7 +303,9 @@ export function OnboardingWizard({
   function addCustomTag() {
     const tag = customTag.trim().replace(/^#/, "");
     if (!HASHTAG.test(tag)) {
-      setErrors({ hashtag: "Use 2–50 letters, numbers or underscores, without spaces" });
+      setErrors({
+        hashtag: "Use 2–50 letters, numbers or underscores, without spaces",
+      });
       return;
     }
     if (!lower(draft.followedHashtags).includes(tag.toLowerCase())) {
@@ -229,8 +315,16 @@ export function OnboardingWizard({
       }
       update({ followedHashtags: [...draft.followedHashtags, tag] });
     }
-    if (!suggestions.hashtags.some((s) => s.tag.toLowerCase() === tag.toLowerCase())) {
-      setExtraTags((prev) => (prev.some((t) => t.toLowerCase() === tag.toLowerCase()) ? prev : [...prev, tag]));
+    if (
+      !suggestions.hashtags.some(
+        (s) => s.tag.toLowerCase() === tag.toLowerCase(),
+      )
+    ) {
+      setExtraTags((prev) =>
+        prev.some((t) => t.toLowerCase() === tag.toLowerCase())
+          ? prev
+          : [...prev, tag],
+      );
     }
     setCustomTag("");
     setErrors({});
@@ -243,35 +337,110 @@ export function OnboardingWizard({
       id: s.tag,
       label: `#${s.tag}`,
       badge: s.trending ? (
-        <span className="inline-flex items-center gap-0.5 text-xs text-accent" title="Trending now">
+        <span
+          className="inline-flex items-center gap-0.5 text-xs text-accent"
+          title="Trending now"
+        >
           <Icon name="flame" size={12} />
           <span className="sr-only">trending</span>
         </span>
       ) : undefined,
     })),
     ...[...draft.followedHashtags, ...extraTags]
-      .filter((tag, i, all) => all.findIndex((t) => t.toLowerCase() === tag.toLowerCase()) === i)
-      .filter((tag) => !suggestions.hashtags.some((s) => s.tag.toLowerCase() === tag.toLowerCase()))
+      .filter(
+        (tag, i, all) =>
+          all.findIndex((t) => t.toLowerCase() === tag.toLowerCase()) === i,
+      )
+      .filter(
+        (tag) =>
+          !suggestions.hashtags.some(
+            (s) => s.tag.toLowerCase() === tag.toLowerCase(),
+          ),
+      )
       .map((tag) => ({ id: tag, label: `#${tag}` })),
   ];
   // Selected ids must match option ids case-insensitively (the API may return a different display case).
-  const selectedTags = tagOptions.filter((o) => lower(draft.followedHashtags).includes(o.id.toLowerCase())).map((o) => o.id);
+  const selectedTags = tagOptions
+    .filter((o) => lower(draft.followedHashtags).includes(o.id.toLowerCase()))
+    .map((o) => o.id);
+
+  /** Back, Skip and Save: at the top and the bottom of each step, so a long step (chapters) needs no scrolling. */
+  const actions = (where: "top" | "bottom") => (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-3",
+        where === "top"
+          ? "border-b border-line bg-surface px-6 py-3 max-sm:px-5"
+          : "border-t border-line p-6 max-sm:p-5",
+      )}
+    >
+      {index > 0 && (
+        <Button
+          variant="ghost"
+          onClick={() => setIndex(index - 1)}
+          className={where === "top" ? "max-sm:hidden" : undefined}
+          disabled={!!busy}
+        >
+          <Icon name="chevron-left" size={16} />
+          Back
+        </Button>
+      )}
+      <span className="flex-1" />
+      <Button
+        variant="secondary"
+        onClick={() => void submit("skip")}
+        disabled={!!busy}
+        aria-busy={busy === "skip" || undefined}
+      >
+        {busy === "skip"
+          ? "Skipping…"
+          : index === LAST
+            ? "Skip and finish"
+            : "Skip"}
+      </Button>
+      <Button
+        type="submit"
+        disabled={!!busy}
+        aria-busy={busy === "save" || undefined}
+      >
+        {busy === "save"
+          ? "Saving…"
+          : index === LAST
+            ? "Finish"
+            : "Save & continue"}
+      </Button>
+    </div>
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-6 pt-8 pb-16 max-sm:px-4 max-sm:pt-5">
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-accent"><T vars={{ firstName }}>{"Welcome to Charter Mission, {firstName}"}</T></p>
+        <p className="text-sm font-medium text-accent">
+          <T vars={{ firstName }}>
+            {"Welcome to Charter Mission, {firstName}"}
+          </T>
+        </p>
         <OnboardingProgress current={index} />
       </div>
 
       <Panel aria-labelledby={`${id}-title`} className="flex flex-col">
-        <form noValidate onSubmit={(e) => void submit("save", e)} className="flex flex-col">
+        <form
+          noValidate
+          onSubmit={(e) => void submit("save", e)}
+          className="flex flex-col"
+        >
           <div className="flex flex-col gap-1.5 border-b border-line p-6 max-sm:p-5">
-            <h1 id={`${id}-title`} ref={heading} tabIndex={-1} className="text-h2 text-ink focus-visible:outline-none">
+            <h1
+              id={`${id}-title`}
+              ref={heading}
+              tabIndex={-1}
+              className="text-h2 text-ink focus-visible:outline-none"
+            >
               {copy.title}
             </h1>
             <p className="text-md text-secondary">{copy.description}</p>
           </div>
+          {actions("top")}
 
           <div className="flex flex-col gap-6 p-6 max-sm:p-5">
             {formError &&
@@ -292,7 +461,11 @@ export function OnboardingWizard({
                   id={`${id}-headline`}
                   label="Headline"
                   error={errors.headline}
-                  hint={<span className="text-xs text-secondary">{draft.headline.length}/120</span>}
+                  hint={
+                    <span className="text-xs text-secondary">
+                      {draft.headline.length}/120
+                    </span>
+                  }
                 >
                   <input
                     id={`${id}-headline`}
@@ -302,12 +475,18 @@ export function OnboardingWizard({
                     placeholder="e.g. Agritech founder building cold-chain logistics"
                     onChange={(e) => update({ headline: e.target.value })}
                     aria-invalid={errors.headline ? true : undefined}
-                    aria-describedby={describedBy(errors.headline && `${id}-headline-error`)}
+                    aria-describedby={describedBy(
+                      errors.headline && `${id}-headline-error`,
+                    )}
                     className={inputClasses(!!errors.headline)}
                   />
                 </Field>
                 <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-                  <Field id={`${id}-country`} label="Country" error={errors.countryCode}>
+                  <Field
+                    id={`${id}-country`}
+                    label="Country"
+                    error={errors.countryCode}
+                  >
                     <CountrySelect
                       id={`${id}-country`}
                       name="countryCode"
@@ -315,7 +494,9 @@ export function OnboardingWizard({
                       value={draft.countryCode}
                       invalid={!!errors.countryCode}
                       onChange={(e) => update({ countryCode: e.target.value })}
-                      aria-describedby={describedBy(errors.countryCode && `${id}-country-error`)}
+                      aria-describedby={describedBy(
+                        errors.countryCode && `${id}-country-error`,
+                      )}
                     />
                   </Field>
                   <Field id={`${id}-city`} label="City" error={errors.city}>
@@ -326,12 +507,18 @@ export function OnboardingWizard({
                       value={draft.city}
                       onChange={(e) => update({ city: e.target.value })}
                       aria-invalid={errors.city ? true : undefined}
-                      aria-describedby={describedBy(errors.city && `${id}-city-error`)}
+                      aria-describedby={describedBy(
+                        errors.city && `${id}-city-error`,
+                      )}
                       className={inputClasses(!!errors.city)}
                     />
                   </Field>
                 </div>
-                <Field id={`${id}-organisation`} label="Organisation" error={errors.organisation}>
+                <Field
+                  id={`${id}-organisation`}
+                  label="Organisation"
+                  error={errors.organisation}
+                >
                   <input
                     id={`${id}-organisation`}
                     name="organisation"
@@ -340,7 +527,9 @@ export function OnboardingWizard({
                     placeholder="Where you work or study"
                     onChange={(e) => update({ organisation: e.target.value })}
                     aria-invalid={errors.organisation ? true : undefined}
-                    aria-describedby={describedBy(errors.organisation && `${id}-organisation-error`)}
+                    aria-describedby={describedBy(
+                      errors.organisation && `${id}-organisation-error`,
+                    )}
                     className={inputClasses(!!errors.organisation)}
                   />
                 </Field>
@@ -355,7 +544,10 @@ export function OnboardingWizard({
               <>
                 <ChipPicker
                   label="Interests"
-                  options={taxonomies.interests.map((item) => ({ id: item.id, label: item.name }))}
+                  options={taxonomies.interests.map((item) => ({
+                    id: item.id,
+                    label: item.name,
+                  }))}
                   selected={draft.interestIds}
                   onChange={(interestIds) => update({ interestIds })}
                   max={20}
@@ -370,7 +562,11 @@ export function OnboardingWizard({
                   max={30}
                   emptyText="No hashtags yet — add your own below."
                 />
-                <Field id={`${id}-tag`} label="Follow another hashtag" error={errors.hashtag}>
+                <Field
+                  id={`${id}-tag`}
+                  label="Follow another hashtag"
+                  error={errors.hashtag}
+                >
                   <div className="flex gap-2">
                     <input
                       id={`${id}-tag`}
@@ -388,8 +584,13 @@ export function OnboardingWizard({
                         }
                       }}
                       aria-invalid={errors.hashtag ? true : undefined}
-                      aria-describedby={describedBy(errors.hashtag && `${id}-tag-error`)}
-                      className={inputClasses(!!errors.hashtag, "max-w-[280px]")}
+                      aria-describedby={describedBy(
+                        errors.hashtag && `${id}-tag-error`,
+                      )}
+                      className={inputClasses(
+                        !!errors.hashtag,
+                        "max-w-[280px]",
+                      )}
                     />
                     <Button variant="secondary" onClick={addCustomTag}>
                       Add
@@ -403,21 +604,30 @@ export function OnboardingWizard({
               <>
                 <ChipPicker
                   label="Skills"
-                  options={taxonomies.skills.map((item) => ({ id: item.id, label: item.name }))}
+                  options={taxonomies.skills.map((item) => ({
+                    id: item.id,
+                    label: item.name,
+                  }))}
                   selected={draft.skillIds}
                   onChange={(skillIds) => update({ skillIds })}
                   max={30}
                 />
                 <ChipPicker
                   label="Sectors"
-                  options={taxonomies.sectors.map((item) => ({ id: item.id, label: item.name }))}
+                  options={taxonomies.sectors.map((item) => ({
+                    id: item.id,
+                    label: item.name,
+                  }))}
                   selected={draft.sectorIds}
                   onChange={(sectorIds) => update({ sectorIds })}
                   max={10}
                 />
                 <ChipPicker
                   label="Languages you speak"
-                  options={taxonomies.languages.map((item) => ({ id: item.id, label: item.name }))}
+                  options={taxonomies.languages.map((item) => ({
+                    id: item.id,
+                    label: item.name,
+                  }))}
                   selected={draft.languageIds}
                   onChange={(languageIds) => update({ languageIds })}
                   max={10}
@@ -437,30 +647,12 @@ export function OnboardingWizard({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-line p-6 max-sm:p-5">
-            {index > 0 && (
-              <Button variant="ghost" onClick={() => setIndex(index - 1)} disabled={!!busy}>
-                <Icon name="chevron-left" size={16} />
-                Back
-              </Button>
-            )}
-            <span className="flex-1" />
-            <Button
-              variant="secondary"
-              onClick={() => void submit("skip")}
-              disabled={!!busy}
-              aria-busy={busy === "skip" || undefined}
-            >
-              {busy === "skip" ? "Skipping…" : index === LAST ? "Skip and finish" : "Skip"}
-            </Button>
-            <Button type="submit" disabled={!!busy} aria-busy={busy === "save" || undefined}>
-              {busy === "save" ? "Saving…" : index === LAST ? "Finish" : "Save & continue"}
-            </Button>
-          </div>
+          {actions("bottom")}
         </form>
       </Panel>
       <p className="text-center text-xs text-secondary" aria-live="polite">
-        Your progress is saved after each step — you can come back to it from any device.
+        Your progress is saved after each step — you can come back to it from
+        any device.
       </p>
     </div>
   );
