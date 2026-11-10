@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import type { PostView } from "@chartermission/contracts";
-import { Icon, cn } from "@chartermission/ui";
+import { Icon, buttonClasses, cn } from "@chartermission/ui";
 import { useT, T } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { confetti, pop } from "@/components/motion";
@@ -13,7 +13,15 @@ import { ConfirmDialog, UnblockHint } from "./confirm-dialog";
 import { absoluteUrl, authorHref, postAnalyticsHref, postHref } from "./links";
 import { Menu, type MenuItem } from "./menu";
 import { PostAttachments } from "./post-attachments";
-import { AuthorName, LinkPreviewCard, MemberAvatar, PostCounts, PostTypeChip, RepostEmbed, TimeAgo } from "./post-parts";
+import {
+  AuthorName,
+  LinkPreviewCard,
+  MemberAvatar,
+  PostCounts,
+  PostTypeChip,
+  RepostEmbed,
+  TimeAgo,
+} from "./post-parts";
 import { VideoEmbedPlayer } from "@/components/video/video-player";
 import { PostPoll } from "./post-poll";
 import { ArticleCover, ArticlePreview } from "./post-types/article";
@@ -57,9 +65,12 @@ export function PostCard({
   onRemoved,
   onBookmarkChange,
   extraMenu,
+  guest = false,
 }: {
   post: PostView;
   viewer: Viewer;
+  /** A signed-out visitor reading a public post: read-only, with sign-in in place of the actions. */
+  guest?: boolean;
   /** On the post page: full body, and delete navigates back to the feed. */
   detail?: boolean;
   /** Called after delete, mute or block so lists can drop the card. */
@@ -86,13 +97,21 @@ export function PostCard({
   const bookmarkIconRef = useRef<HTMLSpanElement>(null);
 
   // Analytics: count the post as seen by this member (never the author's or page admins' own views).
-  usePostView(cardRef, initial.id, !initial.viewer.canViewAnalytics && initial.status === "published" && !initial.moderationState);
+  usePostView(
+    cardRef,
+    initial.id,
+    !guest &&
+      !initial.viewer.canViewAnalytics &&
+      initial.status === "published" &&
+      !initial.moderationState,
+  );
 
   // The answers list on the post page reports best-answer changes.
   useEffect(
     () =>
       onQuestionChange((postId, question) => {
-        if (postId === initial.id) setPost((current) => ({ ...current, question }));
+        if (postId === initial.id)
+          setPost((current) => ({ ...current, question }));
       }),
     [initial.id],
   );
@@ -104,7 +123,11 @@ export function PostCard({
 
   function update(next: PostView) {
     setPost(next);
-    setReactions({ reaction: next.viewer.reaction, total: next.counts.reactions, breakdown: next.reactionBreakdown });
+    setReactions({
+      reaction: next.viewer.reaction,
+      total: next.counts.reactions,
+      breakdown: next.reactionBreakdown,
+    });
   }
 
   async function toggleBookmark() {
@@ -112,8 +135,13 @@ export function PostCard({
     setBookmarked(next);
     if (next) pop(bookmarkIconRef.current, { scale: 1.25, duration: 380 });
     try {
-      await api("/bookmarks", { method: next ? "PUT" : "DELETE", body: { targetType: "post", targetId: post.id } });
-      toast.success(next ? "Saved to your bookmarks" : "Removed from your bookmarks");
+      await api("/bookmarks", {
+        method: next ? "PUT" : "DELETE",
+        body: { targetType: "post", targetId: post.id },
+      });
+      toast.success(
+        next ? "Saved to your bookmarks" : "Removed from your bookmarks",
+      );
       onBookmarkChange?.(post, next);
     } catch (e) {
       setBookmarked(!next);
@@ -123,8 +151,17 @@ export function PostCard({
 
   async function setClosed(closed: boolean) {
     try {
-      update(await api<PostView>(`/posts/${post.id}/closed`, { method: "PUT", body: { closed } }));
-      toast.success(closed ? "Request closed. Members can no longer offer help." : "Request reopened");
+      update(
+        await api<PostView>(`/posts/${post.id}/closed`, {
+          method: "PUT",
+          body: { closed },
+        }),
+      );
+      toast.success(
+        closed
+          ? "Request closed. Members can no longer offer help."
+          : "Request reopened",
+      );
     } catch (e) {
       toast.error(e);
     }
@@ -140,7 +177,10 @@ export function PostCard({
     onRemoved?.(post, scope);
   }
 
-  const menu: MenuItem[] = [{ label: "Copy link", icon: "link", onSelect: () => copyLink(post) }, ...(extraMenu?.(post) ?? [])];
+  const menu: MenuItem[] = [
+    { label: "Copy link", icon: "link", onSelect: () => copyLink(post) },
+    ...(extraMenu?.(post) ?? []),
+  ];
   if (post.viewer.canEdit && !post.isRepost) {
     menu.push({
       label: "Edit post",
@@ -154,26 +194,67 @@ export function PostCard({
   if (isOwn && post.request) {
     menu.push(
       post.request.closed
-        ? { label: "Reopen request", icon: "repeat", onSelect: () => setClosed(false) }
-        : { label: "Close request", icon: "check", onSelect: () => setClosed(true) },
+        ? {
+            label: "Reopen request",
+            icon: "repeat",
+            onSelect: () => setClosed(false),
+          }
+        : {
+            label: "Close request",
+            icon: "check",
+            onSelect: () => setClosed(true),
+          },
     );
   }
-  if (post.viewer.canViewAnalytics) menu.push({ label: "View analytics", icon: "chart", onSelect: () => router.push(postAnalyticsHref(post.id)) });
-  if (isOwn && post.viewer.canDelete) menu.push({ label: "Delete post", icon: "x", danger: true, onSelect: () => setModal("delete") });
-  if (!isOwn) {
-    if (post.viewer.canReport) menu.push({ label: "Report post", icon: "flag", onSelect: () => setModal("report") });
+  if (post.viewer.canViewAnalytics)
+    menu.push({
+      label: "View analytics",
+      icon: "chart",
+      onSelect: () => router.push(postAnalyticsHref(post.id)),
+    });
+  if (isOwn && post.viewer.canDelete)
+    menu.push({
+      label: "Delete post",
+      icon: "x",
+      danger: true,
+      onSelect: () => setModal("delete"),
+    });
+  if (!isOwn && !guest) {
+    if (post.viewer.canReport)
+      menu.push({
+        label: "Report post",
+        icon: "flag",
+        onSelect: () => setModal("report"),
+      });
     // Muting and blocking are between members; a page is unfollowed from its own page instead.
     if (!post.page) {
-      menu.push({ label: `Mute ${post.author.name}`, icon: "eye-off", onSelect: () => setModal("mute") });
-      menu.push({ label: `Block ${post.author.name}`, icon: "shield", danger: true, onSelect: () => setModal("block") });
+      menu.push({
+        label: `Mute ${post.author.name}`,
+        icon: "eye-off",
+        onSelect: () => setModal("mute"),
+      });
+      menu.push({
+        label: `Block ${post.author.name}`,
+        icon: "shield",
+        danger: true,
+        onSelect: () => setModal("block"),
+      });
     }
-    if (post.viewer.canDelete) menu.push({ label: "Delete post (moderator)", icon: "x", danger: true, onSelect: () => setModal("delete") });
+    if (post.viewer.canDelete)
+      menu.push({
+        label: "Delete post (moderator)",
+        icon: "x",
+        danger: true,
+        onSelect: () => setModal("delete"),
+      });
   }
 
   if (gone) return null;
 
   const moderated = post.moderationState && post.moderationState !== "visible";
-  const bodyText = long ? `${post.body.slice(0, CLAMP_AT).trimEnd()}…` : post.body;
+  const bodyText = long
+    ? `${post.body.slice(0, CLAMP_AT).trimEnd()}…`
+    : post.body;
 
   const articleDetail = detail && post.article ? post.article : null;
   const answerLabel = post.type === "question" ? "Answer" : "Comment";
@@ -186,19 +267,32 @@ export function PostCard({
   const header = (
     <header className="flex w-full items-start gap-3">
       <Link href={authorHref(post)} tabIndex={-1} aria-hidden="true">
-        {post.page ? <PageLogo name={post.page.name} src={post.page.logoUrl} size={40} /> : <MemberAvatar member={post.author} />}
+        {post.page ? (
+          <PageLogo name={post.page.name} src={post.page.logoUrl} size={40} />
+        ) : (
+          <MemberAvatar member={post.author} />
+        )}
       </Link>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span id={`${id}-author`} className="flex min-w-0 items-center gap-1.5">
           <AuthorName member={post.author} href={authorHref(post)} />
-          {post.page && <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-secondary">Page</span>}
+          {post.page && (
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-secondary">
+              Page
+            </span>
+          )}
         </span>
         <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-secondary">
-          {post.author.headline && <span className="truncate">{post.author.headline}</span>}
+          {post.author.headline && (
+            <span className="truncate">{post.author.headline}</span>
+          )}
           {post.author.headline && <span aria-hidden="true">·</span>}
           {post.chapter && (
             <>
-              <Link href={`/chapters/${post.chapter.slug}`} className="hover:underline">
+              <Link
+                href={`/chapters/${post.chapter.slug}`}
+                className="hover:underline"
+              >
                 {post.chapter.name}
               </Link>
               <span aria-hidden="true">·</span>
@@ -250,44 +344,100 @@ export function PostCard({
       )}
 
       {moderated && (
-        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-error-light px-3 py-2.5 text-sm text-ink">
-          <Icon name="eye-off" size={18} className="mt-0.5 shrink-0 text-error" />
+        <div
+          role="note"
+          className="flex items-start gap-2.5 rounded-lg bg-error-light px-3 py-2.5 text-sm text-ink"
+        >
+          <Icon
+            name="eye-off"
+            size={18}
+            className="mt-0.5 shrink-0 text-error"
+          />
           <p>
-            {post.moderationState === "removed" ? "Removed by moderators" : "Hidden by moderators"} — only you can see this post.{" "}
-            <Link href="/settings/moderation" className="font-medium text-primary-light hover:underline">
+            {post.moderationState === "removed"
+              ? "Removed by moderators"
+              : "Hidden by moderators"}{" "}
+            — only you can see this post.{" "}
+            <Link
+              href="/settings/moderation"
+              className="font-medium text-primary-light hover:underline"
+            >
               See why and how to appeal
             </Link>
           </p>
         </div>
       )}
       {post.status === "in_review" && (
-        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink">
+        <div
+          role="note"
+          className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink"
+        >
           <Icon name="clock" size={18} className="mt-0.5 shrink-0 text-info" />
           <p>
-            {post.chapter ? t("Waiting for approval by the {chapter} team. Only you can see this post until then.", { chapter: post.chapter.name }) : t("Waiting for approval. Only you can see this post until then.")}
-            {post.chapterReview?.note ? <span className="mt-1 block text-secondary">{t("Note from the team: “{note}”", { note: post.chapterReview.note })}</span> : null}
+            {post.chapter
+              ? t(
+                  "Waiting for approval by the {chapter} team. Only you can see this post until then.",
+                  { chapter: post.chapter.name },
+                )
+              : t(
+                  "Waiting for approval. Only you can see this post until then.",
+                )}
+            {post.chapterReview?.note ? (
+              <span className="mt-1 block text-secondary">
+                {t("Note from the team: “{note}”", {
+                  note: post.chapterReview.note,
+                })}
+              </span>
+            ) : null}
           </p>
         </div>
       )}
       {post.status === "declined" && (
-        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-error-light px-3 py-2.5 text-sm text-ink">
-          <Icon name="eye-off" size={18} className="mt-0.5 shrink-0 text-error" />
+        <div
+          role="note"
+          className="flex items-start gap-2.5 rounded-lg bg-error-light px-3 py-2.5 text-sm text-ink"
+        >
+          <Icon
+            name="eye-off"
+            size={18}
+            className="mt-0.5 shrink-0 text-error"
+          />
           <p>
-            {post.chapter ? t("The {chapter} team didn’t approve this post for the chapter. Only you can see it.", { chapter: post.chapter.name }) : t("This post wasn’t approved. Only you can see it.")}
-            {post.chapterReview?.note ? <span className="mt-1 block text-secondary">{t("Note from the team: “{note}”", { note: post.chapterReview.note })}</span> : null}
+            {post.chapter
+              ? t(
+                  "The {chapter} team didn’t approve this post for the chapter. Only you can see it.",
+                  { chapter: post.chapter.name },
+                )
+              : t("This post wasn’t approved. Only you can see it.")}
+            {post.chapterReview?.note ? (
+              <span className="mt-1 block text-secondary">
+                {t("Note from the team: “{note}”", {
+                  note: post.chapterReview.note,
+                })}
+              </span>
+            ) : null}
           </p>
         </div>
       )}
       {post.status === "pending_media" && (
-        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink">
+        <div
+          role="note"
+          className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink"
+        >
           <Icon name="shield" size={18} className="mt-0.5 shrink-0 text-info" />
-          <p>Your attachments are being scanned. Others will see this post once the scan finishes.</p>
+          <p>
+            Your attachments are being scanned. Others will see this post once
+            the scan finishes.
+          </p>
         </div>
       )}
 
       {articleDetail ? (
         <>
-          <ArticleCover article={articleDetail} className="aspect-[2/1] max-h-[400px] rounded-[10px]" />
+          <ArticleCover
+            article={articleDetail}
+            className="aspect-[2/1] max-h-[400px] rounded-[10px]"
+          />
           <div className="flex flex-col gap-2">
             <p className="flex items-center gap-1.5 text-label text-accent-hover">
               <Icon name="book" size={14} />
@@ -295,17 +445,34 @@ export function PostCard({
             </p>
             {!editing && (
               <>
-                <h1 dir="auto" className="bidi-auto text-h1 text-ink max-sm:text-h2">{articleDetail.title}</h1>
-                {articleDetail.subtitle && <p className="text-h3 font-normal text-body max-sm:text-md">{articleDetail.subtitle}</p>}
+                <h1
+                  dir="auto"
+                  className="bidi-auto text-h1 text-ink max-sm:text-h2"
+                >
+                  {articleDetail.title}
+                </h1>
+                {articleDetail.subtitle && (
+                  <p className="text-h3 font-normal text-body max-sm:text-md">
+                    {articleDetail.subtitle}
+                  </p>
+                )}
               </>
             )}
           </div>
           {header}
           <div className="h-px w-full bg-line" />
           {editing ? (
-            <PostEditForm post={post} onSaved={saved} onCancel={() => setEditing(false)} />
+            <PostEditForm
+              post={post}
+              onSaved={saved}
+              onCancel={() => setEditing(false)}
+            />
           ) : (
-            <Markdown text={post.body} mentions={post.mentions} className="text-[16px] leading-7" />
+            <Markdown
+              text={post.body}
+              mentions={post.mentions}
+              className="text-[16px] leading-7"
+            />
           )}
         </>
       ) : (
@@ -319,17 +486,42 @@ export function PostCard({
             </p>
           )}
 
-          {post.question && !editing && <QuestionLabel question={post.question} />}
-          {post.celebration && !editing && <CelebrationBand celebration={post.celebration} headingLevel={detail ? 2 : 3} />}
-          {post.request && !editing && <RequestBlock post={post} viewerId={viewer.id} detail={detail} onUpdated={update} />}
+          {post.question && !editing && (
+            <QuestionLabel question={post.question} />
+          )}
+          {post.celebration && !editing && (
+            <CelebrationBand
+              celebration={post.celebration}
+              headingLevel={detail ? 2 : 3}
+            />
+          )}
+          {post.request && !editing && (
+            <RequestBlock
+              post={post}
+              viewerId={viewer.id}
+              detail={detail}
+              onUpdated={update}
+            />
+          )}
 
           {editing ? (
-            <PostEditForm post={post} onSaved={saved} onCancel={() => setEditing(false)} />
+            <PostEditForm
+              post={post}
+              onSaved={saved}
+              onCancel={() => setEditing(false)}
+            />
           ) : post.article ? (
             <ArticlePreview post={post} />
           ) : (
             post.body && (
-              <div className={cn("w-full", post.type === "question" ? "text-h3 text-ink" : "text-md text-ink")}>
+              <div
+                className={cn(
+                  "w-full",
+                  post.type === "question"
+                    ? "text-h3 text-ink"
+                    : "text-md text-ink",
+                )}
+              >
                 <RichText text={bodyText} mentions={post.mentions} />
                 {long && (
                   <button
@@ -337,7 +529,11 @@ export function PostCard({
                     onClick={() => setExpanded(true)}
                     className="mt-1 rounded-sm text-sm font-medium text-secondary hover:text-primary hover:underline"
                   >
-                    See more<span className="sr-only"> <T vars={{ subject }}>{"of {subject}"}</T></span>
+                    See more
+                    <span className="sr-only">
+                      {" "}
+                      <T vars={{ subject }}>{"of {subject}"}</T>
+                    </span>
                   </button>
                 )}
               </div>
@@ -346,20 +542,40 @@ export function PostCard({
 
           {post.attachments.length > 0 && !post.article && (
             // Photos run edge to edge across the card (its padding is p-5, px-4 on small screens).
-            <PostAttachments attachments={post.attachments} bleedClassName="-mx-5 max-sm:-mx-4" />
+            <PostAttachments
+              attachments={post.attachments}
+              bleedClassName="-mx-5 max-sm:-mx-4"
+            />
           )}
-          {post.poll && <PostPoll postId={post.id} poll={post.poll} onUpdated={update} />}
-          {post.linkPreview && !post.isRepost && !post.article && post.attachments.length === 0 && post.linkPreview.embed ? (
-            <VideoEmbedPlayer preview={post.linkPreview} embed={post.linkPreview.embed} />
+          {post.poll && (
+            <PostPoll postId={post.id} poll={post.poll} onUpdated={update} />
+          )}
+          {post.linkPreview &&
+          !post.isRepost &&
+          !post.article &&
+          post.attachments.length === 0 &&
+          post.linkPreview.embed ? (
+            <VideoEmbedPlayer
+              preview={post.linkPreview}
+              embed={post.linkPreview.embed}
+            />
           ) : (
-            post.linkPreview && !post.isRepost && !post.article && <LinkPreviewCard preview={post.linkPreview} />
+            post.linkPreview &&
+            !post.isRepost &&
+            !post.article && <LinkPreviewCard preview={post.linkPreview} />
           )}
           {post.isRepost && <RepostEmbed original={post.repostOf} />}
-          {post.question && !editing && <QuestionFooterNote post={post} detail={detail} />}
+          {post.question && !editing && (
+            <QuestionFooterNote post={post} detail={detail} />
+          )}
         </>
       )}
 
-      <PostCounts post={post} total={reactions.total} breakdown={reactions.breakdown ?? post.reactionBreakdown} />
+      <PostCounts
+        post={post}
+        total={reactions.total}
+        breakdown={reactions.breakdown ?? post.reactionBreakdown}
+      />
 
       {post.viewer.canViewAnalytics && post.status === "published" && (
         <Link
@@ -368,85 +584,162 @@ export function PostCard({
         >
           <Icon name="chart" size={14} />
           View analytics
-          <span className="sr-only"> <T vars={{ subject }}>{"for {subject}"}</T></span>
+          <span className="sr-only">
+            {" "}
+            <T vars={{ subject }}>{"for {subject}"}</T>
+          </span>
         </Link>
       )}
 
       <div className="h-px w-full bg-line" />
 
-      <footer className="flex w-full flex-wrap items-center justify-between gap-y-1">
-        <ReactionButton
-          targetType="post"
-          targetId={post.id}
-          state={reactions}
-          onChange={setReactions}
-          subject={subject}
-          primary={post.celebration ? { kind: "support", label: "Congratulate", activeLabel: "Congratulated", icon: "flame" } : undefined}
-          onReacted={
-            post.celebration
-              ? (kind) => kind === "support" && confetti(cardRef.current?.querySelector("[data-milestone-banner]"))
-              : undefined
-          }
-        />
-        {detail ? (
-          <a href="#add-comment" className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary">
-            <Icon name="message" size={18} />
-            <span className="max-sm:sr-only">{answerLabel}</span>
-          </a>
-        ) : (
-          <Link
-            href={`${postHref(post)}#${post.type === "question" ? "add-comment" : "comments"}`}
+      {guest ? (
+        <footer className="flex w-full flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-secondary">
+            Sign in to react, comment or repost.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => copyLink(post)}
+              className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
+            >
+              <Icon name="share" size={18} />
+              <span className="max-sm:sr-only">Share</span>
+            </button>
+            <Link
+              href={`/signin?next=${encodeURIComponent(postHref(post))}`}
+              className={buttonClasses({ variant: "secondary", size: "small" })}
+            >
+              Sign in
+            </Link>
+            <Link href="/signup" className={buttonClasses({ size: "small" })}>
+              Join Charter Mission
+            </Link>
+          </div>
+        </footer>
+      ) : (
+        <footer className="flex w-full flex-wrap items-center justify-between gap-y-1">
+          <ReactionButton
+            targetType="post"
+            targetId={post.id}
+            state={reactions}
+            onChange={setReactions}
+            subject={subject}
+            primary={
+              post.celebration
+                ? {
+                    kind: "support",
+                    label: "Congratulate",
+                    activeLabel: "Congratulated",
+                    icon: "flame",
+                  }
+                : undefined
+            }
+            onReacted={
+              post.celebration
+                ? (kind) =>
+                    kind === "support" &&
+                    confetti(
+                      cardRef.current?.querySelector("[data-milestone-banner]"),
+                    )
+                : undefined
+            }
+          />
+          {detail ? (
+            <a
+              href="#add-comment"
+              className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
+            >
+              <Icon name="message" size={18} />
+              <span className="max-sm:sr-only">{answerLabel}</span>
+            </a>
+          ) : (
+            <Link
+              href={`${postHref(post)}#${post.type === "question" ? "add-comment" : "comments"}`}
+              className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
+            >
+              <Icon name="message" size={18} />
+              <span className="max-sm:sr-only">{answerLabel}</span>
+              <span className="sr-only">
+                {" "}
+                {post.type === "question" ? "the question in" : "on"} {subject}
+              </span>
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => setModal("repost")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium hover:bg-muted hover:text-primary",
+              post.viewer.reposted ? "text-success" : "text-secondary",
+            )}
+          >
+            <Icon name="repeat" size={18} />
+            <span className="max-sm:sr-only">
+              {post.viewer.reposted ? "Reposted" : "Repost"}
+            </span>
+            <span className="sr-only"> {subject}</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={bookmarked}
+            onClick={toggleBookmark}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium hover:bg-muted hover:text-primary",
+              bookmarked ? "text-primary" : "text-secondary",
+            )}
+          >
+            <span ref={bookmarkIconRef} className="flex">
+              <Icon
+                name="bookmark"
+                size={18}
+                fill={bookmarked ? "currentColor" : "none"}
+                className="transition-[fill] duration-200"
+              />
+            </span>
+            <span className="max-sm:sr-only">
+              {bookmarked ? "Saved" : "Save"}
+            </span>
+            <span className="sr-only"> {subject}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => copyLink(post)}
             className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
           >
-            <Icon name="message" size={18} />
-            <span className="max-sm:sr-only">{answerLabel}</span>
-            <span className="sr-only"> {post.type === "question" ? "the question in" : "on"} {subject}</span>
-          </Link>
-        )}
-        <button
-          type="button"
-          onClick={() => setModal("repost")}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium hover:bg-muted hover:text-primary",
-            post.viewer.reposted ? "text-success" : "text-secondary",
-          )}
-        >
-          <Icon name="repeat" size={18} />
-          <span className="max-sm:sr-only">{post.viewer.reposted ? "Reposted" : "Repost"}</span>
-          <span className="sr-only"> {subject}</span>
-        </button>
-        <button
-          type="button"
-          aria-pressed={bookmarked}
-          onClick={toggleBookmark}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium hover:bg-muted hover:text-primary",
-            bookmarked ? "text-primary" : "text-secondary",
-          )}
-        >
-          <span ref={bookmarkIconRef} className="flex">
-            <Icon name="bookmark" size={18} fill={bookmarked ? "currentColor" : "none"} className="transition-[fill] duration-200" />
-          </span>
-          <span className="max-sm:sr-only">{bookmarked ? "Saved" : "Save"}</span>
-          <span className="sr-only"> {subject}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => copyLink(post)}
-          className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
-        >
-          <Icon name="share" size={18} />
-          <span className="max-sm:sr-only">Share</span>
-          <span className="sr-only"> <T vars={{ subject }}>{"link to {subject}"}</T></span>
-        </button>
-      </footer>
+            <Icon name="share" size={18} />
+            <span className="max-sm:sr-only">Share</span>
+            <span className="sr-only">
+              {" "}
+              <T vars={{ subject }}>{"link to {subject}"}</T>
+            </span>
+          </button>
+        </footer>
+      )}
 
-      {modal === "report" && <ReportDialog targetType="post" targetId={post.id} subject={subject} onClose={() => setModal(null)} />}
+      {modal === "report" && (
+        <ReportDialog
+          targetType="post"
+          targetId={post.id}
+          subject={subject}
+          onClose={() => setModal(null)}
+        />
+      )}
       {modal === "repost" && (
         <RepostDialog
           post={post}
           onClose={() => setModal(null)}
-          onReposted={() => setPost((current) => ({ ...current, viewer: { ...current.viewer, reposted: true }, counts: { ...current.counts, reposts: current.counts.reposts + 1 } }))}
+          onReposted={() =>
+            setPost((current) => ({
+              ...current,
+              viewer: { ...current.viewer, reposted: true },
+              counts: {
+                ...current.counts,
+                reposts: current.counts.reposts + 1,
+              },
+            }))
+          }
         />
       )}
       {modal === "delete" && (
@@ -460,7 +753,8 @@ export function PostCard({
             removed("Post deleted");
           }}
         >
-          It will be removed from feeds, topics and bookmarks. Comments on it are removed too. This can’t be undone.
+          It will be removed from feeds, topics and bookmarks. Comments on it
+          are removed too. This can’t be undone.
         </ConfirmDialog>
       )}
       {modal === "mute" && (
@@ -469,11 +763,20 @@ export function PostCard({
           confirmLabel="Mute"
           onClose={() => setModal(null)}
           onConfirm={async () => {
-            await api("/mutes", { method: "POST", body: { targetType: "member", targetId: post.author.id } });
-            removed(t("{name} is muted. Their posts won’t appear in your feed.", { name: post.author.name }), "author");
+            await api("/mutes", {
+              method: "POST",
+              body: { targetType: "member", targetId: post.author.id },
+            });
+            removed(
+              t("{name} is muted. Their posts won’t appear in your feed.", {
+                name: post.author.name,
+              }),
+              "author",
+            );
           }}
         >
-          Their posts won’t appear in your feed. They won’t be told, and you stay connected. Unmute any time from their profile.
+          Their posts won’t appear in your feed. They won’t be told, and you
+          stay connected. Unmute any time from their profile.
         </ConfirmDialog>
       )}
       {modal === "block" && (
@@ -484,10 +787,17 @@ export function PostCard({
           onClose={() => setModal(null)}
           onConfirm={async () => {
             await api(`/blocks/${post.author.id}`, { method: "POST" });
-            removed(t("{name} is blocked. You can unblock them in Settings → Blocked & muted.", { name: post.author.name }), "author");
+            removed(
+              t(
+                "{name} is blocked. You can unblock them in Settings → Blocked & muted.",
+                { name: post.author.name },
+              ),
+              "author",
+            );
           }}
         >
-          You won’t see each other’s posts or profiles, and any connection or follow between you is removed. They aren’t told. <UnblockHint />
+          You won’t see each other’s posts or profiles, and any connection or
+          follow between you is removed. They aren’t told. <UnblockHint />
         </ConfirmDialog>
       )}
     </article>

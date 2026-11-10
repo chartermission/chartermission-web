@@ -61,7 +61,7 @@ export function initialFields(type: PostType = "standard"): ComposerFields {
   return {
     type,
     text: "",
-    visibility: "members",
+    visibility: "public",
     announcement: false,
     poll: null,
     link: null,
@@ -82,7 +82,7 @@ export function fieldsFromDraft(payload: DraftPayload): ComposerFields {
   return {
     type: payload.type ?? "standard",
     text: payload.body ?? "",
-    visibility: payload.visibility ?? "members",
+    visibility: payload.visibility ?? "public",
     announcement: payload.kind === "announcement",
     poll,
     link: payload.linkUrl ?? null,

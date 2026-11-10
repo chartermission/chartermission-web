@@ -47,8 +47,8 @@ import { T, useT, useIntlTag } from "@/i18n/client";
 export type ComposeTool = "photo" | "video" | "document" | "link" | "poll" | "topic" | "mention";
 
 const visibilityOptions: { value: Visibility; label: string; icon: IconName; hint: string }[] = [
-  { value: "members", label: "Members", icon: "users", hint: "Signed-in Charter Mission members" },
   { value: "public", label: "Public", icon: "globe", hint: "Anyone, including people who aren’t signed in" },
+  { value: "members", label: "Members", icon: "users", hint: "Signed-in Charter Mission members" },
 ];
 
 const toolButtons: { tool: ComposeTool; icon: IconName; label: string; color: string; activeBg?: string }[] = [

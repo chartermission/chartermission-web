@@ -407,7 +407,7 @@ export const PostComposition = z.object({
   chapterId: z.string().uuid().optional(),
   /** Publish as a page the member manages (the page must be live). */
   pageId: z.string().uuid().optional(),
-  visibility: z.enum(["members", "public"]).default("members"),
+  visibility: z.enum(["members", "public"]).default("public"),
   /** Only for accounts with post.announce. */
   kind: PostKind.default("standard"),
   celebration: CelebrationDetails.optional(),

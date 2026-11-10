@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { MessagesUnread } from "@chartermission/contracts";
 import { usePathname, useT } from "@/i18n/client";
 import type { NavKey } from "@/components/nav-items";
-import { Icon, Logo, LogoMark, cn, type AvatarTone, type IconName } from "@chartermission/ui";
+import { Icon, Logo, LogoMark, buttonClasses, cn, type AvatarTone, type IconName } from "@chartermission/ui";
 import { UserMenu } from "@/components/account/user-menu";
 import { SearchBox } from "@/components/search/search-box";
 import { onMessagesChanged } from "@/components/messages/messages-events";
@@ -71,11 +71,14 @@ export function TopNavBar({
   unread = 0,
   unreadMessages = 0,
   pathname,
+  guest = false,
 }: {
   viewer: TopNavViewer | null;
   unread?: number;
   unreadMessages?: number;
   pathname: string | null;
+  /** Signed out (e.g. reading a shared public post): sign-in and join instead of the member menu. */
+  guest?: boolean;
 }) {
   const t = useT();
   const under = (path: string) => pathname !== null && (pathname === path || pathname.startsWith(`${path}/`));
@@ -83,15 +86,15 @@ export function TopNavBar({
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-card">
       <div className="flex h-16 items-center gap-6 px-8 max-lg:gap-3 max-lg:px-4">
-        <Link href="/feed" aria-label="Charter Mission home" className="shrink-0 rounded-lg">
+        <Link href={guest ? "/" : "/feed"} aria-label="Charter Mission home" className="shrink-0 rounded-lg">
           <Logo className="max-md:hidden" />
           <LogoMark className="md:hidden" />
         </Link>
-        {!focused && (
+        {!focused && !guest && (
           <SearchBox className="w-[420px] max-w-full max-2xl:w-[300px] max-xl:w-[220px] max-lg:hidden" />
         )}
         <div className="flex-1" />
-        {!focused && (
+        {!focused && !guest && (
           <nav aria-label={t("nav.main")} className="flex min-w-0 items-center gap-1 overflow-x-auto max-md:gap-0">
             <Link
               href="/search"
@@ -132,6 +135,15 @@ export function TopNavBar({
         )}
         {viewer ? (
           <UserMenu viewer={viewer} />
+        ) : guest ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href="/signin" className={buttonClasses({ variant: "secondary", size: "small" })}>
+              Sign in
+            </Link>
+            <Link href="/signup" className={buttonClasses({ size: "small" })}>
+              Join
+            </Link>
+          </div>
         ) : (
           <span aria-hidden className="h-9 w-[58px] shrink-0 rounded-full bg-muted max-sm:w-9" />
         )}

@@ -13,7 +13,7 @@ import { VideoTrimHost } from "@/components/video/video-trim";
  */
 async function ViewerChrome() {
   const viewer = await getViewer().catch(() => null);
-  if (!viewer) return <TopNavBar viewer={null} pathname={null} />;
+  if (!viewer) return <TopNavBar viewer={null} pathname={null} guest />;
   const [unread, unreadMessages] = await Promise.all([
     apiGet<UnreadCount>("/notifications/unread-count").catch(() => ({ unread: 0 })),
     apiGet<MessagesUnread>("/messages/unread").catch(() => ({ unread: 0 })),

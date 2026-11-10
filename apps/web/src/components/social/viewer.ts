@@ -28,3 +28,18 @@ export const can = (viewer: Viewer | null | undefined, permission: string) => !!
 export function activeUntil(iso: string | null): string | null {
   return iso && new Date(iso).getTime() > Date.now() ? iso : null;
 }
+
+/** Stands in for the viewer when a signed-out visitor reads a public post (PostCard guest mode). */
+export const GUEST_VIEWER: Viewer = {
+  id: "",
+  handle: "",
+  name: "",
+  headline: null,
+  avatarUrl: null,
+  tone: "primary",
+  emailVerified: false,
+  status: "active",
+  countryCode: null,
+  permissions: [],
+  restrictions: { postingUntil: null, connectingUntil: null },
+};

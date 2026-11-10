@@ -146,10 +146,10 @@ describe('Posts, comments, reactions, polls and bookmarks', () => {
       expect(feed.body.items.some((x: { id: string }) => x.id === p.id)).toBe(false);
     });
 
-    it('visitors only see public posts', async () => {
+    it('posts are public unless the author picks Members; visitors only see public posts', async () => {
       const a = await createMember(t);
-      const members = await createPost(a, 'Members only');
-      const pub = await createPost(a, 'Public', { visibility: 'public' });
+      const members = await createPost(a, 'Members only', { visibility: 'members' });
+      const pub = await createPost(a, 'Public by default');
       await t.http().get(`/api/v1/posts/${members.id}`).expect(404);
       await t.http().get(`/api/v1/posts/${pub.id}`).expect(200);
     });
