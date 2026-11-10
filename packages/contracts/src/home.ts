@@ -168,3 +168,15 @@ export const RelatedArticles = z.object({
   related: z.array(PostView),
 });
 export type RelatedArticles = z.infer<typeof RelatedArticles>;
+
+/**
+ * GET /public/preview?path=/{handle} — what a link preview (WhatsApp, LinkedIn, X, Slack) shows
+ * for a page, limited to what a signed-out visitor may see. `image` is an absolute outside
+ * address or an API path (/public/preview-image/…); null means the generic share image.
+ */
+export const LinkPreviewInfo = z.object({
+  title: z.string(),
+  description: z.string(),
+  image: z.string().nullable(),
+});
+export type LinkPreviewInfo = z.infer<typeof LinkPreviewInfo>;

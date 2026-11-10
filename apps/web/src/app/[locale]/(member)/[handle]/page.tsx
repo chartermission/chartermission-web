@@ -47,7 +47,11 @@ async function loadProfile({ params, searchParams }: Props) {
         if (e && typeof e === "object" && "status" in e && (e as { status: number }).status === 401) return null;
         throw e;
       });
-  if (!member) notFound();
+  if (!member) {
+    // Signed out, and the profile is for members only: sign in and come straight back.
+    if (!viewer) redirect(`/signin?next=${encodeURIComponent(`/${handle}`)}`);
+    notFound();
+  }
   // A username the member used before: send the visitor to the current address.
   if (!preview && !/^[0-9a-f-]{36}$/i.test(handle) && handle.toLowerCase() !== member.handle.toLowerCase()) {
     redirect(`/${member.handle}`);
