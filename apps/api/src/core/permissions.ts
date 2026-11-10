@@ -35,6 +35,7 @@ export const PERMISSIONS = {
   'chapter.manage': 'Pin posts and edit the About text on any chapter page',
   'chapters.admin': 'Create, remove, activate and deactivate chapters; set chapter pictures and covers',
   'badges.manage': 'Create, edit and remove profile badges',
+  'pages.manage': 'Create pages, review pages members create, verify, suspend and remove pages',
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -76,6 +77,7 @@ const PLATFORM_ADMIN: Permission[] = [
   'chapter.manage',
   'chapters.admin',
   'badges.manage',
+  'pages.manage',
   'audit.export',
   'members.manage',
   'roles.manage',

@@ -8,7 +8,13 @@ import { toast } from "@/components/social/toast";
 
 export type RelationshipState = Pick<Relationship, "connection" | "connectionId" | "following">;
 
-type Member = { id: string; name: string };
+/** `staff`: an official Charter Mission account, which members follow instead of connecting with. */
+type Member = { id: string; name: string; staff?: boolean };
+
+/** Official accounts are follow-only, in both directions (the API refuses requests either way). */
+export function canConnectWith(member: Member, relationship?: Pick<Relationship, "canConnect">): boolean {
+  return !member.staff && relationship?.canConnect !== false;
+}
 
 /** Connection and follow mutations shared by profile headers, directory cards and suggestions. */
 export function useRelationship(member: Member, initial: RelationshipState) {
@@ -109,6 +115,7 @@ export function ConnectControl({
   onConnectWithNote?: () => void;
 }) {
   const { state, busy } = controls;
+  if (member.staff) return null;
   if (state.connection === "connected") {
     return (
       <Button variant="secondary" size={size} block={block} disabled title="Messaging arrives in a later release">
@@ -165,16 +172,19 @@ export function FollowControl({
   controls,
   size = "small",
   block = false,
+  prominent = member.staff ?? false,
 }: {
   member: Member;
   controls: RelationshipControls;
   size?: ButtonProps["size"];
   block?: boolean;
+  /** Follow is the main action (official accounts and pages, where there is no Connect). */
+  prominent?: boolean;
 }) {
   const { state, busy } = controls;
   return (
     <Button
-      variant={state.following ? "secondary" : "ghost"}
+      variant={state.following ? "secondary" : prominent ? (size === "small" ? "secondary" : "primary") : "ghost"}
       size={size}
       block={block}
       aria-pressed={state.following}

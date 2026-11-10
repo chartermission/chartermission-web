@@ -53,6 +53,11 @@ export const CATEGORY_OF: Record<NotificationType, NotificationCategory | 'alway
   course_link_broken: 'always',
   opportunity_application_received: 'opportunities',
   opportunity_application_updated: 'opportunities',
+  page_approved: 'always',
+  page_rejected: 'always',
+  page_admin_added: 'always',
+  verification_approved: 'always',
+  verification_declined: 'always',
 };
 
 export interface NotifyInput {

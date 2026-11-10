@@ -112,7 +112,7 @@ describe('Trending', () => {
     // Scoped overrides apply only in their scope (chapter given by slug).
     await override('LagosMeetup', 'pin', admin.id, { scopeType: 'chapter', scopeId: 'nigeria' });
     await trending.run();
-    const lagos = await t.http().get('/api/v1/trending?scope=chapter&scopeId=lagos').expect(200);
+    const lagos = await t.http().get('/api/v1/trending?scope=chapter&scopeId=nigeria').expect(200);
     expect(lagos.body.items.map((i: { tag: string; pinned: boolean }) => [i.tag, i.pinned])).toEqual([
       ['CharterFellows', true],
       ['LagosMeetup', true],

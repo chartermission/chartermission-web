@@ -132,10 +132,16 @@ export function LearningOverrides() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  /** Start a search: the loading state is set here, with the change that triggers the fetch below. */
+  const search = (value: string) => {
+    if (value === submitted) return;
     setLoading(true);
     setError(null);
+    setSubmitted(value);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
     api<AdminLearningMember[]>(`/admin/learning/access/members${submitted ? `?q=${encodeURIComponent(submitted)}` : ""}`)
       .then((rows) => !cancelled && setMembers(rows))
       .catch((e) => !cancelled && setError(errorMessage(e)))
@@ -163,7 +169,7 @@ export function LearningOverrides() {
           role="search"
           onSubmit={(e) => {
             e.preventDefault();
-            setSubmitted(query.trim());
+            search(query.trim());
           }}
           className="flex gap-2"
         >
@@ -178,7 +184,7 @@ export function LearningOverrides() {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
-                if (!e.target.value) setSubmitted("");
+                if (!e.target.value) search("");
               }}
               placeholder="Name, @handle or email"
               className={inputClasses(false, "pl-9")}

@@ -24,6 +24,7 @@ import { seedAmbassadors } from './seed-ambassadors.js';
 import { seedStories } from './seed-stories.js';
 import { seedModeration } from './seed-moderation.js';
 import { seedChaptersAndOpportunities } from './seed-opportunities.js';
+import { seedPages } from './seed-pages.js';
 import { seedDemoMfa } from './seed-accounts.js';
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
@@ -211,6 +212,7 @@ async function main() {
     await seedStories(db, ctx);
     await seedModeration(db, ctx);
     await seedChaptersAndOpportunities(db, ctx);
+    await seedPages(db, ctx);
     const mfa = await seedDemoMfa(db);
     console.log(`Seeded ${Object.keys(ids).length} demo members (password: ${DEMO_PASSWORD})`);
     if (mfa.length) console.log(`Two-step verification preset for ${mfa.length} staff accounts: ${mfa.join(', ')} (see the demo accounts PDF)`);

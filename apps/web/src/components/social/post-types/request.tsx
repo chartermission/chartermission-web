@@ -96,7 +96,7 @@ export function RequestBlock({
 }) {
   const request = post.request!;
   const meta = requestMeta[request.category];
-  const isOwn = post.author.id === viewerId;
+  const isOwn = !post.page && post.author.id === viewerId;
   const [helping, setHelping] = useState(false);
   const [busy, setBusy] = useState(false);
   const TitleTag = detail ? "h2" : "h3";

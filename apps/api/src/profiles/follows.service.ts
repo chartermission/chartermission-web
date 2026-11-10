@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ChapterRef, FollowInput, FollowsQuery, FollowView, Page } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { blocks, chapters, follows, hashtags } from '../db/schema.js';
+import { blocks, chapters, follows, hashtags, pages } from '../db/schema.js';
 import { MembersService } from '../core/members.service.js';
+import { PageRefsService } from '../core/page-refs.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { Errors } from '../common/errors.js';
@@ -33,7 +34,19 @@ export class FollowsService {
     private readonly taxonomy: TaxonomyService,
     private readonly members: MembersService,
     private readonly events: EventsService,
+    private readonly pageRefs: PageRefsService,
   ) {}
+
+  /** A page by id or slug. Only live pages can be followed; any page can be unfollowed. */
+  private async pageId(idOrSlug: string, liveOnly: boolean): Promise<string | null> {
+    const [page] = await this.db
+      .select({ id: pages.id, status: pages.status })
+      .from(pages)
+      .where(sql`${pages.id}::text = ${idOrSlug} or lower(${pages.slug}) = ${idOrSlug.toLowerCase()}`)
+      .limit(1);
+    if (!page || (liveOnly && page.status !== 'active')) return null;
+    return page.id;
+  }
 
   /** Resolves and checks the target. Members: id or handle; blocked or hidden → 404; self → 400. */
   private async resolve(userId: string, input: FollowInput, forFollow: boolean): Promise<Resolved> {
@@ -46,6 +59,11 @@ export class FollowsService {
         throw Errors.notFound('Chapter');
       });
       return { targetType: 'chapter', targetId: id! };
+    }
+    if (input.targetType === 'page') {
+      const id = await this.pageId(input.targetId, forFollow);
+      if (!id) throw Errors.notFound('Page');
+      return { targetType: 'page', targetId: id };
     }
     const row = await this.profiles.findRow(input.targetId);
     if (!row) throw Errors.notFound('Member');
@@ -88,6 +106,7 @@ export class FollowsService {
     let target: Resolved;
     if (input.targetType === 'hashtag') target = { targetType: 'hashtag', targetId: normaliseHashtag(input.targetId).tag };
     else if (input.targetType === 'member') target = await this.resolve(userId, input, false);
+    else if (input.targetType === 'page') target = { targetType: 'page', targetId: (await this.pageId(input.targetId, false)) ?? input.targetId };
     else {
       const [chapter] = await this.db
         .select({ id: chapters.id })
@@ -135,7 +154,7 @@ export class FollowsService {
       .where(
         and(
           eq(follows.followerId, userId),
-          query.type ? eq(follows.targetType, query.type) : inArray(follows.targetType, ['member', 'hashtag', 'chapter']),
+          query.type ? eq(follows.targetType, query.type) : inArray(follows.targetType, ['member', 'hashtag', 'chapter', 'page']),
           cursor
             ? sql`(${follows.createdAt}, ${follows.targetType}, ${follows.targetId}) < (${cursor.c}::timestamptz, ${cursor.t}, ${cursor.i})`
             : undefined,
@@ -152,8 +171,10 @@ export class FollowsService {
     const memberIds = page.items.filter((r) => r.targetType === 'member').map((r) => r.targetId);
     const chapterIds = page.items.filter((r) => r.targetType === 'chapter').map((r) => r.targetId);
     const tags = page.items.filter((r) => r.targetType === 'hashtag').map((r) => r.targetId);
-    const [refs, chapterRows, tagRows] = await Promise.all([
+    const pageIds = page.items.filter((r) => r.targetType === 'page').map((r) => r.targetId);
+    const [refs, pageMap, chapterRows, tagRows] = await Promise.all([
       this.members.refs(memberIds),
+      this.pageRefs.refs(pageIds),
       chapterIds.length
         ? this.db
             .select({ id: chapters.id, slug: chapters.slug, name: chapters.name, countryCode: chapters.countryCode })
@@ -174,6 +195,8 @@ export class FollowsService {
       };
       if (r.targetType === 'member' && refs.get(r.targetId)) view.member = refs.get(r.targetId);
       if (r.targetType === 'chapter' && chapterMap.get(r.targetId)) view.chapter = chapterMap.get(r.targetId);
+      const followedPage = r.targetType === 'page' ? pageMap.get(r.targetId) : undefined;
+      if (followedPage) view.page = PageRefsService.toRef(followedPage);
       if (r.targetType === 'hashtag') view.hashtag = tagMap.get(r.targetId) ?? { tag: r.targetId, display: r.targetId };
       return view;
     });

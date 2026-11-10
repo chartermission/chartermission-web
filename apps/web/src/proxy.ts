@@ -28,5 +28,8 @@ export const config = {
     "/chapters/:path*",
     "/ambassadors/:path*",
     "/stories/:path*",
+    "/pages/:path*",
+    "/analytics/:path*",
+    "/articles/new",
   ],
 };

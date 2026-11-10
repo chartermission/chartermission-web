@@ -1,9 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type SyntheticEvent } from "react";
-import { VIDEO_PROVIDER_LABELS, parseVideoEmbed, type ChapterRef, type DraftView, type PostType, type PostView } from "@chartermission/contracts";
+import {
+  VIDEO_PROVIDER_LABELS,
+  parseVideoEmbed,
+  type ChapterRef,
+  type DraftView,
+  type ManagedPage,
+  type PostType,
+  type PostView,
+} from "@chartermission/contracts";
 import { Avatar, Button, Divider, Icon, cn, type IconName } from "@chartermission/ui";
+import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api/client";
+import { stashArticleSeed, writeArticleHref } from "@/components/articles/write-article";
+import { PageLogo } from "@/components/pages/page-logo";
 import { ErrorNotice } from "@/components/social/errors";
 import { absoluteDateTime } from "@/components/social/format";
 import { postTypeMeta } from "@/components/social/post-types/meta";
@@ -94,11 +105,20 @@ export function CreatePostDialog({
   initialBody,
   draft,
   chapter,
+  pageId,
+  presentation = "dialog",
   onClose,
   onPosted,
   onDraftChange,
 }: {
   viewer: Viewer;
+  /** Start out posting as this page (the page's own "Create post" button). */
+  pageId?: string;
+  /**
+   * "dialog" (default) opens as a modal. "page" renders the same composer in the flow of a full
+   * page, for writing articles: no backdrop, a taller editor and a publish bar that stays in view.
+   */
+  presentation?: "dialog" | "page";
   /** Post into this chapter (the chapter page's composer). */
   chapter?: Pick<ChapterRef, "id" | "name">;
   initialTool?: ComposeTool;
@@ -111,12 +131,18 @@ export function CreatePostDialog({
   onDraftChange?: (draft: DraftView | null) => void;
 }) {
   const id = useId();
+  const router = useRouter();
+  const inPage = presentation === "page";
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  /** Pages the viewer manages and can post as (live ones only). */
+  const [pages, setPages] = useState<ManagedPage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const openerRef = useRef<Element | null>(null);
   const suggestionsOpenRef = useRef(false);
   /** Set once the composer's job is done (posted, scheduled, discarded) so closing says nothing. */
   const finishedRef = useRef(false);
+  const postedRef = useRef(false);
   const attachments = useAttachments(draft ? { files: draft.attachments, altTexts: draft.payload.altTexts } : undefined);
 
   const startText = initialBody ?? (initialTool === "topic" ? "#" : initialTool === "mention" ? "@" : "");
@@ -124,7 +150,7 @@ export function CreatePostDialog({
   const [fields, setFields] = useState<ComposerFields>(() => {
     if (draft) return fieldsFromDraft(draft.payload);
     const base = initialFields(initialType);
-    return { ...base, chapterId: chapter?.id, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
+    return { ...base, chapterId: chapter?.id, pageId: chapter ? undefined : pageId, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
   });
   const [caret, setCaret] = useState(initialBody !== undefined ? 0 : fields.text.length);
   const [fileMode, setFileMode] = useState<"image" | "document" | "video" | null>(
@@ -162,28 +188,49 @@ export function CreatePostDialog({
   const scheduled = saved?.status === "scheduled" ? saved : null;
   const failed = saved?.status === "failed" ? saved : null;
 
+  // "Post as": the member's live pages. Chapter posts and reposts are always made as yourself.
   useEffect(() => {
+    if (chapter) return;
+    let alive = true;
+    api<ManagedPage[]>("/me/pages")
+      .then((list) => alive && setPages(list.filter((p) => p.status === "active")))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [chapter]);
+
+  useEffect(() => {
+    const root = inPage ? sectionRef.current : dialogRef.current;
+    if (!root) return;
     const dialog = dialogRef.current;
-    if (!dialog) return;
     openerRef.current = document.activeElement;
-    if (!dialog.open) dialog.showModal();
-    const target = dialog.querySelector<HTMLElement>("[data-autofocus]") ?? textareaRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    const target = root.querySelector<HTMLElement>("[data-autofocus]") ?? textareaRef.current;
     target?.focus();
     if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
       const at = target === textareaRef.current ? (startCaret.current ?? target.value.length) : target.value.length;
       target.setSelectionRange(at, at);
     }
+    if (inPage) return;
     const { overflow } = document.documentElement.style;
     document.documentElement.style.overflow = "hidden";
     return () => {
       document.documentElement.style.overflow = overflow;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once when the composer mounts
   }, []);
 
-  const close = useCallback(() => dialogRef.current?.close(), []);
+  /** On the writing page there is no dialog to close: leaving saves the draft and hands back to the page. */
+  const close = () => (inPage ? leave() : dialogRef.current?.close());
 
   function handleClose(event: SyntheticEvent<HTMLDialogElement>) {
     if (event.target !== event.currentTarget) return;
+    leave();
+  }
+
+  function leave() {
+    if (inPage && postedRef.current) return;
     if (!finishedRef.current) {
       if (scheduled) {
         if (sync.dirty && valid) {
@@ -200,7 +247,7 @@ export function CreatePostDialog({
     }
     const opener = openerRef.current;
     onClose();
-    if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    if (!inPage && opener instanceof HTMLElement && opener.isConnected) opener.focus();
   }
 
   function onBackdropClick(event: MouseEvent<HTMLDialogElement>) {
@@ -248,6 +295,15 @@ export function CreatePostDialog({
     (tool === "video" && fileMode === "video");
 
   function changeType(next: PostType) {
+    // Articles are written on their own page, not in this dialog: take what was typed along.
+    if (next === "article" && !inPage) {
+      stashArticleSeed({ text: fields.text.trim(), pageId: fields.pageId });
+      finishedRef.current = true;
+      if (saved && !draft) sync.remove().catch(() => undefined);
+      close();
+      router.push(writeArticleHref());
+      return;
+    }
     patch({ type: next });
     if (next === "article" && (fileMode === "document" || fileMode === "video") && attachments.items.length === 0) setFileMode(null);
     setNotice(`${postTypeMeta[next].label} selected`);
@@ -259,7 +315,7 @@ export function CreatePostDialog({
     setServerFields({});
     setServerError(null);
     if (valid) return true;
-    requestAnimationFrame(() => focusFirstInvalid(dialogRef.current));
+    requestAnimationFrame(() => focusFirstInvalid(inPage ? sectionRef.current : dialogRef.current));
     return false;
   }
 
@@ -268,7 +324,7 @@ export function CreatePostDialog({
       const mapped = mapServerFields(e.fields);
       setServerFields(mapped);
       if (!Object.keys(mapped).length) setServerError(e);
-      requestAnimationFrame(() => focusFirstInvalid(dialogRef.current));
+      requestAnimationFrame(() => focusFirstInvalid(inPage ? sectionRef.current : dialogRef.current));
     } else {
       setServerError(e);
     }
@@ -286,6 +342,8 @@ export function CreatePostDialog({
         ? await sync.publish()
         : await api<PostView>("/posts", { method: "POST", body: toComposition(fields, ready) });
       finishedRef.current = true;
+      // On the writing page onPosted opens the new article, so there is nothing left to close.
+      postedRef.current = true;
       onPosted(post);
       close();
     } catch (e) {
@@ -373,28 +431,17 @@ export function CreatePostDialog({
               : "Draft saved"
           : "";
 
-  return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby={titleId}
-      onClose={handleClose}
-      onCancel={(event) => {
-        if (event.target !== event.currentTarget) return;
-        // Escape first closes the suggestion list, not the dialog.
-        if (suggestionsOpenRef.current || busy) event.preventDefault();
-      }}
-      onClick={onBackdropClick}
-      className={cn(
-        "m-auto max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl bg-card p-0 text-ink shadow-[0px_24px_48px_0px_rgba(0,0,0,0.25)] backdrop:bg-primary-dark/55 max-sm:max-w-[calc(100vw-1rem)]",
-        type === "article" ? "w-[760px]" : "w-[640px]",
-      )}
-    >
+  const postingAs = pages.find((p) => p.id === fields.pageId);
+  const canPostAs = pages.length > 0 && !fields.chapterId && !fields.repostOfId;
+  const HeadingTag = inPage ? "h1" : "h2";
+
+  const form = (
       <form onSubmit={submit} noValidate className="flex flex-col">
         <div className="flex items-center justify-between gap-3 px-5 py-[18px] max-sm:px-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <h2 id={titleId} className="truncate text-h3 text-ink">
-              {scheduled ? "Edit scheduled post" : meta.title}
-            </h2>
+            <HeadingTag id={titleId} className={cn("truncate text-ink", inPage ? "text-h2" : "text-h3")}>
+              {scheduled ? (inPage ? "Edit scheduled article" : "Edit scheduled post") : inPage ? (draft ? "Edit your draft" : "Write an article") : meta.title}
+            </HeadingTag>
             {chapter && fields.chapterId === chapter.id && (
               <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary-tint px-2.5 py-0.5 text-xs font-medium text-primary">
                 <Icon name="globe" size={14} />
@@ -419,19 +466,53 @@ export function CreatePostDialog({
                 Discard<span className="sr-only"> draft</span>
               </button>
             )}
-            <button type="button" onClick={close} aria-label="Close" className="rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink">
-              <Icon name="x" size={22} />
-            </button>
+            {inPage ? (
+              <Button variant="secondary" size="small" onClick={close} disabled={busy !== null}>
+                {content ? "Save & close" : "Close"}
+              </Button>
+            ) : (
+              <button type="button" onClick={close} aria-label="Close" className="rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink">
+                <Icon name="x" size={22} />
+              </button>
+            )}
           </div>
         </div>
         <Divider />
 
         <div className="flex flex-col gap-3.5 p-5 max-sm:px-4">
-          <PostTypeSwitcher
-            value={type}
-            onChange={changeType}
-            disabled={fields.repostOfId ? ["question", "celebration", "request", "article"] : []}
-          />
+          {!inPage && (
+            <PostTypeSwitcher
+              value={type}
+              onChange={changeType}
+              disabled={fields.repostOfId ? ["question", "celebration", "request", "article"] : fields.pageId ? ["request"] : []}
+            />
+          )}
+          {canPostAs && (
+            <label className="flex flex-wrap items-center gap-2 text-sm text-secondary">
+              <span className="flex items-center gap-1.5">
+                <Icon name={postingAs ? "building" : "user"} size={16} />
+                {type === "article" ? "Publish as" : "Post as"}
+              </span>
+              <select
+                value={fields.pageId ?? ""}
+                onChange={(event) => {
+                  const next = event.target.value || undefined;
+                  // Pages don't post requests or announcements; those stay with the member.
+                  patch({ pageId: next, ...(next ? { announcement: false, ...(type === "request" ? { type: "standard" as const } : {}) } : {}) });
+                  setNotice(next ? `Posting as ${pages.find((p) => p.id === next)?.name ?? "the page"}` : "Posting as yourself");
+                }}
+                className="max-w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm font-medium text-ink outline-none focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
+              >
+                <option value="">{viewer.name} (you)</option>
+                {pages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} (page)
+                  </option>
+                ))}
+              </select>
+              {postingAs && <span className="text-xs">Followers of the page see this; your name isn’t shown.</span>}
+            </label>
+          )}
           <p className="sr-only" aria-live="polite">
             {notice}
           </p>
@@ -476,9 +557,13 @@ export function CreatePostDialog({
           )}
 
           <div className="flex items-center gap-3">
-            <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} size={40} tone={viewer.tone} />
+            {postingAs ? (
+              <PageLogo name={postingAs.name} src={postingAs.logoUrl} size={40} />
+            ) : (
+              <Avatar name={viewer.name} src={viewer.avatarUrl ?? undefined} size={40} tone={viewer.tone} />
+            )}
             <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-              <p className="text-md font-medium text-ink">{viewer.name}</p>
+              <p className="text-md font-medium text-ink">{postingAs?.name ?? viewer.name}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="relative inline-flex items-center rounded-full border border-line text-xs text-body focus-within:ring-2 focus-within:ring-primary-light hover:border-line-strong">
                   <Icon name={visibilityMeta.icon} size={14} className="pointer-events-none absolute left-2.5 text-secondary" />
@@ -576,6 +661,7 @@ export function CreatePostDialog({
                 error={errors.text}
                 textareaRef={textareaRef}
                 label="Article text (required)"
+                tall={inPage}
               />
             </>
           ) : (
@@ -690,7 +776,13 @@ export function CreatePostDialog({
         </div>
 
         <Divider />
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5 max-sm:px-4">
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5 max-sm:px-4",
+            // On the writing page the publish bar stays in view while the article scrolls.
+            inPage && "sticky bottom-0 z-10 bg-card shadow-[0_-1px_0_0_var(--color-line)]",
+          )}
+        >
           <div className="flex items-center gap-1.5 sm:gap-2.5" role="toolbar" aria-label="Add to your post">
             {toolButtons
               .filter((item) => tools.includes(item.tool))
@@ -763,14 +855,44 @@ export function CreatePostDialog({
           {saved || content ? "Drafts save automatically. " : ""}Images and documents appear once a quick safety scan finishes.
         </p>
       </form>
-      {scheduling && (
-        <ScheduleDialog
-          initial={scheduled?.scheduledFor ?? null}
-          confirmLabel={scheduled ? "Update time" : "Schedule"}
-          onConfirm={schedule}
-          onClose={() => setScheduling(false)}
-        />
+  );
+
+  const scheduleDialog = scheduling && (
+    <ScheduleDialog
+      initial={scheduled?.scheduledFor ?? null}
+      confirmLabel={scheduled ? "Update time" : "Schedule"}
+      onConfirm={schedule}
+      onClose={() => setScheduling(false)}
+    />
+  );
+
+  if (inPage) {
+    return (
+      <section ref={sectionRef} aria-labelledby={titleId} className="w-full rounded-card border border-line bg-card text-ink">
+        {form}
+        {scheduleDialog}
+      </section>
+    );
+  }
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      onClose={handleClose}
+      onCancel={(event) => {
+        if (event.target !== event.currentTarget) return;
+        // Escape first closes the suggestion list, not the dialog.
+        if (suggestionsOpenRef.current || busy) event.preventDefault();
+      }}
+      onClick={onBackdropClick}
+      className={cn(
+        "m-auto max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl bg-card p-0 text-ink shadow-[0px_24px_48px_0px_rgba(0,0,0,0.25)] backdrop:bg-primary-dark/55 max-sm:max-w-[calc(100vw-1rem)]",
+        type === "article" ? "w-[760px]" : "w-[640px]",
       )}
+    >
+      {form}
+      {scheduleDialog}
     </dialog>
   );
 }

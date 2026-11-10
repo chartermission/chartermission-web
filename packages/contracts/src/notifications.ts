@@ -48,6 +48,17 @@ export const NotificationType = z.enum([
   "opportunity_application_received",
   /** To the applicant: the poster shortlisted, accepted or declined them. Icon briefcase. */
   "opportunity_application_updated",
+  /* Pages and verification. Always sent (they answer something the member asked for). */
+  /** Your page passed review and is live. Icon check. */
+  "page_approved",
+  /** Your page was not approved, or was suspended, with the reason. Icon alert. */
+  "page_rejected",
+  /** You were made an admin of a page. Icon users. */
+  "page_admin_added",
+  /** Your (or your page's) verification request was approved. Icon check. */
+  "verification_approved",
+  /** Your (or your page's) verification request was declined, with the reason. Icon alert. */
+  "verification_declined",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 

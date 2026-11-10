@@ -8,11 +8,13 @@ import { PostSerializer } from './post-serializer.js';
 import { LinkPreviewService } from './link-preview.js';
 import { DraftsController } from './drafts.controller.js';
 import { DraftsService } from './drafts.service.js';
+import { AnalyticsController } from './analytics.controller.js';
+import { PostAnalyticsService } from './post-analytics.service.js';
 
 @Module({
   imports: [MediaModule],
-  controllers: [PostsController, DraftsController],
-  providers: [PostsService, CommentsService, ReactionsService, PostSerializer, LinkPreviewService, DraftsService],
+  controllers: [AnalyticsController, PostsController, DraftsController],
+  providers: [PostsService, CommentsService, ReactionsService, PostSerializer, LinkPreviewService, DraftsService, PostAnalyticsService],
   exports: [PostsService, CommentsService, PostSerializer, LinkPreviewService, DraftsService],
 })
 export class PostsModule {}

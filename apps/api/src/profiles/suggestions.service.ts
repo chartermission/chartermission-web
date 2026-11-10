@@ -57,8 +57,12 @@ export class SuggestionsService {
         if (!found.has(r.userId)) found.set(r.userId, r.reason);
       }
     }
-    const refs = await this.members.refs(found.keys());
-    return [...found].filter(([id]) => refs.has(id)).map(([id, reason]) => ({ ...refs.get(id)!, reason }));
+    const refs = await this.members.refs([...found.keys(), userId]);
+    // Official accounts are follow-only, whichever side they are on.
+    const viewerIsStaff = !!refs.get(userId)?.staff;
+    return [...found]
+      .filter(([id]) => refs.has(id))
+      .map(([id, reason]) => ({ ...refs.get(id)!, reason, canConnect: !viewerIsStaff && !refs.get(id)!.staff }));
   }
 
   /** Candidate rules shared by every reason: active, discoverable, not self, not blocked, not followed. */

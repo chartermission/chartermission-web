@@ -35,11 +35,22 @@ export default function PrivacyPage() {
           id: "use",
           title: "How we use it",
           body: (
-            <p>
-              To run your account, show your content to the people you choose, send the emails you need (verification, security,
-              outcomes) and the notifications you opt into. Analytics use a pseudonymous ID and never include message text or
-              private fields. We don’t sell personal data.
-            </p>
+            <>
+              <p>
+                To run your account, show your content to the people you choose, send the emails you need (verification, security,
+                outcomes) and the notifications you opt into. Analytics use a pseudonymous ID and never include message text or
+                private fields. We don’t sell personal data.
+              </p>
+              <p>
+                When a post is on your screen we count it as seen, so its author (or the admins of the page that published it) can
+                see how many members it reached. The count is kept against the same pseudonymous ID with your country: authors see
+                totals only, never who viewed a post, and countries with fewer than three viewers are grouped together.
+              </p>
+              <p>
+                If you apply for the verified badge, the legal name, statement and links you send are seen only by our review team
+                and are used only to decide your request.
+              </p>
+            </>
           ),
         },
         {

@@ -64,6 +64,19 @@ the four staff accounts with fixed keys, listed with QR codes in the demo accoun
 (`docs/Charter-Mission-Test-Accounts.pdf`): add them to an authenticator app once and use its codes to sign in.
 In production staff set it up on their first sign-in. Members can turn on the same protection in Settings → Security.
 
+### Pages, verification and post analytics
+
+- **Official accounts are follow-only.** An account with the staff flag (set by `bootstrap --super-admin`, or when someone
+  is made an Ambassador Manager) can be followed but not connected with, in both directions. Existing connections become follows.
+- **Pages** (`/pages`) are for organisations, companies and initiatives. Members follow them; page admins post as the page
+  (the admin's name is never shown). Admin console → Pages creates pages, reviews the ones members create and holds the
+  "Who can create pages" setting (review first, open, or team only).
+- **Verification**: members apply in Settings → Verification, page admins from Manage page. Admin console → Verification
+  approves or declines with a note.
+- **Post analytics**: `/posts/{id}/analytics` for a post's author (or the page's admins) and `/analytics` for the overview.
+  Views are stored against a keyed hash of the viewer, so reach can be counted but nobody can list who viewed a post.
+- **Articles** are written on `/articles/new`; the landing page reads live numbers from `GET /public/overview`.
+
 ### Emails in development
 
 With `MAIL_DRIVER=log` nothing is sent: emails go to the `email_outbox` table and the API log. The check-email

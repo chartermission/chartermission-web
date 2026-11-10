@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { SessionService } from './session.service.js';
 import { MembersService } from './members.service.js';
+import { PageRefsService } from './page-refs.service.js';
 import { BadgesService } from './badges.service.js';
 import { RelationsService } from './relations.service.js';
 import { NotifyService } from './notify.service.js';
@@ -15,6 +16,7 @@ import { SettingsService } from '../infra/settings.service.js';
 const providers = [
   SessionService,
   MembersService,
+  PageRefsService,
   BadgesService,
   RelationsService,
   NotifyService,

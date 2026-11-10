@@ -34,6 +34,7 @@ import {
   users,
 } from '../db/schema.js';
 import { MembersService, mediaUrl, posterUrl } from '../core/members.service.js';
+import { PageRefsService, type PageRefRow } from '../core/page-refs.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { can } from '../core/policy.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -51,6 +52,24 @@ const FALLBACK_AUTHOR: MemberRef = {
 };
 
 /**
+ * A page shown in the author slot: id = page id, handle = page slug. The admin who wrote the post
+ * is never serialised, so members see the page and nothing else.
+ */
+function pageAuthor(page: PageRefRow): MemberRef {
+  return {
+    id: page.id,
+    handle: page.slug,
+    name: page.name,
+    headline: page.tagline,
+    avatarUrl: page.logoUrl,
+    tone: 'primary',
+    verified: page.verified,
+    staff: false,
+    badge: null,
+  };
+}
+
+/**
  * Builds PostView for a viewer, in bulk (one query per related table), keeping
  * the order of the ids given. Callers decide which ids the viewer may list;
  * embedded reposts are re-checked here (null when the original is not visible).
@@ -61,6 +80,7 @@ export class PostSerializer {
     @InjectDb() private readonly db: Db,
     private readonly members: MembersService,
     private readonly relations: RelationsService,
+    private readonly pageRefs: PageRefsService,
   ) {}
 
   async one(id: string, viewer: AuthUser | undefined): Promise<PostView> {
@@ -81,8 +101,11 @@ export class PostSerializer {
       if (originalIds.length) {
         const originalRows = await this.db.select().from(posts).where(inArray(posts.id, originalIds));
         const states = await this.authorStates(originalRows.map((r) => r.authorId));
+        const originalPages = await this.pageRefs.refs(originalRows.map((r) => r.pageId).filter((x): x is string => !!x));
         const visible = originalRows.filter(
-          (r) => canViewPost(r, states.get(r.authorId), viewer, blockedSet) && r.moderationState === 'visible',
+          (r) =>
+            canViewPost(r, states.get(r.authorId), viewer, blockedSet, !r.pageId || originalPages.get(r.pageId)?.status === 'active') &&
+            r.moderationState === 'visible',
         );
         const views = await this.posts(
           visible.map((r) => r.id),
@@ -95,8 +118,10 @@ export class PostSerializer {
     }
 
     const postIds = rows.map((r) => r.id);
-    const [authorRefs, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers] = await Promise.all([
+    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
+      this.pageRefs.refs(rows.map((r) => r.pageId).filter((x): x is string => !!x)),
+      rows.some((r) => r.pageId) ? this.pageRefs.managedIds(viewer?.id) : Promise.resolve(new Set<string>()),
       this.chapters(rows),
       this.hashtags(postIds),
       this.mentions(postIds, blockedSet),
@@ -111,11 +136,15 @@ export class PostSerializer {
     for (const id of ids) {
       const r = byId.get(id);
       if (!r) continue;
-      const own = viewer?.id === r.authorId;
+      const page = r.pageId ? pageMap.get(r.pageId) : undefined;
+      // A page post belongs to everyone who manages the page, not only the admin who wrote it.
+      const managesPage = !!page && managed.has(page.id);
+      const own = page ? managesPage : viewer?.id === r.authorId;
       const attachments = attachmentMap.get(r.id) ?? [];
       const view: PostView = {
         id: r.id,
-        author: authorRefs.get(r.authorId) ?? FALLBACK_AUTHOR,
+        author: page ? pageAuthor(page) : (authorRefs.get(r.authorId) ?? FALLBACK_AUTHOR),
+        page: page ? PageRefsService.toRef(page) : null,
         body: r.body,
         kind: r.kind as PostKind,
         ...typeState(r, attachments, answers, offers),
@@ -137,9 +166,10 @@ export class PostSerializer {
           reaction: viewerState.reactions.get(r.id) ?? null,
           bookmarked: viewerState.bookmarks.has(r.id),
           reposted: viewerState.reposts.has(r.id),
-          canEdit: can(viewer, 'post.edit', { authorId: r.authorId }) && !r.deletedAt,
-          canDelete: can(viewer, 'post.delete', { authorId: r.authorId }) && !r.deletedAt,
+          canEdit: (page ? managesPage : can(viewer, 'post.edit', { authorId: r.authorId })) && !r.deletedAt,
+          canDelete: (managesPage || can(viewer, 'post.delete', { authorId: page ? undefined : r.authorId })) && !r.deletedAt,
           canReport: !!viewer && !own && can(viewer, 'report.create'),
+          canViewAnalytics: !!viewer && own && !r.repostOfId,
         },
       };
       if (r.moderationState !== 'visible' && (own || isModerator(viewer))) {

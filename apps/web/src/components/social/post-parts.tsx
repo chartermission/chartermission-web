@@ -8,10 +8,10 @@ import { postTypeAccent, postTypeMeta } from "./post-types/meta";
 import { RichText } from "./rich-text";
 
 /** Name with verified tick and staff badge. */
-export function AuthorName({ member, className }: { member: MemberRef; className?: string }) {
+export function AuthorName({ member, className, href }: { member: MemberRef; className?: string; /** For posts published as a page. */ href?: string }) {
   return (
     <span className={cn("flex min-w-0 items-center gap-1", className)}>
-      <Link href={memberHref(member.handle)} className="truncate text-md font-medium text-ink hover:underline">
+      <Link href={href ?? memberHref(member.handle)} className="truncate text-md font-medium text-ink hover:underline">
         {member.name}
       </Link>
       {member.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}

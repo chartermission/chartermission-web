@@ -9,7 +9,7 @@ import { api } from "@/lib/api/client";
 import { confetti, pop } from "@/components/motion";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog, UnblockHint } from "./confirm-dialog";
-import { absoluteUrl, postHref } from "./links";
+import { absoluteUrl, authorHref, postAnalyticsHref, postHref } from "./links";
 import { Menu, type MenuItem } from "./menu";
 import { PostAttachments } from "./post-attachments";
 import { AuthorName, LinkPreviewCard, MemberAvatar, PostCounts, PostTypeChip, RepostEmbed, TimeAgo } from "./post-parts";
@@ -27,6 +27,8 @@ import { ReactionButton, type ReactionSnapshot } from "./reaction-button";
 import { RepostDialog } from "./repost-dialog";
 import { RichText } from "./rich-text";
 import { toast } from "./toast";
+import { PageLogo } from "@/components/pages/page-logo";
+import { usePostView } from "./view-tracker";
 import type { Viewer } from "./viewer";
 
 const CLAMP_AT = 420;
@@ -81,6 +83,9 @@ export function PostCard({
   const cardRef = useRef<HTMLElement>(null);
   const bookmarkIconRef = useRef<HTMLSpanElement>(null);
 
+  // Analytics: count the post as seen by this member (never the author's or page admins' own views).
+  usePostView(cardRef, initial.id, !initial.viewer.canViewAnalytics && initial.status === "published" && !initial.moderationState);
+
   // The answers list on the post page reports best-answer changes.
   useEffect(
     () =>
@@ -90,7 +95,8 @@ export function PostCard({
     [initial.id],
   );
 
-  const isOwn = post.author.id === viewer.id;
+  // A post published as a page belongs to everyone who manages that page.
+  const isOwn = post.page ? post.viewer.canEdit : post.author.id === viewer.id;
   const subject = `${post.author.name}’s post`;
   const long = post.body.length > CLAMP_AT && !expanded;
 
@@ -150,11 +156,15 @@ export function PostCard({
         : { label: "Close request", icon: "check", onSelect: () => setClosed(true) },
     );
   }
+  if (post.viewer.canViewAnalytics) menu.push({ label: "View analytics", icon: "chart", onSelect: () => router.push(postAnalyticsHref(post.id)) });
   if (isOwn && post.viewer.canDelete) menu.push({ label: "Delete post", icon: "x", danger: true, onSelect: () => setModal("delete") });
   if (!isOwn) {
     if (post.viewer.canReport) menu.push({ label: "Report post", icon: "flag", onSelect: () => setModal("report") });
-    menu.push({ label: `Mute ${post.author.name}`, icon: "eye-off", onSelect: () => setModal("mute") });
-    menu.push({ label: `Block ${post.author.name}`, icon: "shield", danger: true, onSelect: () => setModal("block") });
+    // Muting and blocking are between members; a page is unfollowed from its own page instead.
+    if (!post.page) {
+      menu.push({ label: `Mute ${post.author.name}`, icon: "eye-off", onSelect: () => setModal("mute") });
+      menu.push({ label: `Block ${post.author.name}`, icon: "shield", danger: true, onSelect: () => setModal("block") });
+    }
     if (post.viewer.canDelete) menu.push({ label: "Delete post (moderator)", icon: "x", danger: true, onSelect: () => setModal("delete") });
   }
 
@@ -173,12 +183,13 @@ export function PostCard({
 
   const header = (
     <header className="flex w-full items-start gap-3">
-      <Link href={`/members/${post.author.handle}`} tabIndex={-1} aria-hidden="true">
-        <MemberAvatar member={post.author} />
+      <Link href={authorHref(post)} tabIndex={-1} aria-hidden="true">
+        {post.page ? <PageLogo name={post.page.name} src={post.page.logoUrl} size={40} /> : <MemberAvatar member={post.author} />}
       </Link>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span id={`${id}-author`}>
-          <AuthorName member={post.author} />
+        <span id={`${id}-author`} className="flex min-w-0 items-center gap-1.5">
+          <AuthorName member={post.author} href={authorHref(post)} />
+          {post.page && <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-secondary">Page</span>}
         </span>
         <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-secondary">
           {post.author.headline && <span className="truncate">{post.author.headline}</span>}
@@ -329,6 +340,17 @@ export function PostCard({
       )}
 
       <PostCounts post={post} total={reactions.total} breakdown={reactions.breakdown ?? post.reactionBreakdown} />
+
+      {post.viewer.canViewAnalytics && post.status === "published" && (
+        <Link
+          href={postAnalyticsHref(post.id)}
+          className="-my-1 flex w-fit items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-secondary hover:bg-muted hover:text-primary"
+        >
+          <Icon name="chart" size={14} />
+          View analytics
+          <span className="sr-only"> for {subject}</span>
+        </Link>
+      )}
 
       <div className="h-px w-full bg-line" />
 

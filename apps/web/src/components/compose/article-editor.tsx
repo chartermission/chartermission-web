@@ -121,6 +121,7 @@ export function ArticleEditor({
   mentions,
   label = "Article text",
   compact = false,
+  tall = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -129,6 +130,8 @@ export function ArticleEditor({
   mentions?: readonly MemberRef[];
   label?: string;
   compact?: boolean;
+  /** On the full writing page: the editor fills most of the screen. */
+  tall?: boolean;
 }) {
   const id = useId();
   const ownRef = useRef<HTMLTextAreaElement>(null);
@@ -268,12 +271,12 @@ export function ArticleEditor({
               aria-describedby={`${id}-meta${error ? ` ${id}-error` : ""}`}
               className={cn(
                 "block w-full resize-y bg-transparent px-4 py-3 text-md leading-7 text-ink outline-none placeholder:text-disabled",
-                compact ? "min-h-[240px]" : "min-h-[320px] max-sm:min-h-[260px]",
+                compact ? "min-h-[240px]" : tall ? "min-h-[58vh] max-sm:min-h-[50vh]" : "min-h-[320px] max-sm:min-h-[260px]",
               )}
             />
           </>
         ) : (
-          <div className={cn("overflow-y-auto px-4 py-3", compact ? "min-h-[240px]" : "min-h-[320px] max-sm:min-h-[260px]")}>
+          <div className={cn("overflow-y-auto px-4 py-3", compact ? "min-h-[240px]" : tall ? "min-h-[58vh] max-sm:min-h-[50vh]" : "min-h-[320px] max-sm:min-h-[260px]")}>
             {value.trim() ? (
               <Markdown text={value} mentions={mentions} headingOffset={1} />
             ) : (

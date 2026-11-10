@@ -30,6 +30,7 @@ import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { can, isActiveUntil } from '../core/policy.js';
 import { MembersService } from '../core/members.service.js';
+import { PageRefsService } from '../core/page-refs.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 import { EventsService } from '../infra/events.service.js';
@@ -91,6 +92,7 @@ export class PostsService implements OnModuleInit {
     private readonly audit: AuditService,
     private readonly media: MediaService,
     private readonly previews: LinkPreviewService,
+    private readonly pageRefs: PageRefsService,
   ) {}
 
   onModuleInit() {
@@ -111,7 +113,13 @@ export class PostsService implements OnModuleInit {
     if (!post) throw Errors.notFound('Post');
     const blocked = viewer ? await this.relations.blockedSet(viewer.id) : new Set<string>();
     const states = await this.serializer.authorStates([post.authorId]);
-    if (!canViewPost(post, states.get(post.authorId), viewer, blocked)) throw Errors.notFound('Post');
+    // A page post is visible while its page is live, and always to the people who manage the page.
+    let pageIsLive = true;
+    if (post.pageId) {
+      pageIsLive = (await this.pageRefs.refs([post.pageId])).get(post.pageId)?.status === 'active';
+      if (!pageIsLive && (await this.pageRefs.role(viewer?.id, post.pageId))) pageIsLive = true;
+    }
+    if (!canViewPost(post, states.get(post.authorId), viewer, blocked, pageIsLive)) throw Errors.notFound('Post');
     if (opts.interactive && !isInteractive(post)) throw Errors.notFound('Post');
     return post;
   }
@@ -127,6 +135,7 @@ export class PostsService implements OnModuleInit {
     if (input.kind === 'announcement' && !can(user, 'post.announce')) {
       throw Errors.forbidden('Only the platform team can publish announcements');
     }
+    if (input.pageId) await this.assertCanPostAs(user, input);
     await this.limits.consume(`posts:${user.id}`, POSTS_PER_DAY, 24 * 3600);
 
     const attachments = await this.validateAttachments(user.id, input.attachmentIds);
@@ -161,6 +170,7 @@ export class PostsService implements OnModuleInit {
           chapterId: input.chapterId ?? null,
           countryCode: user.countryCode,
           repostOfId: original?.id ?? null,
+          pageId: input.pageId ?? null,
           linkUrl,
           // Video links get their player straight away; the title and description follow from the preview job.
           linkPreview: linkUrl ? embedPreview(linkUrl) : null,
@@ -222,9 +232,9 @@ export class PostsService implements OnModuleInit {
   async update(user: AuthUser, id: string, input: UpdatePostInput): Promise<PostView> {
     const post = await this.find(id);
     if (!post || post.deletedAt) throw Errors.notFound('Post');
-    if (!can(user, 'post.edit', { authorId: post.authorId })) {
+    if (!(await this.owns(user, post))) {
       await this.findVisible(user, id);
-      throw Errors.forbidden('Only the author can edit this post');
+      throw Errors.forbidden(post.pageId ? 'Only the page’s admins can edit this post' : 'Only the author can edit this post');
     }
     assertNotRestricted(user);
     checkBody(post.type, input.body);
@@ -262,9 +272,10 @@ export class PostsService implements OnModuleInit {
   async remove(user: AuthUser, id: string, ip?: string): Promise<void> {
     const post = await this.find(id);
     if (!post || post.deletedAt) throw Errors.notFound('Post');
-    if (!can(user, 'post.delete', { authorId: post.authorId })) {
+    const owner = await this.owns(user, post);
+    if (!owner && !can(user, 'post.delete', {})) {
       await this.findVisible(user, id);
-      throw Errors.forbidden('Only the author can delete this post');
+      throw Errors.forbidden(post.pageId ? 'Only the page’s admins can delete this post' : 'Only the author can delete this post');
     }
     await this.db.transaction(async (tx) => {
       await tx.update(posts).set({ deletedAt: new Date() }).where(eq(posts.id, id));
@@ -279,9 +290,29 @@ export class PostsService implements OnModuleInit {
           .where(eq(posts.id, post.repostOfId));
       }
     });
-    if (post.authorId !== user.id) {
+    if (!owner) {
       await this.audit.record({ actorId: user.id, action: 'post.delete', targetType: 'post', targetId: id, before: { authorId: post.authorId }, ip });
     }
+  }
+
+  /** The post's author, or for a page post anyone who manages the page. */
+  private async owns(user: AuthUser, post: PostRow): Promise<boolean> {
+    if (post.pageId) return !!(await this.pageRefs.role(user.id, post.pageId));
+    return post.authorId === user.id;
+  }
+
+  /** Publishing as a page: the member must manage it, and it must be live. */
+  private async assertCanPostAs(user: AuthUser, input: CreatePostInput) {
+    const pageId = input.pageId!;
+    const [page, role] = await Promise.all([this.pageRefs.refs([pageId]).then((m) => m.get(pageId)), this.pageRefs.role(user.id, pageId)]);
+    if (!page || !role) throw Errors.forbidden('You can only post as a page you manage');
+    if (page.status !== 'active') {
+      throw Errors.forbidden(page.status === 'pending' ? 'This page is still being reviewed. You can post once it’s live.' : 'This page isn’t live, so it can’t post.');
+    }
+    if (input.kind === 'announcement') throw Errors.validation({ kind: 'Announcements are published from a team account, not a page' });
+    if (input.chapterId) throw Errors.validation({ chapterId: 'Page posts go to the page’s followers, not a chapter' });
+    if (input.repostOfId) throw Errors.validation({ repostOfId: 'Reposts are made from your own profile' });
+    if (input.type === 'request') throw Errors.validation({ type: 'Requests are posted from your own profile' });
   }
 
   /** Details sent with an edit must match the post's type. */

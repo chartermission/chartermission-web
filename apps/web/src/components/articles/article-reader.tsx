@@ -10,7 +10,7 @@ import { pop } from "@/components/motion";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { FollowControl, useRelationship } from "@/components/network/relationship";
 import { ConfirmDialog, UnblockHint } from "@/components/social/confirm-dialog";
-import { absoluteUrl, articleHref, articlesHref, memberHref } from "@/components/social/links";
+import { absoluteUrl, articleHref, articlesHref, authorHref, memberHref, postAnalyticsHref } from "@/components/social/links";
 import { Menu, type MenuItem } from "@/components/social/menu";
 import { PostCounts } from "@/components/social/post-parts";
 import { coverAlt } from "@/components/social/post-types/article";
@@ -19,6 +19,7 @@ import { PostEditForm } from "@/components/social/post-types/post-edit-form";
 import { ReactionButton, type ReactionSnapshot } from "@/components/social/reaction-button";
 import { RepostDialog } from "@/components/social/repost-dialog";
 import { toast } from "@/components/social/toast";
+import { usePostView } from "@/components/social/view-tracker";
 import type { Viewer } from "@/components/social/viewer";
 import { BrandCover } from "@/components/illustrations";
 import { articleLongDate, withoutTrailingTags } from "./format";
@@ -48,8 +49,11 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
   const bookmarkIconRef = useRef<HTMLSpanElement>(null);
   const follow = useRelationship(post.author, author?.relationship ?? { connection: "none", connectionId: null, following: false });
 
+  usePostView(bodyRef, initial.id, !initial.viewer.canViewAnalytics && initial.status === "published" && !initial.moderationState);
+
   const article = post.article!;
-  const isOwn = post.author.id === viewer.id;
+  // An article published as a page belongs to everyone who manages that page.
+  const isOwn = post.page ? post.viewer.canEdit : post.author.id === viewer.id;
   const canFollow = !!author && !author.relationship.self && !isOwn;
   const subject = `${post.author.name}’s article`;
   const moderated = post.moderationState && post.moderationState !== "visible";
@@ -88,11 +92,14 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
 
   const menu: MenuItem[] = [{ label: "Copy link", icon: "link", onSelect: copyLink }];
   if (post.viewer.canEdit && !post.isRepost) menu.push({ label: "Edit article", icon: "message", onSelect: () => setEditing(true) });
+  if (post.viewer.canViewAnalytics) menu.push({ label: "View analytics", icon: "chart", onSelect: () => router.push(postAnalyticsHref(post.id)) });
   if (isOwn && post.viewer.canDelete) menu.push({ label: "Delete article", icon: "x", danger: true, onSelect: () => setModal("delete") });
   if (!isOwn) {
     if (post.viewer.canReport) menu.push({ label: "Report article", icon: "flag", onSelect: () => setModal("report") });
-    menu.push({ label: `Mute ${post.author.name}`, icon: "eye-off", onSelect: () => setModal("mute") });
-    menu.push({ label: `Block ${post.author.name}`, icon: "shield", danger: true, onSelect: () => setModal("block") });
+    if (!post.page) {
+      menu.push({ label: `Mute ${post.author.name}`, icon: "eye-off", onSelect: () => setModal("mute") });
+      menu.push({ label: `Block ${post.author.name}`, icon: "shield", danger: true, onSelect: () => setModal("block") });
+    }
     if (post.viewer.canDelete) menu.push({ label: "Delete article (moderator)", icon: "x", danger: true, onSelect: () => setModal("delete") });
   }
 
@@ -167,13 +174,13 @@ export function ArticleReader({ post: initial, viewer, author }: { post: PostVie
             {article.subtitle && <p className="text-[20px] leading-[30px] text-body max-sm:text-[17px] max-sm:leading-7">{article.subtitle}</p>}
 
             <div className="flex items-center gap-3 border-y border-line py-4">
-              <Link href={memberHref(post.author.handle)} tabIndex={-1} aria-hidden="true" className="shrink-0">
+              <Link href={authorHref(post)} tabIndex={-1} aria-hidden="true" className="shrink-0">
                 <Avatar name={post.author.name} src={post.author.avatarUrl ?? undefined} tone={post.author.tone} size={40} />
               </Link>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="flex min-w-0 items-center gap-1">
-                    <Link href={memberHref(post.author.handle)} className="truncate text-md font-medium text-ink hover:underline">
+                    <Link href={authorHref(post)} className="truncate text-md font-medium text-ink hover:underline">
                       {post.author.name}
                     </Link>
                     {post.author.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}

@@ -94,6 +94,8 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
 
   const links: { href: string; label: string; icon: IconName }[] = [
     { href: `/members/${viewer.handle}`, label: "View profile", icon: "user" },
+    { href: "/analytics", label: "Analytics", icon: "chart" },
+    { href: "/pages", label: "Pages", icon: "building" },
     { href: "/settings", label: "Settings", icon: "shield" },
   ];
 

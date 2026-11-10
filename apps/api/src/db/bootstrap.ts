@@ -3,6 +3,7 @@ import { createDb, createPool } from './client.js';
 import * as s from './schema.js';
 import { seedReference } from './seed.js';
 import { isMain } from './is-main.js';
+import { closeStaffConnections } from '../profiles/staff-connections.js';
 
 /**
  * Production-safe setup, idempotent (no demo data):
@@ -27,6 +28,8 @@ export async function bootstrap(superAdminEmail?: string) {
     const [role] = await db.select({ id: s.roles.id }).from(s.roles).where(eq(s.roles.key, 'super_admin')).limit(1);
     if (!role) throw new Error('The super_admin role is missing after seeding reference data.');
     await db.update(s.users).set({ isStaff: true }).where(eq(s.users.id, user.id));
+    // Official accounts are follow-only: members who were connected to it now follow it.
+    await closeStaffConnections(db, user.id);
     const existing = await db
       .select({ id: s.userRoles.id })
       .from(s.userRoles)

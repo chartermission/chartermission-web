@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHEDULE_MAX_DAYS, type DraftView, type Page, type PostView } from "@chartermission/contracts";
 import { Button, Icon, buttonClasses, cn } from "@chartermission/ui";
+import { writeArticleHref } from "@/components/articles/write-article";
 import { CreatePostDialog } from "@/components/compose/create-post-dialog";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
 import { ErrorNotice } from "@/components/social/errors";
@@ -59,6 +61,7 @@ function Tabs({ tab, counts }: { tab: DraftsTab; counts: Counts }) {
  * Publish now, Unschedule and Delete act in place.
  */
 export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { tab: DraftsTab; initial: Page<DraftView>; counts: Counts; viewer: Viewer }) {
+  const router = useRouter();
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [loading, setLoading] = useState(false);
@@ -164,6 +167,11 @@ export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { ta
 
   function openComposer(draft: DraftView | null) {
     editingRef.current = draft;
+    // Article drafts open on the writing page; everything else in the composer dialog.
+    if (draft?.payload.type === "article") {
+      router.push(writeArticleHref(draft.id));
+      return;
+    }
     setEditing((current) => ({ key: (current?.key ?? 0) + 1, draft }));
   }
 

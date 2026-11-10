@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { PostView } from "@chartermission/contracts";
 import { Composer, blockedReason, type ComposeStart } from "@/components/composer";
+import { writeArticleHref } from "@/components/articles/write-article";
 import { CreatePostDialog } from "@/components/compose/create-post-dialog";
 import { announceDraftsChanged } from "@/components/drafts/drafts-events";
 import { onComposeRequest } from "@/components/home/compose-request";
@@ -67,7 +68,14 @@ export function FeedComposer({ viewer, compose = false }: { viewer: Viewer; comp
   return (
     <>
       <div ref={panelRef}>
-        <Composer viewer={viewer} onOpen={(start) => setSession((current) => ({ key: (current?.key ?? 0) + 1, ...start }))} />
+        <Composer
+          viewer={viewer}
+          onOpen={(start) => {
+            // Articles are written on their own page.
+            if (start?.type === "article") router.push(writeArticleHref());
+            else setSession((current) => ({ key: (current?.key ?? 0) + 1, ...start }));
+          }}
+        />
       </div>
       {session && (
         <CreatePostDialog

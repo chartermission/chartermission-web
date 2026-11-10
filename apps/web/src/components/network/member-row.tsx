@@ -5,7 +5,7 @@ import type { DirectoryMember } from "@chartermission/contracts";
 import { Icon, RoleBadgeIcon } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
-import { ConnectControl, FollowControl, useRelationship } from "./relationship";
+import { ConnectControl, FollowControl, canConnectWith, useRelationship } from "./relationship";
 
 /** A member in a list (search results) with Connect and Follow. */
 export function MemberRow({ member }: { member: DirectoryMember }) {
@@ -28,8 +28,8 @@ export function MemberRow({ member }: { member: DirectoryMember }) {
         <span className="text-xs text-secondary">You</span>
       ) : (
         <div className="flex gap-2 max-sm:w-full max-sm:justify-end">
-          <ConnectControl member={member} controls={controls} />
-          <FollowControl member={member} controls={controls} />
+          {canConnectWith(member, member.relationship) && <ConnectControl member={member} controls={controls} />}
+          <FollowControl member={member} controls={controls} prominent={!canConnectWith(member, member.relationship)} />
         </div>
       )}
     </li>

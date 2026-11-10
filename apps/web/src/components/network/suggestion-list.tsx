@@ -19,8 +19,8 @@ function SuggestionRow({ member }: { member: SuggestedMember }) {
         </Link>
       </div>
       <div className="flex gap-2 pl-[50px]">
-        <ConnectControl member={member} controls={controls} />
-        <FollowControl member={member} controls={controls} />
+        {member.canConnect !== false && <ConnectControl member={member} controls={controls} />}
+        <FollowControl member={member} controls={controls} prominent={member.staff || member.canConnect === false} />
       </div>
     </li>
   );

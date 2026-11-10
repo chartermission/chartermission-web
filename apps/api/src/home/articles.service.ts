@@ -128,7 +128,8 @@ export class ArticlesService {
       this.db
         .select({ authorId: posts.authorId, articles: sql<number>`count(*)::int` })
         .from(posts)
-        .where(visible)
+        // Top writers are members; articles published as a page count for the page, not its admin.
+        .where(and(visible, isNull(posts.pageId)))
         .groupBy(posts.authorId)
         .orderBy(sql`count(*) desc`, sql`max(${posts.createdAt}) desc`, asc(posts.authorId))
         .limit(HUB_AUTHORS),
@@ -164,7 +165,7 @@ export class ArticlesService {
     if (!isUuid(id)) throw Errors.notFound('Article');
     const visible = this.articleSql(viewer.id);
     const [article] = await this.db
-      .select({ id: posts.id, authorId: posts.authorId })
+      .select({ id: posts.id, authorId: posts.authorId, pageId: posts.pageId })
       .from(posts)
       .where(and(visible, eq(posts.id, id)))
       .limit(1);
@@ -173,7 +174,14 @@ export class ArticlesService {
     const byAuthor = await this.db
       .select({ id: posts.id })
       .from(posts)
-      .where(and(visible, eq(posts.authorId, article.authorId), sql`${posts.id} <> ${article.id}::uuid`))
+      // "More from" the same writer: the page for an article published as a page, otherwise the member.
+      .where(
+        and(
+          visible,
+          article.pageId ? eq(posts.pageId, article.pageId) : and(eq(posts.authorId, article.authorId), isNull(posts.pageId)),
+          sql`${posts.id} <> ${article.id}::uuid`,
+        ),
+      )
       .orderBy(desc(posts.createdAt), desc(posts.id))
       .limit(RELATED);
     const exclude = [article.id, ...byAuthor.map((r) => r.id)];

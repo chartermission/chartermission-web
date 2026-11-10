@@ -114,11 +114,11 @@ export class MomentsService {
       this.db
         .select({ n: sql<number>`count(*)::int` })
         .from(posts)
-        .where(and(eq(posts.authorId, id), isNull(posts.deletedAt), eq(posts.moderationState, 'visible'), eq(posts.status, 'published'))),
+        .where(and(eq(posts.authorId, id), isNull(posts.pageId), isNull(posts.deletedAt), eq(posts.moderationState, 'visible'), eq(posts.status, 'published'))),
       this.db
         .select({ id: posts.id, type: posts.type, body: posts.body, details: posts.details })
         .from(posts)
-        .where(and(shownPostsSql(viewer.id), eq(posts.authorId, id), isNull(posts.repostOfId), sql`btrim(${posts.body}) <> ''`))
+        .where(and(shownPostsSql(viewer.id), eq(posts.authorId, id), isNull(posts.pageId), isNull(posts.repostOfId), sql`btrim(${posts.body}) <> ''`))
         .orderBy(desc(posts.createdAt), desc(posts.id))
         .limit(1),
     ]);

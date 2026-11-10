@@ -1,21 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactionKind, ReactionState } from "@chartermission/contracts";
 import { Icon, cn, type IconName } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { TickNumber, burst, pop } from "@/components/motion";
-import { Menu } from "./menu";
+import { reactionKinds, reactionMeta } from "./reaction-meta";
 import { toast } from "./toast";
 
-/** `color` is the text class of the chosen button; `tone` the same colour for motion effects. */
-export const reactionMeta: Record<ReactionKind, { label: string; icon: IconName; color: string; tone: string }> = {
-  like: { label: "Like", icon: "like", color: "text-primary-light", tone: "var(--color-primary-light)" },
-  insightful: { label: "Insightful", icon: "lightbulb", color: "text-warning", tone: "var(--color-warning)" },
-  support: { label: "Support", icon: "users", color: "text-success", tone: "var(--color-success)" },
-};
-
-export const reactionKinds = Object.keys(reactionMeta) as ReactionKind[];
+export { reactionKinds, reactionMeta };
 
 export type ReactionSnapshot = {
   reaction: ReactionKind | null;
@@ -38,9 +31,15 @@ function applyLocal(state: ReactionSnapshot, next: ReactionKind | null): Reactio
   return { reaction: next, total, breakdown };
 }
 
+/** How long the pointer rests on the button before the reactions float up, and lingers after leaving. */
+const OPEN_DELAY_MS = 350;
+const CLOSE_DELAY_MS = 280;
+const LONG_PRESS_MS = 420;
+
 /**
- * Like button with a reaction picker (like / insightful / support). Counts update
- * optimistically and roll back if PUT/DELETE /reactions fails.
+ * Like button with floating reactions (like / insightful / support). A click or tap likes straight
+ * away; resting the pointer on the button, a long press on touch screens, or keyboard focus floats
+ * the three reactions above it. Counts update optimistically and roll back if PUT/DELETE /reactions fails.
  */
 export function ReactionButton({
   targetType,
@@ -65,7 +64,39 @@ export function ReactionButton({
   onReacted?: (kind: ReactionKind) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const iconRef = useRef<HTMLSpanElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A long press opened the picker, so the click that follows must not also toggle the like. */
+  const pressed = useRef(false);
+
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  const later = (next: boolean, ms: number) => {
+    clear();
+    timer.current = setTimeout(() => setOpen(next), ms);
+  };
+  useEffect(() => clear, []);
+
+  // Tapping elsewhere or pressing Escape puts the reactions away.
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   async function set(next: ReactionKind | null) {
     if (busy) return;
@@ -92,6 +123,12 @@ export function ReactionButton({
     }
   }
 
+  function choose(kind: ReactionKind) {
+    clear();
+    setOpen(false);
+    void set(state.reaction === kind ? null : kind);
+  }
+
   const chosen = state.reaction ? reactionMeta[state.reaction] : null;
   const current = chosen && primary && state.reaction === primary.kind ? { ...chosen, label: primary.activeLabel, icon: primary.icon ?? chosen.icon } : chosen;
   const idle = primary ? { label: primary.label, icon: primary.icon ?? reactionMeta[primary.kind].icon } : { label: "Like", icon: "like" as IconName };
@@ -100,12 +137,40 @@ export function ReactionButton({
     : "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium";
 
   return (
-    <div className="flex items-center">
+    <div
+      ref={wrapRef}
+      className="relative flex items-center"
+      onPointerEnter={(event) => event.pointerType === "mouse" && later(true, OPEN_DELAY_MS)}
+      onPointerLeave={(event) => event.pointerType === "mouse" && later(false, CLOSE_DELAY_MS)}
+      onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && later(false, 0)}
+    >
       <button
         type="button"
         aria-pressed={!!state.reaction}
-        onClick={() => set(state.reaction ? null : (primary?.kind ?? "like"))}
-        className={cn(base, "hover:bg-muted", current ? current.color : "text-secondary hover:text-primary")}
+        aria-describedby={open ? undefined : `${targetId}-reactions-hint`}
+        onClick={() => {
+          if (pressed.current) {
+            pressed.current = false;
+            return;
+          }
+          clear();
+          setOpen(false);
+          void set(state.reaction ? null : (primary?.kind ?? "like"));
+        }}
+        onFocus={(event) => event.currentTarget.matches(":focus-visible") && setOpen(true)}
+        onPointerDown={(event) => {
+          if (event.pointerType === "mouse") return;
+          pressed.current = false;
+          clear();
+          timer.current = setTimeout(() => {
+            pressed.current = true;
+            setOpen(true);
+          }, LONG_PRESS_MS);
+        }}
+        onPointerUp={(event) => event.pointerType !== "mouse" && !pressed.current && clear()}
+        onPointerCancel={clear}
+        onContextMenu={(event) => pressed.current && event.preventDefault()}
+        className={cn(base, "touch-manipulation select-none hover:bg-muted", current ? current.color : "text-secondary hover:text-primary")}
       >
         <span ref={iconRef} className="flex">
           <Icon name={current?.icon ?? idle.icon} size={compact ? 14 : 18} />
@@ -118,20 +183,56 @@ export function ReactionButton({
           </span>
         )}
       </button>
-      <Menu
-        label={`Choose a reaction for ${subject}`}
-        align="start"
-        trigger={<Icon name="chevron-down" size={compact ? 12 : 14} />}
-        items={reactionKinds.map((kind) => ({
-          label: state.reaction === kind ? `${reactionMeta[kind].label} (remove)` : reactionMeta[kind].label,
-          icon: reactionMeta[kind].icon,
-          onSelect: () => set(state.reaction === kind ? null : kind),
-        }))}
-      />
+      <span id={`${targetId}-reactions-hint`} className="sr-only">
+        Press Tab for more reactions
+      </span>
+
+      {open && (
+        <div
+          role="group"
+          aria-label={`React to ${subject}`}
+          className={cn(
+            "reaction-float absolute bottom-full left-0 z-30 flex items-center rounded-full border border-line bg-card shadow-[0_8px_24px_rgb(15_42_42/0.16)]",
+            compact ? "mb-1.5 gap-1 p-1" : "mb-2 gap-1.5 p-1.5",
+          )}
+        >
+          {reactionKinds.map((kind, index) => {
+            const meta = reactionMeta[kind];
+            const active = state.reaction === kind;
+            return (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={active}
+                aria-label={active ? `Remove ${meta.label}` : meta.label}
+                onClick={() => choose(kind)}
+                style={{ animationDelay: `${index * 45}ms` }}
+                className={cn(
+                  "reaction-float-item group/reaction relative flex items-center justify-center rounded-full text-inverse outline-offset-2 transition-transform duration-150 ease-out hover:z-10 hover:-translate-y-1.5 hover:scale-125 focus-visible:-translate-y-1.5 focus-visible:scale-125",
+                  compact ? "size-8" : "size-10",
+                  reactionFill[kind],
+                  active && "ring-2 ring-ink/70 ring-offset-2 ring-offset-card",
+                )}
+              >
+                <Icon name={meta.icon} size={compact ? 16 : 20} />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 rounded-full bg-ink px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-inverse opacity-0 transition-opacity duration-100 group-hover/reaction:opacity-100 group-focus-visible/reaction:opacity-100"
+                >
+                  {meta.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {compact && <KindSummary state={state} />}
     </div>
   );
 }
+
+/** Fill of each floating reaction. */
+const reactionFill: Record<ReactionKind, string> = { like: "bg-primary-light", insightful: "bg-warning", support: "bg-success" };
 
 const kindDot: Record<ReactionKind, string> = { like: "bg-primary-light", insightful: "bg-warning", support: "bg-success" };
 

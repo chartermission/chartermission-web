@@ -6,11 +6,12 @@ import { HomeController } from './home.controller.js';
 import { HomeQueries } from './home-queries.js';
 import { HomeService } from './home.service.js';
 import { MomentsService } from './moments.service.js';
+import { PublicController, PublicOverviewService } from './public.controller.js';
 
 /** Home feed character (welcome strip, moment cards) and the Articles section. Read-only apart from visit tracking. */
 @Module({
   imports: [PostsModule],
-  controllers: [HomeController, ArticlesController],
-  providers: [HomeQueries, HomeService, MomentsService, ArticlesService],
+  controllers: [HomeController, ArticlesController, PublicController],
+  providers: [HomeQueries, HomeService, MomentsService, ArticlesService, PublicOverviewService],
 })
 export class HomeModule {}

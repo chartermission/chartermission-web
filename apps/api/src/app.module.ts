@@ -23,6 +23,7 @@ import { AmbassadorsModule } from './ambassadors/ambassadors.module.js';
 import { StoriesModule } from './stories/stories.module.js';
 import { ChaptersModule } from './chapters/chapters.module.js';
 import { OpportunitiesModule } from './opportunities/opportunities.module.js';
+import { PagesModule } from './pages/pages.module.js';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { OpportunitiesModule } from './opportunities/opportunities.module.js';
     StoriesModule,
     ChaptersModule,
     OpportunitiesModule,
+    PagesModule,
   ],
   controllers: [AppController],
   providers: [

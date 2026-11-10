@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AvatarTone, ChapterRef, CountryCode, FieldVisibility, MemberRef, ProfileBadge, ProfileVisibility, TaxonomyItem } from "./common.js";
+import { AvatarTone, ChapterRef, CountryCode, FieldVisibility, MemberRef, PageRef, ProfileBadge, ProfileVisibility, TaxonomyItem } from "./common.js";
 
 /*
  * Member profiles, onboarding, directory and relationships
@@ -66,6 +66,11 @@ export const Relationship = z.object({
   blocked: z.boolean(),
   /** The viewer muted this member (their posts are left out of the viewer's feeds). */
   muted: z.boolean(),
+  /**
+   * False when the two can't connect: official Charter Mission accounts are follow-only, in both
+   * directions. Treat a missing value as true.
+   */
+  canConnect: z.boolean().optional(),
 });
 export type Relationship = z.infer<typeof Relationship>;
 
@@ -248,14 +253,15 @@ export type ConnectionView = z.infer<typeof ConnectionView>;
 export const CreateConnectionInput = z.object({ memberId: z.string().uuid(), note: z.string().trim().max(300).optional() });
 export type CreateConnectionInput = z.infer<typeof CreateConnectionInput>;
 
-export const FollowTargetType = z.enum(["member", "hashtag", "chapter"]);
+export const FollowTargetType = z.enum(["member", "hashtag", "chapter", "page"]);
 export type FollowTargetType = z.infer<typeof FollowTargetType>;
 
 /** POST /follows and DELETE /follows (same body). Hashtag targets use the tag without "#". */
-export const FollowInput = z.object({ targetType: FollowTargetType, targetId: z.string().min(1).max(60) });
+export const FollowInput = z.object({ targetType: FollowTargetType, targetId: z.string().min(1).max(80) });
 export type FollowInput = z.infer<typeof FollowInput>;
 
-export const SuggestedMember = MemberRef.extend({ reason: z.string() });
+/** `canConnect` false: an official account (or the viewer is one), so only Follow is offered. */
+export const SuggestedMember = MemberRef.extend({ reason: z.string(), canConnect: z.boolean().optional() });
 export type SuggestedMember = z.infer<typeof SuggestedMember>;
 
 /* ---------- Lists and inputs added by the identity workstream ---------- */
@@ -282,6 +288,7 @@ export const FollowView = z.object({
   targetId: z.string(),
   member: MemberRef.optional(),
   chapter: ChapterRef.optional(),
+  page: PageRef.optional(),
   hashtag: z.object({ tag: z.string(), display: z.string() }).optional(),
   createdAt: z.string(),
 });

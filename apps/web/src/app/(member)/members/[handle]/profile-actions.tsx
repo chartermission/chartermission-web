@@ -7,7 +7,7 @@ import type { MemberProfile, PreviewAs } from "@chartermission/contracts";
 import { Button, Icon, buttonClasses } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
-import { ConnectControl, FollowControl, useRelationship } from "@/components/network/relationship";
+import { ConnectControl, FollowControl, canConnectWith, useRelationship } from "@/components/network/relationship";
 import { ConfirmDialog, UnblockHint } from "@/components/social/confirm-dialog";
 import { Dialog } from "@/components/social/dialog";
 import { Menu, type MenuItem } from "@/components/social/menu";
@@ -126,15 +126,16 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
     }
   }
 
+  const connectable = canConnectWith(member, member.relationship);
   const menu: MenuItem[] = [];
-  if (controls.state.connection === "connected") menu.push({ label: "Remove connection", icon: "x", onSelect: () => setModal("remove") });
+  if (connectable && controls.state.connection === "connected") menu.push({ label: "Remove connection", icon: "x", onSelect: () => setModal("remove") });
   menu.push({ label: muted ? `Unmute ${member.name}` : `Mute ${member.name}`, icon: "eye-off", onSelect: toggleMute });
   menu.push({ label: `Block ${member.name}`, icon: "shield", danger: true, onSelect: () => setModal("block") });
   menu.push({ label: "Report profile", icon: "flag", onSelect: () => setModal("report") });
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {controls.state.connection === "connected" ? (
+      {!connectable ? null : controls.state.connection === "connected" ? (
         <span className="flex items-center gap-1.5 rounded-lg bg-success-light px-3 py-2 text-sm font-medium text-success">
           <Icon name="check" size={16} />
           Connected
@@ -142,11 +143,14 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
       ) : (
         <ConnectControl member={member} controls={controls} size="default" onConnectWithNote={canPost ? () => setModal("connect") : undefined} />
       )}
-      <FollowControl member={member} controls={controls} size="default" />
-      <Button variant="secondary" disabled title="Messaging arrives in a later release">
-        Message
-        <span className="sr-only"> (coming in a later release)</span>
-      </Button>
+      {/* Official accounts are follow-only, so Follow is the main action there. */}
+      <FollowControl member={member} controls={controls} size="default" prominent={!connectable} />
+      {connectable && (
+        <Button variant="secondary" disabled title="Messaging arrives in a later release">
+          Message
+          <span className="sr-only"> (coming in a later release)</span>
+        </Button>
+      )}
       <Menu
         label={`More actions for ${member.name}`}
         items={menu}

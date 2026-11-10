@@ -82,6 +82,7 @@ export class LearningAccessService {
             .where(
               and(
                 eq(posts.authorId, userId),
+                isNull(posts.pageId),
                 isNull(posts.deletedAt),
                 isNull(posts.repostOfId),
                 eq(posts.status, 'published'),

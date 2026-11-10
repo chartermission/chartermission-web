@@ -10,6 +10,7 @@ import {
   type AnyPgColumn,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -384,7 +385,7 @@ export const follows = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     targetType: text('target_type').notNull(),
-    /** User id, chapter id, or lower-cased hashtag. */
+    /** User id, chapter id, page id, or lower-cased hashtag. */
     targetId: text('target_id').notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -392,7 +393,7 @@ export const follows = pgTable(
   (t) => [
     primaryKey({ columns: [t.followerId, t.targetType, t.targetId] }),
     index('follows_target_idx').on(t.targetType, t.targetId),
-    check('follows_type_ck', sql`${t.targetType} in ('member','hashtag','chapter','organisation','initiative')`),
+    check('follows_type_ck', sql`${t.targetType} in ('member','hashtag','chapter','page','organisation','initiative')`),
   ],
 );
 
@@ -469,6 +470,8 @@ export const posts = pgTable(
     /** Author's country at posting time, for country filters and trending scopes. */
     countryCode: text('country_code'),
     repostOfId: uuid('repost_of_id'),
+    /** Published as a page by one of its admins (author_id stays the admin who wrote it). */
+    pageId: uuid('page_id').references((): AnyPgColumn => pages.id, { onDelete: 'cascade' }),
     linkUrl: text('link_url'),
     linkPreview: jsonb('link_preview').$type<{
       url: string;
@@ -497,6 +500,7 @@ export const posts = pgTable(
     index('posts_chapter_idx').on(t.chapterId),
     index('posts_repost_idx').on(t.repostOfId),
     index('posts_type_idx').on(t.type, t.createdAt),
+    index('posts_page_idx').on(t.pageId, t.createdAt),
     check('posts_kind_ck', sql`${t.kind} in ('standard','announcement')`),
     check('posts_type_ck', sql`${t.type} in ('standard','question','celebration','request','article')`),
     check('posts_visibility_ck', sql`${t.visibility} in ('members','public')`),
@@ -1683,3 +1687,154 @@ export const featuredMembers = pgTable('featured_members', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/* ======================= Pages, verification and post analytics (migration 0011) ======================= */
+
+/**
+ * A page for an organisation, company, institution or initiative. Members follow pages (follows
+ * with target_type 'page') and page admins publish posts as the page (posts.page_id).
+ * status: pending (member-created, waiting for review) → active; rejected; suspended by staff.
+ */
+export const pages = pgTable(
+  'pages',
+  {
+    id: id(),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    tagline: text('tagline'),
+    about: text('about'),
+    /** contracts PageCategory. */
+    category: text('category').notNull().default('organisation'),
+    website: text('website'),
+    countryCode: text('country_code').references(() => countries.code),
+    city: text('city'),
+    logoFileId: uuid('logo_file_id'),
+    coverFileId: uuid('cover_file_id'),
+    status: text('status').notNull().default('active'),
+    /** Shown to the page's admins when a page is rejected or suspended. */
+    reviewNote: text('review_note'),
+    /** Verified by staff (the tick beside the page name). */
+    verifiedAt: ts('verified_at'),
+    /** One of Charter Mission's own pages (created from the admin console). */
+    official: boolean('official').notNull().default(false),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('pages_slug_uq').on(sql`lower(${t.slug})`),
+    index('pages_status_idx').on(t.status, t.createdAt),
+    check('pages_status_ck', sql`${t.status} in ('pending','active','rejected','suspended')`),
+    check(
+      'pages_category_ck',
+      sql`${t.category} in ('organisation','company','nonprofit','government','education','media','community','initiative')`,
+    ),
+  ],
+);
+
+/** Members who manage a page. The owner can add and remove admins; every admin can edit and post. */
+export const pageAdmins = pgTable(
+  'page_admins',
+  {
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('admin'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.pageId, t.userId] }),
+    index('page_admins_user_idx').on(t.userId),
+    check('page_admins_role_ck', sql`${t.role} in ('owner','admin')`),
+  ],
+);
+
+/**
+ * An application for the verified tick, for a member (page_id null) or a page. Staff decide in
+ * the admin console; approval sets users.verified_at / pages.verified_at. One open request per subject.
+ */
+export const verificationRequests = pgTable(
+  'verification_requests',
+  {
+    id: id(),
+    subjectType: text('subject_type').notNull(),
+    /** The applicant (for pages: the page admin who applied). */
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    pageId: uuid('page_id').references(() => pages.id, { onDelete: 'cascade' }),
+    /** contracts VerificationCategory. */
+    category: text('category').notNull(),
+    /** Full legal name, or the organisation's registered name. */
+    legalName: text('legal_name').notNull(),
+    statement: text('statement').notNull(),
+    /** Public links that back the request (website, LinkedIn, press, registry entry). */
+    links: jsonb('links').$type<string[]>().notNull().default([]),
+    status: text('status').notNull().default('pending'),
+    /** Shown to the applicant with the outcome. */
+    decisionNote: text('decision_note'),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: ts('decided_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('verification_requests_status_idx').on(t.status, t.createdAt),
+    index('verification_requests_user_idx').on(t.userId, t.createdAt),
+    uniqueIndex('verification_requests_open_member_uq')
+      .on(t.userId)
+      .where(sql`${t.status} = 'pending' and ${t.subjectType} = 'member'`),
+    uniqueIndex('verification_requests_open_page_uq')
+      .on(t.pageId)
+      .where(sql`${t.status} = 'pending' and ${t.subjectType} = 'page'`),
+    check('verification_requests_subject_ck', sql`${t.subjectType} in ('member','page')`),
+    check('verification_requests_status_ck', sql`${t.status} in ('pending','approved','declined')`),
+    check('verification_requests_page_ck', sql`(${t.subjectType} = 'page') = (${t.pageId} is not null)`),
+  ],
+);
+
+/**
+ * Post analytics: one row per post and viewer. viewer_key is a keyed hash of the member id
+ * (common/crypto pseudonym), so authors and staff can count reach but never list who viewed.
+ * country_code and audience are the viewer's at their first view.
+ */
+export const postViews = pgTable(
+  'post_views',
+  {
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    viewerKey: text('viewer_key').notNull(),
+    countryCode: text('country_code'),
+    /** connection | follower | other: how the viewer relates to the author (or page). */
+    audience: text('audience').notNull().default('other'),
+    views: integer('views').notNull().default(1),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.postId, t.viewerKey] }),
+    check('post_views_audience_ck', sql`${t.audience} in ('connection','follower','other')`),
+  ],
+);
+
+/** Post analytics per day (UTC): impressions and first-time viewers, for the trend chart. */
+export const postViewDays = pgTable(
+  'post_view_days',
+  {
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    impressions: integer('impressions').notNull().default(0),
+    viewers: integer('viewers').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.day] })],
+);

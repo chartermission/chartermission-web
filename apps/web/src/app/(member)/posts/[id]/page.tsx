@@ -45,7 +45,7 @@ async function PostMain({ params }: { params: Params }) {
   const post = await loadPost(params);
   // Articles are read on their own page; keep #comments / #comment-… anchors.
   if (post.type === "article") return <ArticleRedirect href={articleHref(post.id)} />;
-  const isOwnRequest = post.type === "request" && post.author.id === viewer.id;
+  const isOwnRequest = post.type === "request" && !post.page && post.author.id === viewer.id;
   const [comments, offers] = await Promise.all([
     apiGet<Page<CommentView>>(`/posts/${post.id}/comments`, { sort: "relevant" }).catch(() => null),
     isOwnRequest ? apiGet<HelpOfferView[]>(`/posts/${post.id}/help`).catch(() => null) : Promise.resolve(null),
@@ -74,7 +74,7 @@ async function PostRightRail({ params }: { params: Params }) {
   if (!post || post.type === "article") return null;
   const firstTag = post.hashtags[0];
   const [author, topic] = await Promise.all([
-    apiGetOrNull<MemberProfile>(`/members/${post.author.handle}`).catch(() => null),
+    post.page ? null : apiGetOrNull<MemberProfile>(`/members/${post.author.handle}`).catch(() => null),
     firstTag ? apiGetOrNull<TopicView>(`/topics/${encodeURIComponent(firstTag.toLowerCase())}`).catch(() => null) : null,
   ]);
   const tags = [...new Set([...post.hashtags, ...(topic?.related ?? [])])].slice(0, 8);

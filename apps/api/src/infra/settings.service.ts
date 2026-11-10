@@ -2,7 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { platformSettings } from '../db/schema.js';
-import { LEARNING_ACCESS_DEFAULTS, type LearningAccessRules, type MediaSettings, type PolicyVersions, type TrendingRules } from '@chartermission/contracts';
+import {
+  LEARNING_ACCESS_DEFAULTS,
+  PAGES_SETTINGS_DEFAULTS,
+  type LearningAccessRules,
+  type MediaSettings,
+  type PagesSettings,
+  type PolicyVersions,
+  type TrendingRules,
+} from '@chartermission/contracts';
 
 export const SETTING_DEFAULTS = {
   policy_versions: { terms: '2026-11', privacy: '2026-11', guidelines: '2026-11' } satisfies PolicyVersions,
@@ -18,6 +26,8 @@ export const SETTING_DEFAULTS = {
   media_limits: { postVideoMaxSeconds: 600, storyVideoMaxSeconds: 60 } satisfies MediaSettings,
   /** What members must do before Learning opens (admin console, E-learning access). */
   learning_access: LEARNING_ACCESS_DEFAULTS as LearningAccessRules,
+  /** Who may create pages from the member app (admin console, Pages). */
+  pages: PAGES_SETTINGS_DEFAULTS as PagesSettings,
 };
 
 type SettingKey = keyof typeof SETTING_DEFAULTS;

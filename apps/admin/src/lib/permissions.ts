@@ -29,6 +29,8 @@ export const PERM = {
   membersManage: "members.manage",
   /** Badge catalogue. Platform Admin and above. */
   badgesManage: "badges.manage",
+  /** Pages: create, review the ones members create, verify, suspend, remove. Platform Admin and above. */
+  pagesManage: "pages.manage",
 } as const;
 
 export type ConsoleViewer = Pick<SessionUser, "id" | "name" | "handle" | "avatarUrl" | "tone" | "roles" | "permissions">;
@@ -67,7 +69,9 @@ export type NavKey =
   | "events"
   | "courses"
   | "members"
+  | "verification"
   | "badges"
+  | "pages"
   | "chapters"
   | "ambassadors"
   | "ambassador-team"
@@ -95,7 +99,9 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "events", href: "/events", label: "Events", icon: "calendar", permission: PERM.eventReview },
   { key: "courses", href: "/courses", label: "Courses", icon: "book", permission: PERM.courseCurate },
   { key: "members", href: "/members", label: "Members", icon: "user", permission: PERM.membersManage },
+  { key: "verification", href: "/verification", label: "Verification", icon: "verified", permission: PERM.membersManage },
   { key: "badges", href: "/badges", label: "Badges", icon: "verified", permission: PERM.badgesManage },
+  { key: "pages", href: "/pages", label: "Pages", icon: "building", permission: PERM.pagesManage },
   { key: "chapters", href: "/chapters", label: "Chapters", icon: "map-pin", permission: PERM.chaptersAdmin },
   { key: "ambassadors", href: "/ambassadors", label: "Ambassadors", icon: "verified", permission: PERM.ambassadorManage },
   { key: "ambassador-team", href: "/ambassadors/team", label: "Ambassador team", icon: "users", permission: PERM.ambassadorManagers },

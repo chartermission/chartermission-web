@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, isNotNull, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type { FeedNewQuery, FeedNewResponse, FeedQuery, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, follows, hashtags, memberProfiles, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
+import { chapters, follows, hashtags, memberProfiles, pageAdmins, pages, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { RelationsService } from '../core/relations.service.js';
 import { PostSerializer } from '../posts/post-serializer.js';
-import { engagementSql, listablePostsSql, tsKey } from '../posts/visibility.js';
+import { engagementSql, listablePostsSql, personalPostSql, tsKey } from '../posts/visibility.js';
 import { isUuid } from '../media/uuid-param.js';
 
 /** Pinned announcements shown above the first page of every tab. */
@@ -44,7 +44,7 @@ export class FeedService {
 
     // One member's posts (profile "Recent posts"): newest first, pinned posts in place, and the
     // member's posts still show when the viewer muted them (like opening a muted topic page).
-    if (q.author) {
+    if (q.author || q.page) {
       const visible = listablePostsSql(viewer.id, { muteHashtags: true, muteMembers: false });
       const page = await this.newest(q, [visible, ...filters], q.limit);
       return { items: await this.serializer.posts(page.ids, viewer, blocked), nextCursor: page.nextCursor };
@@ -78,7 +78,7 @@ export class FeedService {
     const conds = [
       listablePostsSql(viewer.id, { muteHashtags: true }),
       ...filters,
-      ne(posts.authorId, viewer.id),
+      sql`(${posts.authorId} <> ${viewer.id} or ${posts.pageId} is not null)`,
       sql`${posts.status} = 'published'`,
       sql`${posts.createdAt} > ${q.since}::timestamptz`,
     ];
@@ -91,12 +91,13 @@ export class FeedService {
     const count = counted?.n ?? 0;
     if (!count) return { count: 0, authors: [] };
     const recent = await this.db
-      .select({ authorId: posts.authorId })
+      .select({ authorId: posts.authorId, pageId: posts.pageId })
       .from(posts)
       .where(and(...conds))
       .orderBy(desc(posts.createdAt))
       .limit(20);
-    const authorIds = [...new Set(recent.map((r) => r.authorId))].slice(0, 3);
+    // Faces on the "new posts" pill are members; posts published as a page don't show who wrote them.
+    const authorIds = [...new Set(recent.filter((r) => !r.pageId).map((r) => r.authorId))].slice(0, 3);
     const refs = await this.serializer.memberRefs(authorIds);
     return { count, authors: authorIds.map((id) => refs.get(id)).filter((r) => !!r) };
   }
@@ -160,10 +161,13 @@ export class FeedService {
     return { ids: page.items.map((r) => r.id), nextCursor: page.nextCursor };
   }
 
-  /** The viewer's own posts, followed members, followed chapters and followed hashtags (CM-FED-05). */
+  /** The viewer's own posts, followed members, followed and managed pages, followed chapters and followed hashtags (CM-FED-05). */
   private followedSql(viewerId: string): SQL {
     return sql`(${posts.authorId} = ${viewerId}
-      or exists (select 1 from ${follows} ff where ff.follower_id = ${viewerId} and ff.target_type = 'member' and ff.target_id = ${posts.authorId}::text)
+      or (${posts.pageId} is null and exists (select 1 from ${follows} ff where ff.follower_id = ${viewerId} and ff.target_type = 'member' and ff.target_id = ${posts.authorId}::text))
+      or (${posts.pageId} is not null and (
+            exists (select 1 from ${follows} ff where ff.follower_id = ${viewerId} and ff.target_type = 'page' and ff.target_id = ${posts.pageId}::text)
+            or exists (select 1 from ${pageAdmins} fpa where fpa.user_id = ${viewerId} and fpa.page_id = ${posts.pageId})))
       or exists (select 1 from ${follows} ff join ${chapters} fc on fc.id = ${posts.chapterId}
                  where ff.follower_id = ${viewerId} and ff.target_type = 'chapter' and (ff.target_id = fc.id::text or ff.target_id = fc.slug))
       or exists (select 1 from ${postHashtags} fph join ${hashtags} fh on fh.id = fph.hashtag_id
@@ -172,7 +176,7 @@ export class FeedService {
   }
 
   /** Author, country, sector (author's sectors), chapter (slug or id) and announcements filters (CM-FED-04). Null = nothing can match. */
-  private async filters(q: Omit<FeedQuery, 'cursor' | 'author'> & { author?: string }): Promise<SQL[] | null> {
+  private async filters(q: Omit<FeedQuery, 'cursor' | 'author' | 'page'> & { author?: string; page?: string }): Promise<SQL[] | null> {
     const out: SQL[] = [];
     if (q.author) {
       const [member] = await this.db
@@ -181,7 +185,17 @@ export class FeedService {
         .where(isUuid(q.author) ? eq(memberProfiles.userId, q.author) : sql`lower(${memberProfiles.handle}) = ${q.author.toLowerCase()}`)
         .limit(1);
       if (!member) return null;
-      out.push(eq(posts.authorId, member.userId));
+      // A profile lists what the member posted as themselves, not what they published for a page.
+      out.push(eq(posts.authorId, member.userId), personalPostSql);
+    }
+    if (q.page) {
+      const [page] = await this.db
+        .select({ id: pages.id })
+        .from(pages)
+        .where(isUuid(q.page) ? eq(pages.id, q.page) : sql`lower(${pages.slug}) = ${q.page.toLowerCase()}`)
+        .limit(1);
+      if (!page) return null;
+      out.push(eq(posts.pageId, page.id));
     }
     if (q.country) out.push(sql`${posts.countryCode} = ${q.country.toUpperCase()}`);
     if (q.sector) {

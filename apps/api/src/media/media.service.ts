@@ -114,6 +114,7 @@ export class MediaService implements OnModuleInit {
     if ((input.purpose === 'chapter_image' || input.purpose === 'chapter_cover') && !user.permissions.has('chapters.admin')) {
       throw Errors.forbidden('Only admins can upload chapter pictures.');
     }
+    // Page pictures: anyone who may create or manage a page (the page itself checks ownership when the file is used).
     const limit = UPLOAD_LIMITS[input.purpose];
     const mime = input.mime.toLowerCase();
     if (!(limit.mimes as readonly string[]).includes(mime)) {

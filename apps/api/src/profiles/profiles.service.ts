@@ -46,6 +46,7 @@ const profileColumns = {
   userId: memberProfiles.userId,
   email: users.email,
   status: users.status,
+  isStaff: users.isStaff,
   joinedAt: users.createdAt,
   handle: memberProfiles.handle,
   displayName: memberProfiles.displayName,
@@ -70,6 +71,7 @@ export type ProfileRow = {
   userId: string;
   email: string;
   status: string;
+  isStaff: boolean;
   joinedAt: Date;
   handle: string;
   displayName: string;
@@ -161,6 +163,7 @@ export class ProfilesService {
       followsYou: false,
       blocked: false,
       muted: false,
+      canConnect: !row.isStaff,
     };
     return this.build(row, PREVIEW_RELATION[as], relationship);
   }
@@ -252,6 +255,7 @@ export class ProfilesService {
         .where(
           and(
             eq(posts.authorId, userId),
+            isNull(posts.pageId),
             isNull(posts.deletedAt),
             eq(posts.moderationState, 'visible'),
             eq(posts.status, 'published'),

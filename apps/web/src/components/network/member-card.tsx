@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { DirectoryMember } from "@chartermission/contracts";
 import { Avatar, Icon, RoleBadgeIcon } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
-import { ConnectControl, FollowControl, useRelationship } from "./relationship";
+import { ConnectControl, FollowControl, canConnectWith, useRelationship } from "./relationship";
 
 /**
  * Directory member card — Figma "Member card" (node 17:84) as used on /network,
@@ -46,8 +46,8 @@ export function DirectoryMemberCard({ member, reason }: { member: DirectoryMembe
           </Link>
         ) : (
           <>
-            <ConnectControl member={member} controls={controls} block />
-            <FollowControl member={member} controls={controls} block />
+            {canConnectWith(member, member.relationship) && <ConnectControl member={member} controls={controls} block />}
+            <FollowControl member={member} controls={controls} block prominent={!canConnectWith(member, member.relationship)} />
           </>
         )}
       </div>

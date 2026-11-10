@@ -78,7 +78,7 @@ describe('Feed and topic pages', () => {
     expect(ids(more.body).filter((id) => ids(small.body).includes(id))).toEqual([]);
 
     // Filters: chapter by slug, announcements only. Pinned announcements obey the filters too.
-    expect(ids((await viewer.get('/feed?tab=latest&chapter=accra').expect(200)).body)).toEqual([byChapter.id]);
+    expect(ids((await viewer.get('/feed?tab=latest&chapter=ghana').expect(200)).body)).toEqual([byChapter.id]);
     expect(ids((await viewer.get('/feed?tab=latest&chapter=nowhere').expect(200)).body)).toEqual([]);
     const ann = await viewer.get('/feed?tab=latest&announcements=true').expect(200);
     expect(ann.body.items.every((p: { kind: string }) => p.kind === 'announcement')).toBe(true);
@@ -105,7 +105,7 @@ describe('Feed and topic pages', () => {
       expect(ng).not.toContain(global.id);
       expect(ng).not.toContain(forAccra.id);
     }
-    const accraIds = ids((await viewer.get('/feed?tab=latest&chapter=accra').expect(200)).body);
+    const accraIds = ids((await viewer.get('/feed?tab=latest&chapter=ghana').expect(200)).body);
     expect(accraIds[0]).toBe(forAccra.id);
     expect(accraIds).not.toContain(global.id);
     expect(ids((await viewer.get('/feed?tab=latest&sector=climate-and-energy').expect(200)).body)).not.toContain(global.id);

@@ -7,6 +7,7 @@ import { Icon } from "@chartermission/ui";
 import { ArticleReader } from "@/components/articles/article-reader";
 import { RelatedArticles, RelatedSkeleton } from "@/components/articles/related-articles";
 import { requireClientViewer } from "@/components/social/data";
+import { pageHref } from "@/components/social/links";
 import { stripMarkdown } from "@/components/social/post-types/markdown";
 import { Bone, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
@@ -39,7 +40,7 @@ export async function generateMetadata({ params }: PageProps<"/articles/[id]">):
 async function RelatedShelves({ post }: { post: PostView }) {
   const related = await apiGet<Related>(`/articles/${post.id}/related`).catch(() => null);
   if (!related || (!related.moreByAuthor.length && !related.related.length)) return null;
-  return <RelatedArticles related={related} author={post.author} />;
+  return <RelatedArticles related={related} author={post.author} authorLink={post.page ? pageHref(post.page.slug) : undefined} />;
 }
 
 async function ArticleMain({ params }: { params: Params }) {
@@ -49,7 +50,8 @@ async function ArticleMain({ params }: { params: Params }) {
   if (!post) notFound();
   const [comments, author] = await Promise.all([
     apiGet<Page<CommentView>>(`/posts/${post.id}/comments`, { sort: "relevant" }).catch(() => null),
-    apiGetOrNull<MemberProfile>(`/members/${post.author.handle}`).catch(() => null),
+    // An article published as a page has no member profile to show under it.
+    post.page ? null : apiGetOrNull<MemberProfile>(`/members/${post.author.handle}`).catch(() => null),
   ]);
   return (
     <>

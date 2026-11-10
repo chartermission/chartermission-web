@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from "react";
-import type { AdminEventRow, Page, QueueStats } from "@chartermission/contracts";
+import type { AdminEventRow, AdminQueueCounts, Page, QueueStats } from "@chartermission/contracts";
 import { AdminBar } from "@/components/shell/admin-bar";
 import { AdminSidebar } from "@/components/shell/admin-sidebar";
 import { Toaster } from "@/components/toast";
@@ -24,16 +24,19 @@ async function ViewerAdminBar() {
 async function ViewerSidebar() {
   const viewer = await getViewer().catch(() => null);
   if (!viewer?.mfa.verifiedThisSession) return <AdminSidebar items={[]} />;
-  const [stats, eventQueue] = await Promise.all([
+  const [stats, eventQueue, queues] = await Promise.all([
     can(viewer, PERM.moderationView) ? apiGet<QueueStats>("/admin/queue/stats").catch(() => null) : null,
     // The review queue's length (one page of 100 is plenty for a badge).
     can(viewer, PERM.eventReview)
       ? apiGet<Page<AdminEventRow>>("/admin/events", { status: "queue", limit: 100 }).catch(() => null)
       : null,
+    // Pages waiting for review and open verification requests.
+    apiGet<AdminQueueCounts>("/admin/queues").catch(() => null),
   ]);
   const counts: Partial<Record<string, number>> = {
     ...(stats ? { moderation: stats.openReports, appeals: stats.openAppeals } : {}),
     ...(eventQueue ? { events: eventQueue.items.length } : {}),
+    ...(queues ? { pages: queues.pages, verification: queues.verification } : {}),
   };
   const items = CONSOLE_NAV.filter((item) => can(viewer, item.permission)).map((item) => ({
     ...item,

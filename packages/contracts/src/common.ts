@@ -97,6 +97,23 @@ export const MemberRef = z.object({
 });
 export type MemberRef = z.infer<typeof MemberRef>;
 
+/**
+ * The compact page shape (an organisation's page), used wherever a page is shown:
+ * as the author of a post published as the page, in lists and in follow rows.
+ */
+export const PageRef = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  tagline: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  /** Verified by staff. */
+  verified: z.boolean(),
+  /** One of Charter Mission's own pages. */
+  official: z.boolean(),
+});
+export type PageRef = z.infer<typeof PageRef>;
+
 /** Colour of a profile badge (design-system tones). */
 export const BadgeTone = z.enum(["primary", "accent", "warning", "info", "success"]);
 export type BadgeTone = z.infer<typeof BadgeTone>;

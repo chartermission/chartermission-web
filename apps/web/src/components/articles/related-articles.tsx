@@ -30,7 +30,7 @@ function Shelf({ id, title, action, posts }: { id: string; title: string; action
 }
 
 /** "More from <author>" and "Related articles" below the reader (GET /articles/:id/related). */
-export function RelatedArticles({ related, author }: { related: Related; author: PostView["author"] }) {
+export function RelatedArticles({ related, author, authorLink }: { related: Related; author: PostView["author"]; /** The page, for an article published as one. */ authorLink?: string }) {
   const firstName = author.name.split(" ")[0] ?? author.name;
   return (
     <>
@@ -38,7 +38,7 @@ export function RelatedArticles({ related, author }: { related: Related; author:
         <Shelf
           id="more-by-author"
           title={`More from ${author.name}`}
-          action={{ href: memberHref(author.handle), label: `${firstName}’s profile` }}
+          action={authorLink ? { href: authorLink, label: "Open the page" } : { href: memberHref(author.handle), label: `${firstName}’s profile` }}
           posts={related.moreByAuthor}
         />
       )}

@@ -80,7 +80,9 @@ async function ProfileMain(props: Props) {
   const facts: { icon: IconName; content: ReactNode }[] = [];
   if (location) facts.push({ icon: "map-pin", content: location });
   if (member.organisation) facts.push({ icon: "building", content: member.organisation });
-  facts.push({ icon: "users", content: `${member.counts.connections.toLocaleString("en-US")} connections · ${member.counts.followers.toLocaleString("en-US")} followers` });
+  // Official accounts are follow-only, so they have followers but no connections.
+  const followers = `${member.counts.followers.toLocaleString("en-US")} follower${member.counts.followers === 1 ? "" : "s"}`;
+  facts.push({ icon: "users", content: member.staff ? followers : `${member.counts.connections.toLocaleString("en-US")} connections · ${followers}` });
   facts.push({ icon: "calendar", content: `Joined ${absoluteDate(member.joinedAt)}` });
 
   const contact: { icon: IconName; label: string; value: ReactNode }[] = [];
@@ -138,7 +140,7 @@ async function ProfileMain(props: Props) {
           <div className="flex flex-wrap items-center gap-1.5">
             <h1 className="text-h2 text-ink">{member.name}</h1>
             {member.verified && <Icon name="verified" size={20} className="text-primary-light" label="Verified member" />}
-            {member.staff && <Chip tone="info">Charter Mission team</Chip>}
+            {member.staff && <Chip tone="info">Official account</Chip>}
             {member.relationship.followsYou && !member.relationship.self && <Chip>Follows you</Chip>}
           </div>
           {member.headline && <p className="text-md text-body">{member.headline}</p>}

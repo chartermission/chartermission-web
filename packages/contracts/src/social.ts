@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ChapterRef, MemberRef } from "./common.js";
+import { ChapterRef, MemberRef, PageRef } from "./common.js";
 
 /*
  * Feed, posts, comments, reactions, bookmarks, polls, hashtags, trending and uploads
@@ -269,7 +269,13 @@ export type ArticleState = {
 
 export type PostView = {
   id: string;
+  /**
+   * Who the post is shown as. For a post published as a page this carries the page's name, logo and
+   * tick (id = page id, handle = page slug) and `page` is set; the admin who wrote it is not exposed.
+   */
   author: MemberRef;
+  /** Set when the post was published as a page: link to /pages/{slug} instead of a member profile. */
+  page: PageRef | null;
   body: string;
   kind: PostKind;
   type: PostType;
@@ -299,6 +305,8 @@ export type PostView = {
     canEdit: boolean;
     canDelete: boolean;
     canReport: boolean;
+    /** The viewer wrote this post, or manages the page it was published as (they can open its analytics). */
+    canViewAnalytics: boolean;
   };
   /** Present only for the author or moderators when the post is not visible to others. */
   moderationState?: ModerationState;
@@ -322,6 +330,7 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
   z.object({
     id: z.string().uuid(),
     author: MemberRef,
+    page: PageRef.nullable(),
     body: z.string(),
     kind: PostKind,
     type: PostType,
@@ -350,6 +359,7 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
       canEdit: z.boolean(),
       canDelete: z.boolean(),
       canReport: z.boolean(),
+      canViewAnalytics: z.boolean(),
     }),
     moderationState: ModerationState.optional(),
   }),
@@ -374,6 +384,8 @@ export const PostComposition = z.object({
   linkUrl: z.string().url().max(500).optional(),
   repostOfId: z.string().uuid().optional(),
   chapterId: z.string().uuid().optional(),
+  /** Publish as a page the member manages (the page must be live). */
+  pageId: z.string().uuid().optional(),
   visibility: z.enum(["members", "public"]).default("members"),
   /** Only for accounts with post.announce. */
   kind: PostKind.default("standard"),
@@ -531,6 +543,8 @@ export const FeedQuery = z.object({
    * Ignores `tab`; pinned announcements are not lifted to the top. Unknown members give an empty page.
    */
   author: z.string().trim().min(1).max(60).optional(),
+  /** One page's posts (page id or slug), newest first, for the page's Posts tab. Ignores `tab`. */
+  page: z.string().trim().min(1).max(80).optional(),
   /** Query-string boolean: "true"/"1" or "false"/"0" (z.coerce.boolean would read "false" as true). */
   announcements: z
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
@@ -549,7 +563,7 @@ export const FeedQuery = z.object({
 export type FeedQuery = z.infer<typeof FeedQuery>;
 
 /** GET /feed/new — same filters as /feed, counts posts newer than `since` (for the "new posts" pill). */
-export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true }).extend({
+export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true, page: true }).extend({
   since: z.string().datetime({ offset: true }),
 });
 export type FeedNewQuery = z.infer<typeof FeedNewQuery>;
@@ -763,6 +777,8 @@ export const UploadPurpose = z.enum([
   "story_video",
   "chapter_image",
   "chapter_cover",
+  "page_logo",
+  "page_cover",
 ]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
 
@@ -786,6 +802,9 @@ export const UPLOAD_LIMITS = {
   chapter_image: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   /** Chapter page cover banner (4:1). Admins only. */
   chapter_cover: { maxBytes: 10 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  /** Page logo (square) and page cover (wide 4:1 banner). Page admins and staff. */
+  page_logo: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  page_cover: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
 } as const;
 
 /**

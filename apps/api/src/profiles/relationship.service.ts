@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import type { Relationship } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { blocks, connections, follows, mutes } from '../db/schema.js';
+import { blocks, connections, follows, mutes, users } from '../db/schema.js';
 
 const NONE: Omit<Relationship, 'self'> = {
   connection: 'none',
@@ -11,6 +11,7 @@ const NONE: Omit<Relationship, 'self'> = {
   followsYou: false,
   blocked: false,
   muted: false,
+  canConnect: true,
 };
 
 /** Read-side relationship facts between a viewer and many members, in a few batched queries. */
@@ -24,7 +25,7 @@ export class RelationshipService {
     const others = targetIds.filter((id) => id !== viewerId);
     if (!viewerId || others.length === 0) return map;
 
-    const [conns, followRows, blockRows, muteRows] = await Promise.all([
+    const [conns, followRows, blockRows, muteRows, staffRows] = await Promise.all([
       this.db
         .select({ id: connections.id, requesterId: connections.requesterId, addresseeId: connections.addresseeId, status: connections.status })
         .from(connections)
@@ -57,7 +58,16 @@ export class RelationshipService {
         .select({ targetId: mutes.targetId })
         .from(mutes)
         .where(and(eq(mutes.userId, viewerId), eq(mutes.targetType, 'member'), inArray(mutes.targetId, others))),
+      // Official (staff) accounts are follow-only, whichever side they are on.
+      this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.isStaff, true), inArray(users.id, [viewerId, ...others]))),
     ]);
+    const staff = new Set(staffRows.map((r) => r.id));
+    for (const id of others) {
+      if (staff.has(viewerId) || staff.has(id)) map.get(id)!.canConnect = false;
+    }
 
     for (const c of conns) {
       const other = c.requesterId === viewerId ? c.addresseeId : c.requesterId;

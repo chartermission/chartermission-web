@@ -4,7 +4,7 @@ import { Avatar, Icon, Panel, cn, RoleBadgeIcon } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import type { Viewer } from "@/components/social/viewer";
 import { WriteArticleButton } from "./write-article-button";
-import { articleHref, memberHref } from "@/components/social/links";
+import { articleHref, authorHref } from "@/components/social/links";
 import { Bone } from "@/components/social/skeletons";
 import { ArticleCounts, ArticleDate, CoverImage } from "./article-card";
 
@@ -37,7 +37,7 @@ export function FeaturedArticle({ post }: { post: PostView }) {
             <Avatar name={post.author.name} src={post.author.avatarUrl ?? undefined} tone={post.author.tone} size={40} />
             <div className="flex min-w-0 flex-col">
               <p className="flex items-center gap-1">
-                <Link href={memberHref(post.author.handle)} className="relative z-10 truncate text-md font-medium text-ink hover:underline">
+                <Link href={authorHref(post)} className="relative z-10 truncate text-md font-medium text-ink hover:underline">
                   {post.author.name}
                 </Link>
                 {post.author.verified && <Icon name="verified" size={16} className="relative z-10 shrink-0 text-primary" label="Verified" />}
