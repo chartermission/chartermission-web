@@ -20,8 +20,20 @@ export function signInUrl({ next, expired, signedOut }: { next?: string | null; 
   return s ? `/signin?${s}` : "/signin";
 }
 
-/** Base URL of the member web app, for "View on site" links. */
-export const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL || "http://localhost:3000").replace(/\/+$/, "");
+/**
+ * Base URL of the member web app, for "View on site" links. NEXT_PUBLIC_WEB_URL is fixed when the
+ * console is built; a production build without it (or with a local address left in) links to the
+ * live site rather than to localhost.
+ */
+const CONFIGURED_WEB_URL = process.env.NEXT_PUBLIC_WEB_URL?.trim();
+const LOCAL_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?/i;
+export const WEB_URL = (
+  process.env.NODE_ENV === "production"
+    ? CONFIGURED_WEB_URL && !LOCAL_URL.test(CONFIGURED_WEB_URL)
+      ? CONFIGURED_WEB_URL
+      : "https://chartermission.com"
+    : CONFIGURED_WEB_URL || "http://localhost:3000"
+).replace(/\/+$/, "");
 
 export function webHref(path: string) {
   return `${WEB_URL}${path.startsWith("/") ? path : `/${path}`}`;
