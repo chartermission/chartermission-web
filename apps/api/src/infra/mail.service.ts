@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
+import { createTransport, type Transporter } from 'nodemailer';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { emailOutbox, emailSuppressions } from '../db/schema.js';
 import { env, isProd } from '../config/env.js';
@@ -20,7 +21,7 @@ export interface OutgoingEmail {
 
 /**
  * Email through an outbox table and the "email" queue. MAIL_DRIVER=log (dev)
- * prints the message and keeps it for GET /dev/mailbox; MAIL_DRIVER=resend sends it.
+ * prints the message and keeps it for GET /dev/mailbox; MAIL_DRIVER=resend or smtp sends it.
  */
 @Injectable()
 export class MailService implements OnModuleInit {
@@ -35,6 +36,25 @@ export class MailService implements OnModuleInit {
     this.queue.process('email', async (name, data: { id: string; unsubscribeUrl?: string }) => {
       if (name === 'send') await this.deliver(data.id, data.unsubscribeUrl);
     });
+  }
+
+  /** Pooled SMTP connection, created on first use (MAIL_DRIVER=smtp). */
+  private transport?: Transporter;
+
+  private smtp(): Transporter {
+    if (!this.transport) {
+      const e = env();
+      this.transport = createTransport({
+        host: e.SMTP_HOST,
+        port: e.SMTP_PORT,
+        secure: e.SMTP_SECURE,
+        requireTLS: !e.SMTP_SECURE,
+        auth: { user: e.SMTP_USER, pass: e.SMTP_PASS },
+        pool: true,
+        maxConnections: 3,
+      });
+    }
+    return this.transport;
   }
 
   async send(mail: OutgoingEmail): Promise<void> {
@@ -80,6 +100,24 @@ export class MailService implements OnModuleInit {
         throw new Error(`Resend ${res.status}`);
       }
       providerMessageId = ((await res.json()) as { id?: string }).id ?? null;
+    } else if (env().MAIL_DRIVER === 'smtp') {
+      try {
+        const info = await this.smtp().sendMail({
+          from: env().MAIL_FROM,
+          to: mail.toAddress,
+          subject: mail.subject,
+          text: mail.textBody ?? undefined,
+          html: mail.htmlBody ?? undefined,
+          headers: unsubscribeUrl
+            ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+            : undefined,
+        });
+        providerMessageId = info.messageId ?? null;
+      } catch (e) {
+        const err = e instanceof Error ? e.message : String(e);
+        await this.db.update(emailOutbox).set({ error: err.slice(0, 500) }).where(eq(emailOutbox.id, id));
+        throw new Error(`SMTP: ${err}`);
+      }
     } else {
       this.logger.log(`[mail:${mail.template}] to ${mail.toAddress}: ${mail.subject}\n${mail.textBody ?? ''}`);
     }

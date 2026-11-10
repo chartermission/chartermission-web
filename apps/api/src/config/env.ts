@@ -33,9 +33,16 @@ const Env = z.object({
   /** Secret for hashing IPs and signing upload URLs. */
   APP_SECRET: z.string().default('dev-only-secret-change-me'),
   COOKIE_DOMAIN: z.string().optional(),
-  /** "log" writes emails to the outbox and the console; "resend" sends through Resend. */
-  MAIL_DRIVER: z.enum(['log', 'resend']).default('log'),
+  /** "log" writes emails to the outbox and the console; "resend" sends through Resend; "smtp" through any SMTP server. */
+  MAIL_DRIVER: z.enum(['log', 'resend', 'smtp']).default('log'),
   RESEND_API_KEY: z.string().optional(),
+  /** SMTP server for MAIL_DRIVER=smtp (self-hosted mailcow: mail.chartermission.com, 587, STARTTLS). */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  /** true = implicit TLS (port 465); false = STARTTLS upgrade, required (port 587). */
+  SMTP_SECURE: flag(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().default('Charter Mission <no-reply@chartermission.com>'),
   /** "local" stores uploads on disk (dev); "s3" uses any S3-compatible bucket (R2, Railway, AWS). */
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
@@ -87,6 +94,11 @@ export function env(): Env {
         if (!process.env[key]) throw new Error(`${key} must be set in production`);
       }
       parsed.data.DEV_TOOLS = false;
+    }
+    if (parsed.data.MAIL_DRIVER === 'smtp') {
+      for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'] as const) {
+        if (!parsed.data[key]) throw new Error(`${key} must be set when MAIL_DRIVER=smtp`);
+      }
     }
     cached = parsed.data;
   }

@@ -99,7 +99,7 @@ Opportunities, initiatives, chapter pages and organisations still use placeholde
 ## Production notes
 
 - API (Railway): set `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `APP_ENCRYPTION_KEY`, `APP_SECRET`,
-  `WEB_ORIGINS`, `WEB_URL`, `ADMIN_URL`, `MAIL_DRIVER=resend` + `RESEND_API_KEY`, `STORAGE_DRIVER=s3` + `S3_*`, and
+  `WEB_ORIGINS`, `WEB_URL`, `ADMIN_URL`, `MAIL_DRIVER=smtp` + `SMTP_*` (or `resend` + `RESEND_API_KEY`), `STORAGE_DRIVER=s3` + `S3_*`, and
   `CLAMAV_HOST` (a clamd service). Run `pnpm --filter @chartermission/api db:migrate:prod` as the release step and
   `start:prod` to serve.
 - Web and admin (Vercel): set `API_INTERNAL_URL` to the API's `/api/v1` URL, and `NEXT_PUBLIC_WEB_URL` on admin.
