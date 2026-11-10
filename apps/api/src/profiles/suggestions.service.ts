@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { ProfileField, SuggestedMember } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
@@ -7,6 +7,7 @@ import {
   chapters,
   connections,
   countries,
+  featuredMembers,
   follows,
   interests,
   memberProfiles,
@@ -21,7 +22,8 @@ import { MembersService } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { fieldVisibleToMemberSql } from './visibility.js';
 
-export type SuggestionReason = 'country' | 'sector' | 'skill' | 'interest' | 'chapter';
+/** featured = members an admin picked to be suggested to new members (featured_members). */
+export type SuggestionReason = 'featured' | 'country' | 'sector' | 'skill' | 'interest' | 'chapter';
 
 const JOINS = {
   sector: { join: profileSectors, item: sectors, field: 'sectors', label: (n: string) => `Also works in ${n}` },
@@ -81,6 +83,18 @@ export class SuggestionsService {
   ): Promise<{ userId: string; reason: string }[]> {
     const base = this.candidate(userId, excludeConnected);
     const visible = (f: ProfileField) => fieldVisibleToMemberSql(f, userId);
+
+    if (reason === 'featured') {
+      const rows = await this.db
+        .select({ userId: memberProfiles.userId })
+        .from(featuredMembers)
+        .innerJoin(memberProfiles, eq(memberProfiles.userId, featuredMembers.userId))
+        .innerJoin(users, eq(users.id, memberProfiles.userId))
+        .where(base)
+        .orderBy(asc(featuredMembers.createdAt))
+        .limit(limit);
+      return rows.map((r) => ({ userId: r.userId, reason: 'Recommended by Charter Mission' }));
+    }
 
     if (reason === 'country') {
       const mine = alias(memberProfiles, 'mine');

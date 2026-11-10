@@ -20,7 +20,7 @@ export const PERMISSIONS = {
   'trending.manage': 'Pin and suppress trending topics; edit trending rules',
   'audit.view': 'View the audit log',
   'audit.export': 'Export the audit log as CSV',
-  'members.manage': 'Verify members and handle deletion requests',
+  'members.manage': 'Verify members, award badges, pick suggested members and handle deletion requests',
   'roles.manage': 'Assign roles below Super Admin',
   'settings.manage': 'Change platform settings and policy versions',
   'superadmin.assign': 'Assign Platform Admins and Super Admins',
@@ -33,6 +33,8 @@ export const PERMISSIONS = {
   'ambassador.manage': 'Create ambassador leads, move them through the pipeline, run onboarding and certify (own countries)',
   'ambassador.managers': 'Create and revoke ambassador manager accounts; choose the required training courses',
   'chapter.manage': 'Pin posts and edit the About text on any chapter page',
+  'chapters.admin': 'Create, remove, activate and deactivate chapters; set chapter pictures and covers',
+  'badges.manage': 'Create, edit and remove profile badges',
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -72,6 +74,8 @@ const PLATFORM_ADMIN: Permission[] = [
   'ambassador.manage',
   'ambassador.managers',
   'chapter.manage',
+  'chapters.admin',
+  'badges.manage',
   'audit.export',
   'members.manage',
   'roles.manage',

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import type { ChapterDetail, EventSummary, MemberRef, Page, PostView } from "@chartermission/contracts";
-import { Icon, Panel, buttonClasses, chipClasses, type IconName } from "@chartermission/ui";
+import { ChapterAvatar, ChapterCover, Icon, Panel, buttonClasses, chipClasses, type IconName } from "@chartermission/ui";
 import { ChapterAbout, ChapterFeed, ChapterMembers, InviteButton, JoinChapterButton } from "@/components/chapters/chapter-actions";
 import { TabList, TabPanel, Tabs } from "@/components/chapters/tabs";
 import { EventRow } from "@/components/events/event-cards";
@@ -73,12 +73,21 @@ async function ChapterView({ params }: Pick<PageProps<"/chapters/[slug]">, "para
   return (
     <Tabs values={tabs.map((tab) => tab.value)} defaultValue="feed">
       <header className="bg-gradient-to-r from-primary-dark to-primary-light">
-        <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 pt-10">
+        <div className="mx-auto w-full max-w-[1240px] px-4 max-sm:px-0">
+          <div className="aspect-[4/1] max-h-[300px] w-full overflow-hidden rounded-b-2xl max-sm:rounded-none">
+            <ChapterCover name={chapter.name} countryCode={chapter.countryCode} src={chapter.coverUrl} />
+          </div>
+        </div>
+        <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 pt-5">
           <div className="flex flex-wrap items-center justify-between gap-5">
             <div className="flex items-center gap-5">
-              <span className="flex size-20 shrink-0 items-center justify-center rounded-2xl bg-card text-primary">
-                <Icon name="globe" size={40} />
-              </span>
+              <ChapterAvatar
+                name={chapter.name}
+                countryCode={chapter.countryCode}
+                src={chapter.imageUrl}
+                size={88}
+                className="-mt-14 rounded-2xl border-4 border-card bg-card shadow-sm max-sm:-mt-10 max-sm:size-[72px]"
+              />
               <div className="flex flex-col gap-1.5">
                 <h1 className="text-h1 text-inverse">{chapter.name}</h1>
                 <ul className="flex flex-wrap gap-x-4 gap-y-1">

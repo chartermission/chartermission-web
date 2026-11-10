@@ -146,7 +146,7 @@ export function CommunityStep({
 
       <ChipPicker
         label="Chapters to follow"
-        description="Local chapters share events and news from their city."
+        description="Chapters share events and news from a country, at home or in the diaspora."
         options={sortedChapters.map((chapter) => ({ id: chapter.id, label: chapter.name }))}
         selected={followedChapterIds}
         onChange={(next) => onChange({ followedChapterIds: next })}

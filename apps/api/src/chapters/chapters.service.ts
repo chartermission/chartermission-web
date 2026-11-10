@@ -16,7 +16,7 @@ import {
 import { InjectDb, type Db } from '../db/db.module.js';
 import { chapterPins, chapters, countries, events, follows, posts, roles, userRoles, users } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
-import { MembersService } from '../core/members.service.js';
+import { MembersService, mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
@@ -24,7 +24,18 @@ import { isUuid } from '../media/uuid-param.js';
 import { PostSerializer } from '../posts/post-serializer.js';
 import { EventAccess } from '../events/event-access.js';
 
-type ChapterRow = { id: string; slug: string; name: string; countryCode: string; status: string; about: string | null; countryName: string; region: string };
+type ChapterRow = {
+  id: string;
+  slug: string;
+  name: string;
+  countryCode: string;
+  status: string;
+  about: string | null;
+  countryName: string;
+  region: string;
+  imageFileId: string | null;
+  coverFileId: string | null;
+};
 
 /** Accounts that no longer appear in member lists. */
 const GONE = ['deleted', 'deletion_pending', 'deactivated'];
@@ -174,6 +185,8 @@ export class ChaptersService {
         about: chapters.about,
         countryName: countries.name,
         region: countries.region,
+        imageFileId: chapters.imageFileId,
+        coverFileId: chapters.coverFileId,
       })
       .from(chapters)
       .innerJoin(countries, eq(countries.code, chapters.countryCode))
@@ -197,6 +210,8 @@ export class ChaptersService {
       countryCode: r.countryCode,
       countryName: r.countryName,
       region: r.region,
+      imageUrl: mediaUrl(r.imageFileId),
+      coverUrl: mediaUrl(r.coverFileId),
       about: r.about,
       followers,
       viewer: { following },

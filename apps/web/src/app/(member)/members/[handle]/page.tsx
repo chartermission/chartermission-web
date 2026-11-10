@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { PreviewAs, type MemberProfile, type Page, type PostView } from "@chartermission/contracts";
-import { Chip, Icon, Panel, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
+import { Chip, Icon, Panel, ProfileBadgeList, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { getClientViewer } from "@/components/social/data";
 import { absoluteDate } from "@/components/social/format";
@@ -142,7 +142,12 @@ async function ProfileMain(props: Props) {
             {member.relationship.followsYou && !member.relationship.self && <Chip>Follows you</Chip>}
           </div>
           {member.headline && <p className="text-md text-body">{member.headline}</p>}
-          {member.badge && <RoleBadgePill badge={member.badge} />}
+          {(member.badge || member.badges.length > 0) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {member.badge && <RoleBadgePill badge={member.badge} />}
+              <ProfileBadgeList badges={member.badges} />
+            </div>
+          )}
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {facts.map((fact, index) => (
               <li key={index} className="flex items-center gap-1.5 text-sm text-secondary">

@@ -23,6 +23,12 @@ export const PERM = {
   ambassadorManage: "ambassador.manage",
   /** Ambassador Manager sub-accounts and required training. Platform Admin and above. */
   ambassadorManagers: "ambassador.managers",
+  /** Chapter catalogue: add, remove, activate / deactivate, pictures and covers. Platform Admin and above. */
+  chaptersAdmin: "chapters.admin",
+  /** Verified tick, badges and featured sign-up suggestions. Platform Admin and above. */
+  membersManage: "members.manage",
+  /** Badge catalogue. Platform Admin and above. */
+  badgesManage: "badges.manage",
 } as const;
 
 export type ConsoleViewer = Pick<SessionUser, "id" | "name" | "handle" | "avatarUrl" | "tone" | "roles" | "permissions">;
@@ -52,7 +58,22 @@ export function roleLabel(roles: readonly string[]): string {
   return ROLE_LABELS.find(([role]) => roles.includes(role))?.[1] ?? "Staff";
 }
 
-export type NavKey = "moderation" | "hidden" | "appeals" | "trending" | "events" | "courses" | "ambassadors" | "ambassador-team" | "learning-access" | "media" | "audit";
+export type NavKey =
+  | "moderation"
+  | "hidden"
+  | "appeals"
+  | "trending"
+  | "topics"
+  | "events"
+  | "courses"
+  | "members"
+  | "badges"
+  | "chapters"
+  | "ambassadors"
+  | "ambassador-team"
+  | "learning-access"
+  | "media"
+  | "audit";
 
 export type ConsoleNavItem = {
   key: NavKey;
@@ -70,8 +91,12 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "hidden", href: "/moderation/hidden", label: "Hidden content", icon: "eye-off", permission: PERM.moderationView },
   { key: "appeals", href: "/appeals", label: "Appeals", icon: "flag", permission: PERM.moderationView },
   { key: "trending", href: "/trending", label: "Trending", icon: "trending", permission: PERM.moderationView },
+  { key: "topics", href: "/topics", label: "Topics", icon: "hash", permission: PERM.trendingManage },
   { key: "events", href: "/events", label: "Events", icon: "calendar", permission: PERM.eventReview },
   { key: "courses", href: "/courses", label: "Courses", icon: "book", permission: PERM.courseCurate },
+  { key: "members", href: "/members", label: "Members", icon: "user", permission: PERM.membersManage },
+  { key: "badges", href: "/badges", label: "Badges", icon: "verified", permission: PERM.badgesManage },
+  { key: "chapters", href: "/chapters", label: "Chapters", icon: "map-pin", permission: PERM.chaptersAdmin },
   { key: "ambassadors", href: "/ambassadors", label: "Ambassadors", icon: "verified", permission: PERM.ambassadorManage },
   { key: "ambassador-team", href: "/ambassadors/team", label: "Ambassador team", icon: "users", permission: PERM.ambassadorManagers },
   { key: "learning-access", href: "/settings/learning", label: "E-learning access", icon: "target", permission: PERM.courseCurate },

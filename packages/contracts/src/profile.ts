@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AvatarTone, ChapterRef, CountryCode, FieldVisibility, MemberRef, ProfileVisibility, TaxonomyItem } from "./common.js";
+import { AvatarTone, ChapterRef, CountryCode, FieldVisibility, MemberRef, ProfileBadge, ProfileVisibility, TaxonomyItem } from "./common.js";
 
 /*
  * Member profiles, onboarding, directory and relationships
@@ -90,6 +90,8 @@ export const MemberProfile = MemberRef.extend({
   languages: z.array(TaxonomyItem).optional(),
   experience: z.array(ExperienceItem).optional(),
   chapters: z.array(ChapterRef),
+  /** Badges awarded by admins (active badges only). */
+  badges: z.array(ProfileBadge),
   counts: z.object({ connections: z.number().int(), followers: z.number().int(), posts: z.number().int() }),
   relationship: Relationship,
 });

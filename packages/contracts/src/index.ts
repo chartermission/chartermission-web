@@ -19,3 +19,4 @@ export * from "./ambassadors.js";
 export * from "./stories.js";
 export * from "./chapters.js";
 export * from "./opportunities.js";
+export * from "./catalogue.js";

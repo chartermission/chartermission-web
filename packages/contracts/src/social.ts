@@ -752,7 +752,18 @@ export type TrendingResponse = z.infer<typeof TrendingResponse>;
 
 /* ---------- Uploads (CM-FED-02, spec 6.3) ---------- */
 
-export const UploadPurpose = z.enum(["avatar", "profile_cover", "post_image", "post_document", "post_video", "event_cover", "story_image", "story_video"]);
+export const UploadPurpose = z.enum([
+  "avatar",
+  "profile_cover",
+  "post_image",
+  "post_document",
+  "post_video",
+  "event_cover",
+  "story_image",
+  "story_video",
+  "chapter_image",
+  "chapter_cover",
+]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
 
 /** Videos phones and cameras record: MP4 (H.264/HEVC), QuickTime (iPhone .mov) and WebM. All are converted to MP4. */
@@ -771,6 +782,10 @@ export const UPLOAD_LIMITS = {
   event_cover: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   story_image: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   story_video: { maxBytes: 250 * 1024 * 1024, mimes: VIDEO_MIMES },
+  /** Chapter display picture (square, shown in a circle or rounded tile). Admins only. */
+  chapter_image: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  /** Chapter page cover banner (4:1). Admins only. */
+  chapter_cover: { maxBytes: 10 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
 } as const;
 
 /**

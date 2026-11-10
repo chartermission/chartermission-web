@@ -115,7 +115,8 @@ describe('Articles: list, hub and related', () => {
     expect(hub.popular.map((p) => p.id)).toEqual([week2.id, week1.id, week3.id]);
     expect(hub.topics).toEqual([
       { tag: 'AfCFTA', articles: 3 },
-      { tag: 'Fintech', articles: 3 },
+      // FinTech is a seeded featured topic, so its display form comes from the seed.
+      { tag: 'FinTech', articles: 3 },
       { tag: 'TradeAfrica', articles: 1 },
     ]);
     expect(hub.authors.map((a) => [a.member.id, a.articles])).toEqual([

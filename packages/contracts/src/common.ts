@@ -97,6 +97,22 @@ export const MemberRef = z.object({
 });
 export type MemberRef = z.infer<typeof MemberRef>;
 
+/** Colour of a profile badge (design-system tones). */
+export const BadgeTone = z.enum(["primary", "accent", "warning", "info", "success"]);
+export type BadgeTone = z.infer<typeof BadgeTone>;
+
+/** An admin-awarded profile badge (Top Voice, Founding Member, Partner ...). */
+export const ProfileBadge = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  description: z.string(),
+  tone: BadgeTone,
+  /** An icon name from @chartermission/ui. */
+  icon: z.string(),
+});
+export type ProfileBadge = z.infer<typeof ProfileBadge>;
+
 export const Uuid = z.string().uuid();
 
 /** ISO 3166-1 alpha-2 country code. */

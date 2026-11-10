@@ -118,7 +118,7 @@ async function countScope(db: Db, rules: TrendingRules, scope: Scope, windowMs: 
            count(distinct c.author_id) filter (where c.cur) as authors,
            coalesce(sum(c.n) filter (where not c.cur), 0) as baseline_total
     from capped c
-    join hashtags h on h.id = c.hashtag_id
+    join hashtags h on h.id = c.hashtag_id and h.status = 'active'
     group by h.tag, h.display
     having coalesce(sum(c.n) filter (where c.cur), 0) > 0`);
   return result.rows.map((r) => ({

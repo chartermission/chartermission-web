@@ -14,6 +14,7 @@ import type {
 import { InjectDb, type Db } from '../db/db.module.js';
 import { chapters, connections, files, follows, memberProfiles, posts, profileExperiences, users } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
+import { BadgesService } from '../core/badges.service.js';
 import { MembersService, mediaUrl, toneFor } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { AppError, Errors } from '../common/errors.js';
@@ -103,6 +104,7 @@ export class ProfilesService {
     private readonly relations: RelationsService,
     private readonly relationships: RelationshipService,
     private readonly taxonomy: TaxonomyService,
+    private readonly badges: BadgesService,
   ) {}
 
   /** Profile row by handle (case-insensitive) or user id. */
@@ -167,18 +169,20 @@ export class ProfilesService {
   private async build(row: ProfileRow, relation: ViewerRelation, relationship: Relationship): Promise<MemberProfile> {
     const vis = effectiveVisibility(row.fieldVisibility);
     const show = (f: ProfileField) => canSeeField(relation, vis[f]);
-    const [ref, tax, experience, chapterList, counts, countryName] = await Promise.all([
+    const [ref, tax, experience, chapterList, counts, countryName, badgeMap] = await Promise.all([
       this.members.ref(row.userId),
       this.taxonomy.forUsers([row.userId]).then((m) => m.get(row.userId)!),
       show('experience') ? this.experience(row.userId) : Promise.resolve([] as ExperienceItem[]),
       relation === 'anonymous' ? Promise.resolve([] as ChapterRef[]) : this.followedChapters(row.userId),
       this.counts(row.userId),
       show('location') ? this.taxonomy.countryName(row.countryCode) : Promise.resolve(null),
+      this.badges.forUsers([row.userId]),
     ]);
     const out: MemberProfile = {
       ...ref!,
       joinedAt: row.joinedAt.toISOString(),
       chapters: chapterList,
+      badges: badgeMap.get(row.userId) ?? [],
       counts,
       relationship,
     };

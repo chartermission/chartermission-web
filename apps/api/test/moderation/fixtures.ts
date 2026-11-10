@@ -15,7 +15,12 @@ export async function insertComment(t: TestApp, postId: string, authorId: string
 }
 
 export async function insertHashtag(t: TestApp, display: string) {
-  const [h] = await t.db.insert(s.hashtags).values({ tag: display.toLowerCase(), display }).returning();
+  // Upsert: featured topics (e.g. AfCFTA) are already seeded as reference data.
+  const [h] = await t.db
+    .insert(s.hashtags)
+    .values({ tag: display.toLowerCase(), display })
+    .onConflictDoUpdate({ target: s.hashtags.tag, set: { display } })
+    .returning();
   return h!;
 }
 

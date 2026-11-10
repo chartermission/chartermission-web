@@ -61,3 +61,12 @@ export function NoAccess({ section }: { section: string }) {
   );
 }
 
+
+/** A whole console section that failed to load (bordered card with retry). */
+export function LoadError({ message }: { message: string }) {
+  return (
+    <div className="rounded-card border border-line bg-card">
+      <ErrorState message={message} />
+    </div>
+  );
+}

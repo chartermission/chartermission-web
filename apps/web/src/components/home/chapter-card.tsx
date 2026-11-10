@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ChapterHighlightMoment } from "@chartermission/contracts";
-import { Icon, buttonClasses, RoleBadgeIcon } from "@chartermission/ui";
+import { ChapterAvatar, Icon, buttonClasses, RoleBadgeIcon } from "@chartermission/ui";
 import { plural } from "@/components/social/format";
 import { memberHref, postHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
@@ -19,9 +19,7 @@ export function ChapterCard({ moment }: { moment: ChapterHighlightMoment }) {
       {(headingId) => (
         <>
           <div className="flex items-center gap-4 max-sm:gap-3">
-            <span aria-hidden="true" className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-primary-dark to-primary-light text-inverse">
-              <Icon name="globe" size={28} />
-            </span>
+            <ChapterAvatar name={chapter.name} countryCode={chapter.countryCode} size={56} className="rounded-xl" />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <h2 id={headingId} className="text-h3 text-ink">
                 <Link href={chapterHref} className="hover:underline">

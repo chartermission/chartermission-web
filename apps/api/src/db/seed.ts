@@ -1,10 +1,13 @@
 import { hash } from '@node-rs/argon2';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createDb, createPool, type Db } from './client.js';
 import * as s from './schema.js';
 import {
+  BADGES,
   CHAPTERS,
   COUNTRIES,
+  FEATURED_HASHTAGS,
+  REFERENCE_SEED_VERSIONS,
   COURSE_TOPICS,
   DEMO_PASSWORD,
   EVENT_CATEGORIES,
@@ -47,10 +50,7 @@ export async function seedReference(db: Db) {
     .insert(s.courseTopics)
     .values(COURSE_TOPICS.map(([sl, name], i) => ({ slug: sl, name, position: i })))
     .onConflictDoNothing();
-  await db
-    .insert(s.chapters)
-    .values(CHAPTERS.map(([sl, name, countryCode]) => ({ slug: sl, name, countryCode })))
-    .onConflictDoNothing();
+  await seedCatalogues(db);
   await db
     .insert(s.permissions)
     .values(Object.entries(PERMISSIONS).map(([key, description]) => ({ key, description })))
@@ -70,6 +70,50 @@ export async function seedReference(db: Db) {
   for (const [key, value] of Object.entries(SETTING_DEFAULTS)) {
     await db.insert(s.platformSettings).values({ key, value }).onConflictDoNothing();
   }
+}
+
+const SEEDS_KEY = 'reference_seeds';
+
+/**
+ * Chapters, featured hashtags and badges: admins add, remove and edit these, so each catalogue is
+ * seeded only when its REFERENCE_SEED_VERSIONS entry is newer than the version recorded in
+ * platform_settings. Inserts never overwrite existing rows.
+ */
+async function seedCatalogues(db: Db) {
+  const [row] = await db.select({ value: s.platformSettings.value }).from(s.platformSettings).where(eq(s.platformSettings.key, SEEDS_KEY));
+  const done = { ...((row?.value as Record<string, number> | undefined) ?? {}) };
+  const due = (k: keyof typeof REFERENCE_SEED_VERSIONS) => (done[k] ?? 0) < REFERENCE_SEED_VERSIONS[k];
+
+  if (due('chapters')) {
+    await db
+      .insert(s.chapters)
+      .values(CHAPTERS.map(([sl, name, countryCode]) => ({ slug: sl, name, countryCode })))
+      .onConflictDoNothing();
+    done.chapters = REFERENCE_SEED_VERSIONS.chapters;
+  }
+  if (due('hashtags')) {
+    for (const [display, description] of FEATURED_HASHTAGS) {
+      await db
+        .insert(s.hashtags)
+        .values({ tag: display.toLowerCase(), display, description, featured: true })
+        .onConflictDoUpdate({
+          target: s.hashtags.tag,
+          set: { featured: true, description: sql`coalesce(${s.hashtags.description}, excluded.description)` },
+        });
+    }
+    done.hashtags = REFERENCE_SEED_VERSIONS.hashtags;
+  }
+  if (due('badges')) {
+    await db
+      .insert(s.badges)
+      .values(BADGES.map((b, i) => ({ ...b, position: i })))
+      .onConflictDoNothing();
+    done.badges = REFERENCE_SEED_VERSIONS.badges;
+  }
+  await db
+    .insert(s.platformSettings)
+    .values({ key: SEEDS_KEY, value: done })
+    .onConflictDoUpdate({ target: s.platformSettings.key, set: { value: done } });
 }
 
 /** Demo members (verified emails, completed onboarding). Returns user ids keyed by SeedMember.key. */

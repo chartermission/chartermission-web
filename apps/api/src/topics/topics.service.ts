@@ -170,7 +170,8 @@ export class TopicsService {
     const followedSql = sql`exists (select 1 from ${follows} tf where tf.follower_id = ${viewer.id} and tf.target_type = 'hashtag' and tf.target_id = "hashtags"."tag")`;
     const suppressedSql = sql`exists (select 1 from ${trendingOverrides} tov where tov.hashtag_id = "hashtags"."id" and tov.action = 'suppress'
       and tov.scope_type = 'global' and tov.revoked_at is null and (tov.expires_at is null or tov.expires_at > now()))`;
-    const conds: SQL[] = [sql`${hashtags.postCount} > 0`];
+    // Featured topics are listed even before anyone posts with them; disabled ones never are.
+    const conds: SQL[] = [eq(hashtags.status, 'active'), sql`(${hashtags.postCount} > 0 or ${hashtags.featured})`];
     if (term) conds.push(like(hashtags.tag, `%${term.replace(/_/g, '\\_')}%`));
     if (q.sort === 'followed') conds.push(followedSql);
     else conds.push(sql`not ${suppressedSql}`);
@@ -207,8 +208,8 @@ export class TopicsService {
     const rows = await this.db
       .select({ tag: hashtags.tag, display: hashtags.display, posts: hashtags.postCount })
       .from(hashtags)
-      .where(prefix ? like(hashtags.tag, `${prefix.replace(/_/g, '\\_')}%`) : undefined)
-      .orderBy(desc(hashtags.postCount), asc(hashtags.tag))
+      .where(and(eq(hashtags.status, 'active'), prefix ? like(hashtags.tag, `${prefix.replace(/_/g, '\\_')}%`) : undefined))
+      .orderBy(desc(hashtags.featured), desc(hashtags.postCount), asc(hashtags.tag))
       .limit(8);
     const snapshot = await latestSnapshot(this.db, GLOBAL, '24h');
     const trending = new Set(servedEntries(snapshot?.entries ?? []).map((e) => e.tag));

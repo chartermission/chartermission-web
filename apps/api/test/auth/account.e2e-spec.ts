@@ -45,9 +45,15 @@ describe('Account, consents and onboarding (CM-AUTH-06/07/08)', () => {
     const blockedPeer = await createMember(t, { name: 'Blocked In Ghana', countryCode: 'GH' });
     await blockedPeer.post(`/blocks/${m.id}`).expect(201);
 
-    // A hashtag with recent posts that is also trending, and a quieter one.
+    // A hashtag with recent posts that is also trending, and a quieter one. The seeded featured
+    // topics are cleared so the organic ranking is what's tested (featured ones would lead).
+    await t.db.delete(s.hashtags);
     const [post] = await t.db.insert(s.posts).values({ authorId: peer.id, body: 'Trade #AfCFTA' }).returning();
-    const [tagA] = await t.db.insert(s.hashtags).values({ tag: 'afcfta', display: 'AfCFTA', postCount: 1 }).returning();
+    const [tagA] = await t.db
+      .insert(s.hashtags)
+      .values({ tag: 'afcfta', display: 'AfCFTA', postCount: 1 })
+      .onConflictDoUpdate({ target: s.hashtags.tag, set: { postCount: 1 } })
+      .returning();
     await t.db.insert(s.hashtags).values({ tag: 'quiet', display: 'Quiet' });
     await t.db.insert(s.postHashtags).values({ postId: post!.id, hashtagId: tagA!.id });
     await t.db.insert(s.trendingSnapshots).values({

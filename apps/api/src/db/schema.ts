@@ -7,6 +7,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigserial,
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -67,6 +68,10 @@ export const chapters = pgTable(
     status: text('status').notNull().default('active'),
     /** Short About text, edited by the chapter's Ambassadors and Chapter Leads. */
     about: text('about'),
+    /** Custom display picture (a chapter_image upload); null shows the generated brand avatar. */
+    imageFileId: uuid('image_file_id').references((): AnyPgColumn => files.id, { onDelete: 'set null' }),
+    /** Custom cover banner for the chapter page (a chapter_cover upload); null shows the generated cover. */
+    coverFileId: uuid('cover_file_id').references((): AnyPgColumn => files.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -420,7 +425,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -434,9 +439,13 @@ export const hashtags = pgTable('hashtags', {
   description: text('description'),
   postCount: integer('post_count').notNull().default(0),
   followerCount: integer('follower_count').notNull().default(0),
+  /** active | disabled. Disabled topics leave trending, suggestions and search; posts keep the tag. */
+  status: text('status').notNull().default('active'),
+  /** Curated by admins: suggested first in onboarding and on the Topics page. */
+  featured: boolean('featured').notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-});
+}, (t) => [check('hashtags_status_ck', sql`${t.status} in ('active','disabled')`)]);
 
 export const posts = pgTable(
   'posts',
@@ -1620,3 +1629,57 @@ export const opportunityApplications = pgTable(
     check('opportunity_applications_status_ck', sql`${t.status} in ('submitted','shortlisted','accepted','declined','withdrawn')`),
   ],
 );
+
+/* ======================= Profile badges and featured members ======================= */
+
+/** Admin-defined profile badges (Top Voice, Founding Member, Partner ...). */
+export const badges = pgTable(
+  'badges',
+  {
+    id: id(),
+    slug: text('slug').notNull().unique(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    /** primary | accent | warning | info | success */
+    tone: text('tone').notNull().default('primary'),
+    /** An icon name from @chartermission/ui. */
+    icon: text('icon').notNull().default('verified'),
+    /** active | disabled. Disabled badges are hidden on profiles and can't be awarded. */
+    status: text('status').notNull().default('active'),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('badges_status_ck', sql`${t.status} in ('active','disabled')`),
+    check('badges_tone_ck', sql`${t.tone} in ('primary','accent','warning','info','success')`),
+  ],
+);
+
+export const memberBadges = pgTable(
+  'member_badges',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    badgeId: uuid('badge_id')
+      .notNull()
+      .references(() => badges.id, { onDelete: 'cascade' }),
+    awardedBy: uuid('awarded_by').references(() => users.id, { onDelete: 'set null' }),
+    note: text('note'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('member_badges_user_badge_uq').on(t.userId, t.badgeId), index('member_badges_user_idx').on(t.userId)],
+);
+
+/** Members an admin picks to be suggested first to people signing up (onboarding "People to follow"). */
+export const featuredMembers = pgTable('featured_members', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});

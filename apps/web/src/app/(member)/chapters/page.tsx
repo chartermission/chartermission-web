@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import type { ChapterSummary } from "@chartermission/contracts";
-import { Icon, Panel } from "@chartermission/ui";
+import { ChapterAvatar, Panel } from "@chartermission/ui";
 import { FollowChapterButton } from "@/components/home/follow-buttons";
 import { LeftRail } from "@/components/left-rail";
 import { PageColumns } from "@/components/page-columns";
@@ -19,9 +19,7 @@ const numberFormat = new Intl.NumberFormat("en-GB");
 function ChapterRow({ chapter }: { chapter: ChapterSummary }) {
   return (
     <li className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
-      <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary">
-        <Icon name="globe" size={18} />
-      </span>
+      <ChapterAvatar name={chapter.name} countryCode={chapter.countryCode} src={chapter.imageUrl} size={44} className="rounded-full" />
       <div className="min-w-0 flex-1">
         <Link href={`/chapters/${chapter.slug}`} className="text-md font-semibold text-ink hover:underline">
           {chapter.name}

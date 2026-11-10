@@ -54,7 +54,7 @@ export class OnboardingService {
         this.follows.followedIds(userId, 'member'),
         this.hashtagSuggestions(),
         this.suggestions.suggest(userId, {
-          reasons: ['country', 'sector', 'interest'],
+          reasons: ['featured', 'country', 'sector', 'interest'],
           limit: MEMBER_SUGGESTIONS,
           excludeConnected: false,
         }),
@@ -153,8 +153,10 @@ export class OnboardingService {
           eq(posts.status, 'published'),
         ),
       )
+      .where(eq(hashtags.status, 'active'))
       .groupBy(hashtags.id)
-      .orderBy(desc(recent), desc(hashtags.postCount), hashtags.tag)
+      // Admin-featured topics first, then the most active this week.
+      .orderBy(desc(hashtags.featured), desc(recent), desc(hashtags.postCount), hashtags.tag)
       .limit(HASHTAG_SUGGESTIONS);
     const [snapshot] = await this.db
       .select({ entries: trendingSnapshots.entries })

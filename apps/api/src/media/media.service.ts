@@ -110,6 +110,10 @@ export class MediaService implements OnModuleInit {
     // Unverified members may add a profile photo during onboarding; post media needs a verified email.
     // Profile photos can be set before the email is verified (onboarding); everything else needs it.
     if (input.purpose !== 'avatar' && input.purpose !== 'profile_cover' && !user.emailVerified) throw Errors.emailNotVerified();
+    // Chapter pictures and covers are set from the admin console only.
+    if ((input.purpose === 'chapter_image' || input.purpose === 'chapter_cover') && !user.permissions.has('chapters.admin')) {
+      throw Errors.forbidden('Only admins can upload chapter pictures.');
+    }
     const limit = UPLOAD_LIMITS[input.purpose];
     const mime = input.mime.toLowerCase();
     if (!(limit.mimes as readonly string[]).includes(mime)) {

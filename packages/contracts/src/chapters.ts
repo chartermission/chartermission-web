@@ -21,6 +21,10 @@ export type ChapterTeamMember = { member: MemberRef; role: ChapterTeamRole; labe
 export type ChapterSummary = ChapterRef & {
   countryName: string;
   region: string;
+  /** Uploaded display picture; null means show the generated chapter avatar (ChapterAvatar). */
+  imageUrl: string | null;
+  /** Uploaded cover banner for the chapter page; null means show the generated cover (ChapterCover). */
+  coverUrl: string | null;
   about: string | null;
   followers: number;
   viewer: { following: boolean };
