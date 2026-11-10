@@ -1,9 +1,18 @@
-import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, Logger } from '@nestjs/common';
+import {
+  type ArgumentsHost,
+  Catch,
+  type ExceptionFilter,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
 import type { ApiError, ErrorCode } from '@chartermission/contracts';
 import { AppError } from './errors.js';
 import { env } from '../config/env.js';
+import type { AppRequest } from '../core/auth-context.js';
+import { requestLanguage } from '../core/session.middleware.js';
+import { requestLocale, translateText } from '../i18n/translate.js';
 
 const statusCodes: Record<number, ErrorCode> = {
   400: 'VALIDATION_FAILED',
@@ -34,7 +43,12 @@ export class ErrorFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
     let status = 500;
-    let body: ApiError = { error: { code: 'INTERNAL', message: 'Something went wrong. Please try again.' } };
+    let body: ApiError = {
+      error: {
+        code: 'INTERNAL',
+        message: 'Something went wrong. Please try again.',
+      },
+    };
 
     if (exception instanceof AppError) {
       status = exception.getStatus();
@@ -46,24 +60,66 @@ export class ErrorFilter implements ExceptionFilter {
           ...(exception.retryAfter ? { retryAfter: exception.retryAfter } : {}),
         },
       };
-      if (exception.retryAfter) res.setHeader('Retry-After', String(exception.retryAfter));
+      if (exception.retryAfter)
+        res.setHeader('Retry-After', String(exception.retryAfter));
     } else if (exception instanceof ZodError) {
       status = 422;
-      body = { error: { code: 'VALIDATION_FAILED', message: 'Check the highlighted fields', fields: zodFields(exception) } };
+      body = {
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'Check the highlighted fields',
+          fields: zodFields(exception),
+        },
+      };
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const code = statusCodes[status] ?? 'INTERNAL';
       const message = status === 404 ? 'Not found' : exception.message;
       body = { error: { code, message } };
     } else {
-      this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+      this.logger.error(
+        exception instanceof Error ? exception.stack : String(exception),
+      );
       // Local development only: name the real cause so it shows on the page, not just in the API terminal.
       if (env().NODE_ENV === 'development') {
-        const root = exception instanceof Error && exception.cause instanceof Error ? exception.cause : exception;
+        const root =
+          exception instanceof Error && exception.cause instanceof Error
+            ? exception.cause
+            : exception;
         const cause = root instanceof Error ? root.message : String(root);
-        body = { error: { code: 'INTERNAL', message: `Something went wrong: ${cause}`.slice(0, 500) } };
+        body = {
+          error: {
+            code: 'INTERNAL',
+            message: `Something went wrong: ${cause}`.slice(0, 500),
+          },
+        };
       }
     }
-    res.status(status).json(body);
+    res
+      .status(status)
+      .json(localise(body, host.switchToHttp().getRequest<AppRequest>()));
   }
+}
+
+/** The message and field messages in the reader's language (codes stay as they are). */
+function localise(body: ApiError, req: AppRequest | undefined): ApiError {
+  const locale = requestLocale() ?? (req ? requestLanguage(req) : 'en');
+  if (locale === 'en') return body;
+  const { fields, ...rest } = body.error;
+  return {
+    error: {
+      ...rest,
+      message: translateText(locale, body.error.message),
+      ...(fields
+        ? {
+            fields: Object.fromEntries(
+              Object.entries(fields).map(([k, v]) => [
+                k,
+                translateText(locale, v),
+              ]),
+            ),
+          }
+        : {}),
+    },
+  };
 }

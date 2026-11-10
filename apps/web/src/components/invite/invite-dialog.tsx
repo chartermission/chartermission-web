@@ -7,6 +7,7 @@ import { Dialog } from "@/components/social/dialog";
 import { toast } from "@/components/social/toast";
 import { useT } from "@/i18n/client";
 import { api } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/errors";
 import { errorMessage } from "@/components/social/error-message";
 
 /**
@@ -76,7 +77,9 @@ export function InviteDialog({ inviterHandle, chapter, onClose }: { inviterHandl
       setEmails("");
       toast.success(t("Invitation sent to {count} people", { count: res.sent }));
     } catch (e) {
-      setError(errorMessage(e));
+      // The field's own message ("Add someone else’s email address") says more than the summary.
+      const field = e instanceof ApiError ? (e.fields?.emails ?? Object.values(e.fields ?? {})[0]) : undefined;
+      setError(field ?? errorMessage(e));
     } finally {
       setSending(false);
     }

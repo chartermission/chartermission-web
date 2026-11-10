@@ -1,14 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { and, desc, eq, gt, sql } from 'drizzle-orm';
-import type { NotificationCategory, NotificationType, NotificationView } from '@chartermission/contracts';
+import type {
+  NotificationCategory,
+  NotificationType,
+  NotificationView,
+} from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { notificationPreferences, notifications, users } from '../db/schema.js';
 import { MailService } from '../infra/mail.service.js';
-import { renderEmail, webUrl } from '../infra/mail-layout.js';
+import { webUrl } from '../infra/mail-layout.js';
 import { RelationsService } from './relations.service.js';
 
 /** Default channel settings per category (members can change these, CM-NTF-03). */
-export const DEFAULT_PREFERENCES: Record<NotificationCategory, { in_app: boolean; email: boolean; push: boolean }> = {
+export const DEFAULT_PREFERENCES: Record<
+  NotificationCategory,
+  { in_app: boolean; email: boolean; push: boolean }
+> = {
   mentions_replies: { in_app: true, email: true, push: true },
   comments: { in_app: true, email: false, push: true },
   reactions: { in_app: true, email: false, push: false },
@@ -21,7 +28,10 @@ export const DEFAULT_PREFERENCES: Record<NotificationCategory, { in_app: boolean
   digest: { in_app: false, email: false, push: false },
 };
 
-export const CATEGORY_OF: Record<NotificationType, NotificationCategory | 'always'> = {
+export const CATEGORY_OF: Record<
+  NotificationType,
+  NotificationCategory | 'always'
+> = {
   mention: 'mentions_replies',
   reply_to_comment: 'mentions_replies',
   comment_on_post: 'comments',
@@ -79,7 +89,12 @@ export interface NotifyInput {
   /** Batch window in minutes; reactions batch per object. Default 15 (spec proposed). */
   windowMinutes?: number;
   /** Optional email copy for categories where the member allows email. */
-  email?: { subject: string; heading: string; paragraphs: string[]; buttonLabel: string };
+  email?: {
+    subject: string;
+    heading: string;
+    paragraphs: string[];
+    buttonLabel: string;
+  };
 }
 
 /**
@@ -95,7 +110,11 @@ export class NotifyService {
     private readonly relations: RelationsService,
   ) {}
 
-  async enabled(userId: string, category: NotificationCategory, channel: 'in_app' | 'email' | 'push') {
+  async enabled(
+    userId: string,
+    category: NotificationCategory,
+    channel: 'in_app' | 'email' | 'push',
+  ) {
     const [row] = await this.db
       .select({ enabled: notificationPreferences.enabled })
       .from(notificationPreferences)
@@ -112,39 +131,53 @@ export class NotifyService {
 
   async notify(input: NotifyInput): Promise<void> {
     if (input.actorId && input.actorId === input.userId) return;
-    if (input.actorId && (await this.relations.isBlockedEitherWay(input.userId, input.actorId))) return;
+    if (
+      input.actorId &&
+      (await this.relations.isBlockedEitherWay(input.userId, input.actorId))
+    )
+      return;
     const [recipient] = await this.db
       .select({ status: users.status, email: users.email })
       .from(users)
       .where(eq(users.id, input.userId))
       .limit(1);
-    if (!recipient || ['deleted', 'deletion_pending', 'deactivated'].includes(recipient.status)) return;
+    if (
+      !recipient ||
+      ['deleted', 'deletion_pending', 'deactivated'].includes(recipient.status)
+    )
+      return;
 
     const category = CATEGORY_OF[input.type];
-    const inApp = category === 'always' || (await this.enabled(input.userId, category, 'in_app'));
-    if (inApp) await this.upsert(input, category === 'always' ? 'moderation' : category);
+    const inApp =
+      category === 'always' ||
+      (await this.enabled(input.userId, category, 'in_app'));
+    if (inApp)
+      await this.upsert(input, category === 'always' ? 'moderation' : category);
 
-    if (input.email && (category === 'always' || (await this.enabled(input.userId, category, 'email')))) {
-      const { text, html } = renderEmail({
-        heading: input.email.heading,
-        paragraphs: input.email.paragraphs,
-        button: { label: input.email.buttonLabel, url: webUrl(input.href) },
-        footer: 'You can change which emails you get in Settings → Notifications.',
-      });
-      await this.mail.send({
+    if (
+      input.email &&
+      (category === 'always' ||
+        (await this.enabled(input.userId, category, 'email')))
+    ) {
+      await this.mail.compose({
         to: recipient.email,
         userId: input.userId,
         template: `notification.${input.type}`,
         subject: input.email.subject,
-        text,
-        html,
+        heading: input.email.heading,
+        paragraphs: input.email.paragraphs,
+        button: { label: input.email.buttonLabel, url: webUrl(input.href) },
+        footer:
+          'You can change which emails you get in Settings → Notifications.',
         unsubscribeUrl: webUrl('/settings/notifications'),
       });
     }
   }
 
   private async upsert(input: NotifyInput, category: string) {
-    const windowStart = new Date(Date.now() - (input.windowMinutes ?? 15) * 60_000);
+    const windowStart = new Date(
+      Date.now() - (input.windowMinutes ?? 15) * 60_000,
+    );
     const [existing] = await this.db
       .select()
       .from(notifications)
@@ -157,15 +190,28 @@ export class NotifyService {
       )
       .orderBy(desc(notifications.updatedAt))
       .limit(1);
-    const data = { segments: input.segments, href: input.href, icon: input.icon };
+    const data = {
+      segments: input.segments,
+      href: input.href,
+      icon: input.icon,
+    };
     if (existing) {
       const actors = input.actorId
-        ? [input.actorId, ...existing.actorIds.filter((a) => a !== input.actorId)].slice(0, 10)
+        ? [
+            input.actorId,
+            ...existing.actorIds.filter((a) => a !== input.actorId),
+          ].slice(0, 10)
         : existing.actorIds;
-      const added = input.actorId && !existing.actorIds.includes(input.actorId) ? 1 : 0;
+      const added =
+        input.actorId && !existing.actorIds.includes(input.actorId) ? 1 : 0;
       await this.db
         .update(notifications)
-        .set({ actorIds: actors, actorCount: sql`${notifications.actorCount} + ${added}`, data, readAt: null })
+        .set({
+          actorIds: actors,
+          actorCount: sql`${notifications.actorCount} + ${added}`,
+          data,
+          readAt: null,
+        })
         .where(eq(notifications.id, existing.id));
       return;
     }
