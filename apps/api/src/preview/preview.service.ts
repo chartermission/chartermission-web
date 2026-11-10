@@ -1,9 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { LinkPreviewInfo } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, events, memberProfiles, opportunities, pages, users } from '../db/schema.js';
-import { PostsService } from '../posts/posts.service.js';
+import { chapters, events, memberProfiles, opportunities, pages, postAttachments, posts, users } from '../db/schema.js';
 import { MediaService } from '../media/media.service.js';
 
 /** Where a preview picture comes from: a stored upload (served by /public/preview-image) or an outside address. */
@@ -17,18 +16,17 @@ const clip = (text: string | null | undefined, max = 200) => {
 
 /**
  * Link previews (WhatsApp, LinkedIn, Slack, X…) for pages whose content needs a sign-in to see.
- * Preview bots are never signed in, so this returns only what a visitor may already know:
- *  - a member: name, headline and photo only when their profile is public; otherwise nothing
- *    personal (a generic "member of Charter Mission" card);
+ * Preview bots are never signed in. Each link gets its own picture:
+ *  - a member: name and photo (the headline only when the profile is public);
  *  - chapters, published events, live pages and open opportunities: their title, summary and picture;
- *  - posts and articles: what the post page shows a signed-out visitor (the same access rules).
+ *  - posts and articles: the first picture (a repost's original when it has none of its own),
+ *    else the page's or author's picture, and the start of the text. Hidden posts get nothing.
  * Pictures are re-checked against the same rules when the bot fetches them.
  */
 @Injectable()
 export class PreviewService {
   constructor(
     @InjectDb() private readonly db: Db,
-    private readonly posts: PostsService,
     private readonly media: MediaService,
   ) {}
 
@@ -106,15 +104,15 @@ export class PreviewService {
       .where(eq(memberProfiles.handle, handle.toLowerCase()))
       .limit(1);
     if (!row || !ACTIVE.includes(row.status)) return null;
-    const open = row.visibility === 'public';
-    return { row, open, picture: open ? this.file('member', row.handle, await this.clean(row.avatar)) : null };
+    // Name and photo are what members see on any profile card; the headline only for public profiles.
+    return { row, open: row.visibility === 'public', picture: this.file('member', row.handle, await this.clean(row.avatar)) };
   }
 
   private async member(handle: string) {
     const found = await this.memberRow(handle);
     if (!found) return null;
-    if (!found.open) return this.out('A member of Charter Mission', 'Sign in to see this profile on Charter Mission.', null);
-    return this.out(`${found.row.name} · Charter Mission`, found.row.headline ?? 'Member of Charter Mission', found.picture);
+    const about = found.open && found.row.headline ? found.row.headline : 'Member of Charter Mission';
+    return this.out(`${found.row.name} · Charter Mission`, about, found.picture);
   }
 
   /* ---------- chapters ---------- */
@@ -189,25 +187,72 @@ export class PreviewService {
 
   /* ---------- posts and articles ---------- */
 
-  private async postRow(id: string) {
+  /**
+   * A published, visible post as a link preview: the post's first picture (for a repost, the
+   * reposted post's), otherwise the page's or the author's picture, with the start of the text.
+   * Members-only posts get a preview too, since whoever shares the link chose to share it.
+   * Hidden, removed, deleted, draft and chapter-pending posts get none.
+   */
+  private async postBase(id: string) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-    const post = await this.posts.get(undefined, id).catch(() => null);
-    if (!post) return null;
-    const image = post.attachments.find((a) => a.kind === 'image');
-    let fileId = image ? await this.clean(image.id) : null;
-    // No picture in the post: the author's photo, when their profile is public.
-    if (!fileId && post.author.handle) {
-      const author = await this.memberRow(post.author.handle);
-      if (author?.open && author.picture?.kind === 'file') fileId = author.picture.fileId;
+    const [row] = await this.db
+      .select({ id: posts.id, body: posts.body, type: posts.type, details: posts.details, authorId: posts.authorId, pageId: posts.pageId, repostOfId: posts.repostOfId, authorStatus: users.status })
+      .from(posts)
+      .innerJoin(users, eq(users.id, posts.authorId))
+      .where(
+        and(
+          eq(posts.id, id),
+          eq(posts.status, 'published'),
+          eq(posts.moderationState, 'visible'),
+          isNull(posts.deletedAt),
+          sql`coalesce(${posts.chapterReview}, '') <> 'pending'`,
+        ),
+      )
+      .limit(1);
+    return row && ACTIVE.includes(row.authorStatus) ? row : null;
+  }
+
+  private async firstImage(postId: string) {
+    const rows = await this.db
+      .select({ fileId: postAttachments.fileId })
+      .from(postAttachments)
+      .where(and(eq(postAttachments.postId, postId), eq(postAttachments.kind, 'image')))
+      .orderBy(asc(postAttachments.position))
+      .limit(4);
+    for (const r of rows) {
+      const clean = await this.clean(r.fileId);
+      if (clean) return clean;
     }
-    return { post, picture: this.file('post', post.id, fileId) };
+    return null;
+  }
+
+  private async postRow(id: string) {
+    const post = await this.postBase(id);
+    if (!post) return null;
+    const original = post.repostOfId ? await this.postBase(post.repostOfId) : null;
+    let fileId = (await this.firstImage(post.id)) ?? (original ? await this.firstImage(original.id) : null);
+    let author = '';
+    if (post.pageId) {
+      const [page] = await this.db.select({ name: pages.name, logo: pages.logoFileId, cover: pages.coverFileId }).from(pages).where(eq(pages.id, post.pageId)).limit(1);
+      author = page?.name ?? '';
+      if (!fileId && page) fileId = (await this.clean(page.logo)) ?? (await this.clean(page.cover));
+    } else {
+      const [profile] = await this.db.select({ name: memberProfiles.displayName, avatar: memberProfiles.avatarFileId }).from(memberProfiles).where(eq(memberProfiles.userId, post.authorId)).limit(1);
+      author = profile?.name ?? '';
+      if (!fileId && profile) fileId = await this.clean(profile.avatar);
+    }
+    const details = (post.details ?? {}) as { title?: unknown; subtitle?: unknown };
+    const article = post.type === 'article' && typeof details.title === 'string' ? { title: details.title, subtitle: typeof details.subtitle === 'string' ? details.subtitle : null } : null;
+    const body = post.body.trim() || original?.body.trim() || '';
+    return { author, article, body, reposted: !!original && !post.body.trim(), picture: this.file('post', post.id, fileId) };
   }
 
   private async post(id: string) {
     const found = await this.postRow(id);
     if (!found) return null;
-    const { post } = found;
-    if (post.article) return this.out(post.article.title, post.article.subtitle ?? clip(post.body, 200), found.picture);
-    return this.out(`${post.author.name} on Charter Mission`, clip(post.body, 200) || 'A post on Charter Mission', found.picture);
+    if (found.article) return this.out(found.article.title, found.article.subtitle ?? clip(found.body, 200), found.picture);
+    const who = found.author || 'A member';
+    const title = found.reposted ? `${who} reposted on Charter Mission` : `${who} on Charter Mission`;
+    return this.out(title, clip(found.body, 200) || 'A post on Charter Mission', found.picture);
   }
 }

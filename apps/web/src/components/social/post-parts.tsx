@@ -1,5 +1,6 @@
 "use client";
 
+import { PostAttachments } from "./post-attachments";
 import Link from "next/link";
 import type React from "react";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
@@ -109,9 +110,6 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
       </p>
     );
   }
-  const images = original.attachments.filter((a) => a.kind === "image").length;
-  const videos = original.attachments.filter((a) => a.kind === "video").length;
-  const docs = original.attachments.length - images - videos;
   return (
     <div className="relative flex w-full flex-col gap-2 rounded-[10px] border border-line p-4 hover:bg-surface">
       <div className="flex items-center gap-2">
@@ -141,16 +139,16 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
       )}
       {original.body && !original.article && <RichText text={original.body} mentions={original.mentions} className="line-clamp-4 text-sm text-ink" />}
       {original.article?.subtitle && <p className="line-clamp-2 text-sm text-body">{original.article.subtitle}</p>}
-      {(images > 0 || docs > 0 || videos > 0 || original.linkPreview?.embed || original.poll) && !original.article && (
+      {/* The original's photos, videos and documents, above the card's link so they can be opened and played. */}
+      {original.attachments.length > 0 && !original.article && (
+        <div className="relative z-10 flex flex-col gap-2">
+          <PostAttachments attachments={original.attachments} />
+        </div>
+      )}
+      {(original.poll || (original.linkPreview?.embed && original.attachments.length === 0)) && !original.article && (
         <p className="flex items-center gap-1.5 text-xs text-secondary">
-          <Icon name={original.poll ? "chart" : videos > 0 || original.linkPreview?.embed ? "video" : "image"} size={14} />
-          {original.poll
-            ? "Poll"
-            : videos > 0 || original.linkPreview?.embed
-              ? "Video"
-              : images > 0
-                ? t("{count} images", { count: images })
-                : "PDF document"}
+          <Icon name={original.poll ? "chart" : "video"} size={14} />
+          {original.poll ? "Poll" : "Video"}
         </p>
       )}
       <Link href={postHref(original)} className="text-xs font-medium text-primary-light after:absolute after:inset-0 hover:underline">
