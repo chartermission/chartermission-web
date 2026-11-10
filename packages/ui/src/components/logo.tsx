@@ -3,26 +3,41 @@ import { AFRICA_MAP_SRC } from "./africa-map";
 
 type Theme = "light" | "dark";
 
-/** Logo mark (Figma Logo, node 7:24): green tile, red C, black dot, embroidered Africa map inside the C. */
+/**
+ * Logo mark (Figma Logo, node 7:24): green gradient tile, red-to-orange C, white Africa network
+ * map inside the C. The dark theme keeps the same tile with a soft white outline for green surfaces.
+ */
 export function LogoMark({ theme = "light", size = 32, className }: { theme?: Theme; size?: number; className?: string }) {
-  const tile = theme === "light" ? "#047942" : "#FFFFFF";
-  const arc = "#E31A20";
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true" className={cn("shrink-0", className)}>
+      <defs>
+        <linearGradient id="cm-logo-tile" x1="28" y1="2" x2="4" y2="30" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#067239" />
+          <stop offset="1" stopColor="#024A22" />
+        </linearGradient>
+        <linearGradient id="cm-logo-arc" x1="6.8" y1="16" x2="24" y2="16" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ED0918" />
+          <stop offset="0.55" stopColor="#FF3A12" />
+          <stop offset="1" stopColor="#FF8A00" />
+        </linearGradient>
+      </defs>
       <path
         d="M24 0H8C3.58172 0 0 3.58172 0 8V24C0 28.4183 3.58172 32 8 32H24C28.4183 32 32 28.4183 32 24V8C32 3.58172 28.4183 0 24 0Z"
-        fill={tile}
+        fill="url(#cm-logo-tile)"
       />
-      <image href={AFRICA_MAP_SRC} x="11.698" y="11.2" width="8.604" height="9.8" preserveAspectRatio="xMidYMid meet" />
+      {theme === "dark" && (
+        <path
+          d="M24 0.5H8C3.85786 0.5 0.5 3.85786 0.5 8V24C0.5 28.1421 3.85786 31.5 8 31.5H24C28.1421 31.5 31.5 28.1421 31.5 24V8C31.5 3.85786 28.1421 0.5 24 0.5Z"
+          stroke="white"
+          strokeOpacity="0.35"
+        />
+      )}
+      <image href={AFRICA_MAP_SRC} x="10.55" y="9.36" width="12.809" height="13.8" preserveAspectRatio="xMidYMid meet" />
       <path
-        d="M21.6001 10.8C20.5575 9.68873 19.2049 8.91652 17.718 8.58361C16.231 8.25069 14.6783 8.37244 13.2614 8.93305C11.8445 9.49367 10.6288 10.4673 9.7722 11.7274C8.91556 12.9876 8.45752 14.4762 8.45752 16C8.45752 17.5238 8.91556 19.0124 9.7722 20.2726C10.6288 21.5327 11.8445 22.5063 13.2614 23.0669C14.6783 23.6276 16.231 23.7493 17.718 23.4164C19.2049 23.0835 20.5575 22.3113 21.6001 21.2"
-        stroke={arc}
-        strokeWidth="3.2"
+        d="M23.962 9.282C21.276 6.224 16.980 5.145 13.168 6.571C9.356 7.996 6.821 11.629 6.800 15.699C6.779 19.768 9.275 23.428 13.072 24.893C16.869 26.358 21.176 25.324 23.894 22.295"
+        stroke="url(#cm-logo-arc)"
+        strokeWidth="3.3"
         strokeLinecap="round"
-      />
-      <path
-        d="M22.7999 18.6C24.2359 18.6 25.4 17.4359 25.4 16C25.4 14.5641 24.2359 13.4 22.7999 13.4C21.364 13.4 20.2 14.5641 20.2 16C20.2 17.4359 21.364 18.6 22.7999 18.6Z"
-        fill="#0A0A0A"
       />
     </svg>
   );

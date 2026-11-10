@@ -120,7 +120,7 @@ function demoEvents(now: Date): DemoEvent[] {
         { offset: 240, minutes: 60, title: 'Chapter meet-ups and networking' },
       ],
       registrations: regs(['amara', 'kwame', 'fatou', 'chinedu', 'kofi', 'efua', 'sefa', 'kojo']),
-      cover: ['#047942', '#E31A20'],
+      cover: ['#046D35', '#FF8A00'],
     },
     {
       slug: 'founders-office-hours-fundraising-2027',
