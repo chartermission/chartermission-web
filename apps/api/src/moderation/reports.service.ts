@@ -59,6 +59,7 @@ export class ReportsService {
 
     const target = await this.targets.resolve(input.targetType, input.targetId);
     if (!target.visibleToMembers) throw Errors.notFound(input.targetType === 'member' ? 'That member' : 'That content');
+    if (target.participants && !target.participants.includes(reporterId)) throw Errors.notFound('That message');
     if (target.userId === reporterId) {
       throw Errors.validation(
         { targetId: input.targetType === 'member' ? 'You can’t report yourself' : 'You can’t report your own content' },

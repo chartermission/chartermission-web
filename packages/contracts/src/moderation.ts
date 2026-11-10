@@ -9,7 +9,7 @@ import { MemberRef } from "./common.js";
 export const ReportStatus = z.enum(["open", "in_review", "actioned", "dismissed", "appealed", "upheld", "overturned"]);
 export type ReportStatus = z.infer<typeof ReportStatus>;
 
-export const ReportTargetType = z.enum(["post", "comment", "member", "hashtag", "story", "opportunity"]);
+export const ReportTargetType = z.enum(["post", "comment", "member", "hashtag", "story", "opportunity", "message"]);
 export type ReportTargetType = z.infer<typeof ReportTargetType>;
 
 export const ReportReason = z.enum([

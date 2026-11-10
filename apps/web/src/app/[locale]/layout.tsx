@@ -5,6 +5,7 @@ import "@fontsource-variable/noto-sans-arabic";
 import "../globals.css";
 import { LOCALES, dirOf } from "@/i18n/config";
 import { I18nProvider } from "@/i18n/client";
+import { DICTS } from "@/i18n/dict";
 import { getLocale, getT, messagesFor } from "@/i18n/server";
 
 /** Absolute links in share previews (WhatsApp, LinkedIn, X need a full URL for the image). */
@@ -41,7 +42,7 @@ export default async function RootLayout({ children }: LayoutProps<"/[locale]">)
   return (
     <html lang={locale} dir={dirOf(locale)}>
       <body className="min-h-dvh">
-        <I18nProvider locale={locale} messages={messagesFor(locale)}>
+        <I18nProvider locale={locale} messages={messagesFor(locale)} dict={DICTS[locale]}>
           {children}
         </I18nProvider>
       </body>

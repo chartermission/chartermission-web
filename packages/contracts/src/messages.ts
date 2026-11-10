@@ -13,9 +13,11 @@ export const MessageView = z.object({
   id: z.string().uuid(),
   conversationId: z.string().uuid(),
   senderId: z.string().uuid(),
-  /** Empty when the sender deleted the message. */
+  /** Empty when the sender deleted the message, or a moderator removed it. */
   body: z.string(),
   deleted: z.boolean(),
+  /** Hidden or removed by a moderator after a report. */
+  removed: z.boolean(),
   createdAt: z.string(),
 });
 export type MessageView = z.infer<typeof MessageView>;
@@ -24,7 +26,7 @@ export const ConversationView = z.object({
   id: z.string().uuid(),
   /** The other member. */
   member: MemberRef,
-  lastMessage: z.object({ body: z.string(), mine: z.boolean(), deleted: z.boolean(), createdAt: z.string() }).nullable(),
+  lastMessage: z.object({ body: z.string(), mine: z.boolean(), deleted: z.boolean(), removed: z.boolean(), createdAt: z.string() }).nullable(),
   /** Messages from the other member since the viewer last opened the conversation. */
   unread: z.number().int(),
   /** False when either has blocked the other, or the other member's account is no longer active. */

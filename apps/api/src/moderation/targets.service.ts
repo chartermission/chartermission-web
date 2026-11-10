@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { ReportTargetType } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { comments, hashtags, memberProfiles, opportunities, posts, stories, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
+import { comments, conversations, hashtags, memberProfiles, messages, opportunities, posts, stories, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { PRIVILEGED_ROLES } from '../core/permissions.js';
@@ -28,6 +28,8 @@ export interface ResolvedTarget {
   createdAt: Date | null;
   preview: string;
   href: string;
+  /** For messages: the two members of the conversation (only they can report it). */
+  participants?: string[];
 }
 
 export const targetKey = (type: string, id: string) => `${type}:${id}`;
@@ -50,6 +52,9 @@ export function hrefFor(
       return `/stories/${id}`;
     case 'opportunity':
       return `/opportunities/${extra.slug ?? id}`;
+    case 'message':
+      // Conversations are private; the console links to the sender instead.
+      return `/${extra.handle ?? id}`;
   }
 }
 
@@ -193,6 +198,33 @@ export class TargetsService {
           href: hrefFor('opportunity', o.id, { slug: o.slug }),
         };
       }
+      case 'message': {
+        if (!isUuid(rawId)) throw Errors.notFound('That message');
+        const [row] = await this.db
+          .select({ m: messages, handle: memberProfiles.handle, memberA: conversations.memberA, memberB: conversations.memberB })
+          .from(messages)
+          .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+          .leftJoin(memberProfiles, eq(memberProfiles.userId, messages.senderId))
+          .where(eq(messages.id, rawId))
+          .limit(1);
+        if (!row) throw Errors.notFound('That message');
+        const m = row.m;
+        const state: ContentState = m.deletedAt ? 'deleted' : (m.moderationState as ContentState);
+        return {
+          type,
+          id: m.id,
+          userId: m.senderId,
+          state,
+          visibleToMembers: state === 'visible',
+          hashtagId: null,
+          postId: null,
+          body: m.body,
+          createdAt: m.createdAt,
+          preview: truncate(m.body) || 'Message',
+          href: hrefFor('message', m.id, { handle: row.handle }),
+          participants: [row.memberA, row.memberB],
+        };
+      }
       case 'hashtag': {
         const tag = rawId.replace(/^#/, '').toLowerCase();
         const [h] = await this.db.select().from(hashtags).where(eq(hashtags.tag, tag)).limit(1);
@@ -252,6 +284,21 @@ export class TargetsService {
           preview: truncate(`${r.title} · ${r.organisation}`),
           userId: r.posterId,
           href: hrefFor('opportunity', r.id, { slug: r.slug }),
+          postId: null,
+        });
+    }
+    const messageIds = ids('message').filter(isUuid);
+    if (messageIds.length) {
+      const rows = await this.db
+        .select({ id: messages.id, body: messages.body, senderId: messages.senderId, handle: memberProfiles.handle })
+        .from(messages)
+        .leftJoin(memberProfiles, eq(memberProfiles.userId, messages.senderId))
+        .where(inArray(messages.id, messageIds));
+      for (const r of rows)
+        out.set(targetKey('message', r.id), {
+          preview: truncate(r.body) || 'Message',
+          userId: r.senderId,
+          href: hrefFor('message', r.id, { handle: r.handle }),
           postId: null,
         });
     }

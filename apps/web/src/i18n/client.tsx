@@ -3,17 +3,20 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { usePathname as useNextPathname } from "next/navigation";
 import { DEFAULT_LOCALE, INTL_LOCALE, dirOf, stripLocale, type Locale } from "./config";
-import { DICTS, SOURCE_PLURALS } from "./dict";
+import { SOURCE_PLURALS } from "./dict/plurals";
 import { en } from "./messages/en";
-import { createTranslator, type MessageKey, type Translate, type Vars } from "./translate";
+import { createTranslator, type Dict, type MessageKey, type Translate, type Vars } from "./translate";
 
 type Value = { locale: Locale; dir: "ltr" | "rtl"; t: Translate };
 
 const I18nContext = createContext<Value>({ locale: DEFAULT_LOCALE, dir: "ltr", t: createTranslator(DEFAULT_LOCALE, en, en, undefined, SOURCE_PLURALS) });
 
-/** Set once in the root layout with the language of the page being served. */
-export function I18nProvider({ locale, messages, children }: { locale: Locale; messages: unknown; children: ReactNode }) {
-  const value = useMemo<Value>(() => ({ locale, dir: dirOf(locale), t: createTranslator(locale, messages, en, DICTS[locale], SOURCE_PLURALS) }), [locale, messages]);
+/**
+ * Set once in the root layout with the language of the page being served. The layout hands over
+ * that language's dictionary only, so a visitor downloads one language, not all of them.
+ */
+export function I18nProvider({ locale, messages, dict, children }: { locale: Locale; messages: unknown; dict?: Dict; children: ReactNode }) {
+  const value = useMemo<Value>(() => ({ locale, dir: dirOf(locale), t: createTranslator(locale, messages, en, dict, SOURCE_PLURALS) }), [locale, messages, dict]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { MESSAGE_MAX_CHARS, type ConversationView, type MessagesPage, type MessageView, type PeoplePage, type PersonEntry } from "@chartermission/contracts";
 import { Button, Icon, Panel, cn } from "@chartermission/ui";
+import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
 import { Dialog } from "@/components/social/dialog";
 import { EmojiPicker, insertAtCaret } from "@/components/social/emoji-picker";
@@ -100,7 +101,7 @@ export function MessagesView({ viewerId, viewerHandle, initial, activeId }: { vi
                     </span>
                     <span className="flex items-center gap-2">
                       <span dir="auto" className={cn("min-w-0 flex-1 truncate text-xs", c.unread ? "font-medium text-ink" : "text-secondary")}>
-                        {c.lastMessage ? (c.lastMessage.deleted ? t("Message deleted") : `${c.lastMessage.mine ? `${t("You")}: ` : ""}${c.lastMessage.body}`) : ""}
+                        {c.lastMessage ? (c.lastMessage.deleted ? t("Message deleted") : c.lastMessage.removed ? t("Message removed") : `${c.lastMessage.mine ? `${t("You")}: ` : ""}${c.lastMessage.body}`) : ""}
                       </span>
                       {c.unread > 0 && (
                         <span className="min-w-5 shrink-0 rounded-full bg-accent px-1.5 text-center text-[11px] leading-5 font-semibold text-inverse">
@@ -145,6 +146,7 @@ function Thread({ conversationId, viewerId, onActivity }: { conversationId: stri
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState<MessageView | null>(null);
+  const [reporting, setReporting] = useState<MessageView | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const latest = useRef<string | null>(null);
@@ -271,6 +273,7 @@ function Thread({ conversationId, viewerId, onActivity }: { conversationId: stri
   }
 
   const lastMine = [...items].reverse().find((m) => m.senderId === viewerId && !m.deleted);
+  const gone = (m: MessageView) => m.deleted || m.removed;
   const seen = !!lastMine && !!conversation.seenAt && conversation.seenAt >= lastMine.createdAt;
 
   return (
@@ -307,13 +310,13 @@ function Thread({ conversationId, viewerId, onActivity }: { conversationId: stri
                 <div
                   className={cn(
                     "rounded-2xl px-3.5 py-2 text-sm",
-                    message.deleted ? "border border-line bg-card text-secondary italic" : mine ? "bg-primary text-inverse" : "bg-muted text-ink",
+                    gone(message) ? "border border-line bg-card text-secondary italic" : mine ? "bg-primary text-inverse" : "bg-muted text-ink",
                   )}
                 >
                   <p dir="auto" className="whitespace-pre-wrap break-words">
-                    {message.deleted ? t("This message was deleted") : <NoTranslate>{message.body}</NoTranslate>}
+                    {message.deleted ? t("This message was deleted") : message.removed ? t("This message was removed by a moderator") : <NoTranslate>{message.body}</NoTranslate>}
                   </p>
-                  <p className={cn("mt-0.5 text-end text-[10px]", message.deleted ? "text-secondary" : mine ? "text-inverse/70" : "text-secondary")}>{when.time(message.createdAt)}</p>
+                  <p className={cn("mt-0.5 text-end text-[10px]", gone(message) ? "text-secondary" : mine ? "text-inverse/70" : "text-secondary")}>{when.time(message.createdAt)}</p>
                 </div>
                 {mine && !message.deleted && (
                   <button
@@ -324,6 +327,17 @@ function Thread({ conversationId, viewerId, onActivity }: { conversationId: stri
                     className="rounded-md p-1 text-secondary opacity-0 hover:bg-muted hover:text-error focus-visible:opacity-100 group-hover:opacity-100"
                   >
                     <Icon name="x" size={14} />
+                  </button>
+                )}
+                {!mine && !gone(message) && (
+                  <button
+                    type="button"
+                    aria-label={t("Report message")}
+                    title={t("Report message")}
+                    onClick={() => setReporting(message)}
+                    className="rounded-md p-1 text-secondary opacity-0 hover:bg-muted hover:text-error focus-visible:opacity-100 group-hover:opacity-100"
+                  >
+                    <Icon name="flag" size={14} />
                   </button>
                 )}
               </div>
@@ -360,6 +374,10 @@ function Thread({ conversationId, viewerId, onActivity }: { conversationId: stri
         <p role="note" className="border-t border-line px-4 py-3 text-center text-sm text-secondary">
           {t("You can’t send messages in this conversation.")}
         </p>
+      )}
+
+      {reporting && (
+        <ReportDialog targetType="message" targetId={reporting.id} subject={t("a message from {name}", { name: conversation.member.name })} onClose={() => setReporting(null)} />
       )}
 
       {deleting && (

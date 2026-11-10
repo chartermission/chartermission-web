@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { ConversationView, MemberProfile, MessagesPage, OwnProfile } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { resetLimits } from '../auth/support.js';
+import { REASON } from '../moderation/fixtures.js';
 
 type Member = Awaited<ReturnType<typeof createMember>>;
 
@@ -124,5 +125,28 @@ describe('Private messages, and the profile’s intro video, résumé and links'
     const many = Array.from({ length: 11 }, (_, i) => ({ label: `Link ${i}`, url: `https://example.com/${i}` }));
     await leila.patch('/me/profile', { links: many }).expect(422);
     await leila.patch('/me/profile', { links: many.slice(0, 10) }).expect(200);
+  });
+  it('a member can report a message; a moderator removing it hides the text from both members', async () => {
+    const mod = await createMember(t, { name: 'Moderator M', roles: ['moderator'], admin: true });
+    const zara = await createMember(t, { name: 'Zara Nkosi' });
+    const tunde = await createMember(t, { name: 'Tunde Bakare' });
+    await connect(zara, tunde);
+    const convo = (await zara.post('/messages/conversations', { memberId: tunde.id }).expect(200)).body as ConversationView;
+    const sent = (await tunde.post(`/messages/conversations/${convo.id}/messages`, { body: 'Send me your bank details and I will double it' }).expect(201)).body;
+    // Only the other member of the conversation can report it, and not the sender.
+    await leila.post('/reports', { targetType: 'message', targetId: sent.id, reason: 'scam' }).expect(404);
+    await tunde.post('/reports', { targetType: 'message', targetId: sent.id, reason: 'scam' }).expect(422);
+    const report = await zara.post('/reports', { targetType: 'message', targetId: sent.id, reason: 'scam', detail: 'Asking for money' }).expect(201);
+
+    const queue = (await mod.get('/admin/reports').expect(200)).body.items as { id: string; target: { type: string; preview: string } }[];
+    expect(queue.find((r) => r.id === report.body.id)?.target).toMatchObject({ type: 'message', preview: expect.stringContaining('bank details') });
+    await mod.post(`/admin/reports/${report.body.id}/actions`, { action: 'remove', reason: REASON }).expect(201);
+
+    for (const who of [zara, tunde]) {
+      const page = (await who.get(`/messages/conversations/${convo.id}/messages`).expect(200)).body as MessagesPage;
+      expect(page.items.find((m) => m.id === sent.id)).toMatchObject({ removed: true, body: '' });
+    }
+    const inbox = (await zara.get('/messages/conversations').expect(200)).body as ConversationView[];
+    expect(inbox.find((c) => c.id === convo.id)?.lastMessage).toMatchObject({ removed: true, body: '' });
   });
 });

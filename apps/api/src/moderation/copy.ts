@@ -20,6 +20,7 @@ const NOUN: Record<ReportTargetType, string> = {
   hashtag: 'topic',
   story: 'story',
   opportunity: 'listing',
+  message: 'message',
 };
 
 const date = (d: Date) => d.toISOString().slice(0, 10);

@@ -944,7 +944,7 @@ export const contentReports = pgTable(
     uniqueIndex('reports_one_open_per_reporter_uq')
       .on(t.reporterId, t.targetType, t.targetId)
       .where(sql`${t.status} in ('open','in_review')`),
-    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag','story','opportunity')`),
+    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag','story','opportunity','message')`),
     check(
       'reports_status_ck',
       sql`${t.status} in ('open','in_review','actioned','dismissed','appealed','upheld','overturned')`,
@@ -1668,8 +1668,13 @@ export const messages = pgTable(
     createdAt: createdAt(),
     /** Deleted by its sender: the text is cleared and the other member sees that a message was deleted. */
     deletedAt: ts('deleted_at'),
+    /** Hidden or removed by a moderator after a report; the text is withheld from both members. */
+    moderationState: text('moderation_state').notNull().default('visible'),
   },
-  (t) => [index('messages_conversation_idx').on(t.conversationId, t.createdAt)],
+  (t) => [
+    index('messages_conversation_idx').on(t.conversationId, t.createdAt),
+    check('messages_moderation_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
+  ],
 );
 
 /** Members a chapter's team has barred from the chapter: they can't join it or post in it. */

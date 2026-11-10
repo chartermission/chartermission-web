@@ -231,7 +231,7 @@ export class MessagesService {
       out.push({
         id: r.id,
         member,
-        lastMessage: m ? { body: preview(m.body), mine: m.senderId === userId, deleted: !!m.deletedAt, createdAt: m.createdAt.toISOString() } : null,
+        lastMessage: m ? { body: visible(m) ? preview(m.body) : '', mine: m.senderId === userId, deleted: !!m.deletedAt, removed: m.moderationState !== 'visible', createdAt: m.createdAt.toISOString() } : null,
         unread: unreadBy.get(r.id) ?? 0,
         canSend: active.has(member.id) && !blocked.has(member.id),
         seenAt: seen?.toISOString() ?? null,
@@ -241,6 +241,16 @@ export class MessagesService {
   }
 }
 
+const visible = (m: Pick<MessageRow, 'deletedAt' | 'moderationState'>) => !m.deletedAt && m.moderationState === 'visible';
+
 function toView(m: MessageRow): MessageView {
-  return { id: m.id, conversationId: m.conversationId, senderId: m.senderId, body: m.deletedAt ? '' : m.body, deleted: !!m.deletedAt, createdAt: m.createdAt.toISOString() };
+  return {
+    id: m.id,
+    conversationId: m.conversationId,
+    senderId: m.senderId,
+    body: visible(m) ? m.body : '',
+    deleted: !!m.deletedAt,
+    removed: m.moderationState !== 'visible',
+    createdAt: m.createdAt.toISOString(),
+  };
 }
