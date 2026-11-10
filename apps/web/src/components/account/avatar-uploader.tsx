@@ -6,6 +6,7 @@ import { Avatar, Button, cn, type AvatarTone } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
 import { ResendVerification } from "@/components/auth/resend-verification";
+import { ImageCropDialog, assertCroppable } from "./image-crop-dialog";
 
 type Status =
   | { kind: "idle" }
@@ -15,8 +16,9 @@ type Status =
   | { kind: "error"; text: string; unverified?: boolean };
 
 /**
- * Avatar picker (CM-PRF-07): uploads through lib/upload, then PATCH /me/profile { avatarFileId }.
- * JPEG, PNG or WebP up to 5 MB; the server re-encodes and strips metadata.
+ * Avatar picker (CM-PRF-07): the picked image opens in the crop editor (square, round guide), the
+ * 800 × 800 crop uploads through lib/upload, then PATCH /me/profile { avatarFileId }.
+ * JPEG, PNG or WebP originals up to 25 MB; the server re-encodes and strips metadata.
  */
 export function AvatarUploader({
   name,
@@ -35,7 +37,19 @@ export function AvatarUploader({
   const input = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState(avatarUrl);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [picked, setPicked] = useState<File | null>(null);
   const busy = status.kind === "uploading" || status.kind === "processing";
+
+  function pick(file: File) {
+    if (input.current) input.current.value = "";
+    try {
+      assertCroppable(file, "avatar");
+      setStatus({ kind: "idle" });
+      setPicked(file);
+    } catch (error) {
+      setStatus({ kind: "error", text: isApiError(error) ? error.message : "Choose a JPEG, PNG or WebP image." });
+    }
+  }
 
   async function handleFile(file: File) {
     setStatus({ kind: "uploading", progress: 0 });
@@ -87,7 +101,7 @@ export function AvatarUploader({
             tabIndex={-1}
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void handleFile(file);
+              if (file) pick(file);
             }}
           />
           <Button
@@ -106,7 +120,7 @@ export function AvatarUploader({
           )}
         </div>
         <p id={`${id}-hint`} className="text-xs text-secondary">
-          JPEG, PNG or WebP, up to 5 MB.
+          JPEG, PNG or WebP. You can crop and zoom it before saving.
         </p>
         <div aria-live="polite" className="w-full empty:hidden">
           {status.kind === "uploading" && (
@@ -127,6 +141,18 @@ export function AvatarUploader({
           )}
         </div>
       </div>
+      <ImageCropDialog
+        file={picked}
+        title="Adjust your photo"
+        aspect={1}
+        shape="circle"
+        outputWidth={800}
+        onCancel={() => setPicked(null)}
+        onConfirm={(cropped) => {
+          setPicked(null);
+          void handleFile(cropped);
+        }}
+      />
     </div>
   );
 }

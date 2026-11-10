@@ -5,6 +5,7 @@ import { UPLOAD_LIMITS, type OwnProfile } from "@chartermission/contracts";
 import { Button } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
+import { ImageCropDialog, assertCroppable } from "./image-crop-dialog";
 
 type Status =
   | { kind: "idle" }
@@ -14,16 +15,28 @@ type Status =
   | { kind: "error"; text: string };
 
 /**
- * Cover photo picker: uploads a profile_cover image through lib/upload, then
- * PATCH /me/profile { coverFileId }. Shown as the wide banner at the top of the profile.
+ * Cover photo picker: the picked image opens in the crop editor (4:1), the 1600 × 400 crop uploads
+ * as profile_cover through lib/upload, then PATCH /me/profile { coverFileId }. Shown as the wide
+ * banner at the top of the profile.
  */
 export function CoverUploader({ coverUrl, onChange }: { coverUrl: string | null; onChange?: (coverUrl: string | null) => void }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState(coverUrl);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [picked, setPicked] = useState<File | null>(null);
   const busy = status.kind === "uploading" || status.kind === "processing";
-  const maxMb = Math.round(UPLOAD_LIMITS.profile_cover.maxBytes / 1024 / 1024);
+
+  function pick(file: File) {
+    if (input.current) input.current.value = "";
+    try {
+      assertCroppable(file, "profile_cover");
+      setStatus({ kind: "idle" });
+      setPicked(file);
+    } catch (error) {
+      setStatus({ kind: "error", text: isApiError(error) ? error.message : "Choose a JPEG, PNG or WebP image." });
+    }
+  }
 
   async function handleFile(file: File) {
     setStatus({ kind: "uploading", progress: 0 });
@@ -79,7 +92,7 @@ export function CoverUploader({ coverUrl, onChange }: { coverUrl: string | null;
           tabIndex={-1}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) void handleFile(file);
+            if (file) pick(file);
           }}
         />
         <Button variant="secondary" size="small" disabled={busy} onClick={() => input.current?.click()} aria-describedby={`${id}-hint`}>
@@ -92,7 +105,7 @@ export function CoverUploader({ coverUrl, onChange }: { coverUrl: string | null;
         )}
       </div>
       <p id={`${id}-hint`} className="text-xs text-secondary">
-        A wide image works best (about 1600 × 400). JPEG, PNG or WebP, up to {maxMb} MB.
+        A wide image works best. JPEG, PNG or WebP. You can crop and zoom it before saving.
       </p>
       <div aria-live="polite" className="empty:hidden">
         {status.kind === "uploading" && (
@@ -102,6 +115,18 @@ export function CoverUploader({ coverUrl, onChange }: { coverUrl: string | null;
         {status.kind === "done" && <span className="text-xs text-success">{status.text}</span>}
         {status.kind === "error" && <span className="text-xs text-error">{status.text}</span>}
       </div>
+      <ImageCropDialog
+        file={picked}
+        title="Adjust your cover photo"
+        aspect={4}
+        shape="rect"
+        outputWidth={1600}
+        onCancel={() => setPicked(null)}
+        onConfirm={(cropped) => {
+          setPicked(null);
+          void handleFile(cropped);
+        }}
+      />
     </div>
   );
 }
