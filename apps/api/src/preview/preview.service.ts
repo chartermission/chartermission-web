@@ -252,7 +252,7 @@ export class PreviewService {
     if (!found) return null;
     if (found.article) return this.out(found.article.title, found.article.subtitle ?? clip(found.body, 200), found.picture);
     const who = found.author || 'A member';
-    const title = found.reposted ? `${who} reposted on Charter Mission` : `${who} on Charter Mission`;
+    const title = found.reposted ? `${who} reposted on Charter Mission` : who === 'Charter Mission' ? who : `${who} on Charter Mission`;
     return this.out(title, clip(found.body, 200) || 'A post on Charter Mission', found.picture);
   }
 }
