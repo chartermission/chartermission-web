@@ -88,7 +88,7 @@ function ToastItem({ item }: { item: Toast }) {
 export function Toaster() {
   const items = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   return (
-    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4">
+    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 max-md:bottom-[calc(5rem+env(safe-area-inset-bottom))] flex flex-col items-center gap-2 px-4">
       {items.map((item) => (
         <ToastItem key={item.id} item={item} />
       ))}

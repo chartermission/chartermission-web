@@ -305,3 +305,10 @@
     line-height: 1.7;
   }
 }
+
+/* Phones: keep the end of every page clear of the bottom tab bar (components/mobile-nav.tsx). */
+@media (max-width: 767.98px) {
+  body:has([data-tab-bar]) {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
