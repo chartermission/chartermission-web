@@ -6,7 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { parseVideoEmbed, type HighlightView, type StoryTray, type StoryView } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
-import { ffmpegPaths } from '../../src/media/video.js';
+import { canRemux, ffmpegPaths, probeVideo, remuxVideo, transcodeVideo } from '../../src/media/video.js';
 import { SettingsService } from '../../src/infra/settings.service.js';
 import { StoriesService } from '../../src/stories/stories.service.js';
 import { createPost, follow, uploadBytes } from './social-helpers.js';
@@ -128,6 +128,33 @@ describe('Video posts, media settings and stories', () => {
     const post = await createPost(m, 'Watch this', { attachmentIds: [id] });
     expect(post.attachments).toEqual([expect.objectContaining({ id, kind: 'video', posterUrl: expect.stringContaining('/poster') })]);
     expect(post.status).toBe('published');
+  });
+
+  it('repackages web-ready videos without re-encoding and caps big ones at 720p / 30 fps', async (ctx) => {
+    if (!ffmpeg) ctx.skip();
+    // A small H.264/AAC clip is already web-ready: copied, not re-encoded.
+    await makeVideo('ready.mp4', 2);
+    const ready = await probeVideo(path.join(dir, 'ready.mp4'));
+    expect(canRemux(ready, false)).toBe(true);
+    expect(canRemux(ready, true)).toBe(false); // a trim needs a frame-accurate cut
+    await remuxVideo(path.join(dir, 'ready.mp4'), path.join(dir, 'ready-out.mp4'));
+    const copied = await probeVideo(path.join(dir, 'ready-out.mp4'));
+    expect(copied).toMatchObject({ width: 640, height: 360, videoCodec: 'h264', audioCodec: 'aac' });
+
+    // A 1080p 60 fps phone-style clip is re-encoded to 1280×720 at 30 fps.
+    const big = path.join(dir, 'big.mp4');
+    const made = spawnSync(
+      ffmpeg!,
+      ['-y', '-f', 'lavfi', '-i', 'testsrc=duration=2:size=1920x1080:rate=60', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', big],
+      { stdio: 'ignore' },
+    );
+    expect(made.status).toBe(0);
+    const source = await probeVideo(big);
+    expect(canRemux(source, false)).toBe(false);
+    await transcodeVideo(big, path.join(dir, 'big-out.mp4'), source.durationSeconds, undefined, source);
+    const out = await probeVideo(path.join(dir, 'big-out.mp4'));
+    expect(out).toMatchObject({ width: 1280, height: 720, videoCodec: 'h264' });
+    expect(Math.round(out.fps)).toBe(30);
   });
 
   it('rejects videos longer than the admin limit', async (ctx) => {

@@ -30,7 +30,7 @@ import { mediaUrl, posterUrl } from '../core/members.service.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { createStorage, LocalStorage, URL_TTL_SECONDS, verifyUploadSignature, type Storage } from './storage.js';
 import { scanBuffer } from './scanner.js';
-import { VideoToolMissingError, extractPoster, probeVideo, sha256File, transcodeVideo, type VideoProbe } from './video.js';
+import { VideoToolMissingError, canRemux, extractPoster, probeVideo, remuxVideo, sha256File, transcodeVideo, type VideoProbe } from './video.js';
 
 export type FileRow = typeof files.$inferSelect;
 
@@ -76,7 +76,7 @@ export class MediaService implements OnModuleInit {
     this.queue.process('media', async (name, data: { fileId: string }) => {
       if (name === 'process-upload') await this.processUpload(data.fileId);
     });
-    // Video conversion is CPU-heavy: its own queue, one at a time, so image checks never wait behind it.
+    // Video conversion is CPU-heavy: its own queue, so image checks never wait behind it.
     this.queue.process(
       'video',
       async (name, data: { fileId: string }, job) => {
@@ -97,7 +97,8 @@ export class MediaService implements OnModuleInit {
           throw err;
         }
       },
-      { concurrency: 1 },
+      // Two at a time on machines with 4+ cores, so a short clip isn't stuck behind a long one.
+      { concurrency: os.cpus().length >= 4 ? 2 : 1 },
     );
   }
 
@@ -304,8 +305,14 @@ export class MediaService implements OnModuleInit {
       const poster = path.join(dir, 'poster.jpg');
       let result: VideoProbe;
       try {
-        await transcodeVideo(input, output, keptSeconds, clip);
+        const started = Date.now();
+        const remuxed = canRemux(source, !!clip);
+        if (remuxed) await remuxVideo(input, output);
+        else await transcodeVideo(input, output, keptSeconds, clip, source);
         result = await probeVideo(output);
+        this.logger.log(
+          `Video ${file.id}: ${remuxed ? 'repackaged' : 'converted'} ${source.width}×${source.height} ${source.videoCodec} ${Math.round(source.fps)} fps, ${keptSeconds.toFixed(1)} s in ${((Date.now() - started) / 1000).toFixed(1)} s`,
+        );
         await extractPoster(output, poster, result.durationSeconds);
       } catch (err) {
         if (err instanceof VideoToolMissingError) throw err;

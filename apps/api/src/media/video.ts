@@ -5,9 +5,13 @@ import { env } from '../config/env.js';
 
 /*
  * Video processing with ffmpeg (the "video" worker). Uploaded videos are probed, checked against the
- * length limit and converted to one web-safe rendition: H.264/AAC MP4, at most 1280 px on the long
- * side (720p), metadata stripped (no GPS or device tags), "faststart" so playback begins before the
- * whole file has loaded. A still frame becomes the poster.
+ * length limit and turned into one web-safe rendition: H.264/AAC MP4, at most 1280 px on the long
+ * side (720p) and 30 fps, metadata stripped (no GPS or device tags), "faststart" so playback begins
+ * before the whole file has loaded. A still frame becomes the poster.
+ *
+ * Speed (members wait for this): a file that is already web-ready is only repackaged (no re-encode,
+ * about a second); otherwise the encode uses x264 "superfast", caps the frame rate at 30 and, when a
+ * large source is shrunk, skips the decoder's deblocking pass (invisible after downscaling).
  *
  * Binaries: FFMPEG_PATH / FFPROBE_PATH, else the bundled @ffmpeg-installer/ffmpeg and
  * @ffprobe-installer/ffprobe packages, else `ffmpeg` / `ffprobe` on the PATH.
@@ -67,11 +71,38 @@ function run(bin: string, args: string[], timeoutMs: number): Promise<string> {
   });
 }
 
-export type VideoProbe = { durationSeconds: number; width: number; height: number; hasAudio: boolean };
+export type VideoProbe = {
+  durationSeconds: number;
+  width: number;
+  height: number;
+  hasAudio: boolean;
+  /** Frames per second (0 when unknown). */
+  fps: number;
+  videoCodec: string;
+  pixelFormat: string;
+  /** null when there is no audio track. */
+  audioCodec: string | null;
+  /** Overall bits per second (0 when unknown). */
+  bitRate: number;
+};
 
 type ProbeJson = {
-  format?: { duration?: string };
-  streams?: { codec_type?: string; width?: number; height?: number; duration?: string }[];
+  format?: { duration?: string; bit_rate?: string };
+  streams?: {
+    codec_type?: string;
+    codec_name?: string;
+    pix_fmt?: string;
+    width?: number;
+    height?: number;
+    duration?: string;
+    avg_frame_rate?: string;
+    r_frame_rate?: string;
+  }[];
+};
+
+const rate = (value?: string) => {
+  const [n, d] = (value ?? '').split('/').map(Number);
+  return n && d ? n / d : 0;
 };
 
 export async function probeVideo(file: string): Promise<VideoProbe> {
@@ -87,12 +118,51 @@ export async function probeVideo(file: string): Promise<VideoProbe> {
   if (!video) throw new VideoUnreadableError('No video track');
   const duration = Number(data.format?.duration ?? video.duration ?? NaN);
   if (!Number.isFinite(duration) || duration <= 0) throw new VideoUnreadableError('Unknown duration');
+  const audio = data.streams?.find((s) => s.codec_type === 'audio');
   return {
     durationSeconds: duration,
     width: video.width!,
     height: video.height!,
-    hasAudio: !!data.streams?.some((s) => s.codec_type === 'audio'),
+    hasAudio: !!audio,
+    fps: rate(video.avg_frame_rate) || rate(video.r_frame_rate),
+    videoCodec: video.codec_name ?? '',
+    pixelFormat: video.pix_fmt ?? '',
+    audioCodec: audio?.codec_name ?? null,
+    bitRate: Number(data.format?.bit_rate ?? 0) || 0,
   };
+}
+
+/** Highest frame rate kept; 60 fps phone video is halved, which roughly halves the encode. */
+export const VIDEO_MAX_FPS = 30;
+/** Above this a web-ready file is still re-encoded (to keep playback light on mobile data). */
+const REMUX_MAX_BITRATE = 4_500_000;
+
+/**
+ * Already web-ready (H.264 8-bit 4:2:0, at most 720p and 30 fps, modest bitrate, AAC or silent) and
+ * not trimmed: repackage without re-encoding.
+ */
+export function canRemux(probe: VideoProbe, trimmed: boolean): boolean {
+  return (
+    !trimmed &&
+    probe.videoCodec === 'h264' &&
+    probe.pixelFormat === 'yuv420p' &&
+    Math.max(probe.width, probe.height) <= VIDEO_MAX_EDGE &&
+    probe.fps > 0 &&
+    probe.fps <= VIDEO_MAX_FPS + 1 &&
+    probe.bitRate > 0 &&
+    probe.bitRate <= REMUX_MAX_BITRATE &&
+    (probe.audioCodec === null || probe.audioCodec === 'aac')
+  );
+}
+
+/** Copies the streams into a clean MP4: metadata and chapters stripped, faststart. */
+export async function remuxVideo(input: string, output: string): Promise<void> {
+  const { ffmpeg } = await ffmpegPaths();
+  await run(
+    ffmpeg,
+    ['-hide_banner', '-y', '-i', input, '-map', '0:v:0', '-map', '0:a:0?', '-c', 'copy', '-map_metadata', '-1', '-map_chapters', '-1', '-movflags', '+faststart', output],
+    5 * 60_000,
+  );
 }
 
 /** Converts to the web rendition. Allows about 6× real time (at least 10 minutes) before giving up. */
@@ -102,23 +172,31 @@ export async function transcodeVideo(
   durationSeconds: number,
   /** Keep only this part of the source (the member's trim). Seeking before the input is frame-accurate when re-encoding. */
   clip?: { startSeconds: number; durationSeconds: number },
+  /** The source's probe, to tune the work (frame-rate cap, decoder shortcuts). */
+  source?: Pick<VideoProbe, 'width' | 'height' | 'fps'>,
 ): Promise<void> {
   const { ffmpeg } = await ffmpegPaths();
   const e = VIDEO_MAX_EDGE;
-  const scale = `scale='if(gte(iw,ih),min(${e},iw),-2)':'if(gte(iw,ih),-2,min(${e},ih))'`;
+  const scale = `scale='if(gte(iw,ih),min(${e},iw),-2)':'if(gte(iw,ih),-2,min(${e},ih))':flags=bilinear`;
+  // Halve 60 fps sources; leave 24/25/29.97/30 untouched (resampling those would drop or repeat frames).
+  const fps = !source || source.fps > VIDEO_MAX_FPS + 1 ? `,fps=${VIDEO_MAX_FPS}` : '';
+  // 1080p and larger shrink by at least 1.5×: skipping the deblocking pass while decoding saves time
+  // without visible effect at 720p. Smaller sources keep it.
+  const shrinking = !source || Math.max(source.width, source.height) >= VIDEO_MAX_EDGE * 1.5;
   await run(
     ffmpeg,
     [
       '-hide_banner',
       '-y',
+      ...(shrinking ? ['-skip_loop_filter', 'all'] : []),
       ...(clip ? ['-ss', clip.startSeconds.toFixed(3)] : []),
       '-i', input,
       ...(clip ? ['-t', clip.durationSeconds.toFixed(3)] : []),
       '-map', '0:v:0',
       '-map', '0:a:0?',
-      '-vf', `${scale},format=yuv420p`,
+      '-vf', `${scale}${fps},format=yuv420p`,
       '-c:v', 'libx264',
-      '-preset', 'veryfast',
+      '-preset', 'superfast',
       '-crf', '23',
       '-profile:v', 'high',
       '-maxrate', '3M',
@@ -127,6 +205,7 @@ export async function transcodeVideo(
       '-b:a', '128k',
       '-ac', '2',
       '-map_metadata', '-1',
+      '-map_chapters', '-1',
       '-movflags', '+faststart',
       output,
     ],

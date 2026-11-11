@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api/errors";
 const POLL_INTERVAL_MS = 800;
 const POLL_TIMEOUT_MS = 60_000;
 /** Videos are converted on the server, which can take a few minutes for long ones. */
-const VIDEO_POLL_INTERVAL_MS = 2_000;
+const VIDEO_POLL_INTERVAL_MS = 1_000;
 const VIDEO_POLL_TIMEOUT_MS = 30 * 60_000;
 
 /** Client-side check against the same limits the API enforces; throws an ApiError with a member-facing message. */
