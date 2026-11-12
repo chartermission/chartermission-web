@@ -213,6 +213,59 @@ export async function transcodeVideo(
   );
 }
 
+export type AudioProbe = { durationSeconds: number; codec: string };
+
+/** Voice notes: the file must hold an audio track; returns its length. */
+export async function probeAudio(file: string): Promise<AudioProbe> {
+  const { ffprobe } = await ffmpegPaths();
+  const json = await run(ffprobe, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], 60_000);
+  let data: ProbeJson;
+  try {
+    data = JSON.parse(json) as ProbeJson;
+  } catch {
+    throw new VideoUnreadableError('Unreadable probe output');
+  }
+  const audio = data.streams?.find((s) => s.codec_type === 'audio');
+  if (!audio) throw new VideoUnreadableError('No audio track');
+  let duration = Number(data.format?.duration ?? audio.duration ?? NaN);
+  // Browser recordings (WebM from MediaRecorder) often carry no duration: decode to measure it.
+  if (!Number.isFinite(duration) || duration <= 0) {
+    duration = await measureDecoded(file);
+  }
+  if (!Number.isFinite(duration) || duration <= 0) throw new VideoUnreadableError('Unknown duration');
+  return { durationSeconds: duration, codec: audio.codec_name ?? '' };
+}
+
+/** Length by decoding the whole stream (ffmpeg prints the final time on stderr). */
+async function measureDecoded(file: string): Promise<number> {
+  const { ffmpeg } = await ffmpegPaths();
+  return new Promise((resolve) => {
+    const child = spawn(ffmpeg, ['-hide_banner', '-i', file, '-map', '0:a:0', '-f', 'null', '-'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    child.stderr.on('data', (c: Buffer) => {
+      err = (err + c.toString('utf8')).slice(-4000);
+    });
+    const timer = setTimeout(() => child.kill('SIGKILL'), 120_000);
+    child.on('error', () => resolve(NaN));
+    child.on('close', () => {
+      clearTimeout(timer);
+      const times = [...err.matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)];
+      const last = times.at(-1);
+      resolve(last ? Number(last[1]) * 3600 + Number(last[2]) * 60 + Number(last[3]) : NaN);
+    });
+  });
+}
+
+/** Voice note → AAC in an MP4 (.m4a) container, mono 64 kbps, metadata stripped, faststart. Plays everywhere. */
+export async function transcodeAudio(input: string, output: string): Promise<void> {
+  const { ffmpeg } = await ffmpegPaths();
+  await run(
+    ffmpeg,
+    ['-hide_banner', '-y', '-i', input, '-map', '0:a:0', '-vn', '-c:a', 'aac', '-b:a', '64k', '-ac', '1', '-map_metadata', '-1', '-movflags', '+faststart', '-f', 'mp4', output],
+    5 * 60_000,
+  );
+}
+
 /** A JPEG still from about a second in (or the middle of very short clips). */
 export async function extractPoster(input: string, output: string, durationSeconds: number): Promise<void> {
   const { ffmpeg } = await ffmpegPaths();

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { ReportTargetType } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { comments, conversations, hashtags, memberProfiles, messages, opportunities, posts, stories, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
+import { comments, conversationMembers, hashtags, memberProfiles, messages, opportunities, posts, stories, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { PRIVILEGED_ROLES } from '../core/permissions.js';
@@ -201,13 +201,17 @@ export class TargetsService {
       case 'message': {
         if (!isUuid(rawId)) throw Errors.notFound('That message');
         const [row] = await this.db
-          .select({ m: messages, handle: memberProfiles.handle, memberA: conversations.memberA, memberB: conversations.memberB })
+          .select({ m: messages, handle: memberProfiles.handle })
           .from(messages)
-          .innerJoin(conversations, eq(conversations.id, messages.conversationId))
           .leftJoin(memberProfiles, eq(memberProfiles.userId, messages.senderId))
           .where(eq(messages.id, rawId))
           .limit(1);
         if (!row) throw Errors.notFound('That message');
+        // Anyone who was in the conversation may report a message in it.
+        const people = await this.db
+          .select({ userId: conversationMembers.userId })
+          .from(conversationMembers)
+          .where(eq(conversationMembers.conversationId, row.m.conversationId));
         const m = row.m;
         const state: ContentState = m.deletedAt ? 'deleted' : (m.moderationState as ContentState);
         return {
@@ -222,7 +226,7 @@ export class TargetsService {
           createdAt: m.createdAt,
           preview: truncate(m.body) || 'Message',
           href: hrefFor('message', m.id, { handle: row.handle }),
-          participants: [row.memberA, row.memberB],
+          participants: people.map((p) => p.userId),
         };
       }
       case 'hashtag': {

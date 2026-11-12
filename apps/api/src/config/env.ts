@@ -77,6 +77,23 @@ const Env = z.object({
    * partner API doesn't return a link, so confirm this pattern with Charter Center.
    */
   CHARTER_CENTER_COURSE_URL: z.string().default('https://charter-center.com/courses/{id}'),
+  /**
+   * Web Push (browser notifications for messages). Generate a pair once with
+   * `npx web-push generate-vapid-keys`; unset turns push off.
+   */
+  VAPID_PUBLIC_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+  VAPID_PRIVATE_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+  VAPID_SUBJECT: z.string().default('mailto:support@chartermission.com'),
+  /**
+   * "Translate" on messages: deepl (DEEPL_API_KEY), libretranslate (LIBRETRANSLATE_URL, optional
+   * LIBRETRANSLATE_API_KEY) or anthropic (ANTHROPIC_API_KEY). Unset hides the button. "fake" is for tests.
+   */
+  TRANSLATE_PROVIDER: z.enum(['deepl', 'libretranslate', 'anthropic', 'fake']).optional().or(z.literal('').transform(() => undefined)),
+  DEEPL_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+  LIBRETRANSLATE_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
+  LIBRETRANSLATE_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+  ANTHROPIC_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+  TRANSLATE_MODEL: z.string().default('claude-haiku-4-5'),
 });
 
 export type Env = z.infer<typeof Env>;

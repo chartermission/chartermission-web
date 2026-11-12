@@ -473,7 +473,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','profile_video','profile_resume')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','profile_video','profile_resume','message_image','message_file','voice_note')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -1630,17 +1630,33 @@ export const chapterPins = pgTable(
  * A private conversation between two members. There is one per pair: member_a is always the
  * smaller id, so the pair can be found whichever of the two opens it.
  */
+/**
+ * A conversation: a private chat between two members ("direct", memberA < memberB), a group chat,
+ * or a chapter's announcement channel ("broadcast", one per chapter, only its team writes).
+ * Who is in it, and each person's read, mute, pin and archive state, live in conversation_members.
+ */
 export const conversations = pgTable(
   'conversations',
   {
     id: id(),
-    memberA: uuid('member_a')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    memberB: uuid('member_b')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    /** When each of the two last opened the conversation; later messages from the other are unread. */
+    kind: text('kind').notNull().default('direct'),
+    /** Direct chats only: the two members, in id order (unique pair). */
+    memberA: uuid('member_a').references(() => users.id, { onDelete: 'cascade' }),
+    memberB: uuid('member_b').references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * "request": a direct chat started with someone the sender isn't connected with; the recipient
+     * accepts ("active") or declines. Groups and broadcasts are always "active".
+     */
+    status: text('status').notNull().default('active'),
+    requestedBy: uuid('requested_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Groups: the name members see. */
+    title: text('title'),
+    /** Groups made for a chapter team and every broadcast belong to a chapter. */
+    chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'cascade' }),
+    /** Groups made for an event's attendees. */
+    eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Superseded by conversation_members.read_at; kept for rollback. */
     aReadAt: ts('a_read_at'),
     bReadAt: ts('b_read_at'),
     lastMessageAt: ts('last_message_at'),
@@ -1648,9 +1664,44 @@ export const conversations = pgTable(
   },
   (t) => [
     uniqueIndex('conversations_pair_ux').on(t.memberA, t.memberB),
+    uniqueIndex('conversations_broadcast_ux').on(t.chapterId).where(sql`${t.kind} = 'broadcast'`),
     index('conversations_a_idx').on(t.memberA, t.lastMessageAt),
     index('conversations_b_idx').on(t.memberB, t.lastMessageAt),
-    check('conversations_order_ck', sql`${t.memberA} < ${t.memberB}`),
+    check('conversations_order_ck', sql`${t.memberA} is null or ${t.memberA} < ${t.memberB}`),
+    check('conversations_kind_ck', sql`${t.kind} in ('direct','group','broadcast')`),
+    check('conversations_status_ck', sql`${t.status} in ('active','request','declined')`),
+    check('conversations_direct_ck', sql`${t.kind} <> 'direct' or (${t.memberA} is not null and ${t.memberB} is not null)`),
+  ],
+);
+
+/** Who is in a conversation, and their own view of it. */
+export const conversationMembers = pgTable(
+  'conversation_members',
+  {
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Groups: admins rename it and add or remove people. */
+    role: text('role').notNull().default('member'),
+    joinedAt: createdAt(),
+    /** Left the group, was removed, or turned a chapter's announcements off. */
+    leftAt: ts('left_at'),
+    /** Later messages from others are unread. */
+    readAt: ts('read_at'),
+    /** No notifications until then (far future = until turned back on). */
+    mutedUntil: ts('muted_until'),
+    pinnedAt: ts('pinned_at'),
+    archivedAt: ts('archived_at'),
+    /** "Mark as unread": shows as unread until opened again. */
+    markedUnread: boolean('marked_unread').notNull().default(false),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conversationId, t.userId] }),
+    index('conversation_members_user_idx').on(t.userId),
+    check('conversation_members_role_ck', sql`${t.role} in ('admin','member')`),
   ],
 );
 
@@ -1664,7 +1715,20 @@ export const messages = pgTable(
     senderId: uuid('sender_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /** text (may carry attachments), voice (a voice note), share (a card for a post, event…), meeting (an invitation), system ("Amara added Kwame"). */
+    kind: text('kind').notNull().default('text'),
     body: text('body').notNull(),
+    replyToId: uuid('reply_to_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
+    /** Set by the sender's app so a retried send is not stored twice. */
+    clientId: uuid('client_id'),
+    editedAt: ts('edited_at'),
+    /** kind = share: what is shared (post, article, event, opportunity, member, page, chapter) and its id or slug. */
+    shareType: text('share_type'),
+    shareId: text('share_id'),
+    /** kind = meeting: { title, startsAt, durationMinutes, link, status, respondedAt }. */
+    meeting: jsonb('meeting'),
+    /** The first link in the text, unfurled: { url, title, description, image, site }. */
+    linkPreview: jsonb('link_preview'),
     createdAt: createdAt(),
     /** Deleted by its sender: the text is cleared and the other member sees that a message was deleted. */
     deletedAt: ts('deleted_at'),
@@ -1673,8 +1737,73 @@ export const messages = pgTable(
   },
   (t) => [
     index('messages_conversation_idx').on(t.conversationId, t.createdAt),
+    uniqueIndex('messages_client_ux').on(t.senderId, t.clientId).where(sql`${t.clientId} is not null`),
     check('messages_moderation_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
+    check('messages_kind_ck', sql`${t.kind} in ('text','voice','share','meeting','system')`),
   ],
+);
+
+/** Photos, documents and voice notes attached to a message. */
+export const messageAttachments = pgTable(
+  'message_attachments',
+  {
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.fileId] }), index('message_attachments_file_idx').on(t.fileId)],
+);
+
+/** One reaction per member per message (changing it replaces it). */
+export const messageReactions = pgTable(
+  'message_reactions',
+  {
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.userId] })],
+);
+
+/** Machine translations of a message, kept so each language is translated once. */
+export const messageTranslations = pgTable(
+  'message_translations',
+  {
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    lang: text('lang').notNull(),
+    text: text('text').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.lang] })],
+);
+
+/** Browsers a member allowed to show notifications on (Web Push). */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: createdAt(),
+    lastUsedAt: ts('last_used_at'),
+  },
+  (t) => [uniqueIndex('push_subscriptions_endpoint_ux').on(t.endpoint), index('push_subscriptions_user_idx').on(t.userId)],
 );
 
 /** Members a chapter's team has barred from the chapter: they can't join it or post in it. */

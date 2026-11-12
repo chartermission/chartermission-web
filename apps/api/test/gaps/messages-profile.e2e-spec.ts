@@ -35,8 +35,9 @@ describe('Private messages, and the profile’s intro video, résumé and links'
   afterAll(() => t.close());
   beforeEach(() => resetLimits());
 
-  it('connected members exchange messages; others cannot start a conversation or read one', async () => {
-    await amara.post('/messages/conversations', { memberId: leila.id }).expect(403);
+  it('connected members exchange messages; others get a message request and cannot read one', async () => {
+    // Not connected: a message request instead of a chat.
+    expect((await amara.post('/messages/conversations', { memberId: leila.id }).expect(200)).body).toMatchObject({ status: 'request', request: 'outgoing', firstContact: true });
     await amara.post('/messages/conversations', { memberId: amara.id }).expect(400);
     const convo = (await amara.post('/messages/conversations', { memberId: kwame.id }).expect(200)).body as ConversationView;
     expect(convo).toMatchObject({ member: { id: kwame.id }, lastMessage: null, unread: 0, canSend: true });
@@ -47,8 +48,8 @@ describe('Private messages, and the profile’s intro video, résumé and links'
     await amara.post(`/messages/conversations/${convo.id}/messages`, { body: '   ' }).expect(422);
     const first = await amara.post(`/messages/conversations/${convo.id}/messages`, { body: 'Hello Kwame 👋' }).expect(201);
     await amara.post(`/messages/conversations/${convo.id}/messages`, { body: 'Are you coming to the Accra meetup?' }).expect(201);
-    expect((await kwame.get('/messages/unread').expect(200)).body).toEqual({ unread: 1 });
-    expect((await amara.get('/messages/unread').expect(200)).body).toEqual({ unread: 0 });
+    expect((await kwame.get('/messages/unread').expect(200)).body).toEqual({ unread: 1, requests: 0 });
+    expect((await amara.get('/messages/unread').expect(200)).body).toEqual({ unread: 0, requests: 0 });
     const inbox = (await kwame.get('/messages/conversations').expect(200)).body as ConversationView[];
     expect(inbox).toEqual([expect.objectContaining({ id: convo.id, unread: 2, lastMessage: expect.objectContaining({ body: 'Are you coming to the Accra meetup?', mine: false }) })]);
     // One notification for the conversation, not one per message.
@@ -59,7 +60,7 @@ describe('Private messages, and the profile’s intro video, résumé and links'
     expect(page.items.map((m) => m.body)).toEqual(['Hello Kwame 👋', 'Are you coming to the Accra meetup?']);
     expect(page.olderCursor).toBeNull();
     await kwame.post(`/messages/conversations/${convo.id}/read`).expect(204);
-    expect((await kwame.get('/messages/unread').expect(200)).body).toEqual({ unread: 0 });
+    expect((await kwame.get('/messages/unread').expect(200)).body).toEqual({ unread: 0, requests: 0 });
     expect(((await amara.get('/messages/conversations').expect(200)).body as ConversationView[])[0]!.seenAt).toEqual(expect.any(String));
 
     const reply = await kwame.post(`/messages/conversations/${convo.id}/messages`, { body: 'Yes, see you there' }).expect(201);

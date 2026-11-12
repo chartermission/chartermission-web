@@ -120,6 +120,13 @@
       "when": 1794343795890,
       "tag": "0016_message_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794495200948,
+      "tag": "0017_messaging_v2",
+      "breakpoints": true
     }
   ]
 }

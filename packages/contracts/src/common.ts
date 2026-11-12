@@ -29,6 +29,7 @@ export const ErrorCode = z.enum([
   "BLOCKED",
   /** Learning is locked until the member meets the admin-set requirements (GET /learning/access). */
   "LEARNING_LOCKED",
+  "UNAVAILABLE",
   "INTERNAL",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;

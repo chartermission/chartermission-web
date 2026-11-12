@@ -802,12 +802,25 @@ export const UploadPurpose = z.enum([
   "page_cover",
   "profile_video",
   "profile_resume",
+  "message_image",
+  "message_file",
+  "voice_note",
 ]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
 
 /** Videos phones and cameras record: MP4 (H.264/HEVC), QuickTime (iPhone .mov) and WebM. All are converted to MP4. */
 export const VIDEO_MIMES = ["video/mp4", "video/quicktime", "video/webm"] as const;
 export const isVideoPurpose = (p: UploadPurpose) => p === "post_video" || p === "story_video" || p === "profile_video";
+/** What browsers' voice recorders produce (WebM/Opus in Chrome and Firefox, MP4/AAC in Safari). All are converted to AAC (.m4a). */
+export const VOICE_MIMES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/aac", "audio/x-m4a", "audio/wav", "video/webm", "video/mp4"] as const;
+export const isAudioPurpose = (p: UploadPurpose) => p === "voice_note";
+/** Documents members can send in messages. */
+export const MESSAGE_FILE_MIMES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+] as const;
 
 export const UPLOAD_LIMITS = {
   avatar: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
@@ -832,6 +845,12 @@ export const UPLOAD_LIMITS = {
   profile_video: { maxBytes: 800 * 1024 * 1024, mimes: VIDEO_MIMES },
   /** A member's résumé or CV, shown on their profile to the people they choose. PDF only. */
   profile_resume: { maxBytes: 5 * 1024 * 1024, mimes: ["application/pdf"] },
+  /** Photos sent in messages. */
+  message_image: { maxBytes: 10 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  /** Documents sent in messages: PDF, Word, Excel, PowerPoint. */
+  message_file: { maxBytes: 20 * 1024 * 1024, mimes: MESSAGE_FILE_MIMES },
+  /** Voice notes, up to VOICE_NOTE_MAX_SECONDS. */
+  voice_note: { maxBytes: 25 * 1024 * 1024, mimes: VOICE_MIMES },
 } as const;
 
 /**

@@ -40,7 +40,7 @@ import { AnalyticsService } from '../infra/analytics.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { MediaService, type FileRow } from '../media/media.service.js';
 import { PostSerializer } from './post-serializer.js';
-import { LinkPreviewService } from './link-preview.js';
+import { LinkPreviewService, embedPreview } from './link-preview.js';
 import { attachHashtags, syncHashtags } from './hashtags.js';
 import { replaceMentions, resolveMentions } from './mentions.js';
 import { firstHttpsUrl, parseHashtags } from './text-parse.js';
@@ -570,15 +570,3 @@ export class PostsService implements OnModuleInit {
   }
 }
 
-/** A player-only preview for a supported video link (YouTube, Vimeo, Loom, TikTok, Dailymotion); null for other links. */
-function embedPreview(url: string): LinkPreview | null {
-  const embed = parseVideoEmbed(url);
-  if (!embed) return null;
-  let domain = '';
-  try {
-    domain = new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    domain = '';
-  }
-  return { url, domain, title: null, description: null, imageUrl: embed.thumbnailUrl, embed };
-}

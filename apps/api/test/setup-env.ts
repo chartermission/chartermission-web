@@ -10,3 +10,4 @@ process.env.STORAGE_LOCAL_DIR ??= '/tmp/cm-test-uploads';
 process.env.WEB_ORIGINS = 'http://localhost:3000,http://localhost:3001';
 // Learning: always the fixture catalogue and fixture link checker (no outbound network in tests).
 delete process.env.CHARTER_CENTER_API_URL;
+process.env.TRANSLATE_PROVIDER = 'fake';

@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import type { LookupAddress } from 'node:dns';
 import { Injectable, Logger } from '@nestjs/common';
 import { parse } from 'node-html-parser';
-import type { LinkPreview } from '@chartermission/contracts';
+import { parseVideoEmbed, type LinkPreview } from '@chartermission/contracts';
 import { assertSafeUrl, SsrfError, type LookupFn } from './ssrf.js';
 
 export const PREVIEW_TIMEOUT_MS = 5000;
@@ -114,4 +114,17 @@ export function parsePreview(html: string, url: URL): LinkPreview {
     }
   }
   return { url: url.toString(), domain: url.hostname.replace(/^www\./, ''), title, description, imageUrl };
+}
+
+/** A player-only preview for a supported video link (YouTube, Vimeo, Loom, TikTok, Dailymotion); null for other links. */
+export function embedPreview(url: string): LinkPreview | null {
+  const embed = parseVideoEmbed(url);
+  if (!embed) return null;
+  let domain = '';
+  try {
+    domain = new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    domain = '';
+  }
+  return { url, domain, title: null, description: null, imageUrl: embed.thumbnailUrl, embed };
 }

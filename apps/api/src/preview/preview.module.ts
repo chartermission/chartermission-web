@@ -7,5 +7,6 @@ import { PreviewService } from './preview.service.js';
   imports: [MediaModule],
   controllers: [PreviewController],
   providers: [PreviewService],
+  exports: [PreviewService],
 })
 export class PreviewModule {}

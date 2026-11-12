@@ -54,4 +54,5 @@ export const Errors = {
   preconditionFailed: () => new AppError(412, 'PRECONDITION_FAILED', 'This was changed by someone else. Reload and try again.'),
   tooLarge: (message: string) => new AppError(413, 'PAYLOAD_TOO_LARGE', message),
   unsupportedMedia: (message: string) => new AppError(415, 'UNSUPPORTED_MEDIA', message),
+  unavailable: (message: string) => new AppError(503, 'UNAVAILABLE', message),
 };

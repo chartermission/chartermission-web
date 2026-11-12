@@ -10,6 +10,9 @@ import type { Readable } from 'node:stream';
 import {
   UPLOAD_LIMITS,
   VIDEO_MIMES,
+  VOICE_MIMES,
+  VOICE_NOTE_MAX_SECONDS,
+  isAudioPurpose,
   formatDuration,
   isVideoPurpose,
   type CreateUploadInput,
@@ -30,7 +33,19 @@ import { mediaUrl, posterUrl } from '../core/members.service.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { createStorage, LocalStorage, URL_TTL_SECONDS, verifyUploadSignature, type Storage } from './storage.js';
 import { scanBuffer } from './scanner.js';
-import { VideoToolMissingError, canRemux, extractPoster, probeVideo, remuxVideo, sha256File, transcodeVideo, type VideoProbe } from './video.js';
+import {
+  VideoToolMissingError,
+  canRemux,
+  extractPoster,
+  probeAudio,
+  probeVideo,
+  remuxVideo,
+  sha256File,
+  transcodeAudio,
+  transcodeVideo,
+  type AudioProbe,
+  type VideoProbe,
+} from './video.js';
 
 export type FileRow = typeof files.$inferSelect;
 
@@ -43,6 +58,16 @@ const EXTENSIONS: Record<string, string[]> = {
   'video/mp4': ['mp4', 'm4v'],
   'video/quicktime': ['mov', 'qt'],
   'video/webm': ['webm'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['docx'],
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['xlsx'],
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['pptx'],
+  'audio/webm': ['webm', 'weba'],
+  'audio/ogg': ['ogg', 'oga', 'opus'],
+  'audio/mp4': ['m4a', 'mp4'],
+  'audio/x-m4a': ['m4a'],
+  'audio/aac': ['aac', 'm4a'],
+  'audio/mpeg': ['mp3'],
+  'audio/wav': ['wav'],
 };
 
 /** Images are re-encoded to at most this many pixels on the longest side. */
@@ -117,7 +142,8 @@ export class MediaService implements OnModuleInit {
     }
     // Page pictures: anyone who may create or manage a page (the page itself checks ownership when the file is used).
     const limit = UPLOAD_LIMITS[input.purpose];
-    const mime = input.mime.toLowerCase();
+    // Recorders label files "audio/webm;codecs=opus": the parameters don't matter here.
+    const mime = input.mime.toLowerCase().split(';')[0]!.trim();
     if (!(limit.mimes as readonly string[]).includes(mime)) {
       throw Errors.unsupportedMedia(`This file type isn’t allowed here. Use ${describeMimes(input.purpose)}.`);
     }
@@ -173,7 +199,7 @@ export class MediaService implements OnModuleInit {
       await this.db.update(files).set({ scanStatus: 'pending', sizeBytes: size }).where(eq(files.id, fileId));
     }
     if (file.scanStatus === 'awaiting_upload' || file.scanStatus === 'pending') {
-      if (isVideoPurpose(file.purpose as UploadPurpose)) {
+      if (isVideoPurpose(file.purpose as UploadPurpose) || isAudioPurpose(file.purpose as UploadPurpose)) {
         await this.queue.add('video', 'process-video', { fileId }, { jobId: `video-${fileId}` });
       } else {
         await this.queue.add('media', 'process-upload', { fileId }, { jobId: `upload-${fileId}` });
@@ -202,6 +228,7 @@ export class MediaService implements OnModuleInit {
     if (size === null || size === 0) return this.reject(file, 'rejected', 'The file was not uploaded');
     if (size > limit.maxBytes) return this.reject(file, 'rejected', 'The file is larger than allowed');
     if (isVideoPurpose(file.purpose as UploadPurpose)) return this.processVideo(file);
+    if (isAudioPurpose(file.purpose as UploadPurpose)) return this.processAudio(file);
     const data = await this.storage.read(file.storageKey);
     if (!data) return this.reject(file, 'rejected', 'The file was not uploaded');
 
@@ -344,6 +371,59 @@ export class MediaService implements OnModuleInit {
     }
   }
 
+  /**
+   * Voice notes: must hold an audio track and be at most VOICE_NOTE_MAX_SECONDS; converted to
+   * AAC (.m4a) with metadata stripped. Only ffmpeg's output is stored.
+   */
+  private async processAudio(file: FileRow): Promise<void> {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'cm-voice-'));
+    try {
+      const input = path.join(dir, 'source');
+      if (!(await this.storage.downloadTo(file.storageKey, input))) return await this.reject(file, 'rejected', 'The file was not uploaded');
+      const detected = await fileTypeFromFile(input);
+      if (!detected || !(VOICE_MIMES as readonly string[]).includes(detected.mime)) {
+        return await this.reject(file, 'rejected', 'The file’s contents don’t match its type');
+      }
+      let source: AudioProbe;
+      try {
+        source = await probeAudio(input);
+      } catch (err) {
+        if (err instanceof VideoToolMissingError) throw err;
+        return await this.reject(file, 'rejected', 'We couldn’t play this recording. Try recording it again.');
+      }
+      if (source.durationSeconds > VOICE_NOTE_MAX_SECONDS + 1) {
+        return await this.reject(file, 'rejected', `Voice notes can be up to ${formatDuration(VOICE_NOTE_MAX_SECONDS)} long.`);
+      }
+      const output = path.join(dir, 'voice.m4a');
+      let result: AudioProbe;
+      try {
+        await transcodeAudio(input, output);
+        result = await probeAudio(output);
+      } catch (err) {
+        if (err instanceof VideoToolMissingError) throw err;
+        this.logger.warn(`Voice note ${file.id} could not be converted: ${String(err)}`);
+        return await this.reject(file, 'rejected', 'We couldn’t process this recording. Try recording it again.');
+      }
+      await this.storage.uploadFrom(file.storageKey, output, 'audio/mp4');
+      const { size } = await stat(output);
+      const [updated] = await this.db
+        .update(files)
+        .set({
+          scanStatus: 'clean',
+          rejectionReason: null,
+          mime: 'audio/mp4',
+          sizeBytes: size,
+          sha256: await sha256File(output),
+          durationMs: Math.round(result.durationSeconds * 1000),
+        })
+        .where(eq(files.id, file.id))
+        .returning();
+      await this.settled(updated!);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
   /** Rejects a file that is still waiting for processing (used when processing keeps failing). */
   private async failPending(fileId: string, reason: string) {
     const [file] = await this.db.select().from(files).where(eq(files.id, fileId)).limit(1);
@@ -380,7 +460,7 @@ export class MediaService implements OnModuleInit {
     const file = await this.find(fileId);
     if (!file || file.scanStatus !== 'clean') throw Errors.notFound('File');
     if (!file.isPublic && !viewer) throw Errors.unauthenticated();
-    const inline = file.mime.startsWith('image/') || file.mime.startsWith('video/');
+    const inline = file.mime.startsWith('image/') || file.mime.startsWith('video/') || file.mime.startsWith('audio/');
     const name = safeFileName(file.originalName ?? 'file', file.mime);
     const disposition = `${inline ? 'inline' : 'attachment'}; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
     const redirect = await this.storage.presignDownload(file.storageKey, { mime: file.mime, disposition });
@@ -434,6 +514,8 @@ export async function reencodeImage(data: Buffer, mime: string) {
 function describeMimes(purpose: UploadPurpose): string {
   if (purpose === 'post_document') return 'a PDF up to 10 MB';
   if (purpose === 'profile_resume') return 'a PDF up to 5 MB';
+  if (purpose === 'message_file') return 'a PDF, Word, Excel or PowerPoint file up to 20 MB';
+  if (purpose === 'voice_note') return 'a voice recording up to 25 MB';
   if (isVideoPurpose(purpose)) return `an MP4, MOV or WebM video up to ${Math.round(UPLOAD_LIMITS[purpose].maxBytes / 1024 / 1024)} MB`;
   return `JPEG, PNG or WebP up to ${Math.round(UPLOAD_LIMITS[purpose].maxBytes / 1024 / 1024)} MB`;
 }
