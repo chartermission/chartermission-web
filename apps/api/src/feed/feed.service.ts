@@ -164,10 +164,11 @@ export class FeedService {
   /**
    * Posts from Charter Mission's official accounts and official pages. Every member sees them in
    * Following and they get the followed-source boost in For you, whether or not the member follows
-   * them (mutes and blocks still apply through listablePostsSql).
+   * them (mutes and blocks still apply through listablePostsSql). Posts marked broadcast (members'
+   * Charter Center certificates) are treated the same way so that everyone sees them.
    */
   private officialSql(): SQL {
-    return sql`((${posts.pageId} is null and exists (select 1 from ${users} ou where ou.id = ${posts.authorId} and ou.is_official))
+    return sql`(${posts.broadcast} or (${posts.pageId} is null and exists (select 1 from ${users} ou where ou.id = ${posts.authorId} and ou.is_official))
       or (${posts.pageId} is not null and exists (select 1 from ${pages} op where op.id = ${posts.pageId} and op.official)))`;
   }
 
@@ -205,7 +206,8 @@ export class FeedService {
         .where(isUuid(q.page) ? eq(pages.id, q.page) : sql`lower(${pages.slug}) = ${q.page.toLowerCase()}`)
         .limit(1);
       if (!page) return null;
-      out.push(eq(posts.pageId, page.id));
+      // The page's own posts, and members' posts about it (Charter Center certificates on Charter Center's page).
+      out.push(sql`(${posts.pageId} = ${page.id} or ${posts.aboutPageId} = ${page.id})`);
     }
     if (q.country) out.push(sql`${posts.countryCode} = ${q.country.toUpperCase()}`);
     if (q.sector) {

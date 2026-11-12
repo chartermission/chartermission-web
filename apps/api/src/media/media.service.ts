@@ -283,6 +283,36 @@ export class MediaService implements OnModuleInit {
     await this.settled(updated!);
   }
 
+  /**
+   * A file the platform received on a member's behalf (a Charter Center photo or certificate): stored
+   * as theirs and put through the same checks as an upload (type and signature, size, malware scan,
+   * image re-encoding). Returns the clean file, or throws when it is refused.
+   */
+  async ingest(ownerId: string, purpose: UploadPurpose, data: Buffer, originalName: string, opts: { attached?: boolean } = {}): Promise<FileRow> {
+    const limit = UPLOAD_LIMITS[purpose];
+    if (data.length === 0 || data.length > limit.maxBytes) throw Errors.unsupportedMedia('The file is empty or larger than allowed');
+    const detected = await fileTypeFromBuffer(data);
+    if (!detected || !(limit.mimes as readonly string[]).includes(detected.mime)) throw Errors.unsupportedMedia('The file’s type isn’t allowed here');
+    const id = randomUUID();
+    const key = `uploads/${purpose}/${id}`;
+    await this.storage.write(key, data, detected.mime);
+    await this.db.insert(files).values({
+      id,
+      ownerId,
+      purpose,
+      storageKey: key,
+      originalName: originalName.slice(0, 200),
+      declaredMime: detected.mime,
+      mime: detected.mime,
+      sizeBytes: data.length,
+      attachedAt: opts.attached ? new Date() : null,
+    });
+    await this.processUpload(id);
+    const file = await this.find(id);
+    if (!file || file.scanStatus !== 'clean') throw Errors.unsupportedMedia(file?.rejectionReason ?? 'The file was refused');
+    return file;
+  }
+
   /** GET /uploads/limits: the video length limits members upload against. */
   mediaLimits(): Promise<MediaSettings> {
     return this.settings.get('media_limits');

@@ -128,8 +128,11 @@ export function AccountBanners({ viewer }: { viewer: AccountNoticeViewer }) {
   );
 }
 
-/** Pages that must stay reachable while onboarding is unfinished. */
-const onboardingExempt = ["/onboarding", "/settings", "/appeals"];
+/**
+ * Pages that must stay reachable while onboarding is unfinished. Exams too: Charter Center students
+ * who join from an exam invitation go straight to the exam and finish their profile afterwards.
+ */
+const onboardingExempt = ["/onboarding", "/settings", "/appeals", "/exams"];
 /** A member who doesn't accept the new policies can still leave (deactivate, delete, export). */
 const policyExempt = ["/settings/data"];
 
@@ -137,7 +140,7 @@ const under = (pathname: string, paths: string[]) => paths.some((p) => pathname 
 
 /**
  * Sends members to the step they must finish first: changed policies (any page), then onboarding
- * (except on onboarding, settings and appeals). Client-side so the page shell never waits on it.
+ * (except on onboarding, settings, appeals and exams). Client-side so the page shell never waits on it.
  */
 export function AccountGate({ viewer }: { viewer: AccountNoticeViewer }) {
   const pathname = usePathname();

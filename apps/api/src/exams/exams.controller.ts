@@ -1,19 +1,34 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   AdminExamAttemptsQuery,
   ExamImportInput,
+  ExamJoinCompleteInput,
+  ExamJoinResendInput,
+  ExamJoinStartInput,
+  ExamJoinVerifyInput,
   ExamQuestionInput,
   ExamQuestionOrderInput,
   ExamQuestionsImportInput,
   ExamSectionsInput,
   ExamSettingsInput,
   SaveExamAnswerInput,
+  SendExamInvitesInput,
   UpdateExamInput,
+  UpdateExamsSettingsInput,
   type AdminExamAttempt,
   type AdminExamDetail,
   type AdminExamSummary,
   type ExamAnswerSaved,
   type ExamAttemptView,
+  type ExamCertificateView,
+  type ExamInviteRow,
+  type ExamJoinCompleted,
+  type ExamJoinInfo,
+  type ExamJoinStarted,
+  type ExamJoinVerified,
+  type ExamsAdminSettings,
+  type SendExamInvitesResult,
   type ExamDetail,
   type ExamSummary,
   type Ok,
@@ -26,6 +41,7 @@ import { UuidParam } from '../media/uuid-param.js';
 import { ExamsService } from './exams.service.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
 import { AdminExamsService } from './admin-exams.service.js';
+import { ExamJoinService } from './exam-join.service.js';
 
 /** Exams for signed-in members: browse, take and review. Marking happens here, never in the browser. */
 @Controller()
@@ -55,6 +71,13 @@ export class ExamsController {
     return this.attempts.start(ctx.user, id);
   }
 
+  /** The member's Charter Center certificate for this exam (null until they pass an exam that awards one). */
+  @Get('exams/:id/certificate')
+  @Access('member')
+  certificate(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<ExamCertificateView | null> {
+    return this.exams.certificate(ctx.user, id);
+  }
+
   @Get('exam-attempts/:id')
   @Access('member')
   attempt(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<ExamAttemptView> {
@@ -72,6 +95,69 @@ export class ExamsController {
   @Access('member')
   submit(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<ExamAttemptView> {
     return this.attempts.submit(ctx.user, id);
+  }
+}
+
+/**
+ * Charter Center students joining from an exam invitation (no account yet, so no @Access): email →
+ * 6-digit code → confirm the Charter Center name and photo, choose a password → signed in, at the exam.
+ */
+@Controller('exam-join')
+export class ExamJoinController {
+  constructor(private readonly join: ExamJoinService) {}
+
+  @Get(':slug')
+  info(@Param('slug') slug: string): Promise<ExamJoinInfo> {
+    return this.join.info(slug);
+  }
+
+  @Post('resend')
+  @HttpCode(200)
+  resend(@ZBody(ExamJoinResendInput) input: ExamJoinResendInput): Promise<ExamJoinStarted> {
+    return this.join.resend(input.joinId);
+  }
+
+  @Post('verify')
+  @HttpCode(200)
+  verify(@ZBody(ExamJoinVerifyInput) input: ExamJoinVerifyInput): Promise<ExamJoinVerified> {
+    return this.join.verify(input.joinId, input.code);
+  }
+
+  @Post('complete')
+  @HttpCode(200)
+  complete(@ZBody(ExamJoinCompleteInput) input: ExamJoinCompleteInput, @Req() req: AppRequest, @Res({ passthrough: true }) res: Response): Promise<ExamJoinCompleted> {
+    return this.join.complete(input.joinId, input.password, req, res);
+  }
+
+  @Post(':slug/start')
+  @HttpCode(200)
+  start(@Param('slug') slug: string, @ZBody(ExamJoinStartInput) input: ExamJoinStartInput, @Req() req: AppRequest): Promise<ExamJoinStarted> {
+    return this.join.start(slug, input.email, req);
+  }
+}
+
+/** Admin console: Charter Center connection for exams, and certificate retries. */
+@Controller('admin')
+export class AdminExamsSettingsController {
+  constructor(private readonly admin: AdminExamsService) {}
+
+  @Get('exams-settings')
+  @Access('admin', 'exam.manage')
+  settings(): Promise<ExamsAdminSettings> {
+    return this.admin.examsSettings();
+  }
+
+  @Put('exams-settings')
+  @Access('admin', 'exam.manage')
+  updateSettings(@Auth() ctx: AuthContext, @ZBody(UpdateExamsSettingsInput) input: UpdateExamsSettingsInput, @Req() req: AppRequest): Promise<ExamsAdminSettings> {
+    return this.admin.updateExamsSettings(ctx, input, clientIp(req));
+  }
+
+  @Post('exam-certificates/:id/retry')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  retryCertificate(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @Req() req: AppRequest): Promise<Ok> {
+    return this.admin.retryCertificate(ctx, id, clientIp(req));
   }
 }
 
@@ -165,6 +251,19 @@ export class AdminExamsController {
   @Access('admin', 'exam.manage')
   removeQuestion(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @UuidParam('questionId') questionId: string, @Req() req: AppRequest): Promise<AdminExamDetail> {
     return this.admin.removeQuestion(ctx, id, questionId, clientIp(req));
+  }
+
+  @Get(':id/invites')
+  @Access('admin', 'exam.manage')
+  invites(@UuidParam('id') id: string): Promise<ExamInviteRow[]> {
+    return this.admin.inviteList(id);
+  }
+
+  @Post(':id/invites')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  sendInvites(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(SendExamInvitesInput) input: SendExamInvitesInput, @Req() req: AppRequest): Promise<SendExamInvitesResult> {
+    return this.admin.sendInvites(ctx, id, input, clientIp(req));
   }
 
   @Get(':id/attempts')

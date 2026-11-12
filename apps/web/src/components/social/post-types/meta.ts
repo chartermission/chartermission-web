@@ -59,6 +59,7 @@ export const celebrationMeta: Record<CelebrationCategory, { label: string; icon:
   funding: { label: CELEBRATION_LABELS.funding, icon: "trending", placeholder: "Closed our $2M seed round" },
   award: { label: CELEBRATION_LABELS.award, icon: "verified", placeholder: "Won the Africa Climate Innovation Award" },
   graduation: { label: CELEBRATION_LABELS.graduation, icon: "book", placeholder: "Graduated with an MSc in Development Finance" },
+  certification: { label: CELEBRATION_LABELS.certification, icon: "clipboard", placeholder: "Earned the CAPM certificate from Charter Center" },
   milestone: { label: CELEBRATION_LABELS.milestone, icon: "target", placeholder: "Reached 10,000 farmers on the platform" },
 };
 

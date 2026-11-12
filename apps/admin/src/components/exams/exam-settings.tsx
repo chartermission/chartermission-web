@@ -47,6 +47,8 @@ type Draft = {
   review: ExamReview;
   access: ExamAccess;
   credit: string;
+  charterCenterCourseId: string;
+  shareCertificates: boolean;
 };
 
 const draftOf = (e: AdminExamDetail): Draft => ({
@@ -64,6 +66,8 @@ const draftOf = (e: AdminExamDetail): Draft => ({
   review: e.review,
   access: e.access,
   credit: e.credit ?? "",
+  charterCenterCourseId: e.charterCenterCourseId ?? "",
+  shareCertificates: e.shareCertificates,
 });
 
 /** The Settings tab (PATCH /admin/exams/:id): what the exam is called, its rules, and who can take it. */
@@ -114,6 +118,8 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
       review: d.review,
       access: d.access,
       credit: d.credit.trim() || null,
+      charterCenterCourseId: d.charterCenterCourseId.trim() || null,
+      shareCertificates: d.shareCertificates,
     };
     setBusy(true);
     try {
@@ -255,6 +261,32 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
             )}
           </Field>
         </div>
+      </Group>
+
+      <Group title="Charter Center certificate">
+        <TextField
+          label="Charter Center course ID"
+          value={d.charterCenterCourseId}
+          maxLength={100}
+          dir="ltr"
+          placeholder="e.g. capm-101"
+          hint="When a member passes, Charter Mission asks Charter Center for their certificate for this course (their email and this ID). Leave empty for an exam without a certificate."
+          error={fields.charterCenterCourseId}
+          onChange={(e) => set("charterCenterCourseId", e.target.value)}
+        />
+        {exam.charterCenterCourseId && exam.charterCenterCourseId === d.charterCenterCourseId.trim() && (
+          <p className="text-xs text-secondary">
+            {exam.charterCenterCourse
+              ? t("Matches the Charter Center course “{title}” in Learning.", { title: exam.charterCenterCourse.title })
+              : "No course with this ID is in Learning yet. That’s fine if Charter Center hasn’t listed it; check the ID with them."}
+          </p>
+        )}
+        <Checkbox
+          checked={d.shareCertificates}
+          onChange={(v) => set("shareCertificates", v)}
+          label="Share certificates on the feed"
+          note="Posts the certificate as the member (a Certification celebration) that every member sees, also listed on Charter Center’s page. Members can delete the post."
+        />
       </Group>
 
       {saved && <FormNotice tone="success">Saved.</FormNotice>}

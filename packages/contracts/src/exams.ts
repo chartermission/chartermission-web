@@ -34,6 +34,18 @@ import { z } from "zod";
  *  PATCH  /admin/exams/:id/questions/:qid       ExamQuestionInput → AdminExamDetail
  *  DELETE /admin/exams/:id/questions/:qid       AdminExamDetail
  *  GET    /admin/exams/:id/attempts             Page<AdminExamAttempt>; AdminExamAttemptsQuery
+ *  GET    /admin/exams/:id/invites              ExamInviteRow[]
+ *  POST   /admin/exams/:id/invites              SendExamInvitesInput → SendExamInvitesResult
+ *  POST   /admin/exam-certificates/:id/retry    Ok. Ask Charter Center again now.
+ *  GET    /admin/exams-settings                 ExamsAdminSettings
+ *  PUT    /admin/exams-settings                 UpdateExamsSettingsInput → ExamsAdminSettings
+ *
+ * Joining from Charter Center (public, no session; see the "Joining" section below):
+ *  POST /exam-join/:slug/start      ExamJoinStartInput → ExamJoinStarted (code emailed)
+ *  POST /exam-join/resend           ExamJoinResendInput → ExamJoinStarted
+ *  POST /exam-join/verify           ExamJoinVerifyInput → ExamJoinVerified
+ *  POST /exam-join/complete         ExamJoinCompleteInput → ExamJoinCompleted (signed in)
+ *  GET  /exams/:id/certificate      ExamCertificateView | null (member: their own)
  */
 
 /** Permission strings used by Exams (apps/api/src/core/permissions.ts). */
@@ -97,6 +109,19 @@ const settingsShape = {
   access: ExamAccess.default("members"),
   /** Who wrote the questions, or a disclaimer, shown under the exam. */
   credit: optionalText(300),
+  /**
+   * The Charter Center course this exam certifies. When set, a member who passes gets their
+   * certificate from Charter Center (POST /certificates with their email and this id).
+   */
+  charterCenterCourseId: z
+    .string()
+    .trim()
+    .max(100, "At most 100 characters")
+    .regex(/^[A-Za-z0-9._:-]*$/, "Letters, numbers, dots, dashes and underscores only")
+    .nullish()
+    .transform((v) => (v ? v : null)),
+  /** Post the certificate on the member's behalf, shown in everyone's feed. */
+  shareCertificates: z.boolean().default(true),
 };
 
 const differentLanguages = (v: { language?: string; secondLanguage?: string | null }) => !v.secondLanguage || v.secondLanguage !== v.language;
@@ -123,6 +148,14 @@ export const UpdateExamInput = z
     review: ExamReview.optional(),
     access: ExamAccess.optional(),
     credit: z.string().trim().max(300).nullable().optional(),
+    charterCenterCourseId: z
+      .string()
+      .trim()
+      .max(100, "At most 100 characters")
+      .regex(/^[A-Za-z0-9._:-]*$/, "Letters, numbers, dots, dashes and underscores only")
+      .nullable()
+      .optional(),
+    shareCertificates: z.boolean().optional(),
     status: ExamStatus.optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), "Nothing to change");
@@ -227,6 +260,31 @@ export const ExamSection = z.object({
 });
 export type ExamSection = z.infer<typeof ExamSection>;
 
+/* ---------------- Certificates ---------------- */
+
+/**
+ * pending: asked Charter Center, not there yet (we keep asking for about two days) ·
+ * issued: received, stored and (when the exam shares certificates) posted · failed: gave up.
+ */
+export const ExamCertificateStatus = z.enum(["pending", "issued", "failed"]);
+export type ExamCertificateStatus = z.infer<typeof ExamCertificateStatus>;
+
+/** A member's certificate for an exam they passed (exams with a Charter Center course only). */
+export const ExamCertificateView = z.object({
+  id: z.string().uuid(),
+  status: ExamCertificateStatus,
+  /** Charter Center's reference, printed on the certificate. */
+  certificateId: z.string().nullable(),
+  /** The certificate as a picture (also the image of the feed post). */
+  imageUrl: z.string().nullable(),
+  /** The PDF, downloaded as a file. */
+  downloadUrl: z.string().nullable(),
+  /** The post that shared it, while it exists. */
+  postId: z.string().uuid().nullable(),
+  issuedAt: z.string().nullable(),
+});
+export type ExamCertificateView = z.infer<typeof ExamCertificateView>;
+
 /* ---------------- Member views ---------------- */
 
 /** The viewer's own progress on an exam. */
@@ -291,6 +349,10 @@ export const ExamDetail = ExamSummary.extend({
   sections: z.array(ExamSection),
   /** The viewer's attempts, newest first. */
   attempts: z.array(ExamAttemptSummary),
+  /** Passing earns a Charter Center certificate. */
+  awardsCertificate: z.boolean(),
+  /** The viewer's certificate, once they have passed. */
+  certificate: ExamCertificateView.nullable(),
 });
 export type ExamDetail = z.infer<typeof ExamDetail>;
 
@@ -372,6 +434,10 @@ export const ExamAttemptView = z.object({
   questions: z.array(ExamAttemptQuestion),
   /** Present once submitted. */
   result: ExamResult.nullable(),
+  /** Passing earns a Charter Center certificate. */
+  awardsCertificate: z.boolean(),
+  /** The member's certificate for this exam, once a submitted attempt passed. */
+  certificate: ExamCertificateView.nullable(),
 });
 export type ExamAttemptView = z.infer<typeof ExamAttemptView>;
 
@@ -418,6 +484,7 @@ export const AdminExamSummary = z.object({
   maxAttempts: z.number().int().nullable(),
   access: ExamAccess,
   stats: AdminExamStats,
+  charterCenterCourseId: z.string().nullable(),
   publishedAt: z.string().nullable(),
   updatedAt: z.string(),
 });
@@ -445,6 +512,9 @@ export const AdminExamDetail = AdminExamSummary.extend({
   shuffleOptions: z.boolean(),
   review: ExamReview,
   credit: z.string().nullable(),
+  shareCertificates: z.boolean(),
+  /** The synced Charter Center course with that id, when there is one (to confirm the id is right). */
+  charterCenterCourse: z.object({ title: z.string(), slug: z.string() }).nullable(),
   sections: z.array(ExamSection),
   /** In exam order. */
   questions: z.array(AdminExamQuestion),
@@ -461,6 +531,8 @@ export const AdminExamAttempt = ExamAttemptSummary.extend({
     countryCode: z.string().nullable(),
   }),
   answered: z.number().int(),
+  /** The member's certificate for this exam (on their passing attempts). */
+  certificate: z.object({ id: z.string().uuid(), status: ExamCertificateStatus, lastError: z.string().nullable() }).nullable(),
 });
 export type AdminExamAttempt = z.infer<typeof AdminExamAttempt>;
 
@@ -473,3 +545,134 @@ export const AdminExamAttemptsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type AdminExamAttemptsQuery = z.infer<typeof AdminExamAttemptsQuery>;
+
+/* ---------------- Joining from Charter Center ---------------- */
+
+/*
+ * A Charter Center student opens an exam's join link (/exams/{slug}/join), enters the email they use
+ * on Charter Center, and gets a 6-digit code at that address. The code proves the address is
+ * theirs; only then do we show the name and photo Charter Center has for it. They choose a password
+ * and their account is made from that name and photo, signed in and sent to the exam. Someone who
+ * already has an account here is told to sign in instead.
+ */
+
+/** POST /exam-join/:slug/start */
+export const ExamJoinStartInput = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address").max(254),
+});
+export type ExamJoinStartInput = z.infer<typeof ExamJoinStartInput>;
+
+export const ExamJoinStarted = z.object({
+  /** Carries the join to the next steps (valid for 30 minutes). */
+  joinId: z.string(),
+  /** "a••••@gmail.com" */
+  maskedEmail: z.string(),
+  /** Seconds before another code can be sent. */
+  resendAfter: z.number().int(),
+});
+export type ExamJoinStarted = z.infer<typeof ExamJoinStarted>;
+
+/** POST /exam-join/resend */
+export const ExamJoinResendInput = z.object({ joinId: z.string().min(10).max(80) });
+export type ExamJoinResendInput = z.infer<typeof ExamJoinResendInput>;
+
+/** POST /exam-join/verify */
+export const ExamJoinVerifyInput = z.object({
+  joinId: z.string().min(10).max(80),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+export type ExamJoinVerifyInput = z.infer<typeof ExamJoinVerifyInput>;
+
+/** new: confirm the name and photo and choose a password · existing: sign in with that email. */
+export const ExamJoinVerified = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("new"),
+    name: z.string(),
+    /** The Charter Center photo as a data: URL (already resized), or null. */
+    photo: z.string().nullable(),
+    email: z.string(),
+  }),
+  z.object({ status: z.literal("existing"), email: z.string() }),
+]);
+export type ExamJoinVerified = z.infer<typeof ExamJoinVerified>;
+
+/** POST /exam-join/complete */
+export const ExamJoinCompleteInput = z.object({
+  joinId: z.string().min(10).max(80),
+  password: z.string().min(12, "Use at least 12 characters").max(128, "Use 128 characters or fewer"),
+  acceptTerms: z.literal(true, { message: "You must accept the terms to continue" }),
+});
+export type ExamJoinCompleteInput = z.infer<typeof ExamJoinCompleteInput>;
+
+export const ExamJoinCompleted = z.object({ next: z.string() });
+export type ExamJoinCompleted = z.infer<typeof ExamJoinCompleted>;
+
+/** The exam as the public join page shows it (GET /exam-join/:slug). */
+export const ExamJoinInfo = z.object({
+  slug: z.string(),
+  title: z.string(),
+  titleAlt: z.string().nullable(),
+  language: ExamLanguage,
+  secondLanguage: ExamLanguage.nullable(),
+  questionCount: z.number().int(),
+  timeLimitMinutes: z.number().int().nullable(),
+  passPercent: z.number().int(),
+  awardsCertificate: z.boolean(),
+});
+export type ExamJoinInfo = z.infer<typeof ExamJoinInfo>;
+
+/* ---------------- Invitations (admin) ---------------- */
+
+export const EXAM_INVITES_PER_REQUEST = 500;
+
+/** POST /admin/exams/:id/invites — emails the exam's join link to each address. */
+export const SendExamInvitesInput = z.object({
+  emails: z
+    .array(z.string().trim().toLowerCase().max(254))
+    .min(1, "Add at least one email address")
+    .max(EXAM_INVITES_PER_REQUEST, `Up to ${EXAM_INVITES_PER_REQUEST} addresses at a time`),
+  /** A line from the team, added to the email. */
+  message: z.string().trim().max(500, "At most 500 characters").nullish().transform((v) => v || null),
+});
+export type SendExamInvitesInput = z.infer<typeof SendExamInvitesInput>;
+
+export const SendExamInvitesResult = z.object({
+  sent: z.number().int(),
+  /** Invited in the last 10 minutes already. */
+  skipped: z.number().int(),
+  /** Not email addresses. */
+  invalid: z.array(z.string()),
+});
+export type SendExamInvitesResult = z.infer<typeof SendExamInvitesResult>;
+
+/** invited: no account yet · joined: has an account · took: finished an attempt · passed. */
+export const ExamInviteStatus = z.enum(["invited", "joined", "took", "passed"]);
+export type ExamInviteStatus = z.infer<typeof ExamInviteStatus>;
+
+export const ExamInviteRow = z.object({
+  email: z.string(),
+  status: ExamInviteStatus,
+  sends: z.number().int(),
+  firstSentAt: z.string(),
+  lastSentAt: z.string(),
+});
+export type ExamInviteRow = z.infer<typeof ExamInviteRow>;
+
+/* ---------------- Charter Center connection (admin) ---------------- */
+
+export const ExamsAdminSettings = z.object({
+  /** mock: made-up students and certificates for testing · live: Charter Center's API. */
+  charterCenterMode: z.enum(["mock", "live"]),
+  /** The page certificate posts name and appear on (Charter Center's page on Charter Mission). */
+  certificatePage: z.object({ id: z.string().uuid(), slug: z.string(), name: z.string() }).nullable(),
+});
+export type ExamsAdminSettings = z.infer<typeof ExamsAdminSettings>;
+
+/** PUT /admin/exams-settings — the page by its link name (chartermission.com/pages/{slug}); null finds a page named Charter Center. */
+export const UpdateExamsSettingsInput = z.object({
+  certificatePageSlug: z.string().trim().toLowerCase().max(100).nullable(),
+});
+export type UpdateExamsSettingsInput = z.infer<typeof UpdateExamsSettingsInput>;

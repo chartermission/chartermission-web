@@ -71,6 +71,11 @@ function pageAuthor(page: PageRefRow): MemberRef {
   };
 }
 
+/** The page a member's post is about (a Charter Center certificate names Charter Center's page), when it is live. */
+function aboutPageRef(page: Parameters<typeof PageRefsService.toRef>[0] | undefined): PostView['aboutPage'] {
+  return page && page.status === 'active' ? PageRefsService.toRef(page) : null;
+}
+
 /**
  * Builds PostView for a viewer, in bulk (one query per related table), keeping
  * the order of the ids given. Callers decide which ids the viewer may list;
@@ -122,7 +127,7 @@ export class PostSerializer {
     const postIds = rows.map((r) => r.id);
     const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
-      this.pageRefs.refs(rows.map((r) => r.pageId).filter((x): x is string => !!x)),
+      this.pageRefs.refs(rows.flatMap((r) => [r.pageId, r.aboutPageId]).filter((x): x is string => !!x)),
       rows.some((r) => r.pageId) ? this.pageRefs.managedIds(viewer?.id) : Promise.resolve(new Set<string>()),
       this.chapters(rows),
       this.hashtags(postIds),
@@ -147,6 +152,7 @@ export class PostSerializer {
         id: r.id,
         author: page ? pageAuthor(page) : (authorRefs.get(r.authorId) ?? FALLBACK_AUTHOR),
         page: page ? PageRefsService.toRef(page) : null,
+        aboutPage: aboutPageRef(r.aboutPageId ? pageMap.get(r.aboutPageId) : undefined),
         body: r.body,
         kind: r.kind as PostKind,
         ...typeState(r, attachments, answers, offers),

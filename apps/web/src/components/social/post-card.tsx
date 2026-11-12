@@ -494,6 +494,7 @@ export function PostCard({
           {post.celebration && !editing && (
             <CelebrationBand
               celebration={post.celebration}
+              aboutPage={post.aboutPage}
               headingLevel={detail ? 2 : 3}
             />
           )}

@@ -32,6 +32,8 @@ export const SETTING_DEFAULTS = {
   pages: PAGES_SETTINGS_DEFAULTS as PagesSettings,
   /** Whether members' posts go straight into a chapter or wait for its team's approval (admin console, Chapters). */
   chapter_posts: CHAPTER_POSTS_DEFAULTS as ChapterPostsSettings,
+  /** The page Charter Center certificate posts name and appear on; null finds a page named Charter Center (admin console, Exams). */
+  exam_certificates: { pageId: null as string | null },
 };
 
 type SettingKey = keyof typeof SETTING_DEFAULTS;

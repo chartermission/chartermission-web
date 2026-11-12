@@ -32,8 +32,12 @@ const PREVIEW_PATH = /^\/(?:[a-z0-9][a-z0-9-]{1,59}|(?:chapters|events|pages|opp
 /** Public pages keep their own previews. */
 const PUBLIC_PAGES = new Set(["check-email", "forgot-password", "guidelines", "policies", "privacy", "reset-password", "sign-in", "signin", "signup", "terms", "verify-email"]);
 
+/** Exam invitations from Charter Center: the join page is where people without an account start. */
+const EXAM_JOIN = /^\/exams\/[^/]+\/join\/?$/;
+
 const needsSession = (pathname: string) =>
-  pathname === "/articles/new" || MEMBER_AREAS.some((area) => pathname === area || pathname.startsWith(`${area}/`));
+  !EXAM_JOIN.test(pathname) &&
+  (pathname === "/articles/new" || MEMBER_AREAS.some((area) => pathname === area || pathname.startsWith(`${area}/`)));
 
 /**
  * Three jobs on every page request (after sending www. to the bare domain):

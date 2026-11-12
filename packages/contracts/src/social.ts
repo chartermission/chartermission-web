@@ -34,7 +34,7 @@ export type PostKind = z.infer<typeof PostKind>;
 export const PostType = z.enum(["standard", "question", "celebration", "request", "article"]);
 export type PostType = z.infer<typeof PostType>;
 
-export const CelebrationCategory = z.enum(["new_role", "launch", "funding", "award", "graduation", "milestone"]);
+export const CelebrationCategory = z.enum(["new_role", "launch", "funding", "award", "graduation", "milestone", "certification"]);
 export type CelebrationCategory = z.infer<typeof CelebrationCategory>;
 
 export const CELEBRATION_LABELS: Record<CelebrationCategory, string> = {
@@ -44,6 +44,7 @@ export const CELEBRATION_LABELS: Record<CelebrationCategory, string> = {
   award: "Award",
   graduation: "Graduation",
   milestone: "Milestone",
+  certification: "Certification",
 };
 
 export const RequestCategory = z.enum(["cofounder", "mentor", "volunteers", "partner", "hire", "advice"]);
@@ -294,6 +295,11 @@ export type PostView = {
   author: MemberRef;
   /** Set when the post was published as a page: link to /pages/{slug} instead of a member profile. */
   page: PageRef | null;
+  /**
+   * The page a member's post is about (a Charter Center certificate names Charter Center's page):
+   * the celebration links to it and the post is also listed on that page.
+   */
+  aboutPage: PageRef | null;
   body: string;
   kind: PostKind;
   type: PostType;
@@ -351,6 +357,7 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     id: z.string().uuid(),
     author: MemberRef,
     page: PageRef.nullable(),
+    aboutPage: PageRef.nullable(),
     body: z.string(),
     kind: PostKind,
     type: PostType,

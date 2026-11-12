@@ -25,6 +25,26 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+const CERTIFICATE_LABEL = { issued: "Certificate issued", pending: "Certificate on its way", failed: "No certificate yet" } as const;
+
+/** A passing attempt's Charter Center certificate: where it stands, and asking again when it hasn't come. */
+function CertificateState({ certificate, onRetry }: { certificate: NonNullable<AdminExamAttempt["certificate"]>; onRetry: () => void }) {
+  const tone = certificate.status === "issued" ? "text-success" : certificate.status === "failed" ? "text-error" : "text-secondary";
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+      <span className={`flex items-center gap-1 ${tone}`} title={certificate.lastError ?? undefined}>
+        <Icon name={certificate.status === "issued" ? "check" : certificate.status === "failed" ? "alert" : "clock"} size={12} />
+        {CERTIFICATE_LABEL[certificate.status]}
+      </span>
+      {(certificate.status !== "issued" || certificate.lastError) && (
+        <button type="button" onClick={onRetry} className="font-medium text-primary hover:underline">
+          Ask again
+        </button>
+      )}
+    </span>
+  );
+}
+
 /** The Results tab (GET /admin/exams/:id/attempts): who took the exam and how they did, newest first. */
 export function ExamResults({ exam, onChange }: { exam: AdminExamDetail; onChange: (exam: AdminExamDetail) => void }) {
   const t = useT();
@@ -83,6 +103,17 @@ export function ExamResults({ exam, onChange }: { exam: AdminExamDetail; onChang
     }
   }
 
+  async function retryCertificate(a: AdminExamAttempt) {
+    if (!a.certificate) return;
+    try {
+      await api(`/admin/exam-certificates/${a.certificate.id}/retry`, { method: "POST" });
+      toast(t("Asked Charter Center again for {name}’s certificate.", { name: a.member.name }));
+      void load(q, result);
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    }
+  }
+
   async function exportCsv() {
     setExporting(true);
     try {
@@ -93,7 +124,7 @@ export function ExamResults({ exam, onChange }: { exam: AdminExamDetail; onChang
         all.push(...page.items);
         next = page.nextCursor;
       } while (next && all.length < EXPORT_LIMIT);
-      const header = ["name", "handle", "email", "country", "attempt", "status", "result", "correct", "total", "percent", "answered", "timed_out", "started_at", "submitted_at", "duration_seconds"];
+      const header = ["name", "handle", "email", "country", "attempt", "status", "result", "correct", "total", "percent", "answered", "timed_out", "started_at", "submitted_at", "duration_seconds", "certificate"];
       const lines = all.map((a) => [
         a.member.name,
         a.member.handle,
@@ -110,6 +141,7 @@ export function ExamResults({ exam, onChange }: { exam: AdminExamDetail; onChang
         a.startedAt,
         a.submittedAt,
         a.durationSeconds,
+        a.certificate?.status ?? "",
       ]);
       downloadText(`${exam.slug}-results.csv`, csvRows([header, ...lines]));
     } catch (e) {
@@ -175,7 +207,7 @@ export function ExamResults({ exam, onChange }: { exam: AdminExamDetail; onChang
                     <th scope="col" className="py-3 ps-4 pe-3 text-start font-semibold">Member</th>
                     <th scope="col" className="w-[90px] py-3 pe-3 text-start font-semibold">Attempt</th>
                     <th scope="col" className="w-[130px] py-3 pe-3 text-start font-semibold">Score</th>
-                    <th scope="col" className="w-[150px] py-3 pe-3 text-start font-semibold">Result</th>
+                    <th scope="col" className="w-[190px] py-3 pe-3 text-start font-semibold">Result</th>
                     <th scope="col" className="w-[100px] py-3 pe-3 text-start font-semibold">Time taken</th>
                     <th scope="col" className="w-[170px] py-3 pe-4 text-start font-semibold">Date</th>
                   </tr>
@@ -217,6 +249,7 @@ export function ExamResults({ exam, onChange }: { exam: AdminExamDetail; onChang
                             </Chip>
                             {a.timedOut && <span className="text-xs text-secondary">Time ran out</span>}
                           </span>
+                          {a.certificate && <CertificateState certificate={a.certificate} onRetry={() => void retryCertificate(a)} />}
                         </td>
                         <td className="py-3 pe-3 tabular-nums">{formatDuration(a.durationSeconds)}</td>
                         <td className="py-3 pe-4">

@@ -167,7 +167,7 @@ export class PagesService {
       this.db
         .select({ n: sql<number>`count(*)::int` })
         .from(posts)
-        .where(and(eq(posts.pageId, row.id), sql`${posts.deletedAt} is null`, eq(posts.status, 'published'), eq(posts.moderationState, 'visible'))),
+        .where(and(sql`(${posts.pageId} = ${row.id} or ${posts.aboutPageId} = ${row.id})`, sql`${posts.deletedAt} is null`, eq(posts.status, 'published'), eq(posts.moderationState, 'visible'))),
     ]);
     const detail: PageDetail = {
       ...summary!,

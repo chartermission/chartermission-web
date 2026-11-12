@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { and, asc, count, eq, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import {
   EXAM_GRACE_SECONDS,
@@ -20,6 +20,7 @@ import { isUuid } from '../media/uuid-param.js';
 import { buildOrder, hasPassed, markAttempt, percentOf } from './exam-marking.js';
 import { examBase, reviewOf, sectionsOf, type ExamAttemptRow, type ExamRow } from './exam-views.js';
 import { ExamsService, canPreview } from './exams.service.js';
+import { ExamCertificatesService } from './exam-certificates.service.js';
 
 const START_LIMIT = 30;
 const START_WINDOW_SECONDS = 3600;
@@ -31,12 +32,15 @@ const graceEnd = (expiresAt: Date) => expiresAt.getTime() + EXAM_GRACE_SECONDS *
 /** Taking an exam: start (or resume), save answers as you go, submit, and read the result. */
 @Injectable()
 export class ExamAttemptsService {
+  private readonly logger = new Logger('ExamAttempts');
+
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly examsService: ExamsService,
     private readonly learningAccess: LearningAccessService,
     private readonly limits: RateLimitService,
     private readonly analytics: AnalyticsService,
+    private readonly certificates: ExamCertificatesService,
   ) {}
 
   /** POST /exams/:id/attempts — a new attempt, or the one already in progress. */
@@ -133,6 +137,8 @@ export class ExamAttemptsService {
       sections: sections.views,
       questions,
       result: submitted ? await this.result(viewer, exam, attempt) : null,
+      awardsCertificate: !!exam.charterCenterCourseId && !attempt.preview,
+      certificate: submitted && !attempt.preview && exam.charterCenterCourseId ? await this.certificates.forMember(exam.id, viewer.id) : null,
     };
   }
 
@@ -261,9 +267,14 @@ export class ExamAttemptsService {
           result: { items: marked.items, sections: marked.sections },
         })
         .where(eq(examAttempts.id, attempt.id));
-      return { examId: exam.id, userId: attempt.userId, preview: attempt.preview };
+      return { examId: exam.id, userId: attempt.userId, preview: attempt.preview, passed: hasPassed(marked.correct, marked.total, exam.passPercent) };
     });
-    if (done && !done.preview) this.analytics.track('exam_submitted', done.userId, null, done.examId);
+    if (!done || done.preview) return;
+    this.analytics.track('exam_submitted', done.userId, null, done.examId);
+    // Exams tied to a Charter Center course: ask for the member's certificate (never blocks the result).
+    if (done.passed) {
+      await this.certificates.onPassed(done.examId, done.userId, attemptId).catch((err: unknown) => this.logger.warn(`Certificate request for attempt ${attemptId}: ${String(err)}`));
+    }
   }
 
   /** The attempt's questions in its own order; with the answer key only when `showKey`. */

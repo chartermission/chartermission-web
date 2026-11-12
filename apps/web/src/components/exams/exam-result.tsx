@@ -11,6 +11,7 @@ import { ExamText } from "./exam-text";
 import { clock, dirOf, examHref, letterOf, type ReadMode } from "./format";
 import { ReadModeSwitch, useReadMode } from "./read-mode";
 import { StartExamButton } from "./start-exam-button";
+import { CertificateCard } from "./certificate-card";
 
 type Filter = "all" | "wrong" | "flagged";
 
@@ -116,7 +117,7 @@ function ReviewQuestion({ q, number, attempt, mode }: { q: ExamAttemptQuestion; 
 }
 
 /** The result of a finished attempt: the score, how each section went and, when the exam allows it, every question with the correct answer. */
-export function ExamResultView({ attempt }: { attempt: ExamAttemptView }) {
+export function ExamResultView({ attempt, finishProfile = false }: { attempt: ExamAttemptView; finishProfile?: boolean }) {
   const t = useT();
   const intl = useIntlTag();
   const [mode, setMode] = useReadMode();
@@ -189,6 +190,11 @@ export function ExamResultView({ attempt }: { attempt: ExamAttemptView }) {
           </div>
         </div>
       </section>
+
+      {/* Passing an exam tied to a Charter Center course earns its certificate. */}
+      {attempt.awardsCertificate && (result.passed || attempt.certificate) && (
+        <CertificateCard examId={exam.id} initial={attempt.certificate} finishProfile={finishProfile} />
+      )}
 
       {result.sections.length > 0 && (
         <section aria-labelledby="exam-sections-heading" className="flex flex-col gap-3">

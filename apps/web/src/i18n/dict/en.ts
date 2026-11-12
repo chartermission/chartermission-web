@@ -7,6 +7,7 @@ export const en: Dict = {
   "{count} more events loaded.": { one: "{count} more event loaded.", other: "{count} more events loaded." },
   "{count} more courses loaded.": { one: "{count} more course loaded.", other: "{count} more courses loaded." },
   "{count} courses": { one: "{count} course", other: "{count} courses" },
+  "Send a new code in {count} seconds": { one: "Send a new code in {count} second", other: "Send a new code in {count} seconds" },
   "View {count} more replies": { one: "View {count} more reply", other: "View {count} more replies" },
   "{count} posts": { one: "{count} post", other: "{count} posts" },
   "{count} topics": { one: "{count} topic", other: "{count} topics" },

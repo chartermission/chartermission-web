@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { INVITE_COOKIE, INVITE_EVENT_COOKIE } from "@/lib/invite";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/components/auth/destinations";
 import { Suspense } from "react";
 import type { OnboardingState, OwnProfile } from "@chartermission/contracts";
 import { Panel } from "@chartermission/ui";
@@ -36,9 +37,11 @@ function WizardSkeleton() {
   );
 }
 
-async function Wizard() {
+async function Wizard({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  // Where to go when done (a Charter Center student finishing their profile after an exam, say).
+  const next = safeNext([(await searchParams).next].flat()[0]);
   const viewer = await requireViewer("/onboarding");
-  if (viewer.onboarding.completed) redirect("/feed");
+  if (viewer.onboarding.completed) redirect(next ?? "/feed");
   if (viewer.status === "suspended" || viewer.status === "deactivated") {
     return (
       <div className="mx-auto w-full max-w-[760px] px-6 pt-8">
@@ -57,13 +60,13 @@ async function Wizard() {
     );
   }
   const [state, profile, taxonomies] = result.data;
-  if (state.completed) redirect("/feed");
+  if (state.completed) redirect(next ?? "/feed");
   // Invited to a chapter (/invite?chapter=…): pick it in "Find your people" for them.
   const jar = await cookies();
   const invited = jar.get(INVITE_COOKIE)?.value;
   // Invited to an event (/invite?event=…): open it when they finish.
   const invitedEvent = jar.get(INVITE_EVENT_COOKIE)?.value;
-  const done = invitedEvent && /^[a-z0-9-]{1,200}$/.test(invitedEvent) ? `/events/${invitedEvent}` : "/feed";
+  const done = invitedEvent && /^[a-z0-9-]{1,200}$/.test(invitedEvent) ? `/events/${invitedEvent}` : (next ?? "/feed");
   const invitedChapterId = taxonomies.chapters.find((c) => c.slug === invited)?.id ?? null;
   return (
     <OnboardingWizard
@@ -79,11 +82,11 @@ async function Wizard() {
 }
 
 /** Onboarding wizard — spec 4.2 CM-AUTH-07 (about, topics, skills, community). */
-export default function OnboardingPage() {
+export default function OnboardingPage({ searchParams }: PageProps<"/[locale]/onboarding">) {
   return (
     <main id="main" className="min-h-[calc(100dvh-64px)] bg-surface">
       <Suspense fallback={<WizardSkeleton />}>
-        <Wizard />
+        <Wizard searchParams={searchParams} />
       </Suspense>
     </main>
   );

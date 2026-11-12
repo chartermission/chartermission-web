@@ -21,7 +21,7 @@ export const metadata: Metadata = { title: "Exam", robots: { index: false } };
 async function Attempt({ params }: { params: Props["params"] }) {
   const { slug, id } = await params;
   if (!SLUG.test(slug) || !UUID.test(id)) notFound();
-  await requireViewer(`/exams/${slug}/attempts/${id}`);
+  const viewer = await requireViewer(`/exams/${slug}/attempts/${id}`);
   const attempt = await apiGetOrNull<ExamAttemptView>(`/exam-attempts/${id}`);
   if (!attempt) notFound();
   return (
@@ -30,7 +30,7 @@ async function Attempt({ params }: { params: Props["params"] }) {
         <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
         Exam details
       </Link>
-      <AttemptScreen key={attempt.id} initial={attempt} />
+      <AttemptScreen key={attempt.id} initial={attempt} finishProfile={!viewer.onboarding.completed} />
     </>
   );
 }

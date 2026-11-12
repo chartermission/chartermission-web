@@ -8,6 +8,7 @@ import type { AuthUser } from '../core/auth-context.js';
 import type { Permission } from '../core/permissions.js';
 import { LearningAccessService } from '../learning/learning-access.service.js';
 import { isUuid } from '../media/uuid-param.js';
+import { ExamCertificatesService } from './exam-certificates.service.js';
 import { attemptSummary, examBase, questionCounts, reviewOf, sectionsOf, viewerProgress, type ExamRow } from './exam-views.js';
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,99}$/;
@@ -22,6 +23,7 @@ export class ExamsService {
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly learningAccess: LearningAccessService,
+    private readonly certificates: ExamCertificatesService,
   ) {}
 
   /** GET /exams — published exams, newest first; staff who manage exams also see drafts. */
@@ -37,7 +39,7 @@ export class ExamsService {
   /** GET /exams/:slug */
   async detail(viewer: AuthUser, slug: string): Promise<ExamDetail> {
     const exam = await this.findVisible(viewer, { slug });
-    const [[summary], sections, attempts] = await Promise.all([
+    const [[summary], sections, attempts, certificate] = await Promise.all([
       this.summaries(viewer, [exam]),
       sectionsOf(this.db, exam.id),
       this.db
@@ -46,6 +48,7 @@ export class ExamsService {
         .where(and(eq(examAttempts.examId, exam.id), eq(examAttempts.userId, viewer.id)))
         .orderBy(desc(examAttempts.startedAt))
         .limit(HISTORY_LIMIT),
+      this.certificates.forMember(exam.id, viewer.id),
     ]);
     return {
       ...summary!,
@@ -54,7 +57,15 @@ export class ExamsService {
       credit: exam.credit,
       sections: sections.views.filter((s) => s.questionCount > 0),
       attempts: attempts.map(attemptSummary),
+      awardsCertificate: !!exam.charterCenterCourseId,
+      certificate,
     };
+  }
+
+  /** GET /exams/:id/certificate — the member's own certificate for this exam (polled while pending). */
+  async certificate(viewer: AuthUser, examId: string) {
+    const exam = await this.findVisible(viewer, { id: examId });
+    return this.certificates.forMember(exam.id, viewer.id);
   }
 
   /**

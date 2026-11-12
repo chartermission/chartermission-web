@@ -1,4 +1,5 @@
-import type { CelebrationDetails } from "@chartermission/contracts";
+import Link from "next/link";
+import type { CelebrationDetails, PageRef } from "@chartermission/contracts";
 import { Icon } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import { celebrationMeta } from "./meta";
@@ -6,8 +7,17 @@ import { celebrationMeta } from "./meta";
 /**
  * Header band for a celebration: category, headline and organisation above the story.
  * `data-milestone-banner` marks it as the origin of the congratulate confetti (PostCard).
+ * `aboutPage` (a Charter Center certificate names Charter Center's page) links the organisation.
  */
-export function CelebrationBand({ celebration, headingLevel = 3 }: { celebration: CelebrationDetails; headingLevel?: 2 | 3 }) {
+export function CelebrationBand({
+  celebration,
+  aboutPage = null,
+  headingLevel = 3,
+}: {
+  celebration: CelebrationDetails;
+  aboutPage?: PageRef | null;
+  headingLevel?: 2 | 3;
+}) {
   const meta = celebrationMeta[celebration.category];
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
@@ -30,11 +40,22 @@ export function CelebrationBand({ celebration, headingLevel = 3 }: { celebration
         <div className="flex min-w-0 flex-1 flex-col gap-0.5 pe-10 max-sm:pe-4">
           <p className="text-label uppercase tracking-[0.6px] text-accent-hover">{meta.label}</p>
           <Heading className="text-h3 text-ink">{celebration.headline}</Heading>
-          {celebration.organisation && (
-            <p className="flex items-center gap-1.5 text-sm text-body">
-              <Icon name="building" size={14} className="shrink-0 text-secondary" />
-              <span className="truncate">{celebration.organisation}</span>
-            </p>
+          {aboutPage ? (
+            <Link
+              href={`/pages/${aboutPage.slug}`}
+              className="relative z-10 flex w-fit max-w-full items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline"
+            >
+              <Icon name="building" size={14} className="shrink-0" />
+              <span className="truncate">{celebration.organisation || aboutPage.name}</span>
+              {aboutPage.verified && <Icon name="verified" size={14} className="shrink-0 text-info" />}
+            </Link>
+          ) : (
+            celebration.organisation && (
+              <p className="flex items-center gap-1.5 text-sm text-body">
+                <Icon name="building" size={14} className="shrink-0 text-secondary" />
+                <span className="truncate">{celebration.organisation}</span>
+              </p>
+            )
           )}
         </div>
       </div>

@@ -519,6 +519,10 @@ export const posts = pgTable(
     repostOfId: uuid('repost_of_id'),
     /** Published as a page by one of its admins (author_id stays the admin who wrote it). */
     pageId: uuid('page_id').references((): AnyPgColumn => pages.id, { onDelete: 'cascade' }),
+    /** The page a member's post is about (certificate posts name Charter Center): listed on that page too. */
+    aboutPageId: uuid('about_page_id').references((): AnyPgColumn => pages.id, { onDelete: 'set null' }),
+    /** Shown to every member like an official account's post (certificate posts). */
+    broadcast: boolean('broadcast').notNull().default(false),
     linkUrl: text('link_url'),
     linkPreview: jsonb('link_preview').$type<{
       url: string;
@@ -558,6 +562,7 @@ export const posts = pgTable(
     index('posts_repost_idx').on(t.repostOfId),
     index('posts_type_idx').on(t.type, t.createdAt),
     index('posts_page_idx').on(t.pageId, t.createdAt),
+    index('posts_about_page_idx').on(t.aboutPageId, t.createdAt),
     check('posts_kind_ck', sql`${t.kind} in ('standard','announcement')`),
     check('posts_type_ck', sql`${t.type} in ('standard','question','celebration','request','article')`),
     check('posts_visibility_ck', sql`${t.visibility} in ('members','public')`),
@@ -1437,6 +1442,10 @@ export const exams = pgTable(
     /** members: any signed-in member · learning: follows the e-learning access rules. */
     access: text('access').notNull().default('members'),
     credit: text('credit'),
+    /** Charter Center course this exam certifies; passing asks Charter Center for the certificate. */
+    charterCenterCourseId: text('charter_center_course_id'),
+    /** Post the certificate on the member's behalf (shown in everyone's feed). */
+    shareCertificates: boolean('share_certificates').notNull().default(true),
     publishedAt: ts('published_at'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
@@ -1548,6 +1557,64 @@ export const examAttempts = pgTable(
     uniqueIndex('exam_attempts_open_uq').on(t.examId, t.userId).where(sql`${t.status} = 'in_progress'`),
     check('exam_attempts_status_ck', sql`${t.status} in ('in_progress','submitted')`),
   ],
+);
+
+/**
+ * A member's Charter Center certificate for an exam they passed (one per member and exam). Asked for
+ * when the attempt is marked; while Charter Center has none yet the request is retried with a
+ * growing delay (next_try_at). Its files are copied here, so the post and the download don't
+ * depend on Charter Center's links staying up.
+ */
+export const examCertificates = pgTable(
+  'exam_certificates',
+  {
+    id: id(),
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The passing attempt that earned it. */
+    attemptId: uuid('attempt_id').references(() => examAttempts.id, { onDelete: 'set null' }),
+    /** The course id it was asked for (the exam's at the time). */
+    courseId: text('course_id').notNull(),
+    status: text('status').notNull().default('pending'),
+    externalId: text('external_id'),
+    imageFileId: uuid('image_file_id').references(() => files.id, { onDelete: 'set null' }),
+    pdfFileId: uuid('pdf_file_id').references(() => files.id, { onDelete: 'set null' }),
+    postId: uuid('post_id').references((): AnyPgColumn => posts.id, { onDelete: 'set null' }),
+    tries: integer('tries').notNull().default(0),
+    nextTryAt: ts('next_try_at'),
+    lastError: text('last_error'),
+    issuedAt: ts('issued_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('exam_certificates_member_uq').on(t.examId, t.userId),
+    index('exam_certificates_due_idx').on(t.status, t.nextTryAt),
+    check('exam_certificates_status_ck', sql`${t.status} in ('pending','issued','failed')`),
+  ],
+);
+
+/** Exam join links emailed from the console (one row per exam and address). */
+export const examInvites = pgTable(
+  'exam_invites',
+  {
+    id: id(),
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    /** Lower-case. */
+    email: text('email').notNull(),
+    invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    sends: integer('sends').notNull().default(1),
+    lastSentAt: ts('last_sent_at').notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('exam_invites_email_uq').on(t.examId, t.email)],
 );
 
 /* ======================= Ambassador programme ======================= */

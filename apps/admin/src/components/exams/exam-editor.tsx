@@ -14,9 +14,10 @@ import { useT } from "@/i18n/client";
 import { STATUS_CHIP, examFacts } from "./exam-labels";
 import { ExamQuestions } from "./exam-questions";
 import { ExamResults } from "./exam-results";
+import { ExamInvites } from "./exam-invites";
 import { ExamSettings } from "./exam-settings";
 
-type Tab = "questions" | "settings" | "results";
+type Tab = "questions" | "settings" | "invite" | "results";
 type Confirm = "publish" | "unpublish" | "archive" | "delete";
 
 /**
@@ -111,12 +112,14 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
         items={[
           { value: "questions", label: `${t("Questions")} · ${exam.questionCount}` },
           { value: "settings", label: t("Settings") },
+          { value: "invite", label: t("Invite") },
           { value: "results", label: `${t("Results")} · ${exam.stats.attempts}` },
         ]}
       />
 
       {tab === "questions" && <ExamQuestions exam={exam} taken={taken} onChange={setExam} />}
       {tab === "settings" && <ExamSettings exam={exam} onChange={setExam} />}
+      {tab === "invite" && <ExamInvites exam={exam} />}
       {tab === "results" && <ExamResults exam={exam} onChange={setExam} />}
 
       {confirm === "publish" && (

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import type { AdminExamSummary } from "@chartermission/contracts";
+import type { AdminExamSummary, ExamsAdminSettings } from "@chartermission/contracts";
+import { CharterCenterPanel } from "@/components/exams/charter-center-panel";
 import { ExamsConsole } from "@/components/exams/exams-console";
 import { PageHeader } from "@/components/shell/page-header";
 import { SkeletonTable } from "@/components/skeletons";
@@ -15,13 +16,22 @@ async function Exams() {
   const viewer = await requireViewer("/exams");
   if (!can(viewer, PERM.examManage)) return <NoAccess section="exams" />;
   let rows: AdminExamSummary[];
+  let settings: ExamsAdminSettings | null;
   try {
-    rows = await apiGet<AdminExamSummary[]>("/admin/exams");
+    [rows, settings] = await Promise.all([
+      apiGet<AdminExamSummary[]>("/admin/exams"),
+      apiGet<ExamsAdminSettings>("/admin/exams-settings").catch(() => null),
+    ]);
   } catch (e) {
     if (e instanceof ApiError && e.status === 403) return <NoAccess section="exams" />;
     return <LoadError message={e instanceof ApiError ? e.message : "Exams couldn’t be loaded."} />;
   }
-  return <ExamsConsole initial={rows} />;
+  return (
+    <>
+      {settings && <CharterCenterPanel initial={settings} />}
+      <ExamsConsole initial={rows} />
+    </>
+  );
 }
 
 /** Exams members take on Charter Mission: the list, and the way into each exam's builder and results. */

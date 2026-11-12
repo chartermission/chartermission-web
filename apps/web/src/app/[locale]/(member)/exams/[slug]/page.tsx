@@ -9,6 +9,7 @@ import { ExamStatusChip } from "@/components/exams/exam-card";
 import { ExamText } from "@/components/exams/exam-text";
 import { attemptHref, attemptsText, clock, timeLimitText } from "@/components/exams/format";
 import { StartExamButton } from "@/components/exams/start-exam-button";
+import { CertificateCard } from "@/components/exams/certificate-card";
 import { absoluteDateTime } from "@/components/social/format";
 import { Bone, LoadingStatus } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
@@ -182,7 +183,7 @@ async function Attempts({ exam, attempts }: { exam: ExamDetail; attempts: ExamAt
 
 async function ExamMain({ params }: { params: Props["params"] }) {
   const { slug } = await params;
-  await requireViewer(`/exams/${slug}`);
+  const viewer = await requireViewer(`/exams/${slug}`);
   const exam = await getExam(slug);
   if (!exam) notFound();
   const t = await getT();
@@ -209,6 +210,17 @@ async function ExamMain({ params }: { params: Props["params"] }) {
         </aside>
 
         <div className="flex min-w-0 flex-col gap-8 lg:col-start-1 lg:row-start-1">
+          {exam.certificate && <CertificateCard examId={exam.id} initial={exam.certificate} finishProfile={!viewer.onboarding.completed} />}
+
+          {exam.awardsCertificate && !exam.certificate && (
+            <p className="flex items-start gap-2.5 rounded-[10px] bg-primary-tint-2 p-3.5 text-sm text-ink">
+              <Icon name="clipboard" size={18} className="mt-0.5 shrink-0 text-primary-light" />
+              <span>
+                <span className="font-medium">Pass to earn your Charter Center certificate.</span> It arrives here to download, and is shared on the feed so the community can congratulate you.
+              </span>
+            </p>
+          )}
+
           {exam.status === "draft" && (
             <p role="status" className="flex items-start gap-2.5 rounded-[10px] bg-warning-light p-3.5 text-sm text-ink">
               <Icon name="eye-off" size={18} className="mt-0.5 shrink-0 text-warning" />

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import {
   EXAM_MAX_QUESTIONS,
@@ -13,25 +13,39 @@ import {
   type ExamQuestionsImportInput,
   type ExamSectionsInput,
   type ExamSettingsInput,
+  type ExamInviteRow,
+  type ExamsAdminSettings,
   type Ok,
   type Page,
+  type SendExamInvitesInput,
+  type SendExamInvitesResult,
   type UpdateExamInput,
+  type UpdateExamsSettingsInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { examAttempts, examQuestions, examSections, exams, memberProfiles, users } from '../db/schema.js';
+import { courses, examAttempts, examCertificates, examInvites, examQuestions, examSections, exams, memberProfiles, pages, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
+import { MailService } from '../infra/mail.service.js';
+import { webUrl } from '../infra/mail-layout.js';
+import { SettingsService } from '../infra/settings.service.js';
 import { likeContains } from '../learning/courses.service.js';
 import { isUuid } from '../media/uuid-param.js';
 import { ensureSections, importExam, insertExam, insertQuestions, questionColumns } from './exam-store.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
+import { ExamCertificatesService } from './exam-certificates.service.js';
+import { CHARTER_CENTER_EXAMS_CLIENT, type CharterCenterExamsClient } from './charter-center-exams.client.js';
 import { attemptSummary, examBase, questionCounts, reviewOf, sectionsOf, type ExamQuestionRow, type ExamRow } from './exam-views.js';
 
 const tsKey = (col: typeof examAttempts.startedAt) => sql<string>`to_char(${col} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** The same address isn't emailed again sooner than this. */
+const INVITE_AGAIN_AFTER_MS = 10 * 60_000;
 
 const NO_STATS: AdminExamStats = { attempts: 0, participants: 0, passedMembers: 0, averagePercent: null, inProgress: 0 };
 
@@ -42,6 +56,10 @@ export class AdminExamsService {
     @InjectDb() private readonly db: Db,
     private readonly audit: AuditService,
     private readonly attempts: ExamAttemptsService,
+    private readonly certificates: ExamCertificatesService,
+    private readonly settings: SettingsService,
+    private readonly mail: MailService,
+    @Inject(CHARTER_CENTER_EXAMS_CLIENT) private readonly charterCenter: CharterCenterExamsClient,
   ) {}
 
   /** GET /admin/exams — drafts and published first, then archived; most recently changed first. */
@@ -58,10 +76,13 @@ export class AdminExamsService {
   /** GET /admin/exams/:id */
   async detail(id: string, db: Db | Tx = this.db): Promise<AdminExamDetail> {
     const exam = await this.find(id, db);
-    const [sections, questions, stats] = await Promise.all([
+    const [sections, questions, stats, course] = await Promise.all([
       sectionsOf(db, exam.id),
       db.select().from(examQuestions).where(eq(examQuestions.examId, exam.id)).orderBy(asc(examQuestions.position), asc(examQuestions.createdAt)),
       this.stats([exam.id]),
+      exam.charterCenterCourseId
+        ? db.select({ title: courses.title, slug: courses.slug }).from(courses).where(eq(courses.externalId, exam.charterCenterCourseId)).limit(1)
+        : Promise.resolve([]),
     ]);
     return {
       ...this.summary(exam, questions.length, stats.get(exam.id) ?? NO_STATS),
@@ -71,6 +92,8 @@ export class AdminExamsService {
       shuffleOptions: exam.shuffleOptions,
       review: reviewOf(exam),
       credit: exam.credit,
+      shareCertificates: exam.shareCertificates,
+      charterCenterCourse: course[0] ?? null,
       sections: sections.views,
       questions: questions.map(questionView),
     };
@@ -315,10 +338,12 @@ export class AdminExamsService {
         handle: memberProfiles.handle,
         avatarFileId: memberProfiles.avatarFileId,
         countryCode: memberProfiles.countryCode,
+        certificate: { id: examCertificates.id, status: examCertificates.status, lastError: examCertificates.lastError },
       })
       .from(examAttempts)
       .innerJoin(users, eq(users.id, examAttempts.userId))
       .innerJoin(memberProfiles, eq(memberProfiles.userId, examAttempts.userId))
+      .leftJoin(examCertificates, eq(examCertificates.attemptId, examAttempts.id))
       .where(and(...filters))
       .orderBy(desc(examAttempts.startedAt), desc(examAttempts.id))
       .limit(q.limit + 1);
@@ -329,9 +354,114 @@ export class AdminExamsService {
         answered: r.attempt.status === 'submitted' ? r.attempt.answeredCount : Object.keys(r.attempt.answers).length,
         total: r.attempt.status === 'submitted' ? r.attempt.totalCount : r.attempt.questionOrder.length,
         member: { id: r.attempt.userId, name: r.name, handle: r.handle, email: r.email, avatarUrl: mediaUrl(r.avatarFileId), countryCode: r.countryCode },
+        certificate: r.certificate?.id
+          ? { id: r.certificate.id, status: r.certificate.status as 'pending' | 'issued' | 'failed', lastError: r.certificate.lastError }
+          : null,
       })),
       nextCursor: page.nextCursor,
     };
+  }
+
+  /** POST /admin/exams/:id/invites — emails the exam's join link (published exams only). */
+  async sendInvites(ctx: AuthContext, id: string, input: SendExamInvitesInput, ip?: string): Promise<SendExamInvitesResult> {
+    const exam = await this.find(id);
+    if (exam.status !== 'published') throw Errors.conflict('Publish the exam before inviting members');
+    const invalid: string[] = [];
+    const wanted = new Set<string>();
+    for (const raw of input.emails) {
+      const email = raw.trim().toLowerCase();
+      if (!email) continue;
+      if (!EMAIL.test(email)) invalid.push(raw);
+      else wanted.add(email);
+    }
+    if (!wanted.size) return { sent: 0, skipped: 0, invalid };
+    const recent = new Date(Date.now() - INVITE_AGAIN_AFTER_MS);
+    const known = await this.db
+      .select({ email: examInvites.email, lastSentAt: examInvites.lastSentAt })
+      .from(examInvites)
+      .where(and(eq(examInvites.examId, exam.id), inArray(examInvites.email, [...wanted])));
+    const skip = new Set(known.filter((k) => k.lastSentAt > recent).map((k) => k.email.toLowerCase()));
+    const link = webUrl(`/exams/${exam.slug}/join`);
+    let sent = 0;
+    for (const email of wanted) {
+      if (skip.has(email)) continue;
+      await this.db
+        .insert(examInvites)
+        .values({ examId: exam.id, email, invitedBy: ctx.user.id })
+        .onConflictDoUpdate({
+          target: [examInvites.examId, examInvites.email],
+          set: { sends: sql`${examInvites.sends} + 1`, lastSentAt: new Date(), invitedBy: ctx.user.id, updatedAt: new Date() },
+        });
+      await this.mail.compose({
+        to: email,
+        template: 'exam.invite',
+        subject: `You’re invited to take “${exam.title}” on Charter Mission`,
+        heading: 'Take your exam on Charter Mission',
+        paragraphs: [
+          `Charter Center invites you to take the exam “${exam.title}” on Charter Mission.`,
+          ...(input.message ? [input.message] : []),
+          'Use the email address of your Charter Center account. Your Charter Mission account is made from it in a minute, and you go straight to the exam.',
+        ],
+        button: { label: 'Take the exam', url: link },
+        transactional: true,
+      });
+      sent++;
+    }
+    await this.audit.record({ actorId: ctx.user.id, action: 'exam.invites_sent', targetType: 'exam', targetId: exam.id, after: { sent, skipped: skip.size }, ip });
+    return { sent, skipped: skip.size, invalid };
+  }
+
+  /** GET /admin/exams/:id/invites — who was invited, and how far each got. */
+  async inviteList(id: string): Promise<ExamInviteRow[]> {
+    const exam = await this.find(id);
+    const rows = await this.db
+      .select({
+        email: examInvites.email,
+        sends: examInvites.sends,
+        firstSentAt: examInvites.createdAt,
+        lastSentAt: examInvites.lastSentAt,
+        userId: users.id,
+        took: sql<boolean>`exists (select 1 from ${examAttempts} a where a.exam_id = ${exam.id} and a.user_id = ${users.id} and a.status = 'submitted' and not a.preview)`,
+        passed: sql<boolean>`exists (select 1 from ${examAttempts} a where a.exam_id = ${exam.id} and a.user_id = ${users.id} and a.passed and not a.preview)`,
+      })
+      .from(examInvites)
+      .leftJoin(users, and(eq(sql`lower(${users.email})`, examInvites.email), sql`${users.status} <> 'deleted'`))
+      .where(eq(examInvites.examId, exam.id))
+      .orderBy(desc(examInvites.lastSentAt))
+      .limit(2000);
+    return rows.map((r) => ({
+      email: r.email,
+      status: !r.userId ? 'invited' : r.passed ? 'passed' : r.took ? 'took' : 'joined',
+      sends: r.sends,
+      firstSentAt: r.firstSentAt.toISOString(),
+      lastSentAt: r.lastSentAt.toISOString(),
+    }));
+  }
+
+  /** POST /admin/exam-certificates/:id/retry */
+  async retryCertificate(ctx: AuthContext, id: string, ip?: string): Promise<Ok> {
+    await this.certificates.retry(id);
+    await this.audit.record({ actorId: ctx.user.id, action: 'exam.certificate_retried', targetType: 'exam_certificate', targetId: id.toLowerCase(), ip });
+    return { ok: true };
+  }
+
+  /** GET /admin/exams-settings */
+  async examsSettings(): Promise<ExamsAdminSettings> {
+    return { charterCenterMode: this.charterCenter.mode, certificatePage: await this.certificates.certificatePage() };
+  }
+
+  /** PUT /admin/exams-settings */
+  async updateExamsSettings(ctx: AuthContext, input: UpdateExamsSettingsInput, ip?: string): Promise<ExamsAdminSettings> {
+    let pageId: string | null = null;
+    if (input.certificatePageSlug) {
+      const slug = input.certificatePageSlug.replace(/^.*\/pages\//, '').replace(/[/?#].*$/, '');
+      const [page] = await this.db.select({ id: pages.id }).from(pages).where(and(eq(sql`lower(${pages.slug})`, slug), eq(pages.status, 'active'))).limit(1);
+      if (!page) throw Errors.validation({ certificatePageSlug: 'No live page has that link name' });
+      pageId = page.id;
+    }
+    await this.settings.set('exam_certificates', { pageId }, ctx.user.id);
+    await this.audit.record({ actorId: ctx.user.id, action: 'exam.settings_updated', targetType: 'setting', targetId: 'exam_certificates', after: { pageId }, ip });
+    return this.examsSettings();
   }
 
   /* ---------- internals ---------- */
@@ -348,7 +478,7 @@ export class AdminExamsService {
   }
 
   private summary(row: ExamRow, questionCount: number, stats: AdminExamStats): AdminExamSummary {
-    return { ...examBase(row), questionCount, stats, publishedAt: row.publishedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
+    return { ...examBase(row), charterCenterCourseId: row.charterCenterCourseId, questionCount, stats, publishedAt: row.publishedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
   }
 
   private async stats(examIds: string[]): Promise<Map<string, AdminExamStats>> {
