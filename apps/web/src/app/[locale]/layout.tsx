@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import { MediaGuard } from "@/components/video/media-guard";
 import { SHARE_IMAGE } from "@/lib/share-image";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/noto-sans-arabic";
@@ -44,6 +46,9 @@ export default async function RootLayout({ children }: LayoutProps<"/[locale]">)
       <body className="min-h-dvh">
         <I18nProvider locale={locale} messages={messagesFor(locale)} dict={DICTS[locale]}>
           {children}
+          <Suspense fallback={null}>
+            <MediaGuard />
+          </Suspense>
         </I18nProvider>
       </body>
     </html>

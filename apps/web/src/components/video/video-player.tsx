@@ -54,6 +54,7 @@ export function VideoEmbedPlayer({ preview, embed }: { preview: LinkPreview; emb
       <div className={cn("relative w-full bg-ink", embed.vertical ? "mx-auto aspect-[9/16] max-h-[560px] max-w-[315px]" : "aspect-video")}>
         {playing ? (
           <iframe
+            data-media-embed=""
             src={src}
             title={title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
