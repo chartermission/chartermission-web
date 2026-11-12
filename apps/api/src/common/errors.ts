@@ -43,8 +43,9 @@ export const Errors = {
   notFound: (what = 'That item') => new AppError(404, 'NOT_FOUND', `${what} was not found`),
   conflict: (message: string) => new AppError(409, 'CONFLICT', message),
   invalidToken: () => new AppError(400, 'INVALID_TOKEN', 'This link is invalid or has expired. Request a new one.'),
-  rateLimited: (retryAfter: number) =>
-    new AppError(429, 'RATE_LIMITED', 'Too many attempts. Try again later.', undefined, retryAfter),
+  /** `reason` explains which limit was reached (e.g. "You can send 2 message requests a day."). */
+  rateLimited: (retryAfter: number, reason?: string) =>
+    new AppError(429, 'RATE_LIMITED', reason ?? 'Too many attempts. Try again later.', undefined, retryAfter),
   mfaRequired: () => new AppError(403, 'MFA_REQUIRED', 'Enter your authenticator code to continue'),
   mfaSetupRequired: () => new AppError(403, 'MFA_SETUP_REQUIRED', 'Set up two-step verification to continue'),
   invalidMfa: () => new AppError(400, 'INVALID_MFA_CODE', 'That code is not right. Try the latest one.'),

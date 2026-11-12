@@ -13,13 +13,13 @@ import { InjectRedis } from './redis.js';
 export class RateLimitService {
   constructor(@InjectRedis() private readonly redis: Redis) {}
 
-  async consume(key: string, limit: number, windowSeconds: number): Promise<void> {
+  async consume(key: string, limit: number, windowSeconds: number, reason?: string): Promise<void> {
     const k = `rl:${key}`;
     const count = await this.redis.incr(k);
     if (count === 1) await this.redis.expire(k, windowSeconds);
     if (count > limit) {
       const ttl = await this.redis.ttl(k);
-      throw Errors.rateLimited(ttl > 0 ? ttl : windowSeconds);
+      throw Errors.rateLimited(ttl > 0 ? ttl : windowSeconds, reason);
     }
   }
 

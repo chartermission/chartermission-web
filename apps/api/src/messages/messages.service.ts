@@ -67,8 +67,6 @@ import { TranslateService } from './translate.service.js';
 
 const MESSAGES_PER_HOUR = 300;
 const NEW_ACCOUNT_MESSAGES_PER_HOUR = 60;
-const NEW_CONVERSATIONS_PER_DAY = 40;
-const NEW_ACCOUNT_CONVERSATIONS_PER_DAY = 5;
 const REQUESTS_PER_DAY = 10;
 const NEW_ACCOUNT_REQUESTS_PER_DAY = 2;
 const NEW_ACCOUNT_DAYS = 7;
@@ -179,11 +177,10 @@ export class MessagesService implements OnModuleInit {
       if (!other || !ACTIVE.includes(other.status) || (await this.relations.isBlockedEitherWay(user.id, input.memberId))) throw Errors.notFound('That member');
       if (other.isOfficial || user.isOfficial) throw Errors.forbidden('Official Charter Mission accounts don’t take private messages');
       const connected = await this.connected(user.id, input.memberId);
-      const fresh = await this.isNewAccount(user.id);
-      if (connected) {
-        await this.limits.consume(`conversations:${user.id}`, fresh ? NEW_ACCOUNT_CONVERSATIONS_PER_DAY : NEW_CONVERSATIONS_PER_DAY, 24 * 3600);
-      } else {
-        await this.limits.consume(`message-requests:${user.id}`, fresh ? NEW_ACCOUNT_REQUESTS_PER_DAY : REQUESTS_PER_DAY, 24 * 3600);
+      // Chats with connections (who accepted) only count toward the messages-per-hour limit; requests to strangers are capped per day.
+      if (!connected) {
+        const perDay = (await this.isNewAccount(user.id)) ? NEW_ACCOUNT_REQUESTS_PER_DAY : REQUESTS_PER_DAY;
+        await this.limits.consume(`message-requests:${user.id}`, perDay, 24 * 3600, `You can send ${perDay} message requests a day to members you aren’t connected with.`);
       }
       await this.db.transaction(async (tx) => {
         const [created] = await tx
@@ -346,7 +343,8 @@ export class MessagesService implements OnModuleInit {
     if (!current.canSend) throw Errors.forbidden(current.cantSendReason ?? 'You can’t send messages in this conversation');
 
     const fresh = await this.isNewAccount(user.id);
-    await this.limits.consume(`messages:${user.id}`, fresh ? NEW_ACCOUNT_MESSAGES_PER_HOUR : MESSAGES_PER_HOUR, 3600);
+    const perHour = fresh ? NEW_ACCOUNT_MESSAGES_PER_HOUR : MESSAGES_PER_HOUR;
+    await this.limits.consume(`messages:${user.id}`, perHour, 3600, `You can send up to ${perHour} messages an hour.`);
 
     // Attachments must be the sender's own clean uploads of the right kind.
     const attachmentIds = [...new Set(input.attachmentIds ?? [])];
@@ -635,10 +633,16 @@ export class MessagesService implements OnModuleInit {
   /** POST /messages/share — the same card (and note) to several people at once. */
   async shareTo(user: AuthUser, input: ShareToMessagesInput): Promise<{ sent: number }> {
     const conversationIds = new Set(input.conversationIds ?? []);
+    // Check everyone first, so a refusal sends nothing rather than some.
     for (const memberId of input.memberIds ?? []) {
       if (!(await this.connected(user.id, memberId))) throw Errors.forbidden('You can send this to your connections and your existing conversations');
-      conversationIds.add((await this.start(user, { memberId })).id);
     }
+    const total = conversationIds.size + (input.memberIds?.length ?? 0);
+    const perHour = (await this.isNewAccount(user.id)) ? NEW_ACCOUNT_MESSAGES_PER_HOUR : MESSAGES_PER_HOUR;
+    await this.limits.assertBelow(`messages:${user.id}`, perHour - total + 1).catch(() => {
+      throw Errors.rateLimited(3600, `You can send up to ${perHour} messages an hour. Pick fewer people or try again later.`);
+    });
+    for (const memberId of input.memberIds ?? []) conversationIds.add((await this.start(user, { memberId })).id);
     if (!conversationIds.size) throw Errors.badRequest('Choose who to send it to');
     let sent = 0;
     for (const id of conversationIds) {
@@ -653,7 +657,7 @@ export class MessagesService implements OnModuleInit {
   /** POST /messages/groups — connections, a chapter's members (its team), or an event's attendees (its hosts). */
   async createGroup(user: AuthUser, input: CreateGroupInput): Promise<ConversationView> {
     assertNotRestricted(user);
-    await this.limits.consume(`groups:${user.id}`, GROUPS_PER_DAY, 24 * 3600);
+    await this.limits.consume(`groups:${user.id}`, GROUPS_PER_DAY, 24 * 3600, `You can start ${GROUPS_PER_DAY} groups a day.`);
     let chapterId: string | null = null;
     let eventId: string | null = null;
     const ids = new Set(input.memberIds ?? []);

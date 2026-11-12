@@ -265,6 +265,31 @@ describe('Messaging: requests, rich messages, organising, groups and announcemen
     await amara.get('/messages/announcements/nigeria').expect(403);
   });
 
+  it('a new account can send a card to many connections at once; limits explain themselves and refuse before sending', async () => {
+    const sender = await createMember(t, { name: 'Sara Newcomer' });
+    const friends = [];
+    for (let i = 0; i < 8; i++) {
+      const f = await createMember(t, { name: `Friend ${i}` });
+      await t.db.insert(s.connections).values({ requesterId: sender.id, addresseeId: f.id, status: 'accepted', respondedAt: new Date() });
+      friends.push(f);
+    }
+    const post = (await sender.post('/posts', { body: 'Join our risk management training', visibility: 'public' }).expect(201)).body as { id: string };
+    const res = await sender
+      .post('/messages/share', { share: { type: 'post', key: post.id }, body: 'Kindly register', memberIds: friends.map((f) => f.id) })
+      .expect(200);
+    expect(res.body).toEqual({ sent: 8 });
+    for (const f of friends.slice(0, 2)) {
+      const inbox = (await f.get('/messages/conversations').expect(200)).body as ConversationView[];
+      expect(inbox[0]).toMatchObject({ unread: 1, lastMessage: expect.objectContaining({ body: 'Kindly register' }) });
+    }
+
+    // Message requests to strangers stay capped (2 a day for a new account), with a message that says so.
+    const stranger = await createMember(t, { name: 'Not Connected' });
+    for (let i = 0; i < 2; i++) await sender.post('/messages/conversations', { memberId: (await createMember(t, { name: `Other ${i}` })).id }).expect(200);
+    const refused = await sender.post('/messages/conversations', { memberId: stranger.id }).expect(429);
+    expect(refused.body.error.message).toMatch(/message requests a day/);
+  });
+
   it('pushes live events to each member’s open stream', async () => {
     const realtime = t.app.get(RealtimeService);
     const got: MessageStreamEvent[] = [];

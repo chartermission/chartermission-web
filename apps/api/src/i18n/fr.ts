@@ -947,4 +947,8 @@ export const fr: Record<string, string> = {
   "Your verification request": "Votre demande de vérification",
   "Your verification request was approved. The verified tick now shows beside the name across Charter Mission.": "Votre demande de vérification a été approuvée. La coche de vérification apparaît désormais à côté du nom partout sur Charter Mission.",
   "Your verification request wasn’t approved": "Votre demande de vérification n’a pas été approuvée",
+  "You can send {n} message requests a day to members you aren’t connected with.": "Vous pouvez envoyer {n} demandes de message par jour à des membres avec qui vous n’êtes pas en relation.",
+  "You can send up to {n} messages an hour.": "Vous pouvez envoyer jusqu’à {n} messages par heure.",
+  "You can send up to {n} messages an hour. Pick fewer people or try again later.": "Vous pouvez envoyer jusqu’à {n} messages par heure. Choisissez moins de personnes ou réessayez plus tard.",
+  "You can start {n} groups a day.": "Vous pouvez créer {n} groupes par jour.",
 };
