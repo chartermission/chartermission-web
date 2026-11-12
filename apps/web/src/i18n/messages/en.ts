@@ -99,6 +99,7 @@ export const en = {
     initiatives: "Initiatives",
     events: "Events",
     learning: "Learning",
+    exams: "Exams",
     chapters: "Chapters",
     ambassadors: "Ambassadors",
     pages: "Pages",

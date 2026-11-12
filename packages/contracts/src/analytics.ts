@@ -23,5 +23,9 @@ export const AnalyticsEventName = z.enum([
   "event_cancelled",
   /** "Start learning" opened a Charter Center course (CM-LRN-04). Subject: course id. */
   "charter_center_click",
+  /** A member started an attempt at an exam. Subject: exam id. */
+  "exam_started",
+  /** A member finished an exam (submitted, or the time ran out). Subject: exam id. */
+  "exam_submitted",
 ]);
 export type AnalyticsEventName = z.infer<typeof AnalyticsEventName>;

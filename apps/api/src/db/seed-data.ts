@@ -150,7 +150,7 @@ export const CHAPTERS: [string, string, string][] = [
  * "reference_seeds"), so an item an admin removes isn't re-created on the next start. Bump a
  * version to seed newly added items; existing rows are never overwritten.
  */
-export const REFERENCE_SEED_VERSIONS = { chapters: 4, hashtags: 2, badges: 1 } as const;
+export const REFERENCE_SEED_VERSIONS = { chapters: 4, hashtags: 2, badges: 1, exams: 1 } as const;
 
 /**
  * What each chapters version added, so a later version never redoes an earlier step on a database

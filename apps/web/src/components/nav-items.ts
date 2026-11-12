@@ -1,7 +1,7 @@
 import type { IconName } from "@chartermission/ui";
 
 /** Keys under `nav.` in the message files. */
-export type NavKey = "home" | "articles" | "network" | "opportunities" | "initiatives" | "events" | "learning" | "chapters" | "ambassadors" | "pages" | "saved" | "drafts" | "analytics" | "alerts" | "messages";
+export type NavKey = "home" | "articles" | "network" | "opportunities" | "initiatives" | "events" | "learning" | "exams" | "chapters" | "ambassadors" | "pages" | "saved" | "drafts" | "analytics" | "alerts" | "messages";
 
 /** Member section navigation, shared by SideNav and SectionNav. `label` is the English name; show t(`nav.${key}`). */
 export const sectionNavItems: { href: string; key: NavKey; label: string; icon: IconName }[] = [
@@ -12,6 +12,7 @@ export const sectionNavItems: { href: string; key: NavKey; label: string; icon: 
   { href: "/initiatives", key: "initiatives", label: "Initiatives", icon: "lightbulb" },
   { href: "/events", key: "events", label: "Events", icon: "calendar" },
   { href: "/learning", key: "learning", label: "Learning", icon: "book" },
+  { href: "/exams", key: "exams", label: "Exams", icon: "clipboard" },
   { href: "/chapters", key: "chapters", label: "Chapters", icon: "globe" },
   { href: "/ambassadors", key: "ambassadors", label: "Ambassadors", icon: "shield" },
   { href: "/pages", key: "pages", label: "Pages", icon: "building" },

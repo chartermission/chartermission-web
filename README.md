@@ -113,6 +113,27 @@ In production staff set it up on their first sign-in. Members can turn on the sa
   (`moreDiasporaChapters()`), each with a hashtag, an About text and a landmark photo behind its cover
   (`apps/api/src/db/chapter-photos.ts`, Unsplash, photographer credited on the cover). Admins can change a chapter's photo.
 
+### Exams
+
+Multiple-choice exams members take on Charter Mission, built in the admin console (Exams, permission `exam.manage`:
+Platform Admins and Super Admins).
+
+- **Building**: an exam has settings (time limit, pass mark, attempts allowed, shuffling, what members see afterwards, who
+  can take it), optional sections ("Domain I …") and questions with 2–6 answers, one correct, plus an explanation.
+  Every text can carry a second language (English with Arabic, say) and members choose which to read. Questions can be
+  typed in one at a time or imported from a spreadsheet saved as CSV (template in the import window; Export CSV gives
+  the same format back). New exams are drafts: staff can take a draft on the member site to check it, and those tries
+  are never counted. Publish makes it visible under `/exams`.
+- **Taking**: `/exams/{link-name}`. Every answer is saved to the API as it is chosen, and the time limit is kept by the
+  server (`exam_attempts.expires_at`); an attempt whose time ran out is marked with what was saved. The correct answers
+  are never sent to the browser before the attempt is submitted: marking happens in `apps/api/src/exams`.
+- **Access**: by default any signed-in member can take an exam, also while Learning is still locked for them. An exam
+  can instead follow the e-learning access rules (Settings tab → Who can take it).
+- **Results**: each exam's Results tab lists every attempt (search, filter, CSV export). Editing or removing a question
+  never changes a finished attempt's score; an exam members have taken can be archived but not deleted.
+- **Seeded exam**: the Charter Center "CAPM Practice — 50 Questions" paper (`apps/api/src/exams/data/capm-practice.ts`)
+  is added once as a **draft** by the reference seed (`REFERENCE_SEED_VERSIONS.exams`); the demo seed publishes it.
+
 ### Emails in development
 
 With `MAIL_DRIVER=log` nothing is sent: emails go to the `email_outbox` table and the API log. The check-email

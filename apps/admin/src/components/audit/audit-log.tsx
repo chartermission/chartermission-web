@@ -20,6 +20,7 @@ const ACTION_PREFIXES = [
   { value: "trending.", label: "Trending controls" },
   { value: "event.", label: "Events review" },
   { value: "course.", label: "Course curation" },
+  { value: "exam.", label: "Exams" },
   { value: "auth.", label: "Sign-ins and security" },
   { value: "audit.", label: "Audit exports" },
 ];
@@ -32,6 +33,7 @@ const TARGET_TYPES = [
   { value: "hashtag", label: "Topics" },
   { value: "event", label: "Events" },
   { value: "course", label: "Courses" },
+  { value: "exam", label: "Exams" },
   { value: "user", label: "Accounts" },
   { value: "session", label: "Sessions" },
   { value: "setting", label: "Settings" },

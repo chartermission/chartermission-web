@@ -11,7 +11,7 @@ import { handleHistory, memberProfiles } from '../db/schema.js';
  */
 export const RESERVED_HANDLES = new Set([
   // Pages of the web app today
-  'ambassadors', 'analytics', 'appeals', 'articles', 'bookmarks', 'chapters', 'drafts', 'events', 'feed', 'initiatives',
+  'ambassadors', 'analytics', 'appeals', 'articles', 'bookmarks', 'chapters', 'drafts', 'events', 'exams', 'feed', 'initiatives',
   'learning', 'members', 'network', 'nominate', 'notifications', 'onboarding', 'opportunities', 'pages', 'posts', 'search',
   'settings', 'stories', 'topics', 'check-email', 'forgot-password', 'guidelines', 'policies', 'privacy', 'reset-password',
   'sign-in', 'signin', 'signup', 'terms', 'verify-email', 'brand', 'api', 'sso',

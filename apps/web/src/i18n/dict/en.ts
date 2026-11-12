@@ -52,4 +52,13 @@ export const en: Dict = {
   "{count} going": { one: "{count} going", other: "{count} going" },
   "Up to {count} addresses at a time": { one: "Up to {count} address at a time", other: "Up to {count} addresses at a time" },
   "Invitation sent to {count} people": { one: "Invitation sent to {count} person", other: "Invitation sent to {count} people" },
+  "{count} minutes": { one: "{count} minute", other: "{count} minutes" },
+  "{count} attempts": { one: "{count} attempt", other: "{count} attempts" },
+  "{count} attempts left": { one: "{count} attempt left", other: "{count} attempts left" },
+  "{count} questions": { one: "{count} question", other: "{count} questions" },
+  "You have {count} minutes. The clock starts now and keeps running if you leave the page. Your answers are saved as you go, and the exam is handed in automatically when the time is up.": { one: "You have {count} minute. The clock starts now and keeps running if you leave the page. Your answers are saved as you go, and the exam is handed in automatically when the time is up.", other: "You have {count} minutes. The clock starts now and keeps running if you leave the page. Your answers are saved as you go, and the exam is handed in automatically when the time is up." },
+  "You have {count} minutes. The clock starts when you begin and keeps running if you leave the page.": { one: "You have {count} minute. The clock starts when you begin and keeps running if you leave the page.", other: "You have {count} minutes. The clock starts when you begin and keeps running if you leave the page." },
+  "{count} answers aren’t saved yet. Check your connection; we’ll keep them on this page meanwhile.": { one: "{count} answer isn’t saved yet. Check your connection; we’ll keep it on this page meanwhile.", other: "{count} answers aren’t saved yet. Check your connection; we’ll keep them on this page meanwhile." },
+  "You have answered {answered} of {total} questions. The {count} you left blank will be marked wrong.": { one: "You have answered {answered} of {total} questions. The one you left blank will be marked wrong.", other: "You have answered {answered} of {total} questions. The {count} you left blank will be marked wrong." },
+  "{count} questions are still marked for review.": { one: "{count} question is still marked for review.", other: "{count} questions are still marked for review." },
 };

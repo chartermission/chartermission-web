@@ -14,6 +14,7 @@ const MEMBER_AREAS = [
   "/opportunities",
   "/events",
   "/learning",
+  "/exams",
   "/initiatives",
   "/chapters",
   "/ambassadors",

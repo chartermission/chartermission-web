@@ -19,6 +19,8 @@ export const PERM = {
   eventManage: "event.manage",
   /** Learning catalogue curation, link status and sync. Platform Admin and above. */
   courseCurate: "course.curate",
+  /** Exam builder and members' exam results. Platform Admin and above. */
+  examManage: "exam.manage",
   /** Ambassador leads, pipeline, onboarding and certification (own countries). Ambassador Managers and Platform Admins. */
   ambassadorManage: "ambassador.manage",
   /** Ambassador Manager sub-accounts and required training. Platform Admin and above. */
@@ -70,6 +72,7 @@ export type NavKey =
   | "topics"
   | "events"
   | "courses"
+  | "exams"
   | "members"
   | "verification"
   | "badges"
@@ -100,6 +103,7 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "topics", href: "/topics", label: "Topics", icon: "hash", permission: PERM.trendingManage },
   { key: "events", href: "/events", label: "Events", icon: "calendar", permission: PERM.eventReview },
   { key: "courses", href: "/courses", label: "Courses", icon: "book", permission: PERM.courseCurate },
+  { key: "exams", href: "/exams", label: "Exams", icon: "clipboard", permission: PERM.examManage },
   { key: "members", href: "/members", label: "Members", icon: "user", permission: PERM.membersManage },
   { key: "verification", href: "/verification", label: "Verification", icon: "verified", permission: PERM.membersManage },
   { key: "badges", href: "/badges", label: "Badges", icon: "verified", permission: PERM.badgesManage },

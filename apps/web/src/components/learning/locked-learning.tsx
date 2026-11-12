@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { LearningAccess, LearningRequirement } from "@chartermission/contracts";
 import { Chip, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
 import { PageShell } from "@/components/discover/page-shell";
+import { ExamsLink } from "@/components/exams/exams-link";
 import { BrandPattern } from "@/components/illustrations";
 import { T } from "@/i18n/client";
 import { getT } from "@/i18n/server";
@@ -131,6 +132,7 @@ export async function LockedLearning({ access }: { access: LearningAccess }) {
           ))}
         </ul>
       </Panel>
+      <ExamsLink />
     </PageShell>
   );
 }

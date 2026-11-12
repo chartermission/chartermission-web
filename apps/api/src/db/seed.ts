@@ -23,6 +23,7 @@ import {
 } from './seed-data.js';
 import { seedEvents } from './seed-events.js';
 import { seedLearning } from './seed-learning.js';
+import { seedDemoExams, seedExams } from './seed-exams.js';
 import { seedAmbassadors } from './seed-ambassadors.js';
 import { seedStories } from './seed-stories.js';
 import { seedModeration } from './seed-moderation.js';
@@ -81,7 +82,7 @@ export async function seedReference(db: Db) {
 const SEEDS_KEY = 'reference_seeds';
 
 /**
- * Chapters, featured hashtags and badges: admins add, remove and edit these, so each catalogue is
+ * Chapters, featured hashtags, badges and exams: admins add, remove and edit these, so each catalogue is
  * seeded only when its REFERENCE_SEED_VERSIONS entry is newer than the version recorded in
  * platform_settings. Inserts never overwrite existing rows.
  */
@@ -132,6 +133,11 @@ async function seedCatalogues(db: Db) {
       .values(BADGES.map((b, i) => ({ ...b, position: i })))
       .onConflictDoNothing();
     done.badges = REFERENCE_SEED_VERSIONS.badges;
+  }
+  if (due('exams')) {
+    // 1 = the Charter Center CAPM practice exam, as a draft for an admin to review and publish.
+    await seedExams(db);
+    done.exams = REFERENCE_SEED_VERSIONS.exams;
   }
   await db
     .insert(s.platformSettings)
@@ -315,6 +321,7 @@ async function main() {
     const ctx: SeedContext = { ids, chapters: Object.fromEntries(chapterRows.map((c) => [c.slug, c.id])) };
     await seedEvents(db, ctx);
     await seedLearning(db, ctx);
+    await seedDemoExams(db);
     await seedAmbassadors(db, ctx);
     await seedStories(db, ctx);
     await seedModeration(db, ctx);

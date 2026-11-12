@@ -1403,6 +1403,153 @@ export const learningAccessOverrides = pgTable('learning_access_overrides', {
   createdAt: createdAt(),
 });
 
+/* ======================= Exams (migration 0018) ======================= */
+
+/** One answer of a question. The id is short and stable, so answers survive re-ordering and edits. */
+export type ExamOptionRow = { id: string; text: string; textAlt: string | null };
+
+/**
+ * A multiple-choice exam built in the admin console and taken by members. Texts may carry a
+ * second-language version (the *_alt columns), shown beside or instead of the first.
+ * Members see an exam while status = 'published'; staff with exam.manage can try a draft.
+ */
+export const exams = pgTable(
+  'exams',
+  {
+    id: id(),
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    titleAlt: text('title_alt'),
+    description: text('description').notNull().default(''),
+    descriptionAlt: text('description_alt'),
+    language: text('language').notNull().default('en'),
+    secondLanguage: text('second_language'),
+    status: text('status').notNull().default('draft'),
+    /** Minutes per attempt; null = no limit. */
+    timeLimitMinutes: integer('time_limit_minutes'),
+    passPercent: integer('pass_percent').notNull().default(70),
+    /** Attempts per member; null = no limit. */
+    maxAttempts: integer('max_attempts'),
+    shuffleQuestions: boolean('shuffle_questions').notNull().default(false),
+    shuffleOptions: boolean('shuffle_options').notNull().default(false),
+    /** full: answers and explanations after submitting · score_only. */
+    review: text('review').notNull().default('full'),
+    /** members: any signed-in member · learning: follows the e-learning access rules. */
+    access: text('access').notNull().default('members'),
+    credit: text('credit'),
+    publishedAt: ts('published_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('exams_status_idx').on(t.status, t.publishedAt),
+    check('exams_status_ck', sql`${t.status} in ('draft','published','archived')`),
+    check('exams_review_ck', sql`${t.review} in ('full','score_only')`),
+    check('exams_access_ck', sql`${t.access} in ('members','learning')`),
+    check('exams_pass_ck', sql`${t.passPercent} between 1 and 100`),
+  ],
+);
+
+/** Named groups of questions ("Domain I — Fundamentals"); results are broken down by section. */
+export const examSections = pgTable(
+  'exam_sections',
+  {
+    id: id(),
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    titleAlt: text('title_alt'),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('exam_sections_exam_idx').on(t.examId, t.position)],
+);
+
+export const examQuestions = pgTable(
+  'exam_questions',
+  {
+    id: id(),
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    sectionId: uuid('section_id').references(() => examSections.id, { onDelete: 'set null' }),
+    position: integer('position').notNull().default(0),
+    /** Short reference beside the number, e.g. "ECO 1.1". */
+    reference: text('reference'),
+    /** Short label, e.g. "Calculation". */
+    tag: text('tag'),
+    prompt: text('prompt').notNull(),
+    promptAlt: text('prompt_alt'),
+    options: jsonb('options').$type<ExamOptionRow[]>().notNull(),
+    /** The id of the correct entry in options. Never sent to members before they submit. */
+    correctOptionId: text('correct_option_id').notNull(),
+    explanation: text('explanation').notNull().default(''),
+    explanationAlt: text('explanation_alt'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('exam_questions_exam_idx').on(t.examId, t.position), index('exam_questions_section_idx').on(t.sectionId)],
+);
+
+/** The questions of one attempt in the order shown, each with the order of its answers. */
+export type ExamAttemptOrder = { q: string; o: string[] }[];
+
+/** What marking recorded: one entry per question, and the totals per section. */
+export type ExamAttemptResult = {
+  items: { q: string; section: string | null; chosen: string | null; answer: string; ok: boolean }[];
+  sections: { id: string | null; title: string; titleAlt: string | null; correct: number; total: number }[];
+};
+
+/**
+ * One member's go at an exam. Answers are saved as the member goes (answers: question id → option
+ * id), so a dropped connection loses nothing and the time limit is kept by the server. At most one
+ * attempt per member and exam is in progress (partial unique index). Marked on submit, or when read
+ * after expires_at has passed.
+ */
+export const examAttempts = pgTable(
+  'exam_attempts',
+  {
+    id: id(),
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 1 for the member's first attempt at this exam. */
+    number: integer('number').notNull().default(1),
+    status: text('status').notNull().default('in_progress'),
+    /** Started while the exam was a draft (staff trying it out): left out of results and limits. */
+    preview: boolean('preview').notNull().default(false),
+    questionOrder: jsonb('question_order').$type<ExamAttemptOrder>().notNull(),
+    answers: jsonb('answers').$type<Record<string, string>>().notNull().default({}),
+    flags: jsonb('flags').$type<Record<string, true>>().notNull().default({}),
+    startedAt: ts('started_at').notNull().defaultNow(),
+    expiresAt: ts('expires_at'),
+    submittedAt: ts('submitted_at'),
+    timedOut: boolean('timed_out').notNull().default(false),
+    correctCount: integer('correct_count').notNull().default(0),
+    totalCount: integer('total_count').notNull().default(0),
+    answeredCount: integer('answered_count').notNull().default(0),
+    percent: integer('percent').notNull().default(0),
+    /** The pass mark when it was marked. */
+    passPercent: integer('pass_percent').notNull().default(0),
+    passed: boolean('passed').notNull().default(false),
+    result: jsonb('result').$type<ExamAttemptResult | null>(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('exam_attempts_exam_idx').on(t.examId, t.submittedAt),
+    index('exam_attempts_user_idx').on(t.userId, t.examId),
+    uniqueIndex('exam_attempts_open_uq').on(t.examId, t.userId).where(sql`${t.status} = 'in_progress'`),
+    check('exam_attempts_status_ck', sql`${t.status} in ('in_progress','submitted')`),
+  ],
+);
+
 /* ======================= Ambassador programme ======================= */
 
 /**

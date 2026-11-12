@@ -96,6 +96,7 @@ export const fr: Localized = {
     initiatives: "Initiatives",
     events: "Événements",
     learning: "Formation",
+    exams: "Examens",
     chapters: "Sections pays",
     ambassadors: "Ambassadeurs",
     pages: "Pages",

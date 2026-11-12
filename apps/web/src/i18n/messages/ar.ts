@@ -96,6 +96,7 @@ export const ar: Localized = {
     initiatives: "المبادرات",
     events: "الفعاليات",
     learning: "التعلّم",
+    exams: "الاختبارات",
     chapters: "الفروع",
     ambassadors: "السفراء",
     pages: "الصفحات",

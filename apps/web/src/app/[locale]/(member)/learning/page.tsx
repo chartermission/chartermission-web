@@ -4,6 +4,7 @@ import type { CourseSummary, LearningHub, LearningPathSummary, Page } from "@cha
 import { Chip, Icon } from "@chartermission/ui";
 import { PageShell } from "@/components/discover/page-shell";
 import { BrandPattern } from "@/components/illustrations";
+import { ExamsLink } from "@/components/exams/exams-link";
 import { CourseTile, CourseTileSkeleton, featuredGridClass } from "@/components/learning/course-tile";
 import { filtersToQuery, parseCourseFilters } from "@/components/learning/format";
 import { PathCard } from "@/components/learning/path-card";
@@ -176,6 +177,7 @@ export default function LearningPage({ searchParams }: PageProps<"/[locale]/lear
       >
         <HubTop />
       </Suspense>
+      <ExamsLink />
       <Suspense fallback={<CatalogueSkeleton />}>
         <Catalogue searchParams={searchParams} />
       </Suspense>
