@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, ne, sql, type SQL } from 'drizzle-orm';
 import type { DirectoryMember, DirectoryQuery, Page } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { countries, memberProfiles, profileSectors, profileSkills, users } from '../db/schema.js';
+import { chapters, countries, follows, memberProfiles, profileSectors, profileSkills, users } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
@@ -40,6 +40,18 @@ export class DirectoryService {
       ne(memberProfiles.userId, viewerId),
       this.relations.notBlockedSql(viewerId, memberProfiles.userId),
     ];
+
+    if (query.chapter) {
+      const [chapter] = await this.db
+        .select({ id: chapters.id })
+        .from(chapters)
+        .where(and(sql`(${chapters.slug} = ${query.chapter} or ${chapters.id}::text = ${query.chapter})`, eq(chapters.status, 'active')))
+        .limit(1);
+      if (!chapter) return { items: [], nextCursor: null };
+      conditions.push(
+        sql`exists (select 1 from ${follows} f where f.target_type = 'chapter' and f.target_id = ${chapter.id} and f.follower_id = ${memberProfiles.userId})`,
+      );
+    }
 
     const q = query.q?.trim();
     let score: SQL | undefined;

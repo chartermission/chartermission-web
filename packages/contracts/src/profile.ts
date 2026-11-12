@@ -290,6 +290,8 @@ export const DirectoryQuery = z.object({
   country: z.string().length(2).optional(),
   sector: z.string().optional(),
   skill: z.string().optional(),
+  /** Only members of this chapter (its slug): the chapter's Members page. */
+  chapter: z.string().trim().max(120).optional(),
   sort: z.enum(["relevance", "recent", "name"]).default("relevance"),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(24),
