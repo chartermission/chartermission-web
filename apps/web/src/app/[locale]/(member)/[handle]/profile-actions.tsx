@@ -3,12 +3,22 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import type { ConversationView, MemberProfile, PreviewAs } from "@chartermission/contracts";
+import type {
+  ConversationView,
+  MemberProfile,
+  PreviewAs,
+} from "@chartermission/contracts";
 import { Button, Icon, buttonClasses } from "@chartermission/ui";
 import { useT } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
-import { ConnectControl, FollowControl, canConnectWith, useRelationship } from "@/components/network/relationship";
+import { MessageMemberButton } from "@/components/network/message-member";
+import {
+  ConnectControl,
+  FollowControl,
+  canConnectWith,
+  useRelationship,
+} from "@/components/network/relationship";
 import { ConfirmDialog, UnblockHint } from "@/components/social/confirm-dialog";
 import { Dialog } from "@/components/social/dialog";
 import { Menu, type MenuItem } from "@/components/social/menu";
@@ -23,44 +33,50 @@ const previewLabels: Record<PreviewAs, string> = {
 };
 
 /** Opens the private conversation with this member. Messages are for connections, so others see why it is off. */
-function MessageButton({ memberId, connected }: { memberId: string; connected: boolean }) {
+function MessageButton({
+  memberId,
+  connected,
+}: {
+  memberId: string;
+  connected: boolean;
+}) {
   const t = useT();
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  async function open() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const conversation = await api<ConversationView>("/messages/conversations", { method: "POST", body: { memberId } });
-      router.push(`/messages/${conversation.id}`);
-    } catch (e) {
-      toast.error(e);
-      setBusy(false);
-    }
-  }
   if (!connected) {
     return (
-      <Button variant="secondary" disabled title={t("You can message members you’re connected with")}>
+      <Button
+        variant="secondary"
+        disabled
+        title={t("You can message members you’re connected with")}
+      >
         <Icon name="message" size={16} />
         {t("Message")}
       </Button>
     );
   }
-  return (
-    <Button variant="secondary" onClick={open} aria-busy={busy}>
-      <Icon name="message" size={16} />
-      {t("Message")}
-    </Button>
-  );
+  return <MessageMemberButton memberId={memberId} />;
 }
 
-function ConnectDialog({ name, onClose, onSend }: { name: string; onClose: () => void; onSend: (note: string) => Promise<boolean> }) {
+function ConnectDialog({
+  name,
+  onClose,
+  onSend,
+}: {
+  name: string;
+  onClose: () => void;
+  onSend: (note: string) => Promise<boolean>;
+}) {
   const t = useT();
   const id = useId();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <Dialog title={t("Connect with {name}", { name })} description="Add a note to say how you know each other (optional)." onClose={onClose} width={480} initialFocus="textarea">
+    <Dialog
+      title={t("Connect with {name}", { name })}
+      description="Add a note to say how you know each other (optional)."
+      onClose={onClose}
+      width={480}
+      initialFocus="textarea"
+    >
       <form
         className="flex flex-col gap-3"
         onSubmit={async (event) => {
@@ -89,7 +105,10 @@ function ConnectDialog({ name, onClose, onSend }: { name: string; onClose: () =>
           {note.length} / {NOTE_MAX}
         </p>
         <div className="flex justify-end gap-2.5">
-          <Button variant="secondary" onClick={(event) => event.currentTarget.closest("dialog")?.close()}>
+          <Button
+            variant="secondary"
+            onClick={(event) => event.currentTarget.closest("dialog")?.close()}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={busy}>
@@ -102,12 +121,20 @@ function ConnectDialog({ name, onClose, onSend }: { name: string; onClose: () =>
 }
 
 /** Profile header actions for another member, or Edit / Preview for the viewer's own profile. */
-export function ProfileActions({ member, canPost }: { member: MemberProfile; canPost: boolean }) {
+export function ProfileActions({
+  member,
+  canPost,
+}: {
+  member: MemberProfile;
+  canPost: boolean;
+}) {
   const t = useT();
   const router = useRouter();
   const controls = useRelationship(member, member.relationship);
   const [muted, setMuted] = useState(member.relationship.muted);
-  const [modal, setModal] = useState<"connect" | "block" | "report" | "remove" | null>(null);
+  const [modal, setModal] = useState<
+    "connect" | "block" | "report" | "remove" | null
+  >(null);
 
   if (member.relationship.self) {
     return (
@@ -153,8 +180,17 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
 
   async function toggleMute() {
     try {
-      await api("/mutes", { method: muted ? "DELETE" : "POST", body: { targetType: "member", targetId: member.id } });
-      toast.success(muted ? t("Unmuted {name}", { name: member.name }) : t("Muted {name}. Their posts won’t appear in your feed.", { name: member.name }));
+      await api("/mutes", {
+        method: muted ? "DELETE" : "POST",
+        body: { targetType: "member", targetId: member.id },
+      });
+      toast.success(
+        muted
+          ? t("Unmuted {name}", { name: member.name })
+          : t("Muted {name}. Their posts won’t appear in your feed.", {
+              name: member.name,
+            }),
+      );
       setMuted(!muted);
     } catch (e) {
       toast.error(e);
@@ -163,10 +199,28 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
 
   const connectable = canConnectWith(member, member.relationship);
   const menu: MenuItem[] = [];
-  if (connectable && controls.state.connection === "connected") menu.push({ label: "Remove connection", icon: "x", onSelect: () => setModal("remove") });
-  menu.push({ label: muted ? `Unmute ${member.name}` : `Mute ${member.name}`, icon: "eye-off", onSelect: toggleMute });
-  menu.push({ label: `Block ${member.name}`, icon: "shield", danger: true, onSelect: () => setModal("block") });
-  menu.push({ label: "Report profile", icon: "flag", onSelect: () => setModal("report") });
+  if (connectable && controls.state.connection === "connected")
+    menu.push({
+      label: "Remove connection",
+      icon: "x",
+      onSelect: () => setModal("remove"),
+    });
+  menu.push({
+    label: muted ? `Unmute ${member.name}` : `Mute ${member.name}`,
+    icon: "eye-off",
+    onSelect: toggleMute,
+  });
+  menu.push({
+    label: `Block ${member.name}`,
+    icon: "shield",
+    danger: true,
+    onSelect: () => setModal("block"),
+  });
+  menu.push({
+    label: "Report profile",
+    icon: "flag",
+    onSelect: () => setModal("report"),
+  });
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -176,11 +230,26 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
           Connected
         </span>
       ) : (
-        <ConnectControl member={member} controls={controls} size="default" onConnectWithNote={canPost ? () => setModal("connect") : undefined} />
+        <ConnectControl
+          member={member}
+          controls={controls}
+          size="default"
+          onConnectWithNote={canPost ? () => setModal("connect") : undefined}
+        />
       )}
       {/* Official accounts are follow-only, so Follow is the main action there. */}
-      <FollowControl member={member} controls={controls} size="default" prominent={!connectable} />
-      {connectable && <MessageButton memberId={member.id} connected={controls.state.connection === "connected"} />}
+      <FollowControl
+        member={member}
+        controls={controls}
+        size="default"
+        prominent={!connectable}
+      />
+      {connectable && (
+        <MessageButton
+          memberId={member.id}
+          connected={controls.state.connection === "connected"}
+        />
+      )}
       <Menu
         label={t("More actions for {name}", { name: member.name })}
         items={menu}
@@ -190,11 +259,26 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
           </span>
         }
       />
-      {modal === "connect" && <ConnectDialog name={member.name} onClose={() => setModal(null)} onSend={(note) => controls.connect(note)} />}
-      {modal === "report" && <ReportDialog targetType="member" targetId={member.id} subject={t("{name}’s profile", { name: member.name })} onClose={() => setModal(null)} />}
+      {modal === "connect" && (
+        <ConnectDialog
+          name={member.name}
+          onClose={() => setModal(null)}
+          onSend={(note) => controls.connect(note)}
+        />
+      )}
+      {modal === "report" && (
+        <ReportDialog
+          targetType="member"
+          targetId={member.id}
+          subject={t("{name}’s profile", { name: member.name })}
+          onClose={() => setModal(null)}
+        />
+      )}
       {modal === "remove" && (
         <ConfirmDialog
-          title={t("Remove {name} from your connections?", { name: member.name })}
+          title={t("Remove {name} from your connections?", {
+            name: member.name,
+          })}
           confirmLabel="Remove"
           onClose={() => setModal(null)}
           onConfirm={async () => {
@@ -212,13 +296,19 @@ export function ProfileActions({ member, canPost }: { member: MemberProfile; can
           onClose={() => setModal(null)}
           onConfirm={async () => {
             await api(`/blocks/${member.id}`, { method: "POST" });
-            toast.success(t("{name} is blocked. You can unblock them in Settings → Blocked & muted.", { name: member.name }));
+            toast.success(
+              t(
+                "{name} is blocked. You can unblock them in Settings → Blocked & muted.",
+                { name: member.name },
+              ),
+            );
             // Their profile is no longer available to you, so leave it.
             router.replace("/feed");
           }}
         >
-          You won’t see each other’s posts or profiles. Any connection or follow between you is removed, and they can’t message, mention or
-          request to connect with you. They aren’t told. <UnblockHint />
+          You won’t see each other’s posts or profiles. Any connection or follow
+          between you is removed, and they can’t message, mention or request to
+          connect with you. They aren’t told. <UnblockHint />
         </ConfirmDialog>
       )}
     </div>

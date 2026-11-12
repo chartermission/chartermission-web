@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageMemberButton } from "./message-member";
 import { useState } from "react";
 import type { ConnectionView, Relationship } from "@chartermission/contracts";
 import { Button, cn, type ButtonProps } from "@chartermission/ui";
@@ -7,13 +8,19 @@ import { api } from "@/lib/api/client";
 import { toast } from "@/components/social/toast";
 import { T, useT } from "@/i18n/client";
 
-export type RelationshipState = Pick<Relationship, "connection" | "connectionId" | "following">;
+export type RelationshipState = Pick<
+  Relationship,
+  "connection" | "connectionId" | "following"
+>;
 
 /** `official`: an organisation account, which members follow instead of connecting with. Team members connect like anyone. */
 type Member = { id: string; name: string; official?: boolean };
 
 /** Official accounts are follow-only, in both directions (the API refuses requests either way). */
-export function canConnectWith(member: Member, relationship?: Pick<Relationship, "canConnect">): boolean {
+export function canConnectWith(
+  member: Member,
+  relationship?: Pick<Relationship, "canConnect">,
+): boolean {
   return !member.official && relationship?.canConnect !== false;
 }
 
@@ -23,7 +30,11 @@ export function useRelationship(member: Member, initial: RelationshipState) {
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
 
-  async function run(label: string, action: () => Promise<Partial<RelationshipState>>, success?: string) {
+  async function run(
+    label: string,
+    action: () => Promise<Partial<RelationshipState>>,
+    success?: string,
+  ) {
     setBusy(label);
     try {
       const patch = await action();
@@ -45,8 +56,15 @@ export function useRelationship(member: Member, initial: RelationshipState) {
       run(
         "connect",
         async () => {
-          const view = await api<ConnectionView>("/connections", { method: "POST", body: { memberId: member.id, note: note || undefined } });
-          return { connection: view.status === "accepted" ? "connected" : "pending_outgoing", connectionId: view.id };
+          const view = await api<ConnectionView>("/connections", {
+            method: "POST",
+            body: { memberId: member.id, note: note || undefined },
+          });
+          return {
+            connection:
+              view.status === "accepted" ? "connected" : "pending_outgoing",
+            connectionId: view.id,
+          };
         },
         t("Connection request sent to {name}", { name: member.name }),
       ),
@@ -54,7 +72,9 @@ export function useRelationship(member: Member, initial: RelationshipState) {
       run(
         "withdraw",
         async () => {
-          await api(`/connections/${state.connectionId}/withdraw`, { method: "POST" });
+          await api(`/connections/${state.connectionId}/withdraw`, {
+            method: "POST",
+          });
           return { connection: "none", connectionId: null };
         },
         "Request withdrawn",
@@ -63,7 +83,9 @@ export function useRelationship(member: Member, initial: RelationshipState) {
       run(
         "accept",
         async () => {
-          await api(`/connections/${state.connectionId}/accept`, { method: "POST" });
+          await api(`/connections/${state.connectionId}/accept`, {
+            method: "POST",
+          });
           return { connection: "connected" };
         },
         t("You and {name} are now connected", { name: member.name }),
@@ -72,7 +94,9 @@ export function useRelationship(member: Member, initial: RelationshipState) {
       run(
         "decline",
         async () => {
-          await api(`/connections/${state.connectionId}/decline`, { method: "POST" });
+          await api(`/connections/${state.connectionId}/decline`, {
+            method: "POST",
+          });
           return { connection: "none", connectionId: null };
         },
         "Request declined",
@@ -88,12 +112,18 @@ export function useRelationship(member: Member, initial: RelationshipState) {
       ),
     follow: () =>
       run("follow", async () => {
-        await api("/follows", { method: "POST", body: { targetType: "member", targetId: member.id } });
+        await api("/follows", {
+          method: "POST",
+          body: { targetType: "member", targetId: member.id },
+        });
         return { following: true };
       }),
     unfollow: () =>
       run("follow", async () => {
-        await api("/follows", { method: "DELETE", body: { targetType: "member", targetId: member.id } });
+        await api("/follows", {
+          method: "DELETE",
+          body: { targetType: "member", targetId: member.id },
+        });
         return { following: false };
       }),
   };
@@ -120,19 +150,41 @@ export function ConnectControl({
   if (member.official) return null;
   if (state.connection === "connected") {
     return (
-      <Button variant="secondary" size={size} block={block} disabled title="Messaging arrives in a later release">
-        Message<span className="sr-only"> <T vars={{ name: member.name }}>{"{name} (coming later)"}</T></span>
-      </Button>
+      <MessageMemberButton
+        memberId={member.id}
+        name={member.name}
+        size={size}
+        block={block}
+      />
     );
   }
   if (state.connection === "pending_incoming") {
     return (
       <div className={cn("flex gap-2", block && "w-full")}>
-        <Button size={size} block={block} disabled={!!busy} onClick={() => controls.accept()}>
-          Accept<span className="sr-only"> <T vars={{ name: member.name }}>{"{name}’s request"}</T></span>
+        <Button
+          size={size}
+          block={block}
+          disabled={!!busy}
+          onClick={() => controls.accept()}
+        >
+          Accept
+          <span className="sr-only">
+            {" "}
+            <T vars={{ name: member.name }}>{"{name}’s request"}</T>
+          </span>
         </Button>
-        <Button variant="secondary" size={size} block={block} disabled={!!busy} onClick={() => controls.decline()}>
-          Decline<span className="sr-only"> <T vars={{ name: member.name }}>{"{name}’s request"}</T></span>
+        <Button
+          variant="secondary"
+          size={size}
+          block={block}
+          disabled={!!busy}
+          onClick={() => controls.decline()}
+        >
+          Decline
+          <span className="sr-only">
+            {" "}
+            <T vars={{ name: member.name }}>{"{name}’s request"}</T>
+          </span>
         </Button>
       </div>
     );
@@ -149,9 +201,16 @@ export function ConnectControl({
         onClick={() => controls.withdraw()}
         className="group"
       >
-        <span className="group-hover:hidden group-focus-visible:hidden">Pending</span>
-        <span className="hidden group-hover:inline group-focus-visible:inline">Withdraw</span>
-        <span className="sr-only"> <T vars={{ name: member.name }}>{"request to {name}"}</T></span>
+        <span className="group-hover:hidden group-focus-visible:hidden">
+          Pending
+        </span>
+        <span className="hidden group-hover:inline group-focus-visible:inline">
+          Withdraw
+        </span>
+        <span className="sr-only">
+          {" "}
+          <T vars={{ name: member.name }}>{"request to {name}"}</T>
+        </span>
       </Button>
     );
   }
@@ -161,10 +220,15 @@ export function ConnectControl({
       size={size}
       block={block}
       disabled={busy === "connect"}
-      onClick={() => (onConnectWithNote ? onConnectWithNote() : controls.connect())}
+      onClick={() =>
+        onConnectWithNote ? onConnectWithNote() : controls.connect()
+      }
     >
       {busy === "connect" ? "Sending…" : "Connect"}
-      <span className="sr-only"> <T vars={{ name: member.name }}>{"with {name}"}</T></span>
+      <span className="sr-only">
+        {" "}
+        <T vars={{ name: member.name }}>{"with {name}"}</T>
+      </span>
     </Button>
   );
 }
@@ -186,12 +250,22 @@ export function FollowControl({
   const { state, busy } = controls;
   return (
     <Button
-      variant={state.following ? "secondary" : prominent ? (size === "small" ? "secondary" : "primary") : "ghost"}
+      variant={
+        state.following
+          ? "secondary"
+          : prominent
+            ? size === "small"
+              ? "secondary"
+              : "primary"
+            : "ghost"
+      }
       size={size}
       block={block}
       aria-pressed={state.following}
       disabled={busy === "follow"}
-      onClick={() => (state.following ? controls.unfollow() : controls.follow())}
+      onClick={() =>
+        state.following ? controls.unfollow() : controls.follow()
+      }
     >
       {state.following ? "Following" : "Follow"}
       <span className="sr-only"> {member.name}</span>
