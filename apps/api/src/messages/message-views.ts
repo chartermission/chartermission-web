@@ -177,7 +177,8 @@ export class MessageViews {
         archived: !!mine?.archivedAt,
         markedUnread: !!mine?.markedUnread,
         request,
-        firstContact: r.kind === 'direct' && !!member && !connected.has(member.id) && !blocked.has(member.id),
+        // Until the viewer has written back, a chat with someone they aren't connected with carries a safety note.
+        firstContact: r.kind === 'direct' && !!member && !connected.has(member.id) && !blocked.has(member.id) && !viewerMessages.has(r.id),
         joined: !!mine && !mine.leftAt,
       });
     }

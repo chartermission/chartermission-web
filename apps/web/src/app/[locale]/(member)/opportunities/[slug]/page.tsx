@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SendInMessageButton } from "@/components/messages/share-dialog";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -84,6 +85,7 @@ async function Detail({ params }: Pick<PageProps<"/[locale]/opportunities/[slug]
 
       <aside aria-label="Apply" className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-24 lg:w-[360px]">
         <OpportunityActions opportunity={o} />
+        <SendInMessageButton target={{ type: "opportunity", key: o.slug }} className="self-start" compact />
       </aside>
     </div>
   );

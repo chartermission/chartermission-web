@@ -12,6 +12,7 @@ import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog, UnblockHint } from "./confirm-dialog";
 import { absoluteUrl, authorHref, postAnalyticsHref, postHref } from "./links";
 import { Menu, type MenuItem } from "./menu";
+import { openSendInMessage } from "@/components/messages/share-dialog";
 import { PostAttachments } from "./post-attachments";
 import {
   AuthorName,
@@ -179,6 +180,7 @@ export function PostCard({
 
   const menu: MenuItem[] = [
     { label: "Copy link", icon: "link", onSelect: () => copyLink(post) },
+    ...(guest ? [] : [{ label: "Send in a message", icon: "send" as const, onSelect: () => openSendInMessage({ type: post.type === "article" ? "article" : "post", key: post.id }) }]),
     ...(extraMenu?.(post) ?? []),
   ];
   if (post.viewer.canEdit && !post.isRepost) {

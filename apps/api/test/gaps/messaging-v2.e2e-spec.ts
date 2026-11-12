@@ -242,6 +242,14 @@ describe('Messaging: requests, rich messages, organising, groups and announcemen
     const attendees = (await lead.post('/messages/groups', { title: 'Summit attendees', eventSlug: 'lagos-summit-chat' }).expect(201)).body as ConversationView;
     expect(attendees.members.map((m) => m.id).sort()).toEqual([kwame.id, tunde.id].sort());
     await kwame.post('/messages/groups', { title: 'x', eventSlug: 'lagos-summit-chat' }).expect(403);
+    // Asking again opens the same group, with anyone who registered since added.
+    await t.db.insert(s.eventRegistrations).values({ eventId: event.id, userId: leila.id, status: 'registered' });
+    const again = (await lead.post('/messages/groups', { title: 'Summit attendees', eventSlug: 'lagos-summit-chat' }).expect(201)).body as ConversationView;
+    expect(again.id).toBe(attendees.id);
+    expect(again.members.map((m) => m.id).sort()).toEqual([kwame.id, leila.id, tunde.id].sort());
+
+    // A member can open the announcements before the team has posted anything.
+    expect((await kwame.get('/messages/announcements/nigeria').expect(200)).body).toMatchObject({ kind: 'broadcast', canSend: false, joined: true });
 
     // Announcements: the team posts, chapter members receive and can't reply in it, and can turn it off.
     const channel = (await lead.get('/messages/announcements/nigeria').expect(200)).body as ConversationView;

@@ -674,10 +674,37 @@ export class MessagesService implements OnModuleInit {
         .where(and(eq(eventRegistrations.eventId, event.id), inArray(eventRegistrations.status, ['registered', 'attended'])));
       for (const a of attendees) if (a.userId !== user.id) ids.add(a.userId);
     }
+    const title = input.title.trim();
+    // A chapter's or event's group the viewer already runs, under the same name: open it (with any newcomers added) instead of starting another.
+    if (chapterId || eventId) {
+      const [existing] = await this.db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, conversations.id), eq(conversationMembers.userId, user.id)))
+        .where(
+          and(
+            eq(conversations.kind, 'group'),
+            eventId ? eq(conversations.eventId, eventId) : eq(conversations.chapterId, chapterId!),
+            eq(conversations.title, title),
+            isNull(conversationMembers.leftAt),
+            eq(conversationMembers.role, 'admin'),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        const present = await this.db
+          .select({ userId: conversationMembers.userId })
+          .from(conversationMembers)
+          .where(and(eq(conversationMembers.conversationId, existing.id), isNull(conversationMembers.leftAt)));
+        const have = new Set(present.map((p) => p.userId));
+        const newcomers = await this.eligible(user, [...ids].filter((id) => !have.has(id)), { chapterId, eventId });
+        if (newcomers.length && have.size + newcomers.length <= GROUP_MAX_MEMBERS) return this.addMembers(user, existing.id, { memberIds: newcomers });
+        return this.view(user, existing.id);
+      }
+    }
     if (ids.size + 1 > GROUP_MAX_MEMBERS) throw Errors.badRequest(`Groups can have up to ${GROUP_MAX_MEMBERS} members`);
     const eligible = await this.eligible(user, [...ids], { chapterId, eventId });
     if (!eligible.length) throw Errors.badRequest('Add at least one member');
-    const title = input.title.trim();
     const now = new Date();
     const conversation = await this.db.transaction(async (tx) => {
       const [created] = await tx.insert(conversations).values({ kind: 'group', title, chapterId, eventId, createdBy: user.id, lastMessageAt: now }).returning();
@@ -813,16 +840,17 @@ export class MessagesService implements OnModuleInit {
       .from(conversations)
       .where(and(eq(conversations.kind, 'broadcast'), eq(conversations.chapterId, chapter.id)))
       .limit(1);
+    const following = await this.followsChapter(user.id, chapter.id);
     if (!row) {
-      if (!team) throw Errors.notFound('Announcements');
-      await this.db.insert(conversations).values({ kind: 'broadcast', chapterId: chapter.id, createdBy: user.id }).onConflictDoNothing();
+      // Made on first visit by anyone in the chapter, so members can see (and turn off) announcements before the first one.
+      if (!team && !following) throw Errors.forbidden(`Join ${chapter.name} to get its announcements`);
+      await this.db.insert(conversations).values({ kind: 'broadcast', chapterId: chapter.id, createdBy: team ? user.id : null }).onConflictDoNothing();
       [row] = await this.db
         .select()
         .from(conversations)
         .where(and(eq(conversations.kind, 'broadcast'), eq(conversations.chapterId, chapter.id)))
         .limit(1);
     }
-    const following = await this.followsChapter(user.id, chapter.id);
     if (team || following) {
       await this.db
         .insert(conversationMembers)

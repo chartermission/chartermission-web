@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { PushSettings } from "@/components/messages/push-settings";
 import type { NotificationPreferences } from "@chartermission/contracts";
 import { LoadError } from "@/components/account/load-error";
 import { settle } from "@/components/account/settle";
@@ -33,6 +34,7 @@ export default function NotificationSettingsPage() {
         title="Notifications"
         description="Choose what you hear about in the app and by email. Turning off email never stops security messages."
       />
+      <PushSettings />
       <Suspense fallback={<SettingsPageSkeleton cards={1} rows={8} />}>
         <Preferences />
       </Suspense>

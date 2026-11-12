@@ -13,8 +13,17 @@ const VIDEO_POLL_TIMEOUT_MS = 30 * 60_000;
 /** Client-side check against the same limits the API enforces; throws an ApiError with a member-facing message. */
 export function assertUploadable(file: File, purpose: UploadPurpose): void {
   const limit = UPLOAD_LIMITS[purpose];
-  if (!(limit.mimes as readonly string[]).includes(file.type)) {
-    const kinds = purpose === "post_document" ? "a PDF" : isVideoPurpose(purpose) ? "an MP4, MOV or WebM video" : "a JPEG, PNG or WebP image";
+  if (!(limit.mimes as readonly string[]).includes(mimeOf(file))) {
+    const kinds =
+      purpose === "post_document" || purpose === "profile_resume"
+        ? "a PDF"
+        : purpose === "message_file"
+          ? "a PDF, Word, Excel or PowerPoint file"
+          : purpose === "voice_note"
+            ? "a voice recording"
+            : isVideoPurpose(purpose)
+              ? "an MP4, MOV or WebM video"
+              : "a JPEG, PNG or WebP image";
     throw new ApiError(415, "UNSUPPORTED_MEDIA", `Choose ${kinds}.`);
   }
   if (file.size > limit.maxBytes) {
@@ -22,6 +31,9 @@ export function assertUploadable(file: File, purpose: UploadPurpose): void {
     throw new ApiError(413, "PAYLOAD_TOO_LARGE", `Choose a file under ${mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`}.`);
   }
 }
+
+/** The file's type without parameters ("audio/webm;codecs=opus" → "audio/webm"). */
+export const mimeOf = (file: Blob) => file.type.split(";")[0]!.trim().toLowerCase();
 
 /** Client-side length check for a video before it is uploaded (the server checks again). */
 export function assertVideoLength(seconds: number | null, maxSeconds: number): void {
@@ -90,12 +102,13 @@ export async function uploadFile(
   assertUploadable(file, purpose);
   const target = await api<CreateUploadResponse>("/uploads", {
     method: "POST",
-    body: { purpose, fileName: file.name || "upload", mime: file.type, sizeBytes: file.size, trim: trim ?? undefined },
+    body: { purpose, fileName: file.name || "upload", mime: mimeOf(file), sizeBytes: file.size, trim: trim ?? undefined },
   });
   await putBytes(target, file, onProgress);
   let view = await api<FileView>(`/uploads/${target.fileId}/complete`, { method: "POST" });
   const started = Date.now();
-  const video = isVideoPurpose(purpose);
+  // Videos and voice notes are converted on the server, which takes longer than an image check.
+  const video = isVideoPurpose(purpose) || purpose === "voice_note";
   while (view.status === "pending") {
     if (Date.now() - started > (video ? VIDEO_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS)) {
       throw new ApiError(504, "UNKNOWN", "Processing is taking longer than expected. Try again in a minute.");

@@ -16,6 +16,7 @@ import {
 } from "@chartermission/ui";
 import { UserMenu } from "@/components/account/user-menu";
 import { SearchBox } from "@/components/search/search-box";
+import { subscribeMessages } from "@/components/messages/stream";
 import { onMessagesChanged } from "@/components/messages/messages-events";
 import { api } from "@/lib/api/client";
 import { MobileNav, openNavDrawer } from "@/components/mobile-nav";
@@ -77,16 +78,22 @@ function useUnreadMessages(initial: number): number {
     const refresh = () => {
       if (document.visibilityState !== "visible") return;
       api<MessagesUnread>("/messages/unread").then(
-        (r) => live && setCount(r.unread),
+        (r) => live && setCount(r.unread + r.requests),
         () => undefined,
       );
     };
-    const timer = window.setInterval(refresh, 30000);
+    const timer = window.setInterval(refresh, 60000);
     const off = onMessagesChanged(refresh);
+    // Live: the server sends fresh counts whenever they change.
+    const offLive = subscribeMessages((event) => {
+      if (event.type === "unread") setCount(event.unread + event.requests);
+      else if (event.type === "reconnected") refresh();
+    });
     return () => {
       live = false;
       window.clearInterval(timer);
       off();
+      offLive();
     };
   }, []);
   return count;

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import type {
-  ConversationView,
   MemberProfile,
   PreviewAs,
 } from "@chartermission/contracts";
@@ -12,6 +11,7 @@ import { Button, Icon, buttonClasses } from "@chartermission/ui";
 import { useT } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
+import { openSendInMessage } from "@/components/messages/share-dialog";
 import { MessageMemberButton } from "@/components/network/message-member";
 import {
   ConnectControl,
@@ -32,27 +32,8 @@ const previewLabels: Record<PreviewAs, string> = {
   connection: "Preview as a connection",
 };
 
-/** Opens the private conversation with this member. Messages are for connections, so others see why it is off. */
-function MessageButton({
-  memberId,
-  connected,
-}: {
-  memberId: string;
-  connected: boolean;
-}) {
-  const t = useT();
-  if (!connected) {
-    return (
-      <Button
-        variant="secondary"
-        disabled
-        title={t("You can message members you’re connected with")}
-      >
-        <Icon name="message" size={16} />
-        {t("Message")}
-      </Button>
-    );
-  }
+/** Opens the private conversation with this member: straight away with a connection, as a message request with anyone else. */
+function MessageButton({ memberId }: { memberId: string; connected: boolean }) {
   return <MessageMemberButton memberId={memberId} />;
 }
 
@@ -205,6 +186,11 @@ export function ProfileActions({
       icon: "x",
       onSelect: () => setModal("remove"),
     });
+  menu.push({
+    label: "Send profile in a message",
+    icon: "send",
+    onSelect: () => openSendInMessage({ type: "member", key: member.handle }),
+  });
   menu.push({
     label: muted ? `Unmute ${member.name}` : `Mute ${member.name}`,
     icon: "eye-off",

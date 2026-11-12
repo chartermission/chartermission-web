@@ -166,7 +166,7 @@ export const ConversationView = z.object({
   markedUnread: z.boolean(),
   /** Message requests: "incoming" for the member who received it, "outgoing" for its sender. */
   request: z.enum(["incoming", "outgoing"]).nullable(),
-  /** Neither has written to the other before and they aren't connected: the app shows a safety note. */
+  /** Not connected, and the viewer hasn’t written in this chat yet: the app shows a safety note. */
   firstContact: z.boolean(),
   /** Whether the viewer is still in it (false after leaving a group or turning announcements off). */
   joined: z.boolean(),

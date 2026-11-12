@@ -1,5 +1,6 @@
 "use client";
 
+import { openSendInMessage } from "@/components/messages/share-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -150,6 +151,7 @@ export function ArticleReader({
 
   const menu: MenuItem[] = [
     { label: "Copy link", icon: "link", onSelect: copyLink },
+    ...(guest ? [] : [{ label: "Send in a message", icon: "send" as const, onSelect: () => openSendInMessage({ type: "article", key: post.id }) }]),
   ];
   if (post.viewer.canEdit && !post.isRepost)
     menu.push({

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { ChapterChat } from "@/components/chapters/chapter-chat";
+import { SendInMessageButton } from "@/components/messages/share-dialog";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -210,6 +212,7 @@ async function ChapterView({
                 inviterHandle={viewer.handle}
                 chapter={{ slug: chapter.slug, name: chapter.name }}
               />
+              <SendInMessageButton target={{ type: "chapter", key: chapter.slug }} />
             </div>
           </div>
           <TabList
@@ -345,6 +348,14 @@ async function ChapterView({
               </p>
             )}
           </Panel>
+
+          <ChapterChat
+            chapter={{ slug: chapter.slug, name: chapter.name }}
+            canManage={chapter.viewer.canManage}
+            member={chapter.viewer.following}
+            teamIds={chapter.team.map((m) => m.member.id)}
+            viewerId={viewer.id}
+          />
 
           <Panel
             aria-labelledby="chapter-events-heading"

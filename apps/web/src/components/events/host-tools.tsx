@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { CancelEventInput, SubmitForReviewInput, type EventDetail } from "@chartermission/contracts";
+import { CancelEventInput, SubmitForReviewInput, type ConversationView, type EventDetail } from "@chartermission/contracts";
 import { Button, Icon, Panel, buttonClasses, cn, type IconName } from "@chartermission/ui";
 import { inputClasses } from "@/components/auth/fields";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
@@ -212,6 +212,16 @@ export function HostTools({ event, canPublishDirectly }: { event: EventDetail; c
   const deletable = event.status === "draft" || (event.status === "rejected" && !event.review?.publishedAt);
   const hasRegistrations = event.registrationMode === "internal" && (event.status === "published" || event.status === "archived" || event.status === "unpublished");
 
+  /** One group with every registered attendee (the same group each time, with newcomers added). */
+  async function messageAttendees() {
+    try {
+      const group = await api<ConversationView>("/messages/groups", { method: "POST", body: { title: event.title.slice(0, 80), eventSlug: event.slug } });
+      router.push(`/messages/${group.id}`);
+    } catch (e) {
+      toast.error(e);
+    }
+  }
+
   async function remove() {
     await api(`/events/${event.id}`, { method: "DELETE" });
     toast.success("Draft deleted");
@@ -246,6 +256,12 @@ export function HostTools({ event, canPublishDirectly }: { event: EventDetail; c
             </Link>
           )}
         </div>
+        {hasRegistrations && event.registeredCount > 0 && (
+          <Button variant="secondary" size="small" block onClick={() => void messageAttendees()}>
+            <Icon name="message" size={16} />
+            Message attendees
+          </Button>
+        )}
         {(cancellable || deletable) && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
             {cancellable && (

@@ -1,5 +1,6 @@
 "use client";
 
+import { openSendInMessage } from "@/components/messages/share-dialog";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import type { EventDetail, RegistrationResult } from "@chartermission/contracts";
@@ -321,7 +322,7 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
         {announcement}
       </p>
       {publicState && (
-      <div className="grid grid-cols-3 gap-2 border-t border-line pt-4">
+      <div className="grid grid-cols-4 gap-2 border-t border-line pt-4">
         {event.past ? (
           <span className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-disabled" title="The event has ended">
             <Icon name="calendar" size={20} />
@@ -349,6 +350,10 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
         <button type="button" onClick={share} className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink">
           <Icon name="share" size={20} />
           Share
+        </button>
+        <button type="button" onClick={() => openSendInMessage({ type: "event", key: event.slug })} className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink">
+          <Icon name="send" size={20} />
+          Send
         </button>
       </div>
       )}

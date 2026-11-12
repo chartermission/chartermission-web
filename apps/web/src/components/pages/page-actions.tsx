@@ -1,5 +1,6 @@
 "use client";
 
+import { openSendInMessage } from "@/components/messages/share-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -37,7 +38,10 @@ export function PageActions({ page, viewer }: { page: PageDetail; viewer: Viewer
     router.refresh();
   }
 
-  const menu: MenuItem[] = [{ label: "Copy link", icon: "link", onSelect: copyLink }];
+  const menu: MenuItem[] = [
+    { label: "Copy link", icon: "link", onSelect: copyLink },
+    { label: "Send in a message", icon: "send", onSelect: () => openSendInMessage({ type: "page", key: page.slug }) },
+  ];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
