@@ -1,42 +1,64 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
-import { INVITE_EMAILS_MAX, INVITE_MESSAGE_MAX, type SendInvitesResult } from "@chartermission/contracts";
+import { INVITE_EMAILS_MAX, INVITE_MESSAGE_MAX, type SendInvitesResult, type ShareTarget } from "@chartermission/contracts";
 import { Button, Icon, buttonClasses, cn, type IconName } from "@chartermission/ui";
-import { Dialog } from "@/components/social/dialog";
+import { openSendInMessage } from "@/components/messages/share-dialog";
+import { Dialog, closeDialog } from "@/components/social/dialog";
 import { toast } from "@/components/social/toast";
 import { useT } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { errorMessage } from "@/components/social/error-message";
 
+export type InviteEvent = { slug: string; title: string };
+
 /**
- * Invite people to Charter Mission, or to a chapter: share the link with a ready-made message
- * (WhatsApp, Telegram, LinkedIn, X, a text message, the email app or the phone's share sheet),
- * copy either, or have Charter Mission email the invitation.
- * The link is /invite?chapter={slug}&from={handle} (see the proxy): members go straight to the
- * chapter; someone new signs up with the chapter already picked.
+ * Invite people to Charter Mission, to a chapter or to an event: invite members already here (a
+ * message with the chapter's or event's card), share the link with a ready-made message (WhatsApp,
+ * Telegram, LinkedIn, X, a text message, the email app or the phone's share sheet), copy either,
+ * or have Charter Mission email the invitation.
+ * The link is /invite?chapter={slug}&from={handle} or /invite?event={slug}&from={handle} (see the
+ * proxy): members go straight there; someone new signs up first.
  */
-export function InviteDialog({ inviterHandle, chapter, onClose }: { inviterHandle: string; chapter?: { slug: string; name: string } | null; onClose: () => void }) {
+export function InviteDialog({
+  inviterHandle,
+  chapter,
+  event,
+  onClose,
+}: {
+  inviterHandle: string;
+  chapter?: { slug: string; name: string } | null;
+  event?: InviteEvent | null;
+  onClose: () => void;
+}) {
   const t = useT();
   const id = useId();
+  const shareTarget: ShareTarget | null = chapter ? { type: "chapter", key: chapter.slug } : event ? { type: "event", key: event.slug } : null;
   const [origin, setOrigin] = useState("https://chartermission.com");
   // eslint-disable-next-line react-hooks/set-state-in-effect -- the page's own address, known only in the browser
   useEffect(() => setOrigin(window.location.origin), []);
   const link = useMemo(() => {
     const q = new URLSearchParams();
     if (chapter) q.set("chapter", chapter.slug);
+    else if (event) q.set("event", event.slug);
     q.set("from", inviterHandle);
     return `${origin}/invite?${q.toString()}`;
-  }, [origin, chapter, inviterHandle]);
+  }, [origin, chapter, event, inviterHandle]);
 
   const [note, setNote] = useState(() =>
     chapter
       ? t("Join me in the {name} on Charter Mission, the professional community where Africa and its diaspora build together.", { name: chapter.name })
-      : t("I’m on Charter Mission, the professional community where Africa and its diaspora build together. Join me there."),
+      : event
+        ? t("Join me at {name} on Charter Mission.", { name: event.title })
+        : t("I’m on Charter Mission, the professional community where Africa and its diaspora build together. Join me there."),
   );
   const message = `${note.trim()}\n${link}`;
-  const subject = chapter ? t("Join the {name} on Charter Mission", { name: chapter.name }) : t("Join me on Charter Mission");
+  const subject = chapter
+    ? t("Join the {name} on Charter Mission", { name: chapter.name })
+    : event
+      ? t("You’re invited: {name}", { name: event.title })
+      : t("Join me on Charter Mission");
 
   const [copied, setCopied] = useState<"link" | "message" | null>(null);
   async function copy(what: "link" | "message") {
@@ -62,8 +84,8 @@ export function InviteDialog({ inviterHandle, chapter, onClose }: { inviterHandl
   const [emails, setEmails] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function send(event: FormEvent) {
-    event.preventDefault();
+  async function send(submit: FormEvent) {
+    submit.preventDefault();
     const list = emails
       .split(/[\s,;]+/)
       .map((e) => e.trim())
@@ -73,7 +95,7 @@ export function InviteDialog({ inviterHandle, chapter, onClose }: { inviterHandl
     setSending(true);
     setError(null);
     try {
-      const res = await api<SendInvitesResult>("/invites", { method: "POST", body: { emails: list, chapterSlug: chapter?.slug, message: note.trim() || undefined } });
+      const res = await api<SendInvitesResult>("/invites", { method: "POST", body: { emails: list, chapterSlug: chapter?.slug, eventSlug: event?.slug, message: note.trim() || undefined } });
       setEmails("");
       toast.success(t("Invitation sent to {count} people", { count: res.sent }));
     } catch (e) {
@@ -87,8 +109,18 @@ export function InviteDialog({ inviterHandle, chapter, onClose }: { inviterHandl
 
   return (
     <Dialog
-      title={chapter ? t("Invite people to the {name}", { name: chapter.name }) : t("Invite people to Charter Mission")}
-      description={t("Share the link wherever you talk to people, or let us email it for you.")}
+      title={
+        chapter
+          ? t("Invite people to the {name}", { name: chapter.name })
+          : event
+            ? t("Invite people to {name}", { name: event.title })
+            : t("Invite people to Charter Mission")
+      }
+      description={
+        shareTarget
+          ? t("Invite members already on Charter Mission, share the link wherever you talk to people, or let us email it for you.")
+          : t("Share the link wherever you talk to people, or let us email it for you.")
+      }
       onClose={onClose}
       width={560}
     >
@@ -106,6 +138,28 @@ export function InviteDialog({ inviterHandle, chapter, onClose }: { inviterHandl
             {link}
           </span>
         </label>
+
+        {shareTarget && (
+          <div className="flex items-center gap-3 rounded-lg border border-line bg-primary-tint-2 p-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary">
+              <Icon name="users" size={18} />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="text-sm font-medium text-ink">{t("Invite members")}</span>
+              <span className="text-xs text-secondary">{t("Your connections and chats on Charter Mission get your message with the card, in their messages.")}</span>
+            </div>
+            <Button
+              size="small"
+              onClick={(e) => {
+                const from = e.currentTarget;
+                closeDialog(from);
+                openSendInMessage(shareTarget, { note: note.trim(), title: t("Invite members") });
+              }}
+            >
+              {t("Choose members")}
+            </Button>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <span className="text-label text-ink">{t("Share")}</span>
@@ -178,13 +232,17 @@ export function InviteDialog({ inviterHandle, chapter, onClose }: { inviterHandl
 export function InvitePeopleButton({
   inviterHandle,
   chapter,
+  event,
   variant = "accent",
   className,
+  label,
 }: {
   inviterHandle: string;
   chapter?: { slug: string; name: string } | null;
+  event?: InviteEvent | null;
   variant?: "accent" | "secondary" | "primary";
   className?: string;
+  label?: string;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -192,9 +250,9 @@ export function InvitePeopleButton({
     <>
       <button type="button" onClick={() => setOpen(true)} className={cn(buttonClasses({ variant }), className)}>
         <Icon name="plus" size={16} />
-        {t("Invite people")}
+        {label ?? t("Invite people")}
       </button>
-      {open && <InviteDialog inviterHandle={inviterHandle} chapter={chapter} onClose={() => setOpen(false)} />}
+      {open && <InviteDialog inviterHandle={inviterHandle} chapter={chapter} event={event} onClose={() => setOpen(false)} />}
     </>
   );
 }

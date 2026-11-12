@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import {
   INVITE_EMAILS_PER_DAY,
   type SendInvitesInput,
   type SendInvitesResult,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, memberProfiles } from '../db/schema.js';
+import { chapters, events, memberProfiles } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { Errors } from '../common/errors.js';
 import { MailService } from '../infra/mail.service.js';
@@ -14,9 +14,10 @@ import { webUrl } from '../infra/mail-layout.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 
 /** The address an invitation opens (see packages/contracts/src/invites.ts). */
-export function inviteLink(from: string, chapterSlug?: string | null): string {
+export function inviteLink(from: string, chapterSlug?: string | null, eventSlug?: string | null): string {
   const q = new URLSearchParams();
   if (chapterSlug) q.set('chapter', chapterSlug);
+  else if (eventSlug) q.set('event', eventSlug);
   q.set('from', from);
   return webUrl(`/invite?${q.toString()}`);
 }
@@ -66,6 +67,17 @@ export class InvitesService {
       chapter = row;
     }
 
+    let event: { title: string; slug: string } | null = null;
+    if (input.eventSlug && !chapter) {
+      const [row] = await this.db
+        .select({ title: events.title, slug: events.slug })
+        .from(events)
+        .where(and(eq(events.slug, input.eventSlug), eq(events.status, 'published'), isNull(events.cancelledAt)))
+        .limit(1);
+      if (!row) throw Errors.notFound('That event');
+      event = row;
+    }
+
     for (let i = 0; i < emails.length; i += 1)
       await this.limits.consume(
         `invites:${user.id}`,
@@ -75,28 +87,32 @@ export class InvitesService {
 
     const subject = chapter
       ? `${me.name} invited you to the ${chapter.name} on Charter Mission`
-      : `${me.name} invited you to join Charter Mission`;
+      : event
+        ? `${me.name} invited you to ${event.title} on Charter Mission`
+        : `${me.name} invited you to join Charter Mission`;
     const paragraphs = [
       chapter
         ? `${me.name} would like you to join the ${chapter.name} on Charter Mission, the professional community where Africa and its diaspora build together.`
-        : `${me.name} would like you to join Charter Mission, the professional community where Africa and its diaspora build together.`,
+        : event
+          ? `${me.name} would like you to come to ${event.title} on Charter Mission, the professional community where Africa and its diaspora build together.`
+          : `${me.name} would like you to join Charter Mission, the professional community where Africa and its diaspora build together.`,
       ...(input.message ? [`Their note: “${input.message}”`] : []),
-      'Joining is free. You choose what each audience can see on your profile.',
+      event
+        ? 'Joining is free. Once you’re in, you can register for the event in one click.'
+        : 'Joining is free. You choose what each audience can see on your profile.',
     ];
     for (const to of emails) {
       // In the inviter's language: we don't know the recipient's.
       await this.mail.compose({
         to,
         userId: null,
-        template: chapter ? 'invite.chapter' : 'invite.platform',
+        template: chapter ? 'invite.chapter' : event ? 'invite.event' : 'invite.platform',
         subject,
-        heading: chapter
-          ? `Join the ${chapter.name}`
-          : 'You’re invited to Charter Mission',
+        heading: chapter ? `Join the ${chapter.name}` : event ? event.title : 'You’re invited to Charter Mission',
         paragraphs,
         button: {
-          label: 'Accept the invitation',
-          url: inviteLink(me.handle, chapter?.slug),
+          label: event ? 'See the event' : 'Accept the invitation',
+          url: inviteLink(me.handle, chapter?.slug, event?.slug),
         },
         footer: `You received this email because ${me.name} invited you to Charter Mission. We won’t email you again unless you join.`,
       });

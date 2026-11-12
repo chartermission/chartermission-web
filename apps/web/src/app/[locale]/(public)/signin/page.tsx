@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
+import { INVITE_EVENT_COOKIE } from "@/lib/invite";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { safeNext } from "@/components/auth/destinations";
 import { RedirectIfSignedIn } from "@/components/auth/redirect-if-signed-in";
@@ -22,7 +24,9 @@ function first(value: string | string[] | undefined) {
 
 async function SignInWithParams({ searchParams }: Pick<PageProps<"/[locale]/signin">, "searchParams">) {
   const params = await searchParams;
-  const next = safeNext(first(params.next));
+  // Arrived from an event invitation and already a member: go to the event after signing in.
+  const invitedEvent = (await cookies()).get(INVITE_EVENT_COOKIE)?.value;
+  const next = safeNext(first(params.next)) ?? (invitedEvent && /^[a-z0-9-]{1,200}$/.test(invitedEvent) ? `/events/${invitedEvent}` : null);
   const noticeParam = first(params.notice);
   const notice = notices.find((n) => n === noticeParam) ?? null;
   return (

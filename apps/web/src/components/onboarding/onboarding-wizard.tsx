@@ -106,6 +106,7 @@ export function OnboardingWizard({
   countryGroups,
   viewer,
   invitedChapterId = null,
+  done = "/feed",
 }: {
   initial: OnboardingState;
   profile: Pick<OwnProfile, "organisation" | "languages" | "avatarUrl">;
@@ -117,6 +118,8 @@ export function OnboardingWizard({
   viewer: { name: string; tone: AvatarTone; emailVerified: boolean };
   /** The chapter they were invited to, picked for them unless they already chose chapters. */
   invitedChapterId?: string | null;
+  /** Where to go when finished: the feed, or the event they were invited to. */
+  done?: string;
 }) {
   const t = useT();
   const id = useId();
@@ -279,7 +282,7 @@ export function OnboardingWizard({
       }));
       if (action === "save") setDraft((prev) => ({ ...prev, ...follows }));
       if (index >= LAST) {
-        router.replace("/feed");
+        router.replace(done as "/feed");
         router.refresh();
         return;
       }

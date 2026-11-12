@@ -15,21 +15,32 @@ import { announceMessagesChanged } from "./messages-events";
 const EVENT = "cm:send-in-message";
 const MAX = 20;
 
-/** Opens the "Send in a message" dialog for a post, event, profile… from anywhere on a member page. */
-export function openSendInMessage(target: ShareTarget) {
-  window.dispatchEvent(new CustomEvent<ShareTarget>(EVENT, { detail: target }));
+type Request = { target: ShareTarget; note?: string; title?: string };
+
+/** Opens the "Send in a message" dialog for a post, event, profile… from anywhere on a member page; `note` pre-fills the message. */
+export function openSendInMessage(target: ShareTarget, options: { note?: string; title?: string } = {}) {
+  window.dispatchEvent(new CustomEvent<Request>(EVENT, { detail: { target, ...options } }));
 }
 
 /** Mounted once in the member layout; shows the dialog when something asks for it. */
 export function SendInMessageHost() {
-  const [target, setTarget] = useState<ShareTarget | null>(null);
+  const [request, setRequest] = useState<Request | null>(null);
   useEffect(() => {
-    const on = (e: Event) => setTarget((e as CustomEvent<ShareTarget>).detail);
+    const on = (e: Event) => setRequest((e as CustomEvent<Request>).detail);
     window.addEventListener(EVENT, on);
     return () => window.removeEventListener(EVENT, on);
   }, []);
-  if (!target) return null;
-  return <SendInMessageDialog key={`${target.type}:${target.key}`} target={target} onClose={() => setTarget(null)} />;
+  if (!request) return null;
+  const { target } = request;
+  return (
+    <SendInMessageDialog
+      key={`${target.type}:${target.key}:${request.note ?? ""}`}
+      target={target}
+      initialNote={request.note}
+      title={request.title}
+      onClose={() => setRequest(null)}
+    />
+  );
 }
 
 /** A small "Send" button for page headers (events, opportunities, profiles, chapters). */
@@ -45,12 +56,12 @@ export function SendInMessageButton({ target, className, compact = false }: { ta
 
 const keyOf = (r: MessageRecipient) => (r.type === "conversation" ? `c:${r.conversationId}` : `m:${r.member.id}`);
 
-function SendInMessageDialog({ target, onClose }: { target: ShareTarget; onClose: () => void }) {
+function SendInMessageDialog({ target, initialNote = "", title, onClose }: { target: ShareTarget; initialNote?: string; title?: string; onClose: () => void }) {
   const t = useT();
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<MessageRecipient[] | null>(null);
   const [picked, setPicked] = useState<MessageRecipient[]>([]);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(initialNote);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -97,7 +108,7 @@ function SendInMessageDialog({ target, onClose }: { target: ShareTarget; onClose
 
   return (
     <Dialog
-      title={t("Send in a message")}
+      title={title ?? t("Send in a message")}
       description={t("Pick up to {count} people or chats.", { count: MAX })}
       onClose={onClose}
       width={480}

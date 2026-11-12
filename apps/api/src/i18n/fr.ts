@@ -951,4 +951,8 @@ export const fr: Record<string, string> = {
   "You can send up to {n} messages an hour.": "Vous pouvez envoyer jusqu’à {n} messages par heure.",
   "You can send up to {n} messages an hour. Pick fewer people or try again later.": "Vous pouvez envoyer jusqu’à {n} messages par heure. Choisissez moins de personnes ou réessayez plus tard.",
   "You can start {n} groups a day.": "Vous pouvez créer {n} groupes par jour.",
+  "{name} invited you to {name1} on Charter Mission": "{name} vous invite à {name1} sur Charter Mission",
+  "{name} would like you to come to {name1} on Charter Mission, the professional community where Africa and its diaspora build together.": "{name} aimerait que vous veniez à {name1} sur Charter Mission, la communauté professionnelle où l’Afrique et sa diaspora bâtissent ensemble.",
+  "Joining is free. Once you’re in, you can register for the event in one click.": "L’inscription est gratuite. Une fois membre, vous pourrez vous inscrire à l’événement en un clic.",
+  "See the event": "Voir l’événement",
 };

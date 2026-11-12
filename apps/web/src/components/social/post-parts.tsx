@@ -1,7 +1,10 @@
 "use client";
 
 import { PostAttachments } from "./post-attachments";
+import { PostPoll } from "./post-poll";
+import { VideoEmbedPlayer } from "@/components/video/video-player";
 import Link from "next/link";
+import { useState } from "react";
 import type React from "react";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
 import { Avatar, Icon, cn, RoleBadgeIcon } from "@chartermission/ui";
@@ -99,9 +102,17 @@ export function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
   );
 }
 
-/** The original post inside a repost (one level only). */
-export function RepostEmbed({ original }: { original: PostView | null }) {
+/** Past this many characters a reposted post's text is folded, with "See more". */
+const REPOST_FOLD_CHARS = 600;
+
+/**
+ * The original post inside a repost (one level only), shown in full: its text, photos, videos and
+ * documents, poll, link preview or video, and an article's cover. The card links to the original.
+ */
+export function RepostEmbed({ original: initial }: { original: PostView | null }) {
   const t = useT();
+  const [original, setOriginal] = useState(initial);
+  const [expanded, setExpanded] = useState(false);
   if (!original) {
     return (
       <p className="flex w-full items-center gap-2 rounded-[10px] border border-dashed border-line-strong bg-surface px-4 py-3 text-sm text-secondary">
@@ -110,15 +121,22 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
       </p>
     );
   }
+  const long = !original.article && original.body.length > REPOST_FOLD_CHARS;
+  const preview = original.linkPreview && !original.article && original.attachments.length === 0 ? original.linkPreview : null;
   return (
-    <div className="relative flex w-full flex-col gap-2 rounded-[10px] border border-line p-4 hover:bg-surface">
+    <div className="relative flex w-full flex-col gap-2.5 rounded-[10px] border border-line p-4 hover:bg-surface">
       <div className="flex items-center gap-2">
-        <MemberAvatar member={original.author} size={24} link />
-        <span className="truncate text-sm font-medium text-ink">{original.author.name}</span>
-        {original.author.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
-        <RoleBadgeIcon badge={original.author.badge} size={14} />
-        <span className="text-xs text-secondary">
-          · <TimeAgo iso={original.createdAt} />
+        <MemberAvatar member={original.author} size={32} link />
+        <span className="flex min-w-0 flex-col">
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="truncate text-sm font-medium text-ink">{original.author.name}</span>
+            {original.author.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
+            <RoleBadgeIcon badge={original.author.badge} size={14} />
+          </span>
+          <span className="truncate text-xs text-secondary">
+            {original.author.headline ? `${original.author.headline} · ` : ""}
+            <TimeAgo iso={original.createdAt} />
+          </span>
         </span>
       </div>
       {original.type !== "standard" && (
@@ -134,22 +152,39 @@ export function RepostEmbed({ original }: { original: PostView | null }) {
                   : null}
         </p>
       )}
-      {(original.article || original.celebration || original.request) && (
-        <p className="text-sm font-semibold text-ink">{original.article?.title ?? original.celebration?.headline ?? original.request?.title}</p>
+      {original.article?.coverUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- uploaded cover of any size
+        <img src={original.article.coverUrl} alt={original.article.coverAlt ?? ""} className="aspect-[2/1] w-full rounded-lg object-cover" loading="lazy" />
       )}
-      {original.body && !original.article && <RichText text={original.body} mentions={original.mentions} className="line-clamp-4 text-sm text-ink" />}
-      {original.article?.subtitle && <p className="line-clamp-2 text-sm text-body">{original.article.subtitle}</p>}
-      {/* The original's photos, videos and documents, above the card's link so they can be opened and played. */}
+      {(original.article || original.celebration || original.request) && (
+        <p className="text-md font-semibold text-ink">{original.article?.title ?? original.celebration?.headline ?? original.request?.title}</p>
+      )}
+      {original.body && !original.article && (
+        <div className="flex flex-col items-start gap-1">
+          <RichText text={original.body} mentions={original.mentions} className={cn("text-sm whitespace-pre-wrap text-ink", long && !expanded && "line-clamp-[10]")} />
+          {long && (
+            <button type="button" onClick={() => setExpanded(!expanded)} className="relative z-10 text-sm font-medium text-secondary hover:text-ink hover:underline">
+              {expanded ? t("See less") : t("See more")}
+            </button>
+          )}
+        </div>
+      )}
+      {original.article?.subtitle && <p className="text-sm text-body">{original.article.subtitle}</p>}
+      {/* Media, polls and links sit above the card's link so they can be opened, played and used. */}
       {original.attachments.length > 0 && !original.article && (
         <div className="relative z-10 flex flex-col gap-2">
           <PostAttachments attachments={original.attachments} />
         </div>
       )}
-      {(original.poll || (original.linkPreview?.embed && original.attachments.length === 0)) && !original.article && (
-        <p className="flex items-center gap-1.5 text-xs text-secondary">
-          <Icon name={original.poll ? "chart" : "video"} size={14} />
-          {original.poll ? "Poll" : "Video"}
-        </p>
+      {original.poll && !original.article && (
+        <div className="relative z-10">
+          <PostPoll postId={original.id} poll={original.poll} onUpdated={(next) => setOriginal(next)} />
+        </div>
+      )}
+      {preview && (
+        <div className="relative z-10">
+          {preview.embed ? <VideoEmbedPlayer preview={preview} embed={preview.embed} /> : <LinkPreviewCard preview={preview} />}
+        </div>
       )}
       <Link href={postHref(original)} className="text-xs font-medium text-primary-light after:absolute after:inset-0 hover:underline">
         {original.article ? "Read article" : "View original post"}

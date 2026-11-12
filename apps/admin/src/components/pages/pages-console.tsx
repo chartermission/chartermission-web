@@ -7,12 +7,11 @@ import {
   type AdminPageRow,
   type AdminPageStatusInput,
   type Page,
-  type PageCreationPolicy,
   type PagesSettings,
   type PageStatus,
 } from "@chartermission/contracts";
 import { Button, Chip, Icon, cn, type ChipTone } from "@chartermission/ui";
-import { Field, FormModal, SelectBox, selectClasses } from "@/components/ambassadors/modal";
+import { Field, FormModal, SelectBox } from "@/components/ambassadors/modal";
 import { TextField, inputClasses } from "@/components/form-field";
 import { ReasonDialog } from "@/components/reason-dialog";
 import { EmptyState } from "@/components/states";
@@ -40,11 +39,6 @@ const STATUS: Record<PageStatus, { label: string; tone: ChipTone }> = {
   suspended: { label: "Suspended", tone: "error" },
 };
 
-const POLICY: { value: PageCreationPolicy; label: string; hint: string }[] = [
-  { value: "review", label: "Members create pages, the team reviews them first", hint: "New pages wait here until someone approves them." },
-  { value: "open", label: "Members create pages that go live straight away", hint: "No review step. You can still suspend or remove a page afterwards." },
-  { value: "closed", label: "Only the team creates pages", hint: "Members see no Create a page button." },
-];
 
 const ACTION_COPY: Record<AdminPageStatusInput["action"], { title: string; description: string; confirm: string; done: string; needsNote: boolean }> = {
   approve: { title: "Approve {name}?", description: "The page goes live, its admins are told, and it can start posting.", confirm: "Approve page", done: "{name} approved and live.", needsNote: false },
@@ -154,36 +148,29 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
     }
   }
 
-  const policy = POLICY.find((p) => p.value === settings.memberCreation) ?? POLICY[0]!;
-
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-4 rounded-card border border-line bg-card px-5 py-4">
-        <div className="flex min-w-[280px] flex-1 flex-col gap-1.5">
-          <label htmlFor="pages-policy" className="text-label text-ink">
-            Who can create pages
-          </label>
-          <span className="relative">
-            <select
-              id="pages-policy"
-              value={settings.memberCreation}
-              disabled={!canChangeSettings || savingSettings}
-              onChange={(event) => void saveSettings({ ...settings, memberCreation: event.target.value as PageCreationPolicy })}
-              aria-describedby="pages-policy-hint"
-              className={selectClasses()}
-            >
-              {POLICY.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 right-3 my-auto h-fit text-secondary" />
-          </span>
-          <p id="pages-policy-hint" className="text-xs text-secondary">
-            {policy.hint}
-            {!canChangeSettings && " Only Platform Admins can change this."}
-          </p>
+        <div className="flex min-w-[280px] flex-1 flex-col gap-3">
+          <SettingSwitch
+            label="Members can create pages"
+            hint={settings.memberCreation === "closed" ? "Off: only the team creates pages. Members see no Create a page button." : "Any verified member can create pages for their organisations."}
+            checked={settings.memberCreation !== "closed"}
+            disabled={!canChangeSettings || savingSettings}
+            onChange={(on) => void saveSettings({ ...settings, memberCreation: on ? "review" : "closed" })}
+          />
+          <SettingSwitch
+            label="Pages go live without approval"
+            hint={
+              settings.memberCreation === "open"
+                ? "On: new pages are live straight away. You can still suspend or remove a page afterwards."
+                : "Off: new pages wait under “Waiting for review” until someone approves them."
+            }
+            checked={settings.memberCreation === "open"}
+            disabled={!canChangeSettings || savingSettings || settings.memberCreation === "closed"}
+            onChange={(on) => void saveSettings({ ...settings, memberCreation: on ? "open" : "review" })}
+          />
+          {!canChangeSettings && <p className="text-xs text-secondary">Only Platform Admins can change these.</p>}
         </div>
         <div className="flex w-[180px] flex-col gap-1.5">
           <label htmlFor="pages-max" className="text-label text-ink">
@@ -450,5 +437,28 @@ function PageFormModal({ page, onSaved, onClose }: { page: AdminPageRow | null; 
         </label>
       </div>
     </FormModal>
+  );
+}
+
+/** An on/off switch that saves straight away. */
+function SettingSwitch({ label, hint, checked, disabled, onChange }: { label: string; hint: string; checked: boolean; disabled?: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className={cn("flex items-start gap-3", disabled && "opacity-60")}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={cn("relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors", checked ? "bg-primary" : "bg-line-strong")}
+      >
+        <span className={cn("inline-block size-5 rounded-full bg-white shadow transition-transform", checked ? "translate-x-[22px]" : "translate-x-0.5")} />
+      </button>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-medium text-ink">{label}</span>
+        <span className="text-xs text-secondary">{hint}</span>
+      </div>
+    </div>
   );
 }

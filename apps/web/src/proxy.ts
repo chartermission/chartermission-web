@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { INVITE_COOKIE } from "@/lib/invite";
+import { INVITE_COOKIE, INVITE_EVENT_COOKIE } from "@/lib/invite";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, localeFromHeader, type Locale } from "@/i18n/config";
 
 /** Member-only areas: without a session cookie the visitor is sent to sign in with a return path. */
@@ -78,28 +78,32 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // Invitation links (/invite?chapter={slug}&from={handle}).
+  // Invitation links (/invite?chapter={slug}&from={handle}, or event={slug}).
   if (pathname === "/invite") {
-    const chapter = request.nextUrl.searchParams.get("chapter");
-    const slug = chapter && /^[a-z0-9-]{1,80}$/.test(chapter) ? chapter : null;
+    const valid = (v: string | null, max: number) => (v && new RegExp(`^[a-z0-9-]{1,${max}}$`).test(v) ? v : null);
+    const slug = valid(request.nextUrl.searchParams.get("chapter"), 80);
+    const event = slug ? null : valid(request.nextUrl.searchParams.get("event"), 200);
+    const target = slug ? `/chapters/${slug}` : event ? `/events/${event}` : null;
     const url = request.nextUrl.clone();
     url.search = "";
     if (PREVIEW_BOT.test(request.headers.get("user-agent") ?? "")) {
-      // The preview is the chapter's own (cover photo), or the landing page's.
+      // The preview is the chapter's or event's own (cover photo), or the landing page's.
       const saved = request.cookies.get(LOCALE_COOKIE)?.value;
-      if (!slug) return NextResponse.redirect(new URL("/", request.url));
+      if (!target) return NextResponse.redirect(new URL("/", request.url));
       url.pathname = `/${isLocale(saved) ? saved : DEFAULT_LOCALE}/link-preview`;
-      url.search = `?path=${encodeURIComponent(`/chapters/${slug}`)}`;
+      url.search = `?path=${encodeURIComponent(target)}`;
       return NextResponse.rewrite(url);
     }
     if (request.cookies.has("cm_session")) {
-      url.pathname = slug ? `/chapters/${slug}` : "/feed";
+      url.pathname = target ?? "/feed";
       return NextResponse.redirect(url);
     }
-    // Someone new: sign up, with the chapter already picked in "Find your people".
+    // Someone new: sign up, with the chapter already picked in "Find your people", or the event to open afterwards.
     url.pathname = "/signup";
     const response = NextResponse.redirect(url);
-    if (slug) response.cookies.set(INVITE_COOKIE, slug, { path: "/", maxAge: 60 * 60 * 24 * 30, sameSite: "lax" });
+    const month = { path: "/", maxAge: 60 * 60 * 24 * 30, sameSite: "lax" as const };
+    if (slug) response.cookies.set(INVITE_COOKIE, slug, month);
+    if (event) response.cookies.set(INVITE_EVENT_COOKIE, event, { ...month, maxAge: 60 * 60 * 24 });
     return response;
   }
 

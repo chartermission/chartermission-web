@@ -1,5 +1,6 @@
 "use client";
 
+import { InviteDialog } from "@/components/invite/invite-dialog";
 import { openSendInMessage } from "@/components/messages/share-dialog";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -147,7 +148,7 @@ function JoinBlock({ event, isIn }: { event: EventDetail; isIn: boolean }) {
  * registration state (internal, waitlist, external, closed, ended, cancelled), plus
  * add to calendar, save and share.
  */
-export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
+export function RegistrationPanel({ event: initial, inviterHandle }: { event: EventDetail; inviterHandle: string }) {
   const t = useT();
   const router = useRouter();
   const moment = useLocalMoment();
@@ -156,6 +157,7 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
   const [confirming, setConfirming] = useState(false);
   const [saved, setSaved] = useState(initial.viewer.saved);
   const [announcement, setAnnouncement] = useState("");
+  const [inviting, setInviting] = useState(false);
   const saveIcon = useRef<HTMLSpanElement>(null);
   const now = useNow();
 
@@ -351,12 +353,20 @@ export function RegistrationPanel({ event: initial }: { event: EventDetail }) {
           <Icon name="share" size={20} />
           Share
         </button>
-        <button type="button" onClick={() => openSendInMessage({ type: "event", key: event.slug })} className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink">
-          <Icon name="send" size={20} />
-          Send
-        </button>
+        {event.past || event.cancelledAt ? (
+          <button type="button" onClick={() => openSendInMessage({ type: "event", key: event.slug })} className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink">
+            <Icon name="send" size={20} />
+            Send
+          </button>
+        ) : (
+          <button type="button" onClick={() => setInviting(true)} className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink">
+            <Icon name="user-plus" size={20} />
+            Invite
+          </button>
+        )}
       </div>
       )}
+      {inviting && <InviteDialog inviterHandle={inviterHandle} event={{ slug: event.slug, title: event.title }} onClose={() => setInviting(false)} />}
       {confirming && (
         <ConfirmDialog
           title={status === "waitlisted" ? "Leave the waitlist?" : "Cancel your registration?"}

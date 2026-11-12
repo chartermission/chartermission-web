@@ -265,7 +265,7 @@ describe('Messaging: requests, rich messages, organising, groups and announcemen
     await amara.get('/messages/announcements/nigeria').expect(403);
   });
 
-  it('a new account can send a card to many connections at once; limits explain themselves and refuse before sending', async () => {
+  it('a new account can send a card to many connections at once, and message many members', async () => {
     const sender = await createMember(t, { name: 'Sara Newcomer' });
     const friends = [];
     for (let i = 0; i < 8; i++) {
@@ -283,11 +283,11 @@ describe('Messaging: requests, rich messages, organising, groups and announcemen
       expect(inbox[0]).toMatchObject({ unread: 1, lastMessage: expect.objectContaining({ body: 'Kindly register' }) });
     }
 
-    // Message requests to strangers stay capped (2 a day for a new account), with a message that says so.
-    const stranger = await createMember(t, { name: 'Not Connected' });
-    for (let i = 0; i < 2; i++) await sender.post('/messages/conversations', { memberId: (await createMember(t, { name: `Other ${i}` })).id }).expect(200);
-    const refused = await sender.post('/messages/conversations', { memberId: stranger.id }).expect(429);
-    expect(refused.body.error.message).toMatch(/message requests a day/);
+    // No daily caps: a new account can send message requests to many members.
+    for (let i = 0; i < 12; i++) {
+      const other = await createMember(t, { name: `Other ${i}` });
+      expect(((await sender.post('/messages/conversations', { memberId: other.id }).expect(200)).body as ConversationView).request).toBe('outgoing');
+    }
   });
 
   it('pushes live events to each member’s open stream', async () => {

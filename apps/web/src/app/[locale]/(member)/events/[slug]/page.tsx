@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/events/[
 
 async function EventMain({ params }: { params: Params }) {
   const { slug } = await params;
-  await requireClientViewer(`/events/${slug}`);
+  const viewer = await requireClientViewer(`/events/${slug}`);
   const event = await getEvent(slug);
   if (!event) notFound();
   const [hostOptions, taxonomies] = await Promise.all([
@@ -95,7 +95,7 @@ async function EventMain({ params }: { params: Params }) {
 
         <div className="flex flex-col gap-4 lg:row-span-2">
           <div className="flex flex-col gap-4 lg:sticky lg:top-24">
-            <RegistrationPanel key={`${event.viewer.status}-${event.registeredCount}-${event.waitlistCount}-${event.updatedAt}`} event={event} />
+            <RegistrationPanel key={`${event.viewer.status}-${event.registeredCount}-${event.waitlistCount}-${event.updatedAt}`} event={event} inviterHandle={viewer.handle} />
             <HostTools event={event} canPublishDirectly={canPublishDirectly} />
           </div>
         </div>

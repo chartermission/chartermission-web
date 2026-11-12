@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { INVITE_COOKIE } from "@/lib/invite";
+import { INVITE_COOKIE, INVITE_EVENT_COOKIE } from "@/lib/invite";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -59,7 +59,11 @@ async function Wizard() {
   const [state, profile, taxonomies] = result.data;
   if (state.completed) redirect("/feed");
   // Invited to a chapter (/invite?chapter=…): pick it in "Find your people" for them.
-  const invited = (await cookies()).get(INVITE_COOKIE)?.value;
+  const jar = await cookies();
+  const invited = jar.get(INVITE_COOKIE)?.value;
+  // Invited to an event (/invite?event=…): open it when they finish.
+  const invitedEvent = jar.get(INVITE_EVENT_COOKIE)?.value;
+  const done = invitedEvent && /^[a-z0-9-]{1,200}$/.test(invitedEvent) ? `/events/${invitedEvent}` : "/feed";
   const invitedChapterId = taxonomies.chapters.find((c) => c.slug === invited)?.id ?? null;
   return (
     <OnboardingWizard
@@ -69,6 +73,7 @@ async function Wizard() {
       countryGroups={groupCountries(taxonomies.countries)}
       viewer={{ name: viewer.name, tone: viewer.tone, emailVerified: viewer.emailVerified }}
       invitedChapterId={invitedChapterId}
+      done={done}
     />
   );
 }
