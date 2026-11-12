@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
+import type { InvitePreview } from "@chartermission/contracts";
+import { INVITE_REF_COOKIE, parseInviteRef } from "@/lib/invite";
+import { apiGetOrNull } from "@/lib/api/server";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { RedirectIfSignedIn } from "@/components/auth/redirect-if-signed-in";
 import { LoadError } from "@/components/account/load-error";
@@ -18,10 +22,19 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 async function SignUpFormWithCountries() {
-  const result = await settle(getTaxonomies());
+  const invite = parseInviteRef((await cookies()).get(INVITE_REF_COOKIE)?.value);
+  const [result, preview] = await Promise.all([
+    settle(getTaxonomies()),
+    invite ? apiGetOrNull<InvitePreview>("/invites/preview", invite) : Promise.resolve(null),
+  ]);
   if (!result.ok)
     return <LoadError title="We couldn’t load the sign-up form" message={result.error.message} retryHref="/signup" />;
-  return <SignUpForm countryGroups={groupCountries(result.data.countries)} />;
+  return (
+    <SignUpForm
+      countryGroups={groupCountries(result.data.countries)}
+      invite={invite && preview?.inviter ? { ref: invite, inviterName: preview.inviter.name, targetTitle: preview.target?.title ?? null } : null}
+    />
+  );
 }
 
 /** Sign up — Figma "Web / Sign up" (node 17:1511). */

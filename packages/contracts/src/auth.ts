@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { InviteRef } from "./invites.js";
 import { CountryCode } from "./common.js";
 
 /*
@@ -24,6 +25,8 @@ export const SignUpInput = z.object({
   password: Password,
   country: CountryCode,
   acceptTerms: z.literal(true, { message: "You must accept the terms to continue" }),
+  /** The invitation they came through, so the inviter is credited. */
+  invite: InviteRef.optional(),
 });
 export type SignUpInput = z.infer<typeof SignUpInput>;
 

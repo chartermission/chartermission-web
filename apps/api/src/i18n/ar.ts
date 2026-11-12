@@ -997,4 +997,8 @@ export const ar: Record<string, string> = {
   "{name} would like you to come to {name1} on Charter Mission, the professional community where Africa and its diaspora build together.": "يودّ {name} أن تحضر {name1} على Charter Mission، المجتمع المهني الذي تبني فيه أفريقيا وجالياتها معًا.",
   "Joining is free. Once you’re in, you can register for the event in one click.": "الانضمام مجاني. بعد انضمامك يمكنك التسجيل في الفعالية بنقرة واحدة.",
   "See the event": "عرض الفعالية",
+  "{name} joined Charter Mission through your invitation": "انضم {name} إلى Charter Mission عبر دعوتك",
+  "{name} accepted your invitation": "قبل {name} دعوتك",
+  "{name} joined Charter Mission through your invitation, and you’re now connected.": "انضم {name} إلى Charter Mission عبر دعوتك، وأصبحتما متصلين الآن.",
+  "{name} joined Charter Mission through your invitation.": "انضم {name} إلى Charter Mission عبر دعوتك.",
 };

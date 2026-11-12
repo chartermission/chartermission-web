@@ -2244,3 +2244,27 @@ export const postViewDays = pgTable(
   },
   (t) => [primaryKey({ columns: [t.postId, t.day] })],
 );
+
+/** Who invited whom: one row per member who signed up through an invitation link. */
+export const referrals = pgTable(
+  'referrals',
+  {
+    id: id(),
+    inviterId: uuid('inviter_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    inviteeId: uuid('invitee_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** member (join the inviter), chapter or event. */
+    kind: text('kind').notNull().default('member'),
+    /** The chapter's or event's slug. */
+    targetSlug: text('target_slug'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('referrals_invitee_ux').on(t.inviteeId),
+    index('referrals_inviter_idx').on(t.inviterId),
+    check('referrals_kind_ck', sql`${t.kind} in ('member','chapter','event')`),
+  ],
+);

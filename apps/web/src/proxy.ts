@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { INVITE_COOKIE, INVITE_EVENT_COOKIE } from "@/lib/invite";
+import { INVITE_COOKIE, INVITE_EVENT_COOKIE, INVITE_REF_COOKIE } from "@/lib/invite";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, localeFromHeader, type Locale } from "@/i18n/config";
 
 /** Member-only areas: without a session cookie the visitor is sent to sign in with a return path. */
@@ -79,32 +79,38 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // Invitation links (/invite?chapter={slug}&from={handle}, or event={slug}).
+  // Invitation links: /invite?from={handle} (join me), &chapter={slug} or &event={slug}.
   if (pathname === "/invite") {
     const valid = (v: string | null, max: number) => (v && new RegExp(`^[a-z0-9-]{1,${max}}$`).test(v) ? v : null);
-    const slug = valid(request.nextUrl.searchParams.get("chapter"), 80);
-    const event = slug ? null : valid(request.nextUrl.searchParams.get("event"), 200);
-    const target = slug ? `/chapters/${slug}` : event ? `/events/${event}` : null;
+    const params = request.nextUrl.searchParams;
+    const from = params.get("from") && /^[a-z0-9-]{1,60}$/i.test(params.get("from")!) ? params.get("from")! : null;
+    const slug = valid(params.get("chapter"), 80);
+    const event = slug ? null : valid(params.get("event"), 200);
+    const target = slug ? `/chapters/${slug}` : event ? `/events/${event}` : from ? `/${from}` : null;
+    const saved = request.cookies.get(LOCALE_COOKIE)?.value;
+    const locale: Locale = isLocale(saved) ? saved : (localeFromHeader(request.headers.get("accept-language")) ?? DEFAULT_LOCALE);
     const url = request.nextUrl.clone();
-    url.search = "";
     if (PREVIEW_BOT.test(request.headers.get("user-agent") ?? "")) {
-      // The preview is the chapter's or event's own (cover photo), or the landing page's.
-      const saved = request.cookies.get(LOCALE_COOKIE)?.value;
+      // The preview is the chapter's, event's or inviter's own, or the landing page's.
       if (!target) return NextResponse.redirect(new URL("/", request.url));
-      url.pathname = `/${isLocale(saved) ? saved : DEFAULT_LOCALE}/link-preview`;
+      url.pathname = `/${locale}/link-preview`;
       url.search = `?path=${encodeURIComponent(target)}`;
       return NextResponse.rewrite(url);
     }
     if (request.cookies.has("cm_session")) {
+      // Already a member: straight to what they were invited to (for a personal invitation, the inviter's profile).
       url.pathname = target ?? "/feed";
+      url.search = "";
       return NextResponse.redirect(url);
     }
-    // Someone new: sign up, with the chapter already picked in "Find your people", or the event to open afterwards.
-    url.pathname = "/signup";
-    const response = NextResponse.redirect(url);
+    // Someone new: the invitation page says who invited them and to what. The cookies carry the
+    // invitation through sign-up (credit the inviter), onboarding (pick the chapter) and after (open the event).
+    url.pathname = `/${locale}/invite`;
+    const response = NextResponse.rewrite(url);
     const month = { path: "/", maxAge: 60 * 60 * 24 * 30, sameSite: "lax" as const };
+    if (from) response.cookies.set(INVITE_REF_COOKIE, JSON.stringify({ from, kind: slug ? "chapter" : event ? "event" : "member", ...(slug || event ? { slug: slug ?? event } : {}) }), month);
     if (slug) response.cookies.set(INVITE_COOKIE, slug, month);
-    if (event) response.cookies.set(INVITE_EVENT_COOKIE, event, { ...month, maxAge: 60 * 60 * 24 });
+    if (event) response.cookies.set(INVITE_EVENT_COOKIE, event, { ...month, maxAge: 60 * 60 * 24 * 7 });
     return response;
   }
 

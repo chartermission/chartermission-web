@@ -256,3 +256,18 @@ export function InvitePeopleButton({
     </>
   );
 }
+
+const OPEN_INVITE = "cm:open-invite";
+/** Opens the personal invitation dialog from anywhere on a member page (the account menus). */
+export const openInviteDialog = () => window.dispatchEvent(new Event(OPEN_INVITE));
+
+/** Mounted once in the member layout; shows the invite dialog when a menu asks for it. */
+export function InviteHost({ inviterHandle }: { inviterHandle: string }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const on = () => setOpen(true);
+    window.addEventListener(OPEN_INVITE, on);
+    return () => window.removeEventListener(OPEN_INVITE, on);
+  }, []);
+  return open ? <InviteDialog inviterHandle={inviterHandle} onClose={() => setOpen(false)} /> : null;
+}

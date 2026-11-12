@@ -1,5 +1,6 @@
 "use client";
 
+import { openInviteDialog } from "@/components/invite/invite-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
@@ -328,6 +329,17 @@ function NavDrawer({
             )}
           </Link>
         ))}
+        <button
+          type="button"
+          onClick={() => {
+            close();
+            openInviteDialog();
+          }}
+          className={cn(item, "w-full text-ink hover:bg-muted")}
+        >
+          <Icon name="user-plus" size={20} className="text-secondary" />
+          {t("Invite people")}
+        </button>
         {viewer.adminUrl && (
           // eslint-disable-next-line @next/next/no-html-link-for-pages
           <a

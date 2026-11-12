@@ -4,6 +4,7 @@ import { AccountBanners, AccountGate } from "@/components/account/account-notice
 import { TopNav, TopNavBar } from "@/components/top-nav";
 import { apiGet, getViewer } from "@/lib/api/server";
 import { LocaleSync } from "@/i18n/language-menu";
+import { InviteHost } from "@/components/invite/invite-dialog";
 import { SendInMessageHost } from "@/components/messages/share-dialog";
 import { VideoTrimHost } from "@/components/video/video-trim";
 
@@ -39,6 +40,7 @@ async function ViewerChrome() {
       <AccountBanners viewer={account} />
       <AccountGate viewer={account} />
       <SendInMessageHost />
+      <InviteHost inviterHandle={viewer.handle} />
     </>
   );
 }

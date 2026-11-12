@@ -68,6 +68,8 @@ export const NotificationType = z.enum([
   "chapter_ban",
   /** A member sent you a private message (at most one notice per conversation per day). Icon avatar. */
   "message_received",
+  /** Someone joined Charter Mission through your invitation. Icon avatar. */
+  "invite_joined",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 

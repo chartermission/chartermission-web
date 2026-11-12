@@ -1,5 +1,6 @@
 "use client";
 
+import { openInviteDialog } from "@/components/invite/invite-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
@@ -155,6 +156,19 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
               {link.label}
             </Link>
           ))}
+          <button
+            type="button"
+            role="menuitem"
+            tabIndex={-1}
+            onClick={() => {
+              setOpen(false);
+              openInviteDialog();
+            }}
+            className={itemClasses}
+          >
+            <Icon name="user-plus" size={18} className="text-secondary" />
+            {t("Invite people")}
+          </button>
           {viewer.adminUrl && (
             // An API address that answers with a redirect to the console, so it has to be a full page load, not a <Link>.
             // eslint-disable-next-line @next/next/no-html-link-for-pages

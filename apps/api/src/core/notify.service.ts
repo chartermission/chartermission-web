@@ -72,6 +72,7 @@ export const CATEGORY_OF: Record<
   chapter_post_pending: 'always',
   chapter_ban: 'always',
   message_received: 'connections',
+  invite_joined: 'connections',
 };
 
 export interface NotifyInput {

@@ -1,5 +1,6 @@
 "use client";
 
+import type { InviteRefCookie } from "@/lib/invite";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, type FormEvent } from "react";
@@ -55,7 +56,14 @@ function validate(values: Values): Errors {
 }
 
 /** Sign-up form (Figma 17:1544) wired to POST /auth/register. */
-export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] }) {
+export function SignUpForm({
+  countryGroups,
+  invite = null,
+}: {
+  countryGroups: CountryGroup[];
+  /** The invitation they came through: shown above the form, and sent so the inviter is credited. */
+  invite?: { ref: InviteRefCookie; inviterName: string; targetTitle: string | null } | null;
+}) {
   const t = useT();
   const id = useId();
   const fieldId = (field: string) => `${id}-${field}`;
@@ -94,7 +102,7 @@ export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] })
       focusField(firstInvalid);
       return;
     }
-    const input = SignUpInput.parse(values);
+    const input = SignUpInput.parse(invite ? { ...values, invite: invite.ref } : values);
     setSubmitting(true);
     try {
       await api("/auth/register", { method: "POST", body: input });
@@ -141,6 +149,17 @@ export function SignUpForm({ countryGroups }: { countryGroups: CountryGroup[] })
         </h1>
         <p className="text-md text-secondary">It takes two minutes. You can finish your profile later.</p>
       </div>
+
+      {invite && (
+        <p className="flex items-start gap-2 rounded-lg bg-primary-tint-2 px-3 py-2.5 text-sm text-ink">
+          <Icon name="mail" size={16} className="mt-0.5 shrink-0 text-primary" />
+          <span>
+            {invite.targetTitle
+              ? t("Invited by {name} to {target}", { name: invite.inviterName, target: invite.targetTitle })
+              : t("Invited by {name}", { name: invite.inviterName })}
+          </span>
+        </p>
+      )}
 
       {formError && <FormAlert tone="error">{formError}</FormAlert>}
 

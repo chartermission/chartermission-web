@@ -75,6 +75,7 @@ export type NavKey =
   | "exams"
   | "members"
   | "verification"
+  | "referrals"
   | "badges"
   | "pages"
   | "chapters"
@@ -106,6 +107,7 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "exams", href: "/exams", label: "Exams", icon: "clipboard", permission: PERM.examManage },
   { key: "members", href: "/members", label: "Members", icon: "user", permission: PERM.membersManage },
   { key: "verification", href: "/verification", label: "Verification", icon: "verified", permission: PERM.membersManage },
+  { key: "referrals", href: "/referrals", label: "Referrals", icon: "user-plus", permission: PERM.membersManage },
   { key: "badges", href: "/badges", label: "Badges", icon: "verified", permission: PERM.badgesManage },
   { key: "pages", href: "/pages", label: "Pages", icon: "building", permission: PERM.pagesManage },
   { key: "chapters", href: "/chapters", label: "Chapters", icon: "map-pin", permission: PERM.chaptersAdmin },

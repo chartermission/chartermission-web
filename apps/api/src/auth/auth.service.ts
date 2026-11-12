@@ -13,7 +13,7 @@ import {
   type SignUpInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { consentRecords, memberProfiles, roles, sessions, userRoles, users } from '../db/schema.js';
+import { consentRecords, memberProfiles, referrals, roles, sessions, userRoles, users } from '../db/schema.js';
 import { type AppRequest, type AuthContext, clientIp } from '../core/auth-context.js';
 import { ADMIN_SIGNIN_ROLES } from '../core/permissions.js';
 import { SESSION_POLICY, SessionService, audienceOf } from '../core/session.service.js';
@@ -124,6 +124,21 @@ export class AuthService {
           await tx.insert(consentRecords).values(
             POLICIES.map((policyType) => ({ userId, policyType, policyVersion: versions[policyType], ipHash: hashIp(ip) })),
           );
+          // Came through an invitation: credit the inviter (an active member, not themselves).
+          if (input.invite) {
+            const [inviter] = await tx
+              .select({ id: users.id })
+              .from(memberProfiles)
+              .innerJoin(users, eq(users.id, memberProfiles.userId))
+              .where(and(eq(sql`lower(${memberProfiles.handle})`, input.invite.from.toLowerCase()), inArray(users.status, ['active', 'unverified'])))
+              .limit(1);
+            if (inviter && inviter.id !== userId) {
+              await tx
+                .insert(referrals)
+                .values({ inviterId: inviter.id, inviteeId: userId, kind: input.invite.kind, targetSlug: input.invite.kind === 'member' ? null : (input.invite.slug ?? null) })
+                .onConflictDoNothing();
+            }
+          }
           return this.tokens.issue(userId, 'verify', tx);
         });
       } catch (err) {

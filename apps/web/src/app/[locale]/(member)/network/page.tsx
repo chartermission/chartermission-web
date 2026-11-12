@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import {
+  type MyReferrals,
   DirectoryQuery,
   type ConnectionView,
   type DirectoryMember,
@@ -15,6 +16,8 @@ import { InvitePeopleButton } from "@/components/invite/invite-dialog";
 import { Directory } from "@/components/network/directory";
 import { DirectoryMemberCard } from "@/components/network/member-card";
 import { requireClientViewer, settle } from "@/components/social/data";
+import { memberHref } from "@/components/social/links";
+import { MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { errorMessage } from "@/components/social/error-message";
 import { EmptyState, LoadingStatus, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
@@ -110,7 +113,52 @@ async function InvitationsTab({ incoming }: { incoming: Page<ConnectionView> | n
       ) : (
         <SectionError message={errorMessage(outgoing.error)} retryHref="/network?tab=invitations" />
       )}
+      <Suspense fallback={<PanelSkeleton lines={2} />}>
+        <JoinedThroughYou />
+      </Suspense>
     </>
+  );
+}
+
+/** The people who joined Charter Mission through the viewer's invitation links. */
+async function JoinedThroughYou() {
+  const t = await getT();
+  const viewer = await requireClientViewer("/network?tab=invitations");
+  const result = await settle(apiGet<MyReferrals>("/invites/mine"));
+  if (!result.ok) return null;
+  const { total, people } = result.data;
+  return (
+    <section aria-labelledby="joined-heading" className="flex flex-col gap-3 rounded-card border border-line bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 id="joined-heading" className="text-h3 text-ink">
+            {t("Joined through your invitations")} <span className="text-secondary">({total})</span>
+          </h2>
+          <p className="text-sm text-secondary">{t("People who signed up with your invitation link. Personal invitations connect you automatically.")}</p>
+        </div>
+        <InvitePeopleButton inviterHandle={viewer.handle} variant="secondary" />
+      </div>
+      {people.length === 0 ? (
+        <p className="text-sm text-secondary">{t("No one yet. Share your invitation link and they’ll appear here when they join.")}</p>
+      ) : (
+        <ul className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+          {people.map(({ member, kind, joinedAt }) => (
+            <li key={member.id} className="flex items-center gap-3">
+              <MemberAvatar member={member} size={40} link />
+              <div className="flex min-w-0 flex-col">
+                <Link href={memberHref(member.handle)} className="truncate text-sm font-medium text-ink hover:underline">
+                  {member.name}
+                </Link>
+                <span className="truncate text-xs text-secondary">
+                  {kind === "event" ? t("Through an event invitation") : kind === "chapter" ? t("Through a chapter invitation") : t("Through your personal invitation")} ·{" "}
+                  <TimeAgo iso={joinedAt} />
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
