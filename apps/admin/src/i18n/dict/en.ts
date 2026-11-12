@@ -21,4 +21,5 @@ export const en: Dict = {
   "Import {count} questions": { one: "Import {count} question", other: "Import {count} questions" },
   "{count} questions ready to import from {name}.": { one: "{count} question ready to import from {name}.", other: "{count} questions ready to import from {name}." },
   "{count} rows will be skipped:": { one: "{count} row will be skipped:", other: "{count} rows will be skipped:" },
+  "Exam imported with {count} questions. Check it, then publish it.": { one: "Exam imported with {count} question. Check it, then publish it.", other: "Exam imported with {count} questions. Check it, then publish it." },
 };

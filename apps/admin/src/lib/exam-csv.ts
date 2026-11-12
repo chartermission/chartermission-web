@@ -78,7 +78,13 @@ export function parseCsv(text: string): string[][] {
 }
 
 export type CsvProblem = { row: number; message: "no_question" | "few_options" | "no_correct" | "bad_correct" | "gap" };
-export type CsvResult = { questions: ImportQuestionInput[]; problems: CsvProblem[]; missingColumns: string[] };
+export type CsvResult = {
+  questions: ImportQuestionInput[];
+  problems: CsvProblem[];
+  missingColumns: string[];
+  /** Section titles named in the file, in the order they first appear. */
+  sections: string[];
+};
 
 const headerKey = (h: string) =>
   h
@@ -91,7 +97,7 @@ export function questionsFromCsv(text: string): CsvResult {
   const rows = parseCsv(text);
   const header = (rows[0] ?? []).map(headerKey);
   const missingColumns = ["question", "option_a", "option_b", "correct"].filter((c) => !header.includes(c));
-  if (missingColumns.length) return { questions: [], problems: [], missingColumns };
+  if (missingColumns.length) return { questions: [], problems: [], missingColumns, sections: [] };
   const col = (r: string[], name: string) => {
     const i = header.indexOf(name);
     return i === -1 ? "" : (r[i] ?? "").trim();
@@ -124,7 +130,8 @@ export function questionsFromCsv(text: string): CsvResult {
       explanationAlt: col(r, "explanation_alt") || null,
     });
   });
-  return { questions, problems, missingColumns: [] };
+  const sections = [...new Map(questions.filter((q) => q.section).map((q) => [q.section!.toLowerCase(), q.section!])).values()];
+  return { questions, problems, missingColumns: [], sections };
 }
 
 const cellOut = (value: string | null | undefined) => {
@@ -154,6 +161,12 @@ export function csvTemplate(): string {
     ["Domain I — Fundamentals", "الأساسيات", "ECO 1.1", "", "Which of the following is a project?", "أي مما يلي يُعد مشروعًا؟", "Processing the monthly payroll", "معالجة رواتب كل شهر", "Building a new training center", "إنشاء مركز تدريب جديد", "Daily help-desk support", "دعم فني يومي", "Weekly office cleaning", "تنظيف المكتب أسبوعيًا", ...blank(4), "B", "Temporary + unique result → project.", "مؤقت وله نتيجة فريدة = مشروع."],
     ["Domain I — Fundamentals", "", "", "", "A question with two answers and no second language", "", "True", "", "False", "", ...blank(8), "A", "", ""],
   ]);
+}
+
+/** The full specimen exam (50 questions, two languages) as CSV text. */
+export async function specimenCsv(): Promise<string> {
+  const { SPECIMEN_ROWS } = await import("./exam-csv-specimen");
+  return toCsv([[...CSV_COLUMNS], ...SPECIMEN_ROWS]);
 }
 
 export function csvRows(rows: (string | number | null | undefined)[][]): string {

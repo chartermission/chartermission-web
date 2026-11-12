@@ -1,4 +1,4 @@
-import type { AdminExamSummary, ExamAttemptSummary, ExamLanguage, ExamStatus } from "@chartermission/contracts";
+import { EXAM_LANGUAGE_NAMES, ExamLanguage, type AdminExamSummary, type ExamAttemptSummary, type ExamStatus } from "@chartermission/contracts";
 import type { ChipTone } from "@chartermission/ui";
 import type { Translate } from "@/i18n/translate";
 
@@ -7,6 +7,8 @@ export const STATUS_CHIP: Record<ExamStatus, { label: string; tone: ChipTone }> 
   published: { label: "Published", tone: "success" },
   archived: { label: "Archived", tone: "neutral" },
 };
+
+export const LANGUAGE_OPTIONS = ExamLanguage.options.map((value) => ({ value, label: EXAM_LANGUAGE_NAMES[value] }));
 
 export const dirOf = (language: ExamLanguage | null | undefined): "rtl" | "ltr" => (language === "ar" ? "rtl" : "ltr");
 

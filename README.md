@@ -121,8 +121,10 @@ Platform Admins and Super Admins).
 - **Building**: an exam has settings (time limit, pass mark, attempts allowed, shuffling, what members see afterwards, who
   can take it), optional sections ("Domain I …") and questions with 2–6 answers, one correct, plus an explanation.
   Every text can carry a second language (English with Arabic, say) and members choose which to read. Questions can be
-  typed in one at a time or imported from a spreadsheet saved as CSV (template in the import window; Export CSV gives
-  the same format back). New exams are drafts: staff can take a draft on the member site to check it, and those tries
+  typed in one at a time or imported from a spreadsheet saved as CSV: **Import from CSV** on the Exams page creates a
+  whole exam from one file (sections come from its `section` column), and **Import questions** inside an exam adds to
+  it. One row per question; the import window offers a blank template and a full 50-question specimen, also kept in
+  `docs/exam-import-template.csv` and `docs/exam-import-specimen.csv`. Export CSV gives the same format back. New exams are drafts: staff can take a draft on the member site to check it, and those tries
   are never counted. Publish makes it visible under `/exams`.
 - **Taking**: `/exams/{link-name}`. Every answer is saved to the API as it is chosen, and the time limit is kept by the
   server (`exam_attempts.expires_at`); an attempt whose time ran out is marked with what was saved. The correct answers

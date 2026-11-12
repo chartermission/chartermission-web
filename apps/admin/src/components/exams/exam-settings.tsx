@@ -2,25 +2,14 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { EXAM_LANGUAGE_NAMES, type AdminExamDetail, type ExamAccess, type ExamLanguage, type ExamReview, type UpdateExamInput } from "@chartermission/contracts";
-import { Button, Icon, cn } from "@chartermission/ui";
-import { Field, selectClasses } from "@/components/ambassadors/modal";
+import { Button, cn } from "@chartermission/ui";
+import { Field } from "@/components/ambassadors/modal";
 import { FormNotice, TextField, inputClasses } from "@/components/form-field";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { webHref } from "@/lib/navigation";
 import { useT } from "@/i18n/client";
-import { dirOf } from "./exam-labels";
-import { LANGUAGE_OPTIONS } from "./exams-console";
-
-function Select({ id, value, onChange, describedBy, children }: { id: string; value: string; onChange: (v: string) => void; describedBy?: string; children: ReactNode }) {
-  return (
-    <span className="relative">
-      <select id={id} value={value} aria-describedby={describedBy} onChange={(e) => onChange(e.target.value)} className={selectClasses()}>
-        {children}
-      </select>
-      <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 end-3 my-auto h-fit text-secondary" />
-    </span>
-  );
-}
+import { LANGUAGE_OPTIONS, dirOf } from "./exam-labels";
+import { Select } from "./select";
 
 function Checkbox({ checked, onChange, label, note }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; note: string }) {
   return (

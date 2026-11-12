@@ -17,8 +17,9 @@ import { ReasonDialog } from "@/components/reason-dialog";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { csvTemplate, downloadText, questionsFromCsv, questionsToCsv, type CsvProblem, type CsvResult } from "@/lib/exam-csv";
+import { downloadText, questionsToCsv } from "@/lib/exam-csv";
 import { useT } from "@/i18n/client";
+import { CsvPicker, type ParsedCsv } from "./csv-picker";
 import { dirOf } from "./exam-labels";
 
 const LETTERS = "ABCDEF";
@@ -510,33 +511,12 @@ function SectionsForm({ exam, onSaved, onClose }: { exam: AdminExamDetail; onSav
 
 /* ---------------- Import from a spreadsheet ---------------- */
 
-const PROBLEM_TEXT: Record<CsvProblem["message"], string> = {
-  no_question: "Row {row}: the question is empty.",
-  few_options: "Row {row}: it needs at least two answers (option_a and option_b).",
-  gap: "Row {row}: an answer is empty between two others.",
-  no_correct: "Row {row}: the “correct” column is empty.",
-  bad_correct: "Row {row}: “correct” must be the letter of one of the row’s answers.",
-};
-
 function ImportForm({ exam, onSaved, onClose }: { exam: AdminExamDetail; onSaved: (exam: AdminExamDetail, count: number) => void; onClose: () => void }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<(CsvResult & { name: string }) | null>(null);
+  const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const room = EXAM_MAX_QUESTIONS - exam.questions.length;
-
-  async function read(file: File | undefined) {
-    setError(null);
-    setParsed(null);
-    if (!file) return;
-    if (file.size > 5_000_000) return setError(t("That file is too large. Keep it under 5 MB."));
-    try {
-      setParsed({ ...questionsFromCsv(await file.text()), name: file.name });
-    } catch {
-      setError(t("That file couldn’t be read. Save the spreadsheet as CSV (UTF-8) and try again."));
-    }
-  }
-
   const ready = parsed?.questions.length ?? 0;
   return (
     <FormModal
@@ -560,42 +540,12 @@ function ImportForm({ exam, onSaved, onClose }: { exam: AdminExamDetail; onSaved
         }
       }}
     >
-      <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface px-3 py-3 text-sm text-body">
-        <span className="min-w-0 flex-1">
-          Columns: section, reference, tag, question, option_a to option_f, correct (the letter of the right answer) and explanation. Add “_alt” columns for the second
-          language.
-        </span>
-        <Button variant="secondary" size="small" onClick={() => downloadText("exam-questions-template.csv", csvTemplate())}>
-          Download template
-        </Button>
-      </div>
-      <Field label="CSV file">
-        {(id) => (
-          <input
-            id={id}
-            type="file"
-            accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
-            onChange={(e) => void read(e.target.files?.[0])}
-            className="text-sm text-body file:me-3 file:rounded-lg file:border file:border-line-strong file:bg-card file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-muted"
-          />
-        )}
-      </Field>
-      {parsed && parsed.missingColumns.length > 0 && (
-        <FormNotice tone="error">{t("The first row must name these columns: {columns}.", { columns: parsed.missingColumns.join(", ") })}</FormNotice>
-      )}
-      {parsed && parsed.missingColumns.length === 0 && (
-        <FormNotice tone={ready ? "success" : "warning"}>{t("{count} questions ready to import from {name}.", { count: ready, name: parsed.name })}</FormNotice>
-      )}
-      {parsed && parsed.problems.length > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-lg bg-warning-light p-3 text-sm text-body">
-          <span className="font-medium text-ink">{t("{count} rows will be skipped:", { count: parsed.problems.length })}</span>
-          <ul className="flex max-h-40 list-disc flex-col gap-0.5 overflow-y-auto ps-5">
-            {parsed.problems.slice(0, 50).map((p) => (
-              <li key={p.row}>{t(PROBLEM_TEXT[p.message], { row: p.row })}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <CsvPicker
+        onParsed={(next) => {
+          setParsed(next);
+          setError(null);
+        }}
+      />
     </FormModal>
   );
 }
