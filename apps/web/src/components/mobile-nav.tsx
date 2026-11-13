@@ -11,6 +11,7 @@ import { api } from "@/lib/api/client";
 import { sectionNavItems } from "@/components/nav-items";
 import { requestCompose } from "@/components/home/compose-request";
 import type { TopNavViewer } from "@/components/top-nav";
+import { canInstall, promptInstall, useInstallState } from "@/components/pwa/install";
 
 /*
  * Phone navigation, app style: a bottom tab bar (Home, Network, Post, Alerts, Menu) and a side
@@ -27,7 +28,7 @@ export function openNavDrawer() {
 }
 
 /** Screens with their own bottom controls or a task to finish: no tab bar. */
-const NO_TAB_BAR = [
+export const NO_TAB_BAR = [
   /^\/onboarding/,
   /^\/messages\/.+/,
   /^\/articles\/new/,
@@ -181,6 +182,7 @@ function NavDrawer({
   const router = useRouter();
   const ref = useRef<HTMLDialogElement>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const installState = useInstallState();
   const under = (path: string) =>
     pathname === path || pathname.startsWith(`${path}/`);
 
@@ -340,6 +342,19 @@ function NavDrawer({
           <Icon name="user-plus" size={20} className="text-secondary" />
           {t("Invite people")}
         </button>
+        {canInstall(installState) && (
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              void promptInstall();
+            }}
+            className={cn(item, "w-full text-ink hover:bg-muted")}
+          >
+            <Icon name="download" size={20} className="text-secondary" />
+            {t("Install app")}
+          </button>
+        )}
         {viewer.adminUrl && (
           // eslint-disable-next-line @next/next/no-html-link-for-pages
           <a

@@ -1,9 +1,52 @@
 /*
- * Charter Mission service worker: shows push notifications for messages and opens the right page
- * when one is tapped. It does not cache anything.
+ * Charter Mission service worker.
+ *  - Makes the site installable as an app (Add to Home Screen / Install app).
+ *  - Shows push notifications for messages and opens the right page when one is tapped.
+ *  - When a page can't load because the device is offline, shows /offline.html instead of the
+ *    browser's error page. That page and the app icon are the only things it caches; every page,
+ *    API call and file still comes from the network.
+ * Served with Cache-Control: no-cache (next.config.ts) so browsers pick up a new version on the
+ * next visit. Change OFFLINE_CACHE when offline.html or what it uses changes.
  */
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+const OFFLINE_CACHE = "cm-offline-v1";
+const OFFLINE_URL = "/offline.html";
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(OFFLINE_CACHE)
+      .then((cache) => cache.addAll([OFFLINE_URL, "/icons/icon-192.png"]))
+      .then(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((key) => key.startsWith("cm-") && key !== OFFLINE_CACHE).map((key) => caches.delete(key)));
+      // The page request starts while the worker boots, so pages load as fast as without it.
+      if (self.registration.navigationPreload) await self.registration.navigationPreload.enable();
+      await self.clients.claim();
+    })(),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  // Page loads only. Everything else (API, scripts, images, video) goes straight to the network.
+  if (event.request.mode !== "navigate") return;
+  event.respondWith(
+    (async () => {
+      try {
+        const preloaded = await event.preloadResponse;
+        if (preloaded) return preloaded;
+        return await fetch(event.request);
+      } catch {
+        return (await caches.match(OFFLINE_URL)) || Response.error();
+      }
+    })(),
+  );
+});
 
 self.addEventListener("push", (event) => {
   let data = {};
@@ -16,7 +59,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",
-      icon: "/brand/charter-mission-mark.png",
+      icon: "/icons/icon-192.png",
       badge: "/brand/charter-mission-mark.png",
       tag: data.tag || undefined,
       renotify: !!data.tag,

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { MediaGuard } from "@/components/video/media-guard";
+import { EARLY_CAPTURE } from "@/components/pwa/early-capture";
+import { PwaHost } from "@/components/pwa/pwa-host";
 import { SHARE_IMAGE } from "@/lib/share-image";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/noto-sans-arabic";
@@ -25,6 +27,8 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description,
     applicationName: "Charter Mission",
+    // Installed on iPhone/iPad (Add to Home Screen): opens full screen, named Charter Mission.
+    appleWebApp: { capable: true, title: "Charter Mission", statusBarStyle: "default" },
     openGraph: { images: [SHARE_IMAGE], type: "website", siteName: "Charter Mission", locale: OG_LOCALE[locale], description },
     twitter: { card: "summary_large_image", images: [SHARE_IMAGE.url] },
   };
@@ -32,6 +36,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export const viewport: Viewport = {
   themeColor: "#046d35",
+  // Lets the tab bar and drawer pad for the iPhone home indicator and notch (env(safe-area-inset-*)).
+  viewportFit: "cover",
 };
 
 /** One prerendered shell per language. The proxy picks the language; the address stays the same. */
@@ -44,11 +50,13 @@ export default async function RootLayout({ children }: LayoutProps<"/[locale]">)
   return (
     <html lang={locale} dir={dirOf(locale)}>
       <body className="min-h-dvh">
+        <script dangerouslySetInnerHTML={{ __html: EARLY_CAPTURE }} />
         <I18nProvider locale={locale} messages={messagesFor(locale)} dict={DICTS[locale]}>
           {children}
           <Suspense fallback={null}>
             <MediaGuard />
           </Suspense>
+          <PwaHost />
         </I18nProvider>
       </body>
     </html>

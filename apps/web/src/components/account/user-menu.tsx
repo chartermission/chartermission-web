@@ -10,6 +10,7 @@ import { useT } from "@/i18n/client";
 import { LanguageMenuItems } from "@/i18n/language-menu";
 import { ProfileLink } from "@/components/social/post-parts";
 import { memberHref } from "@/components/social/links";
+import { canInstall, promptInstall, useInstallState } from "@/components/pwa/install";
 
 export interface UserMenuViewer {
   name: string;
@@ -33,6 +34,7 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const installState = useInstallState();
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
 
@@ -177,6 +179,21 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
               <span className="flex-1">{t("menu.adminConsole")}</span>
               <Icon name="external" size={14} className="text-secondary" />
             </a>
+          )}
+          {canInstall(installState) && (
+            <button
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              onClick={() => {
+                setOpen(false);
+                void promptInstall();
+              }}
+              className={itemClasses}
+            >
+              <Icon name="download" size={18} className="text-secondary" />
+              {t("Install app")}
+            </button>
           )}
           <LanguageMenuItems itemClasses={itemClasses} />
           <div role="separator" className="my-1 h-px bg-line" />

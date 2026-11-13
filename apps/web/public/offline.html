@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#046d35">
+<title>Charter Mission · Offline</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+    padding: 24px; background: #f8f9fc; color: #1a202c;
+    font-family: "Inter Variable", "Noto Sans Arabic Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 360px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  img { width: 72px; height: 72px; border-radius: 18px; margin-bottom: 8px; }
+  h1 { font-size: 20px; line-height: 1.3; margin: 0; }
+  p { font-size: 15px; line-height: 1.55; color: #475569; margin: 0; }
+  button {
+    margin-top: 12px; border: 0; border-radius: 8px; padding: 10px 20px; font: inherit; font-weight: 600;
+    background: #046d35; color: #fff; cursor: pointer;
+  }
+  button:hover { background: #024a22; }
+  button:focus-visible { outline: 2px solid #0a8a47; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <img src="/icons/icon-192.png" alt="">
+  <h1 id="title">You’re offline</h1>
+  <p id="body">Charter Mission needs an internet connection. Check your connection and try again; this page reloads by itself when you’re back online.</p>
+  <button type="button" id="retry">Try again</button>
+</main>
+<script>
+  (function () {
+    var text = {
+      fr: ["Vous êtes hors ligne", "Charter Mission a besoin d’une connexion Internet. Vérifiez votre connexion et réessayez ; cette page se recharge d’elle-même dès que vous êtes de nouveau en ligne.", "Réessayer"],
+      ar: ["أنت غير متصل بالإنترنت", "يحتاج Charter Mission إلى اتصال بالإنترنت. تحقّق من اتصالك وحاول مرة أخرى؛ ستُعاد تحميل هذه الصفحة تلقائيًا عند عودة الاتصال.", "حاول مرة أخرى"]
+    };
+    var saved = (document.cookie.match(/(?:^|; )cm_locale=([^;]+)/) || [])[1];
+    var lang = saved || (navigator.language || "en").slice(0, 2);
+    if (text[lang]) {
+      document.documentElement.lang = lang;
+      if (lang === "ar") document.documentElement.dir = "rtl";
+      document.getElementById("title").textContent = text[lang][0];
+      document.getElementById("body").textContent = text[lang][1];
+      document.getElementById("retry").textContent = text[lang][2];
+    }
+    document.getElementById("retry").addEventListener("click", function () { location.reload(); });
+    window.addEventListener("online", function () { location.reload(); });
+  })();
+</script>
+</body>
+</html>
