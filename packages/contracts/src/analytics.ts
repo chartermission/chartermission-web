@@ -21,6 +21,8 @@ export const AnalyticsEventName = z.enum([
   "event_registered",
   /** A published event was called off by its host or staff. Subject: event id. */
   "event_cancelled",
+  /** A member shared an event to the feed (a post with the event's card). Subject: event id. */
+  "event_shared",
   /** "Start learning" opened a Charter Center course (CM-LRN-04). Subject: course id. */
   "charter_center_click",
   /** A member started an attempt at an exam. Subject: exam id. */

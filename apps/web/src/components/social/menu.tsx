@@ -21,6 +21,7 @@ export function Menu({
   trigger,
   align = "end",
   className,
+  triggerClassName,
 }: {
   /** Accessible name of the button, e.g. "More options for Amara's post". */
   label: string;
@@ -28,6 +29,8 @@ export function Menu({
   trigger?: ReactNode;
   align?: "start" | "end";
   className?: string;
+  /** Replaces the trigger button's default look (a small icon button). */
+  triggerClassName?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -74,7 +77,7 @@ export function Menu({
             setOpen(true);
           }
         }}
-        className="rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink"
+        className={triggerClassName ?? "rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink"}
       >
         {trigger ?? <Icon name="more" size={20} />}
       </button>

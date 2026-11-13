@@ -39,6 +39,8 @@ import { QueueService } from '../infra/queue.service.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { MediaService, type FileRow } from '../media/media.service.js';
+import { EventAccess, type EventRow } from '../events/event-access.js';
+import { isPublicStatus } from '../events/event-util.js';
 import { PostSerializer } from './post-serializer.js';
 import { LinkPreviewService, embedPreview } from './link-preview.js';
 import { attachHashtags, syncHashtags } from './hashtags.js';
@@ -95,6 +97,7 @@ export class PostsService implements OnModuleInit {
     private readonly previews: LinkPreviewService,
     private readonly pageRefs: PageRefsService,
     private readonly chapterRules: ChapterRules,
+    private readonly eventAccess: EventAccess,
   ) {}
 
   onModuleInit() {
@@ -148,6 +151,7 @@ export class PostsService implements OnModuleInit {
       throw Errors.validation({ poll: 'A post can have a video or a poll, not both' });
     }
     const original = input.repostOfId ? await this.repostTarget(user, input.repostOfId) : null;
+    const sharedEvent = input.eventId ? await this.shareableEvent(user, input.eventId) : null;
     if (input.chapterId) {
       const [chapter] = await this.db.select({ id: chapters.id }).from(chapters).where(eq(chapters.id, input.chapterId)).limit(1);
       if (!chapter) throw Errors.validation({ chapterId: 'Choose an existing chapter' });
@@ -156,7 +160,8 @@ export class PostsService implements OnModuleInit {
     const review = input.chapterId && input.kind !== 'announcement' ? (await this.chapterRules.posting(user, input.chapterId)).review : false;
     const tags = parseHashtags(input.body);
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
-    const linkUrl = input.linkUrl ?? firstHttpsUrl(input.body);
+    // A shared event's card takes the place of a link preview.
+    const linkUrl = sharedEvent ? null : (input.linkUrl ?? firstHttpsUrl(input.body));
     // CM-FED rule: a post is visible only after its attachments pass scanning.
     const status = !attachments.every((f) => f.scanStatus === 'clean') ? 'pending_media' : review ? 'in_review' : 'published';
     const now = new Date();
@@ -174,6 +179,7 @@ export class PostsService implements OnModuleInit {
           chapterId: input.chapterId ?? null,
           countryCode: user.countryCode,
           repostOfId: original?.id ?? null,
+          eventId: sharedEvent?.id ?? null,
           pageId: input.pageId ?? null,
           linkUrl,
           // Video links get their player straight away; the title and description follow from the preview job.
@@ -228,6 +234,7 @@ export class PostsService implements OnModuleInit {
     if (status === 'published') await this.announce(post);
     else if (status === 'in_review') await this.events.emit({ type: 'chapter.post_pending', postId: post.id, chapterId: post.chapterId!, authorId: post.authorId });
     this.analytics.track('post_created', user.id, user.countryCode);
+    if (sharedEvent) this.analytics.track('event_shared', user.id, user.countryCode, sharedEvent.id);
     if (input.kind === 'announcement') {
       await this.audit.record({ actorId: user.id, action: 'post.announce', targetType: 'post', targetId: post.id });
     }
@@ -247,7 +254,7 @@ export class PostsService implements OnModuleInit {
     const details = this.editedDetails(post, input);
     const tags = parseHashtags(input.body);
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
-    const newLink = !post.linkUrl ? firstHttpsUrl(input.body) : null;
+    const newLink = !post.linkUrl && !post.eventId ? firstHttpsUrl(input.body) : null;
     const added = await this.db.transaction(async (tx) => {
       await tx
         .update(posts)
@@ -469,6 +476,15 @@ export class PostsService implements OnModuleInit {
   }
 
   /** A repost of a repost points at the original. One repost per member per original. */
+  /** An event members can share: public, not called off and not over. Events the member can't see are NOT_FOUND. */
+  private async shareableEvent(user: AuthUser, id: string): Promise<EventRow> {
+    const event = await this.eventAccess.visible(id, await this.eventAccess.viewer(user));
+    if (!isPublicStatus(event.status)) throw Errors.validation({ eventId: 'Only published events can be shared' });
+    if (event.cancelledAt) throw Errors.validation({ eventId: 'This event was cancelled' });
+    if (event.endsAt.getTime() <= Date.now()) throw Errors.validation({ eventId: 'This event has ended' });
+    return event;
+  }
+
   private async repostTarget(user: AuthUser, id: string): Promise<PostRow> {
     let target = await this.findVisible(user, id, { interactive: true });
     if (target.repostOfId) target = await this.findVisible(user, target.repostOfId, { interactive: true });

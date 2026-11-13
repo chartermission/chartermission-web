@@ -7,6 +7,7 @@ import {
   readingMinutes,
   type AttachmentView,
   type ChapterRef,
+  type EventSummary,
   type MemberRef,
   type PollView,
   type PostKind,
@@ -20,6 +21,7 @@ import {
   bookmarks,
   chapters,
   comments,
+  events,
   files,
   hashtags,
   mentions,
@@ -39,6 +41,9 @@ import { RelationsService } from '../core/relations.service.js';
 import { can } from '../core/policy.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { canViewPost, isModerator, type AuthorState, type PostRow } from './visibility.js';
+import { EventAccess } from '../events/event-access.js';
+import { EventSerializer } from '../events/event-serializer.js';
+import { isPublicStatus } from '../events/event-util.js';
 
 const FALLBACK_AUTHOR: MemberRef = {
   id: '00000000-0000-0000-0000-000000000000',
@@ -88,6 +93,8 @@ export class PostSerializer {
     private readonly members: MembersService,
     private readonly relations: RelationsService,
     private readonly pageRefs: PageRefsService,
+    private readonly eventAccess: EventAccess,
+    private readonly eventSerializer: EventSerializer,
   ) {}
 
   async one(id: string, viewer: AuthUser | undefined): Promise<PostView> {
@@ -125,7 +132,7 @@ export class PostSerializer {
     }
 
     const postIds = rows.map((r) => r.id);
-    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers] = await Promise.all([
+    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
       this.pageRefs.refs(rows.flatMap((r) => [r.pageId, r.aboutPageId]).filter((x): x is string => !!x)),
       rows.some((r) => r.pageId) ? this.pageRefs.managedIds(viewer?.id) : Promise.resolve(new Set<string>()),
@@ -137,6 +144,7 @@ export class PostSerializer {
       this.viewerState(postIds, viewer),
       this.acceptedAnswers(rows),
       this.helpOffers(rows, viewer),
+      this.sharedEvents(rows, viewer),
     ]);
 
     const out: PostView[] = [];
@@ -165,6 +173,8 @@ export class PostSerializer {
         linkPreview: r.linkPreview ?? null,
         repostOf: depth === 0 && r.repostOfId ? (originals.get(r.repostOfId) ?? null) : null,
         isRepost: !!r.repostOfId,
+        event: (r.eventId && eventMap.get(r.eventId)) || null,
+        isEventShare: !!r.eventId,
         status: r.status as PostView['status'],
         createdAt: r.createdAt.toISOString(),
         editedAt: r.editedAt?.toISOString() ?? null,
@@ -319,6 +329,16 @@ export class PostSerializer {
       });
     }
     return map;
+  }
+
+  /** Shared events as the viewer sees them now; events that are no longer public are left out (the card says so). */
+  private async sharedEvents(rows: PostRow[], viewer: AuthUser | undefined): Promise<Map<string, EventSummary>> {
+    const ids = [...new Set(rows.map((r) => r.eventId).filter((x): x is string => !!x))];
+    if (!ids.length) return new Map();
+    const eventRows = (await this.db.select().from(events).where(inArray(events.id, ids))).filter((e) => isPublicStatus(e.status));
+    if (!eventRows.length) return new Map();
+    const summaries = await this.eventSerializer.summaries(eventRows, await this.eventAccess.optionalViewer(viewer));
+    return new Map(summaries.map((e) => [e.id, e]));
   }
 
   /** Question posts whose accepted answer still shows (not deleted, hidden or removed). */

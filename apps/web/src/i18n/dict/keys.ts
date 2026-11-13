@@ -3521,4 +3521,10 @@ export const KEYS: readonly string[] = [
   "One tap from your home screen, with notifications.",
   "Install",
   "Not now",
+  "Share to feed",
+  "Shared to your feed",
+  "Share via…",
+  "Share this event",
+  "This event is no longer available.",
+  "Who should come, and why?",
 ];

@@ -25,6 +25,7 @@ import {
 } from "./post-parts";
 import { VideoEmbedPlayer } from "@/components/video/video-player";
 import { PostPoll } from "./post-poll";
+import { SharedEventCard } from "@/components/events/shared-event-card";
 import { ArticleCover, ArticlePreview } from "./post-types/article";
 import { CelebrationBand } from "./post-types/celebration";
 import { onQuestionChange } from "./post-types/events";
@@ -567,6 +568,7 @@ export function PostCard({
             !post.isRepost &&
             !post.article && <LinkPreviewCard preview={post.linkPreview} />
           )}
+          {post.isEventShare && <SharedEventCard event={post.event} />}
           {post.isRepost && <RepostEmbed original={post.repostOf} />}
           {post.question && !editing && (
             <QuestionFooterNote post={post} detail={detail} />

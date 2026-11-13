@@ -3523,4 +3523,10 @@ export const fr: Dict = {
   "One tap from your home screen, with notifications.": "À portée de main sur votre écran d’accueil, avec les notifications.",
   "Install": "Installer",
   "Not now": "Plus tard",
+  "Share to feed": "Partager dans le fil",
+  "Shared to your feed": "Partagé dans votre fil",
+  "Share via…": "Partager via…",
+  "Share this event": "Partager cet événement",
+  "This event is no longer available.": "Cet événement n’est plus disponible.",
+  "Who should come, and why?": "Qui devrait venir, et pourquoi ?",
 };

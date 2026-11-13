@@ -8,6 +8,8 @@ import type { EventDetail, RegistrationResult } from "@chartermission/contracts"
 import { Button, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
 import { pop } from "@/components/motion";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
+import { Menu, type MenuItem } from "@/components/social/menu";
+import { ShareToFeedDialog, canShareToFeed } from "./share-to-feed-dialog";
 import { absoluteUrl } from "@/components/social/links";
 import { toast } from "@/components/social/toast";
 import { api } from "@/lib/api/client";
@@ -158,6 +160,7 @@ export function RegistrationPanel({ event: initial, inviterHandle }: { event: Ev
   const [saved, setSaved] = useState(initial.viewer.saved);
   const [announcement, setAnnouncement] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [sharingToFeed, setSharingToFeed] = useState(false);
   const saveIcon = useRef<HTMLSpanElement>(null);
   const now = useNow();
 
@@ -211,12 +214,8 @@ export function RegistrationPanel({ event: initial, inviterHandle }: { event: Ev
     }
   }
 
-  async function share() {
+  async function copyLink() {
     const url = absoluteUrl(`/events/${event.slug}`);
-    if (typeof navigator.share === "function" && window.matchMedia("(pointer: coarse)").matches) {
-      await navigator.share({ title: event.title, text: event.summary, url }).catch(() => {});
-      return;
-    }
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied");
@@ -224,6 +223,23 @@ export function RegistrationPanel({ event: initial, inviterHandle }: { event: Ev
       toast.error(new Error("Couldn’t copy the link. Copy it from the address bar instead."));
     }
   }
+
+  /** Phones: the system share sheet (WhatsApp, Mail…). */
+  const canShareOut = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const shareItems: MenuItem[] = [
+    ...(canShareToFeed(event) ? [{ label: t("Share to feed"), icon: "edit" as const, onSelect: () => setSharingToFeed(true) }] : []),
+    { label: t("Send in a message"), icon: "send", onSelect: () => openSendInMessage({ type: "event", key: event.slug }) },
+    { label: t("Copy link"), icon: "link", onSelect: () => void copyLink() },
+    ...(canShareOut
+      ? [
+          {
+            label: t("Share via…"),
+            icon: "share" as const,
+            onSelect: () => void navigator.share({ title: event.title, text: event.summary, url: absoluteUrl(`/events/${event.slug}`) }).catch(() => {}),
+          },
+        ]
+      : []),
+  ];
 
   let body: React.ReactNode;
   if (event.cancelledAt) {
@@ -349,10 +365,17 @@ export function RegistrationPanel({ event: initial, inviterHandle }: { event: Ev
           </span>
           {saved ? "Saved" : "Save"}
         </button>
-        <button type="button" onClick={share} className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink">
-          <Icon name="share" size={20} />
-          Share
-        </button>
+        <Menu
+          label={t("Share this event")}
+          items={shareItems}
+          triggerClassName="flex w-full flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink"
+          trigger={
+            <>
+              <Icon name="share" size={20} />
+              {t("Share")}
+            </>
+          }
+        />
         {event.past || event.cancelledAt ? (
           <button type="button" onClick={() => openSendInMessage({ type: "event", key: event.slug })} className="flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-center text-xs font-medium text-secondary hover:bg-muted hover:text-ink">
             <Icon name="send" size={20} />
@@ -366,6 +389,7 @@ export function RegistrationPanel({ event: initial, inviterHandle }: { event: Ev
         )}
       </div>
       )}
+      {sharingToFeed && <ShareToFeedDialog event={event} onClose={() => setSharingToFeed(false)} />}
       {inviting && <InviteDialog inviterHandle={inviterHandle} event={{ slug: event.slug, title: event.title }} onClose={() => setInviting(false)} />}
       {confirming && (
         <ConfirmDialog

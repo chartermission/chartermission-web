@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ChapterRef, MemberRef, PageRef } from "./common.js";
+import { EventSummary } from "./events.js";
 
 /*
  * Feed, posts, comments, reactions, bookmarks, polls, hashtags, trending and uploads
@@ -25,7 +26,7 @@ export type PostKind = z.infer<typeof PostKind>;
 /**
  * What a post is. "kind" says who it comes from (an announcement is a platform-team
  * post); "type" says what shape it has:
- *  - standard: text, photos, a document, a poll or a link;
+ *  - standard: text, photos, a document, a poll, a link, or an event shared to the feed (eventId);
  *  - question: Ask the community; comments are answers and the author can mark the best one;
  *  - celebration: a milestone (new role, launch, funding, award, graduation);
  *  - request: "Looking for…" a co-founder, mentor, volunteers, partners, a hire or advice;
@@ -317,6 +318,13 @@ export type PostView = {
   /** One level only: a repost of a repost shows the original. Null when the original was removed. */
   repostOf: PostView | null;
   isRepost: boolean;
+  /**
+   * The event this post shares, as the viewer sees it now (date, place, seats, their registration).
+   * Null when the post shares no event, or the event is no longer public (unpublished): see isEventShare.
+   */
+  event: EventSummary | null;
+  /** The post was written to share an event (true even when the event has since been taken down). */
+  isEventShare: boolean;
   status: PostStatus;
   /** Chapter approval, shown to the author and the chapter's reviewers; absent when the post never needed it. */
   chapterReview?: ChapterReviewInfo;
@@ -374,6 +382,8 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     linkPreview: LinkPreview.nullable(),
     repostOf: PostView.nullable(),
     isRepost: z.boolean(),
+    event: EventSummary.nullable(),
+    isEventShare: z.boolean(),
     status: PostStatus,
     chapterReview: ChapterReviewInfo.optional(),
     createdAt: z.string(),
@@ -411,6 +421,8 @@ export const PostComposition = z.object({
   poll: PollInput.optional(),
   linkUrl: z.string().url().max(500).optional(),
   repostOfId: z.string().uuid().optional(),
+  /** Share an event to the feed: the post shows the event's card. Standard posts only, without media, a poll or a repost. */
+  eventId: z.string().uuid().optional(),
   chapterId: z.string().uuid().optional(),
   /** Publish as a page the member manages (the page must be live). */
   pageId: z.string().uuid().optional(),
@@ -431,12 +443,18 @@ export function compositionIssues(v: PostComposition): Issue[] {
   const add = (path: string, message: string) => issues.push({ path: [path], message });
   const max = v.type === "article" ? ARTICLE_MAX_CHARS : POST_MAX_CHARS;
   if (v.body.length > max) add("body", `Posts can be up to ${max.toLocaleString("en")} characters`);
-  if (!v.body.length && !v.repostOfId && v.attachmentIds.length === 0 && v.type === "standard") {
+  if (!v.body.length && !v.repostOfId && !v.eventId && v.attachmentIds.length === 0 && v.type === "standard") {
     add("body", "Write something or attach a file");
   }
   if (v.type !== "standard") {
     if (v.poll) add("poll", "Polls can only be added to standard posts");
     if (v.repostOfId) add("repostOfId", "Only standard posts can quote another post");
+    if (v.eventId) add("eventId", "Only standard posts can share an event");
+  }
+  if (v.eventId) {
+    if (v.repostOfId) add("eventId", "A post can share an event or another post, not both");
+    if (v.poll) add("eventId", "A post can share an event or have a poll, not both");
+    if (v.attachmentIds.length) add("eventId", "A post that shares an event can’t have attachments");
   }
   if (v.type !== "celebration" && v.celebration) add("celebration", "Only celebration posts have milestone details");
   if (v.type !== "request" && v.request) add("request", "Only “Looking for” posts have request details");

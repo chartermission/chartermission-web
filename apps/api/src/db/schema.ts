@@ -517,6 +517,8 @@ export const posts = pgTable(
     /** Author's country at posting time, for country filters and trending scopes. */
     countryCode: text('country_code'),
     repostOfId: uuid('repost_of_id'),
+    /** An event shared to the feed: the post shows the event's card (contracts PostComposition.eventId). */
+    eventId: uuid('event_id').references((): AnyPgColumn => events.id, { onDelete: 'set null' }),
     /** Published as a page by one of its admins (author_id stays the admin who wrote it). */
     pageId: uuid('page_id').references((): AnyPgColumn => pages.id, { onDelete: 'cascade' }),
     /** The page a member's post is about (certificate posts name Charter Center): listed on that page too. */
@@ -560,6 +562,7 @@ export const posts = pgTable(
     index('posts_created_idx').on(t.createdAt, t.id),
     index('posts_chapter_idx').on(t.chapterId),
     index('posts_repost_idx').on(t.repostOfId),
+    index('posts_event_idx').on(t.eventId),
     index('posts_type_idx').on(t.type, t.createdAt),
     index('posts_page_idx').on(t.pageId, t.createdAt),
     index('posts_about_page_idx').on(t.aboutPageId, t.createdAt),

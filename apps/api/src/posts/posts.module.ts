@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MediaModule } from '../media/media.module.js';
+import { EventsModule } from '../events/events.module.js';
 import { PostsController } from './posts.controller.js';
 import { PostsService } from './posts.service.js';
 import { CommentsService } from './comments.service.js';
@@ -12,7 +13,7 @@ import { AnalyticsController } from './analytics.controller.js';
 import { PostAnalyticsService } from './post-analytics.service.js';
 
 @Module({
-  imports: [MediaModule],
+  imports: [MediaModule, EventsModule],
   controllers: [AnalyticsController, PostsController, DraftsController],
   providers: [PostsService, CommentsService, ReactionsService, PostSerializer, LinkPreviewService, DraftsService, PostAnalyticsService],
   exports: [PostsService, CommentsService, PostSerializer, LinkPreviewService, DraftsService],

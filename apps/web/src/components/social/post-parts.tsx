@@ -2,6 +2,7 @@
 
 import { PostAttachments } from "./post-attachments";
 import { PostPoll } from "./post-poll";
+import { SharedEventCard } from "@/components/events/shared-event-card";
 import { VideoEmbedPlayer } from "@/components/video/video-player";
 import Link from "next/link";
 import { useState } from "react";
@@ -184,6 +185,11 @@ export function RepostEmbed({ original: initial }: { original: PostView | null }
       {preview && (
         <div className="relative z-10">
           {preview.embed ? <VideoEmbedPlayer preview={preview} embed={preview.embed} /> : <LinkPreviewCard preview={preview} />}
+        </div>
+      )}
+      {original.isEventShare && (
+        <div className="relative z-10">
+          <SharedEventCard event={original.event} />
         </div>
       )}
       <Link href={postHref(original)} className="text-xs font-medium text-primary-light after:absolute after:inset-0 hover:underline">

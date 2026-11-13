@@ -3523,4 +3523,10 @@ export const ar: Dict = {
   "One tap from your home screen, with notifications.": "بلمسة واحدة من شاشتك الرئيسية، مع الإشعارات.",
   "Install": "تثبيت",
   "Not now": "ليس الآن",
+  "Share to feed": "مشاركة في الخلاصة",
+  "Shared to your feed": "تمت المشاركة في خلاصتك",
+  "Share via…": "مشاركة عبر…",
+  "Share this event": "مشاركة هذه الفعالية",
+  "This event is no longer available.": "هذه الفعالية لم تعد متاحة.",
+  "Who should come, and why?": "من ينبغي أن يحضر، ولماذا؟",
 };
