@@ -2,6 +2,8 @@
 export const INVITE_COOKIE = "cm_invite_chapter";
 /** The event someone was invited to: they land on it when onboarding is done (set by the proxy on /invite?event=…). */
 export const INVITE_EVENT_COOKIE = "cm_invite_event";
+/** The exam whose invitation link someone opened: given to them as soon as they are signed in (components/exams/exam-invite.tsx). */
+export const INVITE_EXAM_COOKIE = "cm_invite_exam";
 /** The invitation someone opened (inviter, kind, slug), until they sign up: sent with sign-up so the inviter is credited. */
 export const INVITE_REF_COOKIE = "cm_invite_ref";
 

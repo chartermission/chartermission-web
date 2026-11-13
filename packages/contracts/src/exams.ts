@@ -2,18 +2,26 @@ import { z } from "zod";
 
 /*
  * Exams: multiple-choice exams members take on Charter Mission (for example a Charter Center
- * course's practice or final exam). Staff build them in the admin console; the API marks them, so
- * the correct answers never reach the browser before an attempt is submitted.
+ * practice or final exam). Staff build them in the admin console; the API marks them, so the
+ * correct answers never reach the browser before an attempt is submitted.
+ *
+ * Exams are by invitation: an exam's link (/exams/{slug}/join) gives whoever opens it while signed
+ * in (or signs up from it) that exam for good. It then shows on their Learning page, even while
+ * e-learning itself is still locked. Nobody else sees it. Every exam awards a Charter Center
+ * certificate to those who pass.
  *
  * An exam can be written in two languages side by side (English with Arabic, say): every text has
  * an optional second-language version, and the member chooses which to read.
  *
  * Member API (/api/v1):
- *  GET  /exams                       ExamSummary[] — published exams with the viewer's own progress.
- *  GET  /exams/:slug                 ExamDetail. Drafts are visible to staff with exam.manage (preview).
+ *  GET  /exams                       ExamSummary[] — the exams the viewer was invited to, with their own
+ *                                    progress. Staff with exam.manage see every exam, drafts included.
+ *  POST /exams/:slug/access          ExamSummary. The invitation link: gives the viewer this published
+ *                                    exam (once; later calls change nothing). NOT_FOUND otherwise.
+ *  GET  /exams/:slug                 ExamDetail. Only for members the exam was given to (and staff with
+ *                                    exam.manage, who can also preview drafts); NOT_FOUND for others.
  *  POST /exams/:id/attempts          201 ExamAttemptView. Starts an attempt, or returns the one in
- *                                    progress. 403 LEARNING_LOCKED for exams that follow the
- *                                    e-learning access rules; CONFLICT when no attempts are left.
+ *                                    progress. CONFLICT when no attempts are left.
  *  GET  /exam-attempts/:id           ExamAttemptView (own attempts only). An attempt whose time has
  *                                    run out is marked here with the answers saved so far.
  *  PUT  /exam-attempts/:id/answers   SaveExamAnswerInput → ExamAnswerSaved. Saves one answer and/or
@@ -40,11 +48,9 @@ import { z } from "zod";
  *  GET    /admin/exams-settings                 ExamsAdminSettings
  *  PUT    /admin/exams-settings                 UpdateExamsSettingsInput → ExamsAdminSettings
  *
- * Joining from Charter Center (public, no session; see the "Joining" section below):
- *  POST /exam-join/:slug/start      ExamJoinStartInput → ExamJoinStarted (code emailed)
- *  POST /exam-join/resend           ExamJoinResendInput → ExamJoinStarted
- *  POST /exam-join/verify           ExamJoinVerifyInput → ExamJoinVerified
- *  POST /exam-join/complete         ExamJoinCompleteInput → ExamJoinCompleted (signed in)
+ * Public (no session):
+ *  GET  /exam-join/:slug            ExamJoinInfo — what the invitation page shows before signing in.
+ *
  *  GET  /exams/:id/certificate      ExamCertificateView | null (member: their own)
  */
 
@@ -63,10 +69,6 @@ export const EXAM_GRACE_SECONDS = 20;
 
 export const ExamStatus = z.enum(["draft", "published", "archived"]);
 export type ExamStatus = z.infer<typeof ExamStatus>;
-
-/** members: every signed-in member · learning: only members who have unlocked Learning (e-learning access rules). */
-export const ExamAccess = z.enum(["members", "learning"]);
-export type ExamAccess = z.infer<typeof ExamAccess>;
 
 /** After submitting — full: score, the correct answers and explanations · score_only: the score and nothing else. */
 export const ExamReview = z.enum(["full", "score_only"]);
@@ -106,20 +108,8 @@ const settingsShape = {
   shuffleQuestions: z.boolean().default(false),
   shuffleOptions: z.boolean().default(false),
   review: ExamReview.default("full"),
-  access: ExamAccess.default("members"),
   /** Who wrote the questions, or a disclaimer, shown under the exam. */
   credit: optionalText(300),
-  /**
-   * The Charter Center course this exam certifies. When set, a member who passes gets their
-   * certificate from Charter Center (POST /certificates with their email and this id).
-   */
-  charterCenterCourseId: z
-    .string()
-    .trim()
-    .max(100, "At most 100 characters")
-    .regex(/^[A-Za-z0-9._:-]*$/, "Letters, numbers, dots, dashes and underscores only")
-    .nullish()
-    .transform((v) => (v ? v : null)),
   /** Post the certificate on the member's behalf, shown in everyone's feed. */
   shareCertificates: z.boolean().default(true),
 };
@@ -146,15 +136,7 @@ export const UpdateExamInput = z
     shuffleQuestions: z.boolean().optional(),
     shuffleOptions: z.boolean().optional(),
     review: ExamReview.optional(),
-    access: ExamAccess.optional(),
     credit: z.string().trim().max(300).nullable().optional(),
-    charterCenterCourseId: z
-      .string()
-      .trim()
-      .max(100, "At most 100 characters")
-      .regex(/^[A-Za-z0-9._:-]*$/, "Letters, numbers, dots, dashes and underscores only")
-      .nullable()
-      .optional(),
     shareCertificates: z.boolean().optional(),
     status: ExamStatus.optional(),
   })
@@ -269,7 +251,7 @@ export type ExamSection = z.infer<typeof ExamSection>;
 export const ExamCertificateStatus = z.enum(["pending", "issued", "failed"]);
 export type ExamCertificateStatus = z.infer<typeof ExamCertificateStatus>;
 
-/** A member's certificate for an exam they passed (exams with a Charter Center course only). */
+/** A member's Charter Center certificate for an exam they passed. */
 export const ExamCertificateView = z.object({
   id: z.string().uuid(),
   status: ExamCertificateStatus,
@@ -317,9 +299,6 @@ export const ExamSummary = z.object({
   timeLimitMinutes: z.number().int().nullable(),
   passPercent: z.number().int(),
   maxAttempts: z.number().int().nullable(),
-  access: ExamAccess,
-  /** The exam follows the e-learning access rules and the viewer hasn't unlocked Learning yet. */
-  locked: z.boolean(),
   viewer: ExamViewerProgress,
 });
 export type ExamSummary = z.infer<typeof ExamSummary>;
@@ -349,8 +328,6 @@ export const ExamDetail = ExamSummary.extend({
   sections: z.array(ExamSection),
   /** The viewer's attempts, newest first. */
   attempts: z.array(ExamAttemptSummary),
-  /** Passing earns a Charter Center certificate. */
-  awardsCertificate: z.boolean(),
   /** The viewer's certificate, once they have passed. */
   certificate: ExamCertificateView.nullable(),
 });
@@ -434,7 +411,7 @@ export const ExamAttemptView = z.object({
   questions: z.array(ExamAttemptQuestion),
   /** Present once submitted. */
   result: ExamResult.nullable(),
-  /** Passing earns a Charter Center certificate. */
+  /** Passing earns a Charter Center certificate (every exam does; a staff preview of a draft doesn't). */
   awardsCertificate: z.boolean(),
   /** The member's certificate for this exam, once a submitted attempt passed. */
   certificate: ExamCertificateView.nullable(),
@@ -482,9 +459,7 @@ export const AdminExamSummary = z.object({
   timeLimitMinutes: z.number().int().nullable(),
   passPercent: z.number().int(),
   maxAttempts: z.number().int().nullable(),
-  access: ExamAccess,
   stats: AdminExamStats,
-  charterCenterCourseId: z.string().nullable(),
   publishedAt: z.string().nullable(),
   updatedAt: z.string(),
 });
@@ -513,8 +488,6 @@ export const AdminExamDetail = AdminExamSummary.extend({
   review: ExamReview,
   credit: z.string().nullable(),
   shareCertificates: z.boolean(),
-  /** The synced Charter Center course with that id, when there is one (to confirm the id is right). */
-  charterCenterCourse: z.object({ title: z.string(), slug: z.string() }).nullable(),
   sections: z.array(ExamSection),
   /** In exam order. */
   questions: z.array(AdminExamQuestion),
@@ -546,69 +519,14 @@ export const AdminExamAttemptsQuery = z.object({
 });
 export type AdminExamAttemptsQuery = z.infer<typeof AdminExamAttemptsQuery>;
 
-/* ---------------- Joining from Charter Center ---------------- */
+/* ---------------- The invitation link ---------------- */
 
 /*
- * A Charter Center student opens an exam's join link (/exams/{slug}/join), enters the email they use
- * on Charter Center, and gets a 6-digit code at that address. The code proves the address is
- * theirs; only then do we show the name and photo Charter Center has for it. They choose a password
- * and their account is made from that name and photo, signed in and sent to the exam. Someone who
- * already has an account here is told to sign in instead.
+ * An exam's invitation link is /exams/{slug}/join. Someone signed in gets the exam at once
+ * (POST /exams/:slug/access) and lands on it. Someone signed out sees the exam and is asked to
+ * sign in or create a free account; the link is remembered through sign-up, and the exam is theirs
+ * as soon as they are in.
  */
-
-/** POST /exam-join/:slug/start */
-export const ExamJoinStartInput = z.object({
-  email: z.string().trim().toLowerCase().email("Enter a valid email address").max(254),
-});
-export type ExamJoinStartInput = z.infer<typeof ExamJoinStartInput>;
-
-export const ExamJoinStarted = z.object({
-  /** Carries the join to the next steps (valid for 30 minutes). */
-  joinId: z.string(),
-  /** "a••••@gmail.com" */
-  maskedEmail: z.string(),
-  /** Seconds before another code can be sent. */
-  resendAfter: z.number().int(),
-});
-export type ExamJoinStarted = z.infer<typeof ExamJoinStarted>;
-
-/** POST /exam-join/resend */
-export const ExamJoinResendInput = z.object({ joinId: z.string().min(10).max(80) });
-export type ExamJoinResendInput = z.infer<typeof ExamJoinResendInput>;
-
-/** POST /exam-join/verify */
-export const ExamJoinVerifyInput = z.object({
-  joinId: z.string().min(10).max(80),
-  code: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/, "Enter the 6-digit code"),
-});
-export type ExamJoinVerifyInput = z.infer<typeof ExamJoinVerifyInput>;
-
-/** new: confirm the name and photo and choose a password · existing: sign in with that email. */
-export const ExamJoinVerified = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("new"),
-    name: z.string(),
-    /** The Charter Center photo as a data: URL (already resized), or null. */
-    photo: z.string().nullable(),
-    email: z.string(),
-  }),
-  z.object({ status: z.literal("existing"), email: z.string() }),
-]);
-export type ExamJoinVerified = z.infer<typeof ExamJoinVerified>;
-
-/** POST /exam-join/complete */
-export const ExamJoinCompleteInput = z.object({
-  joinId: z.string().min(10).max(80),
-  password: z.string().min(12, "Use at least 12 characters").max(128, "Use 128 characters or fewer"),
-  acceptTerms: z.literal(true, { message: "You must accept the terms to continue" }),
-});
-export type ExamJoinCompleteInput = z.infer<typeof ExamJoinCompleteInput>;
-
-export const ExamJoinCompleted = z.object({ next: z.string() });
-export type ExamJoinCompleted = z.infer<typeof ExamJoinCompleted>;
 
 /** The exam as the public join page shows it (GET /exam-join/:slug). */
 export const ExamJoinInfo = z.object({
@@ -620,7 +538,6 @@ export const ExamJoinInfo = z.object({
   questionCount: z.number().int(),
   timeLimitMinutes: z.number().int().nullable(),
   passPercent: z.number().int(),
-  awardsCertificate: z.boolean(),
 });
 export type ExamJoinInfo = z.infer<typeof ExamJoinInfo>;
 
@@ -648,7 +565,7 @@ export const SendExamInvitesResult = z.object({
 });
 export type SendExamInvitesResult = z.infer<typeof SendExamInvitesResult>;
 
-/** invited: no account yet · joined: has an account · took: finished an attempt · passed. */
+/** invited: hasn't opened the link signed in yet · joined: has the exam · took: finished an attempt · passed. */
 export const ExamInviteStatus = z.enum(["invited", "joined", "took", "passed"]);
 export type ExamInviteStatus = z.infer<typeof ExamInviteStatus>;
 
@@ -664,7 +581,7 @@ export type ExamInviteRow = z.infer<typeof ExamInviteRow>;
 /* ---------------- Charter Center connection (admin) ---------------- */
 
 export const ExamsAdminSettings = z.object({
-  /** mock: made-up students and certificates for testing · live: Charter Center's API. */
+  /** mock: sample certificates for testing (not issued on the live site) · live: Charter Center's certificate API. */
   charterCenterMode: z.enum(["mock", "live"]),
   /** The page certificate posts name and appear on (Charter Center's page on Charter Mission). */
   certificatePage: z.object({ id: z.string().uuid(), slug: z.string(), name: z.string() }).nullable(),

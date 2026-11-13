@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, cache, type ReactNode } from "react";
 import { EXAM_LANGUAGE_NAMES, type ExamAttemptSummary, type ExamDetail } from "@chartermission/contracts";
-import { Icon, Panel, buttonClasses, cn, type IconName } from "@chartermission/ui";
+import { Icon, Panel, cn, type IconName } from "@chartermission/ui";
 import { PageShell } from "@/components/discover/page-shell";
 import { ExamStatusChip } from "@/components/exams/exam-card";
 import { ExamText } from "@/components/exams/exam-text";
@@ -74,19 +74,7 @@ async function ExamActions({ exam }: { exam: ExamDetail }) {
   const empty = exam.questionCount === 0;
   return (
     <Panel className="flex flex-col gap-4 p-5">
-      {exam.locked ? (
-        <div className="flex flex-col gap-3">
-          <div role="status" className="flex items-start gap-2.5 rounded-[10px] bg-warning-light p-3.5 text-sm text-ink">
-            <Icon name="shield" size={18} className="mt-0.5 shrink-0 text-warning" />
-            <span>
-              <span className="font-medium">This exam opens when you unlock Learning.</span> Finish the steps on the Learning page and it unlocks straight away.
-            </span>
-          </div>
-          <Link href="/learning" className={buttonClasses({ variant: "primary", block: true })}>
-            See what’s left to do
-          </Link>
-        </div>
-      ) : closed ? (
+      {closed ? (
         <p role="status" className="rounded-[10px] bg-muted p-3.5 text-sm text-body">
           This exam is closed. Your results are still here.
         </p>
@@ -212,7 +200,7 @@ async function ExamMain({ params }: { params: Props["params"] }) {
         <div className="flex min-w-0 flex-col gap-8 lg:col-start-1 lg:row-start-1">
           {exam.certificate && <CertificateCard examId={exam.id} initial={exam.certificate} finishProfile={!viewer.onboarding.completed} />}
 
-          {exam.awardsCertificate && !exam.certificate && (
+          {!exam.certificate && exam.status !== "draft" && (
             <p className="flex items-start gap-2.5 rounded-[10px] bg-primary-tint-2 p-3.5 text-sm text-ink">
               <Icon name="clipboard" size={18} className="mt-0.5 shrink-0 text-primary-light" />
               <span>
@@ -318,9 +306,9 @@ function ExamSkeleton() {
 export default function ExamPage({ params }: Props) {
   return (
     <PageShell className="gap-6 max-sm:px-4 max-sm:pt-4">
-      <Link href="/exams" className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
+      <Link href="/learning" className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
         <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
-        Exams
+        Learning
       </Link>
       <Suspense
         fallback={

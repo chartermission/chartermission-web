@@ -12,7 +12,6 @@ export const sectionNavItems: { href: string; key: NavKey; label: string; icon: 
   { href: "/initiatives", key: "initiatives", label: "Initiatives", icon: "lightbulb" },
   { href: "/events", key: "events", label: "Events", icon: "calendar" },
   { href: "/learning", key: "learning", label: "Learning", icon: "book" },
-  { href: "/exams", key: "exams", label: "Exams", icon: "clipboard" },
   { href: "/chapters", key: "chapters", label: "Chapters", icon: "globe" },
   { href: "/ambassadors", key: "ambassadors", label: "Ambassadors", icon: "shield" },
   { href: "/pages", key: "pages", label: "Pages", icon: "building" },

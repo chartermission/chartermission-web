@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import type { ExamJoinInfo } from "@chartermission/contracts";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
-import { ExamJoinFlow } from "@/components/exams/exam-join-flow";
+import { ClaimExam, ExamInviteSignedOut } from "@/components/exams/exam-invite";
 import { apiGetOrNull, getViewer } from "@/lib/api/server";
 
 type Props = PageProps<"/[locale]/exams/[slug]/join">;
@@ -17,29 +17,33 @@ export const metadata: Metadata = {
 };
 
 const highlights = [
-  "Use the email of your Charter Center account",
-  "Your account is made from your Charter Center name and photo",
-  "Pass, and your certificate arrives here to download",
+  "Your exam waits on your Learning page",
+  "Your score as soon as you finish",
+  "Pass, and your Charter Center certificate arrives here to download",
   "Meet professionals in 54 countries and the diaspora",
 ];
 
-async function Join({ params }: { params: Props["params"] }) {
+async function Invite({ params }: { params: Props["params"] }) {
   const { slug } = await params;
   if (!SLUG.test(slug)) notFound();
-  // Members who are already signed in go straight to the exam.
+  // Members who are signed in get the exam straight away and land on it.
   const viewer = await getViewer().catch(() => null);
-  if (viewer) redirect(`/exams/${slug.toLowerCase()}`);
+  if (viewer) return <ClaimExam slug={slug.toLowerCase()} />;
   const exam = await apiGetOrNull<ExamJoinInfo>(`/exam-join/${encodeURIComponent(slug)}`);
   if (!exam) notFound();
-  return <ExamJoinFlow exam={exam} />;
+  return <ExamInviteSignedOut exam={exam} />;
 }
 
-/** Where Charter Center exam invitations land: join with the Charter Center email, then take the exam. */
-export default function ExamJoinPage({ params }: Props) {
+/**
+ * An exam's invitation link. The exam is only for people who open this link: signed in, it is added
+ * to their Learning page; signed out, they sign in or create an account first (the proxy remembers
+ * the exam in a cookie, and it is added as soon as they are in).
+ */
+export default function ExamInvitePage({ params }: Props) {
   return (
     <AuthShell heading="Take your Charter Center exam on Charter Mission" highlights={highlights}>
       <Suspense fallback={<AuthFormSkeleton rows={2} />}>
-        <Join params={params} />
+        <Invite params={params} />
       </Suspense>
     </AuthShell>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { EXAM_LANGUAGE_NAMES, type AdminExamDetail, type ExamAccess, type ExamLanguage, type ExamReview, type UpdateExamInput } from "@chartermission/contracts";
+import { EXAM_LANGUAGE_NAMES, type AdminExamDetail, type ExamLanguage, type ExamReview, type UpdateExamInput } from "@chartermission/contracts";
 import { Button, cn } from "@chartermission/ui";
 import { Field } from "@/components/ambassadors/modal";
 import { FormNotice, TextField, inputClasses } from "@/components/form-field";
@@ -45,9 +45,7 @@ type Draft = {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   review: ExamReview;
-  access: ExamAccess;
   credit: string;
-  charterCenterCourseId: string;
   shareCertificates: boolean;
 };
 
@@ -64,13 +62,11 @@ const draftOf = (e: AdminExamDetail): Draft => ({
   shuffleQuestions: e.shuffleQuestions,
   shuffleOptions: e.shuffleOptions,
   review: e.review,
-  access: e.access,
   credit: e.credit ?? "",
-  charterCenterCourseId: e.charterCenterCourseId ?? "",
   shareCertificates: e.shareCertificates,
 });
 
-/** The Settings tab (PATCH /admin/exams/:id): what the exam is called, its rules, and who can take it. */
+/** The Settings tab (PATCH /admin/exams/:id): what the exam is called and its rules. Who can take it: whoever opens its invitation link. */
 export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChange: (exam: AdminExamDetail) => void }) {
   const t = useT();
   const [d, setD] = useState<Draft>(() => draftOf(exam));
@@ -116,9 +112,7 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
       shuffleQuestions: d.shuffleQuestions,
       shuffleOptions: d.shuffleOptions,
       review: d.review,
-      access: d.access,
       credit: d.credit.trim() || null,
-      charterCenterCourseId: d.charterCenterCourseId.trim() || null,
       shareCertificates: d.shareCertificates,
     };
     setBusy(true);
@@ -252,35 +246,14 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
               </Select>
             )}
           </Field>
-          <Field label="Who can take it" hint="E-learning access rules are set under E-learning access.">
-            {(id, describedBy) => (
-              <Select id={id} value={d.access} describedBy={describedBy} onChange={(v) => set("access", v as ExamAccess)}>
-                <option value="members">Every signed-in member</option>
-                <option value="learning">Only members who have unlocked Learning</option>
-              </Select>
-            )}
-          </Field>
         </div>
       </Group>
 
       <Group title="Charter Center certificate">
-        <TextField
-          label="Charter Center course ID"
-          value={d.charterCenterCourseId}
-          maxLength={100}
-          dir="ltr"
-          placeholder="e.g. capm-101"
-          hint="When a member passes, Charter Mission asks Charter Center for their certificate for this course (their email and this ID). Leave empty for an exam without a certificate."
-          error={fields.charterCenterCourseId}
-          onChange={(e) => set("charterCenterCourseId", e.target.value)}
-        />
-        {exam.charterCenterCourseId && exam.charterCenterCourseId === d.charterCenterCourseId.trim() && (
-          <p className="text-xs text-secondary">
-            {exam.charterCenterCourse
-              ? t("Matches the Charter Center course “{title}” in Learning.", { title: exam.charterCenterCourse.title })
-              : "No course with this ID is in Learning yet. That’s fine if Charter Center hasn’t listed it; check the ID with them."}
-          </p>
-        )}
+        <p className="text-sm text-body">
+          Everyone who passes gets a certificate from Charter Center. Charter Mission sends Charter Center the member’s email, their name and
+          this exam’s title, so keep the title as it should read on the certificate.
+        </p>
         <Checkbox
           checked={d.shareCertificates}
           onChange={(v) => set("shareCertificates", v)}

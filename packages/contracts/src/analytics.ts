@@ -29,7 +29,7 @@ export const AnalyticsEventName = z.enum([
   "exam_started",
   /** A member finished an exam (submitted, or the time ran out). Subject: exam id. */
   "exam_submitted",
-  /** Someone joined Charter Mission from an exam link with their Charter Center email. Subject: exam id. */
+  /** A member got an exam from its invitation link (the first time only). Subject: exam id. */
   "exam_joined",
   /** A member's Charter Center certificate arrived after passing an exam. Subject: exam id. */
   "exam_certificate_issued",

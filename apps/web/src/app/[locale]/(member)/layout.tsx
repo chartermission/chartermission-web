@@ -8,6 +8,7 @@ import { InviteHost } from "@/components/invite/invite-dialog";
 import { SendInMessageHost } from "@/components/messages/share-dialog";
 import { VideoTrimHost } from "@/components/video/video-trim";
 import { InstallBanner } from "@/components/pwa/install-banner";
+import { ExamInviteClaim } from "@/components/exams/exam-invite";
 
 /**
  * Reads the session, so it streams in behind the boundary while the page shell renders: the top
@@ -40,6 +41,7 @@ async function ViewerChrome() {
       <LocaleSync accountLocale={viewer.locale} />
       <AccountBanners viewer={account} />
       <InstallBanner />
+      <ExamInviteClaim />
       <AccountGate viewer={account} />
       <SendInMessageHost />
       <InviteHost inviterHandle={viewer.handle} />

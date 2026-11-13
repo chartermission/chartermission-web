@@ -155,6 +155,13 @@
       "when": 1794609153646,
       "tag": "0021_event_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794612486089,
+      "tag": "0022_exams_by_invitation",
+      "breakpoints": true
     }
   ]
 }

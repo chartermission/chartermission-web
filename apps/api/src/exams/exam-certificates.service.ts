@@ -3,8 +3,9 @@ import { and, eq, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import type { ExamCertificateView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { courses, examCertificates, exams, pages, posts, users } from '../db/schema.js';
+import { examCertificates, exams, memberProfiles, pages, posts, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
+import { isProd } from '../config/env.js';
 import { SessionService } from '../core/session.service.js';
 import { mediaUrl } from '../core/members.service.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
@@ -23,6 +24,8 @@ export const CERTIFICATE_JOB = 'exam-certificate';
 const SWEEP_JOB = 'exam-certificates-sweep';
 /** Waits before asking Charter Center again; after the last one the certificate is marked failed (about two days in all). */
 export const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 3600_000, 3 * 3600_000, 6 * 3600_000, 12 * 3600_000, 24 * 3600_000];
+/** With the sample (mock) Charter Center on the live site, certificates wait and are checked again this often. */
+const MOCK_WAIT_MS = 3600_000;
 /** A run that crashed half-way is picked up again by the sweep after this long. */
 const CLAIM_MS = 10 * 60_000;
 const IMAGE_MAX_BYTES = 15 * 1024 * 1024;
@@ -41,11 +44,15 @@ export function certificateView(row: CertificateRow, postAlive: boolean): ExamCe
 }
 
 /**
- * Charter Center certificates for exams that name a course. When a member passes, we ask Charter
- * Center for their certificate (their email and the course id). Until it has one we keep asking
- * (RETRY_DELAYS_MS). Once it arrives, the image and PDF are stored here and, when the exam shares
- * certificates, posted as a celebration by the member that every member sees, linked to Charter
- * Center's page.
+ * Charter Center certificates: every exam awards one. When a member passes, we ask Charter Center
+ * for their certificate (their email, their name and the exam's title). Until it has one we keep
+ * asking (RETRY_DELAYS_MS). Once it arrives, the image and PDF are stored here and, when the exam
+ * shares certificates, posted as a celebration by the member that every member sees, linked to
+ * Charter Center's page.
+ *
+ * On the live site (NODE_ENV=production) the sample Charter Center (CHARTER_CENTER_EXAMS_API=mock)
+ * never issues anything: certificates wait as pending until the real API is switched on, so no
+ * sample certificate is ever posted to the feed.
  */
 @Injectable()
 export class ExamCertificatesService implements OnModuleInit {
@@ -73,11 +80,9 @@ export class ExamCertificatesService implements OnModuleInit {
 
   /** After a passing attempt is marked: one certificate per member and exam. */
   async onPassed(examId: string, userId: string, attemptId: string): Promise<void> {
-    const [exam] = await this.db.select({ courseId: exams.charterCenterCourseId }).from(exams).where(eq(exams.id, examId)).limit(1);
-    if (!exam?.courseId) return;
     const [row] = await this.db
       .insert(examCertificates)
-      .values({ examId, userId, attemptId, courseId: exam.courseId, status: 'pending', nextTryAt: new Date() })
+      .values({ examId, userId, attemptId, status: 'pending', nextTryAt: new Date() })
       .onConflictDoNothing()
       .returning({ id: examCertificates.id });
     if (row) await this.enqueue(row.id);
@@ -125,16 +130,30 @@ export class ExamCertificatesService implements OnModuleInit {
       .where(and(eq(examCertificates.id, id), eq(examCertificates.status, 'pending'), or(isNull(examCertificates.nextTryAt), lte(examCertificates.nextTryAt, new Date()))))
       .returning();
     if (!row) return;
-    const [user] = await this.db.select({ email: users.email, status: users.status }).from(users).where(eq(users.id, row.userId)).limit(1);
+    const [user] = await this.db
+      .select({ email: users.email, status: users.status, name: memberProfiles.displayName })
+      .from(users)
+      .leftJoin(memberProfiles, eq(memberProfiles.userId, users.id))
+      .where(eq(users.id, row.userId))
+      .limit(1);
     if (!user || user.status === 'deleted') {
       await this.db.update(examCertificates).set({ status: 'failed', lastError: 'The member’s account is gone' }).where(eq(examCertificates.id, row.id));
+      return;
+    }
+    const [exam] = await this.db.select({ title: exams.title }).from(exams).where(eq(exams.id, row.examId)).limit(1);
+    if (!exam) return;
+    if (!row.imageFileId && this.charterCenter.mode === 'mock' && isProd()) {
+      await this.db
+        .update(examCertificates)
+        .set({ nextTryAt: new Date(Date.now() + MOCK_WAIT_MS), lastError: 'Waiting for Charter Center’s certificate API (CHARTER_CENTER_EXAMS_API is not live yet)' })
+        .where(eq(examCertificates.id, row.id));
       return;
     }
 
     try {
       if (!row.imageFileId) {
-        const cert = await this.charterCenter.certificate(user.email.toLowerCase(), row.courseId);
-        if (!cert) return await this.later(row, 'Charter Center has no certificate for this member and course yet');
+        const cert = await this.charterCenter.certificate({ email: user.email.toLowerCase(), name: user.name?.trim() || user.email, examTitle: exam.title });
+        if (!cert) return await this.later(row, 'Charter Center has no certificate for this member and exam yet');
         const image = await this.charterCenter.download(cert.imageUrl, IMAGE_MAX_BYTES);
         const pdf = await this.charterCenter.download(cert.pdfUrl, PDF_MAX_BYTES);
         // Large PNG scans become a sharp JPEG that fits the post image limit.
@@ -211,8 +230,7 @@ export class ExamCertificatesService implements OnModuleInit {
     if (!exam?.shareCertificates || !row.imageFileId) return;
     const author = await this.sessions.userById(row.userId);
     if (!author) return;
-    const [course] = await this.db.select({ title: courses.title }).from(courses).where(eq(courses.externalId, row.courseId)).limit(1);
-    const subject = course?.title ?? exam.title;
+    const subject = exam.title;
     const page = await this.certificatePage();
     const post = await this.postsService.create(author, {
       type: 'celebration',

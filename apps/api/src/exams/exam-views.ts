@@ -1,6 +1,5 @@
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import type {
-  ExamAccess,
   ExamAttemptSummary,
   ExamLanguage,
   ExamReview,
@@ -29,7 +28,6 @@ export function examBase(row: ExamRow) {
     timeLimitMinutes: row.timeLimitMinutes,
     passPercent: row.passPercent,
     maxAttempts: row.maxAttempts,
-    access: row.access as ExamAccess,
   };
 }
 

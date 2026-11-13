@@ -1419,7 +1419,8 @@ export type ExamOptionRow = { id: string; text: string; textAlt: string | null }
 /**
  * A multiple-choice exam built in the admin console and taken by members. Texts may carry a
  * second-language version (the *_alt columns), shown beside or instead of the first.
- * Members see an exam while status = 'published'; staff with exam.manage can try a draft.
+ * Members see a published exam once it was given to them (exam_access, from its invitation link);
+ * staff with exam.manage see every exam and can try a draft.
  */
 export const exams = pgTable(
   'exams',
@@ -1442,11 +1443,7 @@ export const exams = pgTable(
     shuffleOptions: boolean('shuffle_options').notNull().default(false),
     /** full: answers and explanations after submitting · score_only. */
     review: text('review').notNull().default('full'),
-    /** members: any signed-in member · learning: follows the e-learning access rules. */
-    access: text('access').notNull().default('members'),
     credit: text('credit'),
-    /** Charter Center course this exam certifies; passing asks Charter Center for the certificate. */
-    charterCenterCourseId: text('charter_center_course_id'),
     /** Post the certificate on the member's behalf (shown in everyone's feed). */
     shareCertificates: boolean('share_certificates').notNull().default(true),
     publishedAt: ts('published_at'),
@@ -1458,7 +1455,6 @@ export const exams = pgTable(
     index('exams_status_idx').on(t.status, t.publishedAt),
     check('exams_status_ck', sql`${t.status} in ('draft','published','archived')`),
     check('exams_review_ck', sql`${t.review} in ('full','score_only')`),
-    check('exams_access_ck', sql`${t.access} in ('members','learning')`),
     check('exams_pass_ck', sql`${t.passPercent} between 1 and 100`),
   ],
 );
@@ -1580,8 +1576,6 @@ export const examCertificates = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** The passing attempt that earned it. */
     attemptId: uuid('attempt_id').references(() => examAttempts.id, { onDelete: 'set null' }),
-    /** The course id it was asked for (the exam's at the time). */
-    courseId: text('course_id').notNull(),
     status: text('status').notNull().default('pending'),
     externalId: text('external_id'),
     imageFileId: uuid('image_file_id').references(() => files.id, { onDelete: 'set null' }),
@@ -1599,6 +1593,24 @@ export const examCertificates = pgTable(
     index('exam_certificates_due_idx').on(t.status, t.nextTryAt),
     check('exam_certificates_status_ck', sql`${t.status} in ('pending','issued','failed')`),
   ],
+);
+
+/**
+ * Who may see and take an exam: given by opening its invitation link while signed in (or signing
+ * up from it). Kept for good, so the exam stays on the member's Learning page.
+ */
+export const examAccess = pgTable(
+  'exam_access',
+  {
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.examId, t.userId] }), index('exam_access_user_idx').on(t.userId, t.createdAt)],
 );
 
 /** Exam join links emailed from the console (one row per exam and address). */

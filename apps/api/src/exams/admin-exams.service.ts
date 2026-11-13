@@ -24,7 +24,7 @@ import {
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { courses, examAttempts, examCertificates, examInvites, examQuestions, examSections, exams, memberProfiles, pages, users } from '../db/schema.js';
+import { examAccess, examAttempts, examCertificates, examInvites, examQuestions, examSections, exams, memberProfiles, pages, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
@@ -76,13 +76,10 @@ export class AdminExamsService {
   /** GET /admin/exams/:id */
   async detail(id: string, db: Db | Tx = this.db): Promise<AdminExamDetail> {
     const exam = await this.find(id, db);
-    const [sections, questions, stats, course] = await Promise.all([
+    const [sections, questions, stats] = await Promise.all([
       sectionsOf(db, exam.id),
       db.select().from(examQuestions).where(eq(examQuestions.examId, exam.id)).orderBy(asc(examQuestions.position), asc(examQuestions.createdAt)),
       this.stats([exam.id]),
-      exam.charterCenterCourseId
-        ? db.select({ title: courses.title, slug: courses.slug }).from(courses).where(eq(courses.externalId, exam.charterCenterCourseId)).limit(1)
-        : Promise.resolve([]),
     ]);
     return {
       ...this.summary(exam, questions.length, stats.get(exam.id) ?? NO_STATS),
@@ -93,7 +90,6 @@ export class AdminExamsService {
       review: reviewOf(exam),
       credit: exam.credit,
       shareCertificates: exam.shareCertificates,
-      charterCenterCourse: course[0] ?? null,
       sections: sections.views,
       questions: questions.map(questionView),
     };
@@ -362,7 +358,7 @@ export class AdminExamsService {
     };
   }
 
-  /** POST /admin/exams/:id/invites — emails the exam's join link (published exams only). */
+  /** POST /admin/exams/:id/invites — emails the exam's invitation link (published exams only). */
   async sendInvites(ctx: AuthContext, id: string, input: SendExamInvitesInput, ip?: string): Promise<SendExamInvitesResult> {
     const exam = await this.find(id);
     if (exam.status !== 'published') throw Errors.conflict('Publish the exam before inviting members');
@@ -400,7 +396,7 @@ export class AdminExamsService {
         paragraphs: [
           `Charter Center invites you to take the exam “${exam.title}” on Charter Mission.`,
           ...(input.message ? [input.message] : []),
-          'Use the email address of your Charter Center account. Your Charter Mission account is made from it in a minute, and you go straight to the exam.',
+          'Open the link, then sign in or create your free Charter Mission account. The exam is added to your Learning page, and you can take it straight away.',
         ],
         button: { label: 'Take the exam', url: link },
         transactional: true,
@@ -421,6 +417,7 @@ export class AdminExamsService {
         firstSentAt: examInvites.createdAt,
         lastSentAt: examInvites.lastSentAt,
         userId: users.id,
+        hasExam: sql<boolean>`exists (select 1 from ${examAccess} x where x.exam_id = ${exam.id} and x.user_id = ${users.id})`,
         took: sql<boolean>`exists (select 1 from ${examAttempts} a where a.exam_id = ${exam.id} and a.user_id = ${users.id} and a.status = 'submitted' and not a.preview)`,
         passed: sql<boolean>`exists (select 1 from ${examAttempts} a where a.exam_id = ${exam.id} and a.user_id = ${users.id} and a.passed and not a.preview)`,
       })
@@ -431,7 +428,7 @@ export class AdminExamsService {
       .limit(2000);
     return rows.map((r) => ({
       email: r.email,
-      status: !r.userId ? 'invited' : r.passed ? 'passed' : r.took ? 'took' : 'joined',
+      status: !r.userId ? 'invited' : r.passed ? 'passed' : r.took ? 'took' : r.hasExam ? 'joined' : 'invited',
       sends: r.sends,
       firstSentAt: r.firstSentAt.toISOString(),
       lastSentAt: r.lastSentAt.toISOString(),
@@ -478,7 +475,7 @@ export class AdminExamsService {
   }
 
   private summary(row: ExamRow, questionCount: number, stats: AdminExamStats): AdminExamSummary {
-    return { ...examBase(row), charterCenterCourseId: row.charterCenterCourseId, questionCount, stats, publishedAt: row.publishedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
+    return { ...examBase(row), questionCount, stats, publishedAt: row.publishedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
   }
 
   private async stats(examIds: string[]): Promise<Map<string, AdminExamStats>> {

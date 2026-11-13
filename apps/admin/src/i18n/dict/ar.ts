@@ -1621,4 +1621,13 @@ export const ar: Dict = {
   "Your role needs an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password or similar) for": "يتطلب دورك تطبيق مصادقة (Google Authenticator أو Microsoft Authenticator أو 1Password أو ما يماثلها) لـ",
   "Your session expired after 30 minutes without activity. Sign in again to continue.": "انتهت جلستك بعد 30 دقيقة من عدم النشاط. سجّل الدخول مجددًا للمتابعة.",
   "Your time:": "توقيتك:",
+  "Everyone who passes gets a certificate from Charter Center. Charter Mission sends Charter Center the member’s email, their name and this exam’s title, so keep the title as it should read on the certificate.": "كل من يجتاز الاختبار يحصل على شهادة من Charter Center. يرسل Charter Mission إلى Charter Center بريد العضو واسمه وعنوان هذا الاختبار، لذا اكتب العنوان كما ينبغي أن يظهر على الشهادة.",
+  "Certificates are samples, so the flow can be tried away from the live site (an email containing “pending” waits for its certificate). On the live site nothing is issued in test mode: certificates wait until CHARTER_CENTER_EXAMS_API=live is set on the API, then arrive within the hour.": "الشهادات تجريبية لتجربة المسار خارج الموقع الفعلي (البريد الذي يحتوي «pending» ينتظر شهادته). على الموقع الفعلي لا يُصدر شيء في وضع الاختبار: تنتظر الشهادات حتى يُضبط CHARTER_CENTER_EXAMS_API=live على الواجهة البرمجية، ثم تصل خلال ساعة.",
+  "Members who pass an exam get their certificate from Charter Center (sent: their email, name and the exam’s title).": "يحصل الأعضاء الذين يجتازون اختبارًا على شهادتهم من Charter Center (يُرسل: بريدهم واسمهم وعنوان الاختبار).",
+  "Invitation link": "رابط الدعوة",
+  "Only people who open this link get the exam. Members who are signed in get it straight away; others sign in or create a free account first. The exam then stays on their Learning page, even before e-learning is unlocked. Anyone you pass the link to can use it.": "لا يحصل على الاختبار إلا من يفتح هذا الرابط. يحصل عليه الأعضاء المسجّلون فورًا، ويسجّل الآخرون الدخول أو ينشئون حسابًا مجانيًا أولًا. ثم يبقى الاختبار في صفحة التعلّم لديهم، حتى قبل فتح التعلّم الإلكتروني. ويمكن لأي شخص تمرّر إليه الرابط استخدامه.",
+  "One per line, or separated by commas. Up to {count} at a time.": "عنوان في كل سطر، أو مفصولة بفواصل. حتى {count} في المرة الواحدة.",
+  "Has the exam": "لديه الاختبار",
+  "{invited} haven’t opened it yet · {joined} have the exam · {took} took it · {passed} passed": "{invited} لم يفتحوه بعد · {joined} لديهم الاختبار · {took} أدّوه · {passed} اجتازوه",
+  "Invitations you send appear here, with who got the exam, took and passed it.": "تظهر هنا الدعوات التي ترسلها، مع من حصل على الاختبار ومن أدّاه ومن اجتازه.",
 };

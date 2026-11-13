@@ -129,8 +129,8 @@ export function AccountBanners({ viewer }: { viewer: AccountNoticeViewer }) {
 }
 
 /**
- * Pages that must stay reachable while onboarding is unfinished. Exams too: Charter Center students
- * who join from an exam invitation go straight to the exam and finish their profile afterwards.
+ * Pages that must stay reachable while onboarding is unfinished. Exams too: people who sign up from
+ * an exam invitation link go straight to the exam and finish their profile afterwards.
  */
 const onboardingExempt = ["/onboarding", "/settings", "/appeals", "/exams"];
 /** A member who doesn't accept the new policies can still leave (deactivate, delete, export). */

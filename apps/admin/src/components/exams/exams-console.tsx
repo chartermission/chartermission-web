@@ -52,11 +52,6 @@ export function ExamsConsole({ initial }: { initial: AdminExamSummary[] }) {
                       <Chip tone={chip.tone} className="px-2! py-0.5! text-xs!">
                         {chip.label}
                       </Chip>
-                      {exam.charterCenterCourseId && (
-                        <Chip tone="info" className="px-2! py-0.5! text-xs!">
-                          Charter Center certificate
-                        </Chip>
-                      )}
                     </div>
                     {exam.titleAlt && (
                       <span className="text-sm text-secondary">

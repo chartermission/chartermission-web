@@ -198,7 +198,6 @@ export const CAPM_PRACTICE_EXAM: z.input<typeof ExamImportInput> = {
   shuffleQuestions: false,
   shuffleOptions: false,
   review: 'full',
-  access: 'members',
   credit: 'Original training questions by Eng. Abdalla Yousif, Charter Center — not official PMI exam items.',
   sections: Object.values(DOMAINS).map((d) => ({ ...d })),
   questions: QUESTIONS.map(([domain, eco, prompt, options, answer, explanation, tag]) => ({

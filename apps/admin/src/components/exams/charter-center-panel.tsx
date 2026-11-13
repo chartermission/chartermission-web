@@ -50,8 +50,8 @@ export function CharterCenterPanel({ initial }: { initial: ExamsAdminSettings })
       </div>
       <p className="text-sm text-body">
         {mock
-          ? "Students and certificates are samples, so the whole flow can be tried: any email joins (one starting with “unknown” is turned away), and an email containing “pending” waits for its certificate. Set CHARTER_CENTER_EXAMS_API=live on the API once Charter Center’s student lookup and certificate APIs are ready."
-          : "Students joining from an exam invitation are checked with Charter Center, and members who pass an exam with a course ID get their certificate from Charter Center."}
+          ? "Certificates are samples, so the flow can be tried away from the live site (an email containing “pending” waits for its certificate). On the live site nothing is issued in test mode: certificates wait until CHARTER_CENTER_EXAMS_API=live is set on the API, then arrive within the hour."
+          : "Members who pass an exam get their certificate from Charter Center (sent: their email, name and the exam’s title)."}
       </p>
       {editing ? (
         <form onSubmit={save} className="flex flex-wrap items-end gap-2">

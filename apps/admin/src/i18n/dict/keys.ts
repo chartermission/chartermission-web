@@ -1619,4 +1619,13 @@ export const KEYS: readonly string[] = [
   "Your role needs an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password or similar) for",
   "Your session expired after 30 minutes without activity. Sign in again to continue.",
   "Your time:",
+  "Everyone who passes gets a certificate from Charter Center. Charter Mission sends Charter Center the member’s email, their name and this exam’s title, so keep the title as it should read on the certificate.",
+  "Certificates are samples, so the flow can be tried away from the live site (an email containing “pending” waits for its certificate). On the live site nothing is issued in test mode: certificates wait until CHARTER_CENTER_EXAMS_API=live is set on the API, then arrive within the hour.",
+  "Members who pass an exam get their certificate from Charter Center (sent: their email, name and the exam’s title).",
+  "Invitation link",
+  "Only people who open this link get the exam. Members who are signed in get it straight away; others sign in or create a free account first. The exam then stays on their Learning page, even before e-learning is unlocked. Anyone you pass the link to can use it.",
+  "One per line, or separated by commas. Up to {count} at a time.",
+  "Has the exam",
+  "{invited} haven’t opened it yet · {joined} have the exam · {took} took it · {passed} passed",
+  "Invitations you send appear here, with who got the exam, took and passed it.",
 ];

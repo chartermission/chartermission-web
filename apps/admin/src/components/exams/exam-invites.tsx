@@ -15,7 +15,7 @@ import { useT } from "@/i18n/client";
 
 const STATUS: Record<ExamInviteStatus, { label: string; tone: ChipTone }> = {
   invited: { label: "Invited", tone: "neutral" },
-  joined: { label: "Joined", tone: "info" },
+  joined: { label: "Has the exam", tone: "info" },
   took: { label: "Took the exam", tone: "warning" },
   passed: { label: "Passed", tone: "success" },
 };
@@ -24,8 +24,8 @@ const STATUS: Record<ExamInviteStatus, { label: string; tone: ChipTone }> = {
 const addresses = (text: string) => [...new Set(text.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean))];
 
 /**
- * The Invite tab (POST/GET /admin/exams/:id/invites): email Charter Center students the exam's join
- * link, and follow who joined, took and passed it.
+ * The Invite tab (POST/GET /admin/exams/:id/invites): email the exam's invitation link, and follow
+ * who got the exam, took and passed it.
  */
 export function ExamInvites({ exam }: { exam: AdminExamDetail }) {
   const t = useT();
@@ -86,10 +86,10 @@ export function ExamInvites({ exam }: { exam: AdminExamDetail }) {
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 rounded-card border border-line bg-card px-5 py-4">
-        <h2 className="text-h3 text-ink">Join link for Charter Center students</h2>
+        <h2 className="text-h3 text-ink">Invitation link</h2>
         <p className="text-sm text-body">
-          Students open it, enter the email of their Charter Center account and confirm it with a code. Their Charter Mission account is made from their Charter Center name and photo,
-          and they go straight to this exam. Members who are already signed in go straight to the exam.
+          Only people who open this link get the exam. Members who are signed in get it straight away; others sign in or create a free account first.
+          The exam then stays on their Learning page, even before e-learning is unlocked. Anyone you pass the link to can use it.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <code className="min-w-0 flex-1 truncate rounded-md border border-line bg-muted px-3 py-2 text-sm text-ink" dir="ltr">
@@ -105,7 +105,7 @@ export function ExamInvites({ exam }: { exam: AdminExamDetail }) {
 
       <form noValidate onSubmit={send} className="flex flex-col gap-4 rounded-card border border-line bg-card px-5 py-4">
         <h2 className="text-h3 text-ink">Invite by email</h2>
-        <Field label="Email addresses" hint={t("One per line, or separated by commas. Up to {count} at a time. Use the addresses students use on Charter Center.", { count: EXAM_INVITES_PER_REQUEST })}>
+        <Field label="Email addresses" hint={t("One per line, or separated by commas. Up to {count} at a time.", { count: EXAM_INVITES_PER_REQUEST })}>
           {(id, describedBy) => (
             <textarea
               id={id}
@@ -140,7 +140,7 @@ export function ExamInvites({ exam }: { exam: AdminExamDetail }) {
           </h2>
           {rows && rows.length > 0 && (
             <p className="text-sm text-secondary">
-              {t("{invited} not joined yet · {joined} joined · {took} took it · {passed} passed", counts)}
+              {t("{invited} haven’t opened it yet · {joined} have the exam · {took} took it · {passed} passed", counts)}
             </p>
           )}
         </div>
@@ -153,7 +153,7 @@ export function ExamInvites({ exam }: { exam: AdminExamDetail }) {
         ) : rows.length === 0 ? (
           <div className="rounded-card border border-line bg-card">
             <EmptyState icon="mail" title="No invitations yet">
-              Invitations you send appear here, with who joined, took and passed the exam.
+              Invitations you send appear here, with who got the exam, took and passed it.
             </EmptyState>
           </div>
         ) : (

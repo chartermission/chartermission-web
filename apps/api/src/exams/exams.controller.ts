@@ -1,12 +1,7 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from '@nestjs/common';
 import {
   AdminExamAttemptsQuery,
   ExamImportInput,
-  ExamJoinCompleteInput,
-  ExamJoinResendInput,
-  ExamJoinStartInput,
-  ExamJoinVerifyInput,
   ExamQuestionInput,
   ExamQuestionOrderInput,
   ExamQuestionsImportInput,
@@ -23,10 +18,7 @@ import {
   type ExamAttemptView,
   type ExamCertificateView,
   type ExamInviteRow,
-  type ExamJoinCompleted,
   type ExamJoinInfo,
-  type ExamJoinStarted,
-  type ExamJoinVerified,
   type ExamsAdminSettings,
   type SendExamInvitesResult,
   type ExamDetail,
@@ -41,9 +33,8 @@ import { UuidParam } from '../media/uuid-param.js';
 import { ExamsService } from './exams.service.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
 import { AdminExamsService } from './admin-exams.service.js';
-import { ExamJoinService } from './exam-join.service.js';
 
-/** Exams for signed-in members: browse, take and review. Marking happens here, never in the browser. */
+/** Exams for signed-in members: their invited exams, take and review. Marking happens here, never in the browser. */
 @Controller()
 export class ExamsController {
   constructor(
@@ -55,6 +46,14 @@ export class ExamsController {
   @Access('member')
   list(@Auth() ctx: AuthContext): Promise<ExamSummary[]> {
     return this.exams.list(ctx.user);
+  }
+
+  /** The invitation link: gives the viewer this exam for good. */
+  @Post('exams/:slug/access')
+  @HttpCode(200)
+  @Access('member')
+  claim(@Auth() ctx: AuthContext, @Param('slug') slug: string): Promise<ExamSummary> {
+    return this.exams.claim(ctx.user, slug);
   }
 
   @Get('exams/:slug')
@@ -98,41 +97,14 @@ export class ExamsController {
   }
 }
 
-/**
- * Charter Center students joining from an exam invitation (no account yet, so no @Access): email →
- * 6-digit code → confirm the Charter Center name and photo, choose a password → signed in, at the exam.
- */
+/** The exam's invitation page before signing in (public: the person may not have an account yet). */
 @Controller('exam-join')
 export class ExamJoinController {
-  constructor(private readonly join: ExamJoinService) {}
+  constructor(private readonly exams: ExamsService) {}
 
   @Get(':slug')
   info(@Param('slug') slug: string): Promise<ExamJoinInfo> {
-    return this.join.info(slug);
-  }
-
-  @Post('resend')
-  @HttpCode(200)
-  resend(@ZBody(ExamJoinResendInput) input: ExamJoinResendInput): Promise<ExamJoinStarted> {
-    return this.join.resend(input.joinId);
-  }
-
-  @Post('verify')
-  @HttpCode(200)
-  verify(@ZBody(ExamJoinVerifyInput) input: ExamJoinVerifyInput): Promise<ExamJoinVerified> {
-    return this.join.verify(input.joinId, input.code);
-  }
-
-  @Post('complete')
-  @HttpCode(200)
-  complete(@ZBody(ExamJoinCompleteInput) input: ExamJoinCompleteInput, @Req() req: AppRequest, @Res({ passthrough: true }) res: Response): Promise<ExamJoinCompleted> {
-    return this.join.complete(input.joinId, input.password, req, res);
-  }
-
-  @Post(':slug/start')
-  @HttpCode(200)
-  start(@Param('slug') slug: string, @ZBody(ExamJoinStartInput) input: ExamJoinStartInput, @Req() req: AppRequest): Promise<ExamJoinStarted> {
-    return this.join.start(slug, input.email, req);
+    return this.exams.joinInfo(slug);
   }
 }
 

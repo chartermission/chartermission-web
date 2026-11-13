@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { INVITE_COOKIE, INVITE_EVENT_COOKIE, INVITE_REF_COOKIE } from "@/lib/invite";
+import { INVITE_COOKIE, INVITE_EVENT_COOKIE, INVITE_EXAM_COOKIE, INVITE_REF_COOKIE } from "@/lib/invite";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, localeFromHeader, type Locale } from "@/i18n/config";
 
 /** Member-only areas: without a session cookie the visitor is sent to sign in with a return path. */
@@ -32,8 +32,8 @@ const PREVIEW_PATH = /^\/(?:[a-z0-9][a-z0-9-]{1,59}|(?:chapters|events|pages|opp
 /** Public pages keep their own previews. */
 const PUBLIC_PAGES = new Set(["check-email", "forgot-password", "guidelines", "policies", "privacy", "reset-password", "sign-in", "signin", "signup", "terms", "verify-email"]);
 
-/** Exam invitations from Charter Center: the join page is where people without an account start. */
-const EXAM_JOIN = /^\/exams\/[^/]+\/join\/?$/;
+/** Exam invitation links: open to everyone (people without an account start here). */
+const EXAM_JOIN = /^\/exams\/([a-z0-9][a-z0-9-]{0,99})\/join\/?$/i;
 
 const needsSession = (pathname: string) =>
   !EXAM_JOIN.test(pathname) &&
@@ -125,6 +125,19 @@ export function proxy(request: NextRequest) {
     url.pathname = `/${isLocale(saved) ? saved : DEFAULT_LOCALE}/link-preview`;
     url.search = `?path=${encodeURIComponent(pathname)}`;
     return NextResponse.rewrite(url);
+  }
+
+  // An exam invitation link: remember the exam through sign-in or sign-up, so it is given to them
+  // as soon as they are in (components/exams/exam-invite.tsx), then show the invitation page.
+  const examInvite = EXAM_JOIN.exec(pathname);
+  if (examInvite) {
+    const saved = request.cookies.get(LOCALE_COOKIE)?.value;
+    const locale: Locale = isLocale(saved) ? saved : (localeFromHeader(request.headers.get("accept-language")) ?? DEFAULT_LOCALE);
+    const url = request.nextUrl.clone();
+    url.pathname = `/${locale}${pathname}`;
+    const response = NextResponse.rewrite(url);
+    response.cookies.set(INVITE_EXAM_COOKIE, examInvite[1]!.toLowerCase(), { path: "/", maxAge: 60 * 60 * 24 * 30, sameSite: "lax" });
+    return response;
   }
 
   if (needsSession(pathname) && !request.cookies.has("cm_session")) {

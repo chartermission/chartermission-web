@@ -4,24 +4,24 @@ import { assertSafeUrl } from '../posts/ssrf.js';
 import { CharterCenterError, type FetchFn } from '../learning/charter-center.client.js';
 
 /*
- * The two Charter Center calls exams need (spec for Charter Center: docs/CHARTER-CENTER-EXAMS-API.md).
+ * The one Charter Center call exams need (spec for Charter Center: docs/CHARTER-CENTER-EXAMS-API.md).
  *
- *   POST {CHARTER_CENTER_API_URL}/students/lookup   { "email": "…" }
- *        200 { "name": "…", "photo_url": "https://…" | null }      404: not a Charter Center student
- *   POST {CHARTER_CENTER_API_URL}/certificates       { "email": "…", "course_id": "…" }
+ *   POST {CHARTER_CENTER_API_URL}/certificates   { "email": "…", "name": "…", "exam_title": "…" }
  *        200 { "certificate_id": "…", "pdf_url": "https://…", "image_url": "https://…" }
  *        404: no certificate yet (we ask again later)
  *
- * Both are sent with Authorization: Bearer {CHARTER_CENTER_API_KEY}, like the catalogue. Field names
- * are read in snake_case or camelCase, and a Laravel-style { "data": { … } } wrapper is accepted.
+ * Sent with Authorization: Bearer {CHARTER_CENTER_API_KEY}, like the catalogue. Field names are read
+ * in snake_case or camelCase, and a Laravel-style { "data": { … } } wrapper is accepted.
  *
- * CHARTER_CENTER_EXAMS_API=mock (the default until Charter Center ships these) answers from
- * MockCharterCenterExamsClient instead, so the whole flow can be tried end to end.
+ * CHARTER_CENTER_EXAMS_API=mock (the default until Charter Center ships it) answers from
+ * MockCharterCenterExamsClient instead, so the flow can be tried end to end.
  */
 
-export interface CharterCenterStudent {
+/** Who passed what: the member's sign-in email and name, and the exam's title. */
+export interface CertificateRequest {
+  email: string;
   name: string;
-  photoUrl: string | null;
+  examTitle: string;
 }
 
 export interface CharterCenterCertificate {
@@ -38,11 +38,9 @@ export interface DownloadedFile {
 
 export interface CharterCenterExamsClient {
   readonly mode: 'mock' | 'live';
-  /** The student with this email on Charter Center, or null when there is none. */
-  lookupStudent(email: string): Promise<CharterCenterStudent | null>;
-  /** The student's certificate for the course, or null when Charter Center has none (yet). */
-  certificate(email: string, courseId: string): Promise<CharterCenterCertificate | null>;
-  /** Fetches a photo, certificate image or PDF the API pointed to. */
+  /** The member's certificate for the exam they passed, or null when Charter Center has none (yet). */
+  certificate(request: CertificateRequest): Promise<CharterCenterCertificate | null>;
+  /** Fetches a certificate image or PDF the API pointed to. */
   download(url: string, maxBytes: number): Promise<DownloadedFile>;
 }
 
@@ -64,12 +62,6 @@ function field(body: unknown, ...names: string[]): unknown {
 }
 
 const httpsUrl = (v: unknown): string | null => (typeof v === 'string' && /^https?:\/\//i.test(v.trim()) ? v.trim() : null);
-
-export function parseStudent(body: unknown): CharterCenterStudent {
-  const name = field(body, 'name', 'full_name', 'fullName');
-  if (typeof name !== 'string' || !name.trim()) throw new CharterCenterError('Charter Center returned a student without a name');
-  return { name: name.trim().replace(/\s+/g, ' ').slice(0, 80), photoUrl: httpsUrl(field(body, 'photo_url', 'photoUrl', 'photo', 'avatar_url')) };
-}
 
 export function parseCertificate(body: unknown): CharterCenterCertificate {
   const certificateId = field(body, 'certificate_id', 'certificateId', 'id');
@@ -93,13 +85,8 @@ export class HttpCharterCenterExamsClient implements CharterCenterExamsClient {
     this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
   }
 
-  async lookupStudent(email: string): Promise<CharterCenterStudent | null> {
-    const body = await this.post('/students/lookup', { email });
-    return body === null ? null : parseStudent(body);
-  }
-
-  async certificate(email: string, courseId: string): Promise<CharterCenterCertificate | null> {
-    const body = await this.post('/certificates', { email, course_id: courseId });
+  async certificate({ email, name, examTitle }: CertificateRequest): Promise<CharterCenterCertificate | null> {
+    const body = await this.post('/certificates', { email, name, exam_title: examTitle });
     return body === null ? null : parseCertificate(body);
   }
 
@@ -180,30 +167,18 @@ export class HttpCharterCenterExamsClient implements CharterCenterExamsClient {
 /* ---------------- Mock ---------------- */
 
 /**
- * Stands in for Charter Center until its API is ready, so the join and certificate flow can be
- * tried end to end with any inbox:
- *  - every email is a student, named after the part before the @ ("amina.yusuf@…" → "Amina Yusuf"),
- *    with a generated photo; except emails starting "unknown" (not a student) and "nophoto" (no photo);
- *  - certificates are made on request, except for emails containing "pending" (none yet, so the
- *    retries and the "on its way" screens can be seen).
+ * Stands in for Charter Center until its API is ready, so the certificate flow can be tried end to
+ * end: a sample certificate with the member's name and the exam's title is made on request, except
+ * for emails containing "pending" (none yet, so the retries and the "on its way" screens can be seen).
  * Files are generated in memory (mock:// addresses), never fetched from the internet.
  */
 export class MockCharterCenterExamsClient implements CharterCenterExamsClient {
   readonly mode = 'mock' as const;
 
-  constructor(private readonly courseTitle: (courseId: string) => Promise<string | null> = async () => null) {}
-
-  async lookupStudent(email: string): Promise<CharterCenterStudent | null> {
-    const local = email.split('@')[0]!.toLowerCase();
-    if (local.startsWith('unknown')) return null;
-    return { name: mockName(email), photoUrl: local.startsWith('nophoto') ? null : `mock://charter-center/photo/${token(email)}?n=${encodeURIComponent(mockName(email))}` };
-  }
-
-  async certificate(email: string, courseId: string): Promise<CharterCenterCertificate | null> {
+  async certificate({ email, name, examTitle }: CertificateRequest): Promise<CharterCenterCertificate | null> {
     if (email.toLowerCase().includes('pending')) return null;
-    const certificateId = `CC-${new Date().getUTCFullYear()}-${String(parseInt(token(`${email}|${courseId}`).slice(0, 8), 16) % 1_000_000).padStart(6, '0')}`;
-    const title = (await this.courseTitle(courseId)) ?? `Course ${courseId}`;
-    const q = new URLSearchParams({ n: mockName(email), c: title, id: certificateId });
+    const certificateId = `CC-${new Date().getUTCFullYear()}-${String(parseInt(token(`${email}|${examTitle}`).slice(0, 8), 16) % 1_000_000).padStart(6, '0')}`;
+    const q = new URLSearchParams({ n: name, c: examTitle, id: certificateId });
     return {
       certificateId,
       imageUrl: `mock://charter-center/certificate.png?${q}`,
@@ -215,7 +190,6 @@ export class MockCharterCenterExamsClient implements CharterCenterExamsClient {
     const parsed = new URL(url);
     if (parsed.protocol !== 'mock:') throw new CharterCenterError(`The mock only serves mock:// files (${url})`);
     const q = parsed.searchParams;
-    if (parsed.pathname.startsWith('/photo/')) return { data: await mockPhoto(q.get('n') ?? '?'), contentType: 'image/png' };
     const details = { name: q.get('n') ?? '', course: q.get('c') ?? '', id: q.get('id') ?? '' };
     if (parsed.pathname === '/certificate.png') return { data: await mockCertificateImage(details), contentType: 'image/png' };
     if (parsed.pathname === '/certificate.pdf') {
@@ -228,39 +202,7 @@ export class MockCharterCenterExamsClient implements CharterCenterExamsClient {
 
 const token = (s: string) => createHash('sha256').update(s.toLowerCase()).digest('hex');
 
-/** "amina.yusuf+cc@x.com" → "Amina Yusuf". */
-export function mockName(email: string): string {
-  const words = email
-    .split('@')[0]!
-    .split('+')[0]!
-    .replace(/^(nophoto|pending)[._-]?/i, '')
-    .split(/[._\-\d]+/)
-    .filter(Boolean)
-    .map((w) => w[0]!.toUpperCase() + w.slice(1).toLowerCase());
-  return (words.join(' ') || 'Charter Student').slice(0, 80);
-}
-
 const esc = (s: string) => s.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('') || '?';
-
-async function mockPhoto(name: string): Promise<Buffer> {
-  const hue = parseInt(token(name).slice(0, 2), 16) % 360;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},55%,38%)"/><stop offset="1" stop-color="hsl(${(hue + 40) % 360},65%,62%)"/></linearGradient></defs>
-    <rect width="400" height="400" fill="url(#g)"/>
-    <circle cx="200" cy="160" r="78" fill="#ffffff" fill-opacity="0.22"/>
-    <path d="M70 400 C 90 290, 310 290, 330 400 Z" fill="#ffffff" fill-opacity="0.22"/>
-    <text x="200" y="182" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="64" fill="#ffffff">${esc(initials(name))}</text>
-  </svg>`;
-  return sharp(Buffer.from(svg)).png().toBuffer();
-}
-
 const CERT_W = 1600;
 const CERT_H = 1131;
 
@@ -276,9 +218,9 @@ async function mockCertificateImage(d: { name: string; course: string; id: strin
     <text x="800" y="420" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#5b6475">This certifies that</text>
     <text x="800" y="530" text-anchor="middle" font-family="serif" font-size="84" font-style="italic" fill="#1d2433">${esc(d.name)}</text>
     <line x1="420" y1="568" x2="1180" y2="568" stroke="#c8962e" stroke-width="2"/>
-    <text x="800" y="650" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#5b6475">has successfully completed</text>
+    <text x="800" y="650" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#5b6475">has successfully passed</text>
     <text x="800" y="730" text-anchor="middle" font-family="sans-serif" font-size="46" font-weight="700" fill="#0b6b3a">${esc(course)}</text>
-    <text x="800" y="800" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#5b6475">and passed its exam on Charter Mission</text>
+    <text x="800" y="800" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#5b6475">on Charter Mission</text>
     <text x="300" y="960" text-anchor="middle" font-family="sans-serif" font-size="26" fill="#1d2433">${esc(date)}</text>
     <line x1="180" y1="920" x2="420" y2="920" stroke="#5b6475" stroke-width="1.5"/>
     <text x="300" y="1000" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#5b6475">Date</text>

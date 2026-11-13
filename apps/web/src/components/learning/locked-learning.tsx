@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { LearningAccess, LearningRequirement } from "@chartermission/contracts";
 import { Chip, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
 import { PageShell } from "@/components/discover/page-shell";
-import { ExamsLink } from "@/components/exams/exams-link";
+import { Suspense } from "react";
+import { YourExams } from "@/components/exams/your-exams";
 import { BrandPattern } from "@/components/illustrations";
 import { T } from "@/i18n/client";
 import { getT } from "@/i18n/server";
@@ -94,6 +95,10 @@ export async function LockedLearning({ access }: { access: LearningAccess }) {
         </div>
         <p className="text-md text-secondary">Short, practical courses and learning paths picked for members.</p>
       </header>
+      {/* Invited exams don't wait for the unlock. */}
+      <Suspense fallback={null}>
+        <YourExams />
+      </Suspense>
       <section
         aria-labelledby="unlock-heading"
         className="relative isolate overflow-hidden rounded-2xl bg-linear-to-r from-primary-dark via-primary via-70% to-accent p-8 max-sm:p-5"
@@ -132,7 +137,6 @@ export async function LockedLearning({ access }: { access: LearningAccess }) {
           ))}
         </ul>
       </Panel>
-      <ExamsLink />
     </PageShell>
   );
 }

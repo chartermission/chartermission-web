@@ -78,10 +78,10 @@ const Env = z.object({
    */
   CHARTER_CENTER_COURSE_URL: z.string().default('https://charter-center.com/courses/{id}'),
   /**
-   * Charter Center student and certificate APIs for exams (docs/CHARTER-CENTER-EXAMS-API.md).
-   * "mock" (default until Charter Center ships them): any email is a student and certificates are
-   * generated samples, so the whole join → exam → certificate flow can be tried end to end.
-   * "live": POST {CHARTER_CENTER_API_URL}/students/lookup and /certificates with the same key.
+   * Charter Center certificate API for exams (docs/CHARTER-CENTER-EXAMS-API.md).
+   * "mock" (default until Charter Center ships it): certificates are generated samples, so the
+   * exam → certificate flow can be tried end to end; in production none are issued (they wait).
+   * "live": POST {CHARTER_CENTER_API_URL}/certificates with the same key.
    */
   CHARTER_CENTER_EXAMS_API: z.enum(['mock', 'live']).default('mock'),
   /**

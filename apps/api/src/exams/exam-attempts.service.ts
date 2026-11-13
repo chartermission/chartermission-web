@@ -15,7 +15,6 @@ import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
-import { LearningAccessService } from '../learning/learning-access.service.js';
 import { isUuid } from '../media/uuid-param.js';
 import { buildOrder, hasPassed, markAttempt, percentOf } from './exam-marking.js';
 import { examBase, reviewOf, sectionsOf, type ExamAttemptRow, type ExamRow } from './exam-views.js';
@@ -37,7 +36,6 @@ export class ExamAttemptsService {
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly examsService: ExamsService,
-    private readonly learningAccess: LearningAccessService,
     private readonly limits: RateLimitService,
     private readonly analytics: AnalyticsService,
     private readonly certificates: ExamCertificatesService,
@@ -48,7 +46,6 @@ export class ExamAttemptsService {
     const exam = await this.examsService.findVisible(viewer, { id: examId });
     if (exam.status === 'archived') throw Errors.conflict('This exam is closed');
     const preview = exam.status === 'draft';
-    if (exam.access === 'learning' && !canPreview(viewer)) await this.learningAccess.assertUnlocked(viewer);
 
     const open = await this.openAttempt(viewer.id, exam.id);
     if (open) {
@@ -137,8 +134,8 @@ export class ExamAttemptsService {
       sections: sections.views,
       questions,
       result: submitted ? await this.result(viewer, exam, attempt) : null,
-      awardsCertificate: !!exam.charterCenterCourseId && !attempt.preview,
-      certificate: submitted && !attempt.preview && exam.charterCenterCourseId ? await this.certificates.forMember(exam.id, viewer.id) : null,
+      awardsCertificate: !attempt.preview,
+      certificate: submitted && !attempt.preview ? await this.certificates.forMember(exam.id, viewer.id) : null,
     };
   }
 
@@ -271,7 +268,7 @@ export class ExamAttemptsService {
     });
     if (!done || done.preview) return;
     this.analytics.track('exam_submitted', done.userId, null, done.examId);
-    // Exams tied to a Charter Center course: ask for the member's certificate (never blocks the result).
+    // Every exam awards a Charter Center certificate: ask for it (never blocks the result).
     if (done.passed) {
       await this.certificates.onPassed(done.examId, done.userId, attemptId).catch((err: unknown) => this.logger.warn(`Certificate request for attempt ${attemptId}: ${String(err)}`));
     }

@@ -1035,4 +1035,5 @@ export const fr: Record<string, string> = {
   "{name} accepted your invitation": "{name} a accepté votre invitation",
   "{name} joined Charter Mission through your invitation, and you’re now connected.": "{name} a rejoint Charter Mission grâce à votre invitation, et vous êtes maintenant en relation.",
   "{name} joined Charter Mission through your invitation.": "{name} a rejoint Charter Mission grâce à votre invitation.",
+  "Open the link, then sign in or create your free Charter Mission account. The exam is added to your Learning page, and you can take it straight away.": "Ouvrez le lien, puis connectez-vous ou créez votre compte Charter Mission gratuit. L’examen est ajouté à votre page Apprentissage, et vous pouvez le passer tout de suite.",
 };

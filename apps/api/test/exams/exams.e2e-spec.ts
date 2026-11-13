@@ -8,7 +8,6 @@ import type {
   ExamSummary,
   Page,
 } from '@chartermission/contracts';
-import { LEARNING_ACCESS_DEFAULTS } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
 
 type Member = Awaited<ReturnType<typeof createMember>>;
@@ -37,6 +36,8 @@ describe('Exams', () => {
 
   const view = async (m: Member, id: string) => (await m.get(`/exam-attempts/${id}`).expect(200)).body as ExamAttemptView;
   const start = async (m: Member, examId: string) => (await m.post(`/exams/${examId}/attempts`).expect(201)).body as ExamAttemptView;
+  /** Opens the exam's invitation link: only then can the member see and take it. */
+  const invite = async (m: Member, slug: string) => (await m.post(`/exams/${slug}/access`).expect(200)).body as ExamSummary;
   /** Answers every question: the correct option for the first `right` questions, a wrong one for the rest. */
   async function answer(m: Member, attempt: ExamAttemptView, key: AdminExamDetail, right: number) {
     for (const [i, q] of attempt.questions.entries()) {
@@ -73,7 +74,7 @@ describe('Exams', () => {
     await admin.post('/admin/exams', { title: 'Same language', language: 'en', secondLanguage: 'en' }).expect(422);
     exam = (await admin.post('/admin/exams', { title: 'Project Basics Quiz', secondLanguage: 'ar', timeLimitMinutes: 30, passPercent: 60, maxAttempts: 2 }).expect(201))
       .body as AdminExamDetail;
-    expect(exam).toMatchObject({ slug: 'project-basics-quiz', status: 'draft', questionCount: 0, review: 'full', access: 'members', maxAttempts: 2 });
+    expect(exam).toMatchObject({ slug: 'project-basics-quiz', status: 'draft', questionCount: 0, review: 'full', maxAttempts: 2 });
     // A second exam with the same title gets its own link name.
     const twin = (await admin.post('/admin/exams', { title: 'Project Basics Quiz' }).expect(201)).body as AdminExamDetail;
     expect(twin.slug).toBe('project-basics-quiz-2');
@@ -135,9 +136,13 @@ describe('Exams', () => {
 
   it('a member takes the exam: no answers leak, progress is saved, marking happens on submit', async () => {
     const m = await createMember(t, { name: 'Sami Student' });
+    // Published, but not for members who haven't opened its link.
+    expect((await m.get('/exams').expect(200)).body).toEqual([]);
+    await m.get('/exams/project-basics-quiz').expect(404);
+    await invite(m, 'project-basics-quiz');
     const list = (await m.get('/exams').expect(200)).body as ExamSummary[];
     expect(list.map((e) => e.slug)).toEqual(['project-basics-quiz']);
-    expect(list[0]).toMatchObject({ questionCount: 5, locked: false, viewer: { attempts: 0, attemptsLeft: 2, bestPercent: null, inProgressAttemptId: null } });
+    expect(list[0]).toMatchObject({ questionCount: 5, viewer: { attempts: 0, attemptsLeft: 2, bestPercent: null, inProgressAttemptId: null } });
     const before = (await m.get('/exams/project-basics-quiz').expect(200)).body as ExamDetail;
     expect(before.sections.map((x) => [x.title, x.questionCount])).toEqual([['Part One', 2], ['Part Two', 2]]);
 
@@ -212,6 +217,7 @@ describe('Exams', () => {
 
   it('keeps the time limit on the server: a late attempt is marked with what was saved', async () => {
     const m = await createMember(t, { name: 'Late Member' });
+    await invite(m, exam.slug);
     const attempt = await start(m, exam.id);
     await answer(m, attempt, exam, 5);
     // The 30 minutes ran out a minute ago.
@@ -225,6 +231,7 @@ describe('Exams', () => {
 
     // An attempt nobody came back to is settled when an admin opens the results.
     const ghost = await createMember(t, { name: 'Ghost Member' });
+    await invite(ghost, exam.slug);
     const left = await start(ghost, exam.id);
     await t.db.update(s.examAttempts).set({ expiresAt: new Date(Date.now() - 3_600_000) }).where(eq(s.examAttempts.id, left.id));
     const results = (await admin.get(`/admin/exams/${exam.id}/attempts`).expect(200)).body as Page<AdminExamAttempt>;
@@ -271,6 +278,7 @@ describe('Exams', () => {
     expect(quiz.sections.map((x) => [x.title, x.titleAlt, x.questionCount])).toEqual([['First', null, 1], ['Second', 'الثاني', 1]]);
     await admin.patch(`/admin/exams/${quiz.id}`, { status: 'published' }).expect(200);
     const m = await createMember(t, { name: 'Score Member' });
+    await invite(m, quiz.slug);
     const attempt = await start(m, quiz.id);
     expect(attempt.expiresAt).toBeNull();
     expect(attempt.questions.map((q) => q.prompt).sort()).toEqual(['S1', 'S2', 'S3']);
@@ -304,24 +312,6 @@ describe('Exams', () => {
     await stranger.get(`/exams/${quiz.slug}`).expect(404);
   });
 
-  it('exams can follow the e-learning access rules', async () => {
-    const gated = (await admin.post('/admin/exams/import', { title: 'Members Who Unlocked Learning', access: 'learning', questions: [question('G1', 0)] }).expect(201))
-      .body as AdminExamDetail;
-    await admin.patch(`/admin/exams/${gated.id}`, { status: 'published' }).expect(200);
-    const m = await createMember(t, { name: 'Locked Member' });
-    const row = ((await m.get('/exams').expect(200)).body as ExamSummary[]).find((e) => e.id === gated.id)!;
-    expect(row).toMatchObject({ access: 'learning', locked: true });
-    expect((await m.post(`/exams/${gated.id}/attempts`).expect(403)).body.error.code).toBe('LEARNING_LOCKED');
-    // The open exam is not affected by the Learning gate.
-    await m.get('/learning').expect(403);
-    await m.get('/exams/project-basics-quiz').expect(200);
-
-    await admin.put('/admin/settings/learning-access', { ...LEARNING_ACCESS_DEFAULTS, enabled: false }).expect(200);
-    expect(((await m.get('/exams').expect(200)).body as ExamSummary[]).find((e) => e.id === gated.id)!.locked).toBe(false);
-    await m.post(`/exams/${gated.id}/attempts`).expect(201);
-    await admin.put('/admin/settings/learning-access', LEARNING_ACCESS_DEFAULTS).expect(200);
-  });
-
   it('staff try a draft before publishing; previews stay out of the results', async () => {
     const capm = ((await admin.get('/admin/exams').expect(200)).body as AdminExamSummary[]).find((e) => e.slug === 'capm-practice-exam')!;
     const key = (await admin.get(`/admin/exams/${capm.id}`).expect(200)).body as AdminExamDetail;
@@ -346,6 +336,7 @@ describe('Exams', () => {
     // Once published, members score it the same way: 35 of 50 is exactly the 70% pass mark.
     await admin.patch(`/admin/exams/${capm.id}`, { status: 'published' }).expect(200);
     const m = await createMember(t, { name: 'CAPM Candidate' });
+    await invite(m, capm.slug);
     const attempt = await start(m, capm.id);
     await answer(m, attempt, key, 35);
     const result = ((await m.post(`/exam-attempts/${attempt.id}/submit`).expect(200)).body as ExamAttemptView).result!;

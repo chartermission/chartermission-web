@@ -13,17 +13,16 @@ export function examMeta(t: Translate, exam: Pick<ExamSummary, "questionCount" |
 }
 
 /** Where the member stands with an exam, as a chip (or nothing before the first attempt). */
-export function ExamStatusChip({ exam }: { exam: Pick<ExamSummary, "status" | "locked" | "viewer"> }) {
+export function ExamStatusChip({ exam }: { exam: Pick<ExamSummary, "status" | "viewer"> }) {
   const chip = "px-2.5 py-0.5 text-xs";
   if (exam.status === "draft") return <Chip tone="warning" className={chip}>Draft · team only</Chip>;
   if (exam.status === "archived") return <Chip tone="neutral" className={chip}>No longer open</Chip>;
   if (exam.viewer.inProgressAttemptId) return <Chip tone="info" className={chip}>In progress</Chip>;
   if (exam.viewer.passed) return <Chip tone="success" className={chip}>Passed</Chip>;
-  if (exam.locked) return <Chip tone="neutral" className={chip}>Locked</Chip>;
   return null;
 }
 
-/** White card for an exam on the Exams page. The whole card opens the exam's page. */
+/** White card for an exam on the Learning page. The whole card opens the exam's page. */
 export async function ExamCard({ exam, className }: { exam: ExamSummary; className?: string }) {
   const t = await getT();
   const { viewer } = exam;

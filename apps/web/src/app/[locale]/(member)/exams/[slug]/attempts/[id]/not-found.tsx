@@ -11,12 +11,12 @@ export default function ExamNotFound() {
         title="This exam isn’t available"
         className="py-16"
         actions={
-          <Link href="/exams" className={buttonClasses({ size: "small" })}>
-            See all exams
+          <Link href="/learning" className={buttonClasses({ size: "small" })}>
+            Go to Learning
           </Link>
         }
       >
-        It may not be open yet, or it has closed. Check the link, or look at the exams that are open now.
+        It may have closed, or it wasn’t shared with you. Exams open from the invitation link you were sent; yours are on your Learning page.
       </EmptyState>
     </PageShell>
   );
