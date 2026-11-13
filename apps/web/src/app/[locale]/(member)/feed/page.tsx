@@ -119,7 +119,7 @@ function FeedEmpty({ query }: { query: FeedQuery }) {
           </>
         }
       >
-        Posts from members, chapters and hashtags you follow appear here, along with platform announcements.
+        Posts from your connections and the members, chapters and hashtags you follow appear here, along with platform announcements.
       </EmptyState>
     );
   }

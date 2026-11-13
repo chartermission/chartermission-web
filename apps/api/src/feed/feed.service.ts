@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { and, desc, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type { FeedNewQuery, FeedNewResponse, FeedQuery, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, follows, users, hashtags, memberProfiles, pageAdmins, pages, postHashtags, posts, profileSectors, sectors } from '../db/schema.js';
-import { decodeCursor, paginate } from '../common/cursor.js';
+import { chapters, connections, follows, users, hashtags, memberProfiles, pageAdmins, pages, postHashtags, postViews, posts, profileSectors, sectors } from '../db/schema.js';
+import { pseudonym } from '../common/crypto.js';
+import { decodeCursor, encodeCursor, paginate } from '../common/cursor.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { RelationsService } from '../core/relations.service.js';
@@ -19,14 +20,52 @@ const FOR_YOU_DAYS = 7;
 /*
  * "For you" score (CM-FED-04/05), transparent and rule-based — no opaque models:
  *
- *   score = (1 + ln(1 + reactions + 2·comments + 3·reposts))      engagement, log-damped
- *         × (1 + 1·followed + 0.25·sameCountry)                    followed source / same country boost
- *         ÷ (1 + ageHours / 12) ^ 1.2                              recency decay
+ *   base  = (1 + ln(1 + reactions + 2·comments + 3·reposts))                    engagement, log-damped
+ *         × (1 + 1·followed + 0.5·official + 0.25·sameCountry)                    source boosts
+ *         × 0.35 if the viewer already saw the post before this feed was opened   seen demotion
+ *         ÷ (1 + ageHours / 12) ^ 1.2                                            recency decay
  *
- * "followed" = the viewer's own post, a followed member, chapter or hashtag, or an official account or page.
- * The reference time is fixed in the cursor so scores stay stable across pages.
+ *   score = base × 0.5^(n − 1), n = the post's rank among the same author's posts  author spread
+ *
+ * "followed" = the viewer's own post, a connection, a followed member, page, chapter or hashtag.
+ * "official" = Charter Mission's official accounts and pages (and broadcast posts), which every member
+ * sees but which no longer outrank people the member chose. An author (or page) is a member or page;
+ * their second-best post scores half, the third a quarter, so one busy account can't fill the page.
+ *
+ * The window is the last 7 days. When it runs out the feed carries on with older posts, newest first,
+ * instead of ending. The reference time is fixed in the cursor so scores stay stable across pages,
+ * and "seen" only counts views from before that time.
  */
-export const FOR_YOU_WEIGHTS = { followed: 1, sameCountry: 0.25, halfLifeHours: 12, decayExponent: 1.2 } as const;
+export const FOR_YOU_WEIGHTS = {
+  followed: 1,
+  official: 0.5,
+  sameCountry: 0.25,
+  seen: 0.35,
+  authorRepeat: 0.5,
+  halfLifeHours: 12,
+  decayExponent: 1.2,
+} as const;
+
+type ForYouCursor = { s?: string; id?: string; at?: string; p?: string; t?: string };
+
+/** Who a post is "from" for the author spread: the page it was published as, else its author. */
+const authorKeySql = sql<string>`coalesce(${posts.pageId}::text, ${posts.authorId}::text)`;
+
+/**
+ * Display order for one page: the same ranking, but a post never sits directly under another from
+ * the same author when a later post on the page can go there instead. Only the order within the page
+ * changes, so cursors (taken from the last ranked row) are unaffected.
+ */
+export function spreadAuthors<T extends { authorKey: string }>(rows: T[]): T[] {
+  const out: T[] = [];
+  const rest = [...rows];
+  while (rest.length) {
+    const prev = out[out.length - 1]?.authorKey;
+    const at = rest.findIndex((r) => r.authorKey !== prev);
+    out.push(...rest.splice(at === -1 ? 0 : at, 1));
+  }
+  return out;
+}
 
 @Injectable()
 export class FeedService {
@@ -128,37 +167,103 @@ export class FeedService {
   }
 
   private async forYou(viewer: AuthUser, q: FeedQuery, conds: SQL[], limit: number) {
-    const c = decodeCursor<{ s: string; id: string; at: string }>(q.cursor);
-    if (c && (!/^-?\d+(\.\d+)?$/.test(String(c.s)) || !isUuid(c.id) || Number.isNaN(Date.parse(c.at)))) {
+    const c = decodeCursor<ForYouCursor>(q.cursor);
+    const older = c?.p === 'o';
+    if (
+      c &&
+      (typeof c.at !== 'string' ||
+        Number.isNaN(Date.parse(c.at)) ||
+        (older
+          ? c.t !== undefined && (typeof c.t !== 'string' || Number.isNaN(Date.parse(c.t)) || !isUuid(c.id))
+          : !/^-?\d+(\.\d+)?$/.test(String(c.s)) || !isUuid(c.id)))
+    ) {
       throw Errors.badRequest('Invalid cursor');
     }
     const asOf = c?.at ?? new Date().toISOString();
-    const w = FOR_YOU_WEIGHTS;
-    const score = sql<string>`round((
-      (1 + ln(1 + ${engagementSql}))
-      * (1 + (case when ${this.followedSql(viewer.id)} or ${this.officialSql()} then ${w.followed}::float8 else 0 end)
-           + (case when ${posts.countryCode} = ${viewer.countryCode}::text then ${w.sameCountry}::float8 else 0 end))
-      / power(1 + greatest(extract(epoch from (${asOf}::timestamptz - ${posts.createdAt})), 0) / ${w.halfLifeHours * 3600}::float8, ${w.decayExponent}::float8)
-    )::numeric, 9)`;
-    const scored = this.db
-      .select({ id: posts.id, score: score.as('score') })
-      .from(posts)
-      .where(
-        and(
-          ...conds,
-          sql`${posts.createdAt} <= ${asOf}::timestamptz`,
-          sql`${posts.createdAt} > ${asOf}::timestamptz - make_interval(days => ${FOR_YOU_DAYS}::int)`,
-        ),
-      )
-      .as('scored');
+    const windowStart = sql`${asOf}::timestamptz - make_interval(days => ${FOR_YOU_DAYS}::int)`;
+
+    let ranked: { id: string; authorKey: string }[] = [];
+    if (!older) {
+      const rows = await this.ranked(viewer, conds, asOf, windowStart, c, limit);
+      if (rows.length > limit) {
+        const items = rows.slice(0, limit);
+        const last = items[items.length - 1]!;
+        return { ids: spreadAuthors(items).map((r) => r.id), nextCursor: encodeCursor({ s: last.score, id: last.id, at: asOf }) };
+      }
+      ranked = rows;
+    }
+
+    // The last 7 days are used up: carry on with older posts, newest first. One extra row tells
+    // whether there are more (fetched even when the ranked rows filled this page exactly).
+    const need = limit - ranked.length;
+    const keyset = older && c?.t ? sql`(${posts.createdAt}, ${posts.id}) < (${c.t}::timestamptz, ${c.id}::uuid)` : undefined;
+    const ts = tsKey(posts.createdAt);
     const rows = await this.db
-      .select({ id: scored.id, score: sql<string>`${scored.score}::text` })
+      .select({ id: posts.id, ts, authorKey: authorKeySql })
+      .from(posts)
+      .where(and(...conds, sql`${posts.createdAt} <= ${windowStart}`, keyset))
+      .orderBy(desc(posts.createdAt), desc(posts.id))
+      .limit(need + 1);
+    const items = rows.slice(0, need);
+    const lastOld = items[items.length - 1];
+    let nextCursor: string | null = null;
+    if (rows.length > need) {
+      // No older row fits on this page (the ranked rows filled it): the next page starts the older posts.
+      nextCursor = lastOld ? encodeCursor({ p: 'o', t: lastOld.ts, id: lastOld.id, at: asOf }) : encodeCursor({ p: 'o', at: asOf });
+    }
+    return { ids: spreadAuthors([...ranked, ...items]).map((r) => r.id), nextCursor };
+  }
+
+  /** The 7-day ranked window (see FOR_YOU_WEIGHTS), limit + 1 rows after the cursor, best first. */
+  private async ranked(viewer: AuthUser, conds: SQL[], asOf: string, windowStart: SQL, c: ForYouCursor | null, limit: number) {
+    const w = FOR_YOU_WEIGHTS;
+    const viewerKey = pseudonym(viewer.id);
+    // Each signal is worked out once per post, then combined in the layer above.
+    const candidates = this.db
+      .select({
+        id: posts.id,
+        authorKey: authorKeySql.as('author_key'),
+        engagement: sql<number>`${engagementSql}`.as('engagement'),
+        ageSeconds: sql<number>`greatest(extract(epoch from (${asOf}::timestamptz - ${posts.createdAt})), 0)`.as('age_seconds'),
+        sameCountry: sql<boolean>`coalesce(${posts.countryCode} = ${viewer.countryCode}::text, false)`.as('same_country'),
+        followed: sql<boolean>`${this.followedSql(viewer.id)}`.as('followed'),
+        official: sql<boolean>`${this.officialSql()}`.as('official'),
+        seen: sql<boolean>`exists (select 1 from ${postViews} sv where sv.post_id = ${posts.id} and sv.viewer_key = ${viewerKey} and sv.created_at < ${asOf}::timestamptz)`.as(
+          'seen',
+        ),
+      })
+      .from(posts)
+      .where(and(...conds, sql`${posts.createdAt} <= ${asOf}::timestamptz`, sql`${posts.createdAt} > ${windowStart}`))
+      .as('candidates');
+    const scored = this.db
+      .select({
+        id: candidates.id,
+        authorKey: candidates.authorKey,
+        base: sql<number>`(
+          (1 + ln(1 + ${candidates.engagement}))
+          * (1 + (case when ${candidates.followed} then ${w.followed}::float8 when ${candidates.official} then ${w.official}::float8 else 0 end)
+               + (case when ${candidates.sameCountry} then ${w.sameCountry}::float8 else 0 end))
+          * (case when ${candidates.seen} then ${w.seen}::float8 else 1 end)
+          / power(1 + ${candidates.ageSeconds} / ${w.halfLifeHours * 3600}::float8, ${w.decayExponent}::float8)
+        )`.as('base'),
+      })
+      .from(candidates)
+      .as('scored');
+    const spread = this.db
+      .select({
+        id: scored.id,
+        authorKey: scored.authorKey,
+        score: sql<string>`round((${scored.base} * power(${w.authorRepeat}::float8,
+          row_number() over (partition by ${scored.authorKey} order by ${scored.base} desc, ${scored.id} desc) - 1))::numeric, 9)`.as('score'),
+      })
       .from(scored)
-      .where(c ? sql`(${scored.score}, ${scored.id}) < (${c.s}::numeric, ${c.id}::uuid)` : undefined)
-      .orderBy(desc(scored.score), desc(scored.id))
+      .as('spread');
+    return this.db
+      .select({ id: spread.id, authorKey: spread.authorKey, score: sql<string>`${spread.score}::text` })
+      .from(spread)
+      .where(c ? sql`(${spread.score}, ${spread.id}) < (${c.s}::numeric, ${c.id}::uuid)` : undefined)
+      .orderBy(desc(spread.score), desc(spread.id))
       .limit(limit + 1);
-    const page = paginate(rows, limit, (last) => ({ s: last.score, id: last.id, at: asOf }));
-    return { ids: page.items.map((r) => r.id), nextCursor: page.nextCursor };
   }
 
   /**
@@ -172,9 +277,17 @@ export class FeedService {
       or (${posts.pageId} is not null and exists (select 1 from ${pages} op where op.id = ${posts.pageId} and op.official)))`;
   }
 
-  /** The viewer's own posts, followed members, followed and managed pages, followed chapters and followed hashtags (CM-FED-05). */
+  /**
+   * The viewer's own posts, connections, followed members, followed and managed pages, followed chapters
+   * and followed hashtags (CM-FED-05). A connection counts as followed: connecting is how most members
+   * build their network, so their posts belong in Following without a separate follow.
+   */
   private followedSql(viewerId: string): SQL {
     return sql`(${posts.authorId} = ${viewerId}
+      or (${posts.pageId} is null and exists (select 1 from ${connections} fcn
+            where fcn.status = 'accepted'
+              and least(fcn.requester_id, fcn.addressee_id) = least(${viewerId}::uuid, ${posts.authorId})
+              and greatest(fcn.requester_id, fcn.addressee_id) = greatest(${viewerId}::uuid, ${posts.authorId})))
       or (${posts.pageId} is null and exists (select 1 from ${follows} ff where ff.follower_id = ${viewerId} and ff.target_type = 'member' and ff.target_id = ${posts.authorId}::text))
       or (${posts.pageId} is not null and (
             exists (select 1 from ${follows} ff where ff.follower_id = ${viewerId} and ff.target_type = 'page' and ff.target_id = ${posts.pageId}::text)

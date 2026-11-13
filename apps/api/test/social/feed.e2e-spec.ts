@@ -41,6 +41,121 @@ describe('Feed and topic pages', () => {
     await viewer.get('/feed?cursor=not-a-cursor').expect(400);
   });
 
+  it('connections count as followed: their posts are in Following and rank above official and unrelated posts in For you', async () => {
+    const viewer = await createMember(t, { countryCode: 'SC' });
+    const connection = await createMember(t);
+    const pending = await createMember(t);
+    const stranger = await createMember(t);
+    const official = await createMember(t);
+    await t.db.update(s.users).set({ isOfficial: true }).where(eq(s.users.id, official.id));
+    await t.db.insert(s.connections).values({ requesterId: connection.id, addresseeId: viewer.id, status: 'accepted', respondedAt: new Date() });
+    await t.db.insert(s.connections).values({ requesterId: viewer.id, addresseeId: pending.id, status: 'pending' });
+    const at = new Date(Date.now() - 3600_000);
+    const fromStranger = await insertPost(t, stranger.id, 'From a stranger', { countryCode: 'SC', createdAt: at });
+    const fromPending = await insertPost(t, pending.id, 'From a pending request', { countryCode: 'SC', createdAt: at });
+    const fromOfficial = await insertPost(t, official.id, 'From the official account', { countryCode: 'SC', createdAt: at });
+    const fromConnection = await insertPost(t, connection.id, 'From a connection', { countryCode: 'SC', createdAt: at });
+
+    const following = ids((await viewer.get('/feed?tab=following&country=SC').expect(200)).body);
+    expect(following).toEqual(expect.arrayContaining([fromConnection.id, fromOfficial.id]));
+    expect(following).not.toContain(fromPending.id);
+    expect(following).not.toContain(fromStranger.id);
+
+    // Same age and engagement: connection (followed) > official > the rest.
+    const forYou = ids((await viewer.get('/feed?tab=for_you&country=SC').expect(200)).body);
+    expect(forYou.slice(0, 2)).toEqual([fromConnection.id, fromOfficial.id]);
+    expect(forYou).toHaveLength(4);
+
+    const since = encodeURIComponent(new Date(Date.now() - 2 * 3600_000).toISOString());
+    const pill = await viewer.get(`/feed/new?tab=following&country=SC&since=${since}`).expect(200);
+    expect(pill.body.count).toBe(2);
+  });
+
+  it('For you moves posts the member has already seen below ones they have not', async () => {
+    const viewer = await createMember(t, { countryCode: 'KM' });
+    const [a, b] = [await createMember(t), await createMember(t)];
+    const at = new Date(Date.now() - 3600_000);
+    const seen = await insertPost(t, a!.id, 'Seen before', { countryCode: 'KM', createdAt: at });
+    const fresh = await insertPost(t, b!.id, 'Not seen yet', { countryCode: 'KM', createdAt: at });
+    await t.db.update(s.posts).set({ reactionCount: 2 }).where(eq(s.posts.id, seen.id));
+    expect(ids((await viewer.get('/feed?tab=for_you&country=KM').expect(200)).body)).toEqual([seen.id, fresh.id]);
+
+    await viewer.post('/posts/views', { postIds: [seen.id] }).expect(200);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(ids((await viewer.get('/feed?tab=for_you&country=KM').expect(200)).body)).toEqual([fresh.id, seen.id]);
+    // Latest is unaffected.
+    expect(ids((await viewer.get('/feed?tab=latest&country=KM').expect(200)).body)).toHaveLength(2);
+  });
+
+  it('For you carries on with older posts, newest first, once the last 7 days run out', async () => {
+    const viewer = await createMember(t, { countryCode: 'GQ' });
+    const day = 24 * 3600_000;
+    const recent: string[] = [];
+    const older: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const author = await createMember(t);
+      recent.push((await insertPost(t, author.id, `Recent ${i}`, { countryCode: 'GQ', createdAt: new Date(Date.now() - (i + 1) * 3600_000) })).id);
+    }
+    for (let i = 0; i < 4; i++) {
+      const author = await createMember(t);
+      older.push((await insertPost(t, author.id, `Older ${i}`, { countryCode: 'GQ', createdAt: new Date(Date.now() - (8 + i) * day) })).id);
+    }
+
+    // Ranked posts first, then older ones fill the rest of the page.
+    const p1 = await viewer.get('/feed?tab=for_you&country=GQ&limit=5').expect(200);
+    expect(ids(p1.body).slice(0, 3).sort()).toEqual([...recent].sort());
+    expect(ids(p1.body).slice(3)).toEqual(older.slice(0, 2));
+    const p2 = await viewer.get(`/feed?tab=for_you&country=GQ&limit=5&cursor=${encodeURIComponent(p1.body.nextCursor)}`).expect(200);
+    expect(ids(p2.body)).toEqual(older.slice(2));
+    expect(p2.body.nextCursor).toBeNull();
+
+    // Ranked posts fill a page exactly: the next page starts the older posts.
+    const q1 = await viewer.get('/feed?tab=for_you&country=GQ&limit=3').expect(200);
+    expect(ids(q1.body).sort()).toEqual([...recent].sort());
+    expect(q1.body.nextCursor).toBeTruthy();
+    const q2 = await viewer.get(`/feed?tab=for_you&country=GQ&limit=3&cursor=${encodeURIComponent(q1.body.nextCursor)}`).expect(200);
+    expect(ids(q2.body)).toEqual(older.slice(0, 3));
+    const q3 = await viewer.get(`/feed?tab=for_you&country=GQ&limit=3&cursor=${encodeURIComponent(q2.body.nextCursor)}`).expect(200);
+    expect(ids(q3.body)).toEqual(older.slice(3));
+    expect(q3.body.nextCursor).toBeNull();
+  });
+
+  it('For you spreads out a busy author and keeps pagination stable', async () => {
+    const viewer = await createMember(t, { countryCode: 'ST' });
+    const busy = await createMember(t);
+    const at = new Date(Date.now() - 3600_000);
+    const busyPosts: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const p = await insertPost(t, busy.id, `Busy ${i}`, { countryCode: 'ST', createdAt: at });
+      await t.db.update(s.posts).set({ reactionCount: 10 }).where(eq(s.posts.id, p.id));
+      busyPosts.push(p.id);
+    }
+    const others: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const author = await createMember(t);
+      others.push((await insertPost(t, author.id, `Other ${i}`, { countryCode: 'ST', createdAt: at })).id);
+    }
+
+    const page = ids((await viewer.get('/feed?tab=for_you&country=ST').expect(200)).body);
+    expect(page).toHaveLength(6);
+    expect(busyPosts).toContain(page[0]);
+    // The other authors sit between the busy author's top posts instead of below all four.
+    const isBusy = page.map((id) => busyPosts.includes(id));
+    expect(isBusy.slice(0, 4)).toEqual([true, false, true, false]);
+
+    // Two at a time: every post exactly once.
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const res: { body: { items: Item[]; nextCursor: string | null } } = await viewer
+        .get(`/feed?tab=for_you&country=ST&limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+        .expect(200);
+      seen.push(...ids(res.body));
+      cursor = res.body.nextCursor;
+    } while (cursor);
+    expect(seen.sort()).toEqual([...busyPosts, ...others].sort());
+  });
+
   it('posts from official accounts and official pages reach every member, followed or not', async () => {
     const viewer = await createMember(t);
     const official = await createMember(t);

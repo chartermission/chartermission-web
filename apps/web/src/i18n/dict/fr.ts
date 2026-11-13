@@ -2101,7 +2101,7 @@ export const fr: Dict = {
   "Posts by {name}": "Publications de {name}",
   "Posts can be scheduled up to {count} days ahead.": { one: "Les publications peuvent être programmées jusqu’à {count} jour à l’avance.", other: "Les publications peuvent être programmées jusqu’à {count} jours à l’avance." },
   "Posts can be up to {count} characters": "Les publications peuvent compter jusqu’à {count} caractères",
-  "Posts from members, chapters and hashtags you follow appear here, along with platform announcements.": "Les publications des membres, sections et hashtags que vous suivez apparaissent ici, ainsi que les annonces de la plateforme.",
+  "Posts from your connections and the members, chapters and hashtags you follow appear here, along with platform announcements.": "Les publications de vos relations et des membres, sections et hashtags que vous suivez apparaissent ici, ainsi que les annonces de la plateforme.",
   "Posts in this chapter are approved by its team before other members see them.": "Les publications de cette section sont validées par son équipe avant d’être visibles par les autres membres.",
   "Posts per day, last 7 days": "Publications par jour, 7 derniers jours",
   "Posts show up to {duration}: if yours is longer, you choose which part to post.": "Les publications affichent jusqu’à {duration} : si la vôtre est plus longue, vous choisissez la partie à publier.",

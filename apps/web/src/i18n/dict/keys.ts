@@ -2099,7 +2099,7 @@ export const KEYS: readonly string[] = [
   "Posts by {name}",
   "Posts can be scheduled up to {count} days ahead.",
   "Posts can be up to {count} characters",
-  "Posts from members, chapters and hashtags you follow appear here, along with platform announcements.",
+  "Posts from your connections and the members, chapters and hashtags you follow appear here, along with platform announcements.",
   "Posts in this chapter are approved by its team before other members see them.",
   "Posts per day, last 7 days",
   "Posts show up to {duration}: if yours is longer, you choose which part to post.",

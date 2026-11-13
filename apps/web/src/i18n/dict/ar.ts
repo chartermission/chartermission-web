@@ -2101,7 +2101,7 @@ export const ar: Dict = {
   "Posts by {name}": "منشورات {name}",
   "Posts can be scheduled up to {count} days ahead.": "يمكن جدولة المنشورات حتى {count} يومًا مقدمًا.",
   "Posts can be up to {count} characters": "يمكن أن يصل المنشور إلى {count} حرفًا",
-  "Posts from members, chapters and hashtags you follow appear here, along with platform announcements.": "تظهر هنا منشورات الأعضاء والفروع والوسوم التي تتابعها، إضافة إلى إعلانات المنصة.",
+  "Posts from your connections and the members, chapters and hashtags you follow appear here, along with platform announcements.": "تظهر هنا منشورات معارفك والأعضاء والفروع والوسوم التي تتابعها، إضافة إلى إعلانات المنصة.",
   "Posts in this chapter are approved by its team before other members see them.": "يوافق فريق هذا الفرع على المنشورات قبل أن يراها بقية الأعضاء.",
   "Posts per day, last 7 days": "المنشورات يوميًا، آخر 7 أيام",
   "Posts show up to {duration}: if yours is longer, you choose which part to post.": "تعرض المنشورات حتى {duration}: إذا كان مقطعك أطول، تختار الجزء الذي تنشره.",
