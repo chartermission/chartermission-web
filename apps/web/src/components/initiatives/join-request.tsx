@@ -1,12 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useContext, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { JOIN_NOTE_MAX, JOIN_NOTE_MIN, type InitiativeDetail } from "@chartermission/contracts";
 import { Button, Icon, buttonClasses, cn, type ButtonSize, type ButtonVariant } from "@chartermission/ui";
+import { api, isApiError } from "@/lib/api/client";
 import { Modal } from "./modal";
 import { T, useT } from "@/i18n/client";
 
 type JoinTarget = {
-  slug: string;
+  id: string;
   title: string;
   leadName: string;
   roles: { id: string; title: string }[];
@@ -20,19 +23,21 @@ type JoinContextValue = {
 
 const JoinContext = createContext<JoinContextValue | null>(null);
 
-const NOTE_MIN = 20;
-const NOTE_MAX = 500;
+const NOTE_MIN = JOIN_NOTE_MIN;
+const NOTE_MAX = JOIN_NOTE_MAX;
 
 /**
  * Owns the "Request to join" dialog for one initiative. Any number of
  * <JoinRequestTrigger>s inside it (hero button, per-role "Apply") open the
  * same dialog, optionally with a role preselected.
  */
-export function JoinRequestProvider({ initiative, children }: { initiative: JoinTarget; children: ReactNode }) {
+export function JoinRequestProvider({ initiative, pending = false, children }: { initiative: JoinTarget; pending?: boolean; children: ReactNode }) {
   const t = useT();
+  const router = useRouter();
   const [isOpen, setOpen] = useState(false);
   const [roleId, setRoleId] = useState("");
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(pending);
+  const [justSent, setJustSent] = useState(false);
 
   return (
     <JoinContext.Provider
@@ -49,12 +54,12 @@ export function JoinRequestProvider({ initiative, children }: { initiative: Join
       <Modal
         open={isOpen}
         onClose={() => setOpen(false)}
-        title={sent ? "Request sent" : t("Request to join {title}", { title: initiative.title })}
+        title={justSent ? "Request sent" : t("Request to join {title}", { title: initiative.title })}
         description={
-          sent ? undefined : t("Tell {leadName} how you can help. Leads usually reply within 3 days.", { leadName: initiative.leadName })
+          justSent ? undefined : t("Tell {leadName} how you can help. Leads usually reply within 3 days.", { leadName: initiative.leadName })
         }
       >
-        {sent ? (
+        {justSent ? (
           <div className="flex flex-col gap-4">
             <p role="status" className="flex items-start gap-3 rounded-[10px] bg-success-light p-4 text-sm text-ink">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-success text-inverse">
@@ -71,7 +76,11 @@ export function JoinRequestProvider({ initiative, children }: { initiative: Join
             target={initiative}
             defaultRoleId={roleId}
             onCancel={() => setOpen(false)}
-            onSent={() => setSent(true)}
+            onSent={() => {
+              setSent(true);
+              setJustSent(true);
+              router.refresh();
+            }}
           />
         )}
       </Modal>
@@ -94,9 +103,13 @@ function JoinForm({
   const id = useId();
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const [note, setNote] = useState("");
+  const [roleId, setRoleId] = useState(defaultRoleId);
+  const [skills, setSkills] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = note.trim();
     if (trimmed.length < NOTE_MIN) {
@@ -104,8 +117,19 @@ function JoinForm({
       noteRef.current?.focus();
       return;
     }
-    // No backend yet: the request would be POSTed here with role, skills and note.
-    onSent();
+    setBusy(true);
+    setFormError(null);
+    try {
+      await api<InitiativeDetail>(`/initiatives/${target.id}/join-requests`, {
+        method: "POST",
+        body: { roleId: roleId || null, skills: skills.trim() || null, note: trimmed },
+      });
+      onSent();
+    } catch (e) {
+      setBusy(false);
+      if (isApiError(e) && e.fields?.note) setError(e.fields.note);
+      else setFormError(isApiError(e) ? (e.fields ? Object.values(e.fields)[0]! : e.message) : "Something went wrong. Please try again.");
+    }
   }
 
   const fieldClasses =
@@ -122,7 +146,8 @@ function JoinForm({
             <select
               id={`${id}-role`}
               name="role"
-              defaultValue={defaultRoleId}
+              value={roleId}
+              onChange={(event) => setRoleId(event.target.value)}
               className={cn(fieldClasses, "appearance-none pe-9")}
             >
               <option value="">Any role — I’ll help where needed</option>
@@ -149,6 +174,9 @@ function JoinForm({
           id={`${id}-skills`}
           name="skills"
           type="text"
+          maxLength={200}
+          value={skills}
+          onChange={(event) => setSkills(event.target.value)}
           autoComplete="off"
           placeholder="e.g. Logistics, SQL, export certification"
           className={fieldClasses}
@@ -192,12 +220,17 @@ function JoinForm({
         </div>
       </div>
 
+      {formError && (
+        <p role="alert" className="rounded-[10px] bg-error-light p-3 text-sm text-error">
+          {formError}
+        </p>
+      )}
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="accent">
-          Send request
+        <Button type="submit" variant="accent" disabled={busy}>
+          {busy ? "Sending…" : "Send request"}
         </Button>
       </div>
     </form>

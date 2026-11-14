@@ -482,6 +482,17 @@ export function PostCard({
         <>
           {header}
 
+          {post.initiative && (
+            <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
+              <Icon name="lightbulb" size={14} />
+              <span>
+                Update on{" "}
+                <Link href={`/initiatives/${post.initiative.slug}`} className="font-medium text-primary-light hover:underline">
+                  {post.initiative.title}
+                </Link>
+              </span>
+            </p>
+          )}
           {post.isRepost && !post.body && (
             <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
               <Icon name="repeat" size={14} />

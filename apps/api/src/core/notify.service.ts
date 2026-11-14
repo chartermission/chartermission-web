@@ -73,6 +73,8 @@ export const CATEGORY_OF: Record<
   chapter_ban: 'always',
   message_received: 'connections',
   invite_joined: 'connections',
+  initiative_join_requested: 'opportunities',
+  initiative_join_decided: 'opportunities',
 };
 
 export interface NotifyInput {

@@ -21,6 +21,7 @@ const NOUN: Record<ReportTargetType, string> = {
   story: 'story',
   opportunity: 'listing',
   message: 'message',
+  initiative: 'initiative',
 };
 
 const date = (d: Date) => d.toISOString().slice(0, 10);

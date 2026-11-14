@@ -70,6 +70,11 @@ export const NotificationType = z.enum([
   "message_received",
   /** Someone joined Charter Mission through your invitation. Icon avatar. */
   "invite_joined",
+  /* Initiatives (category opportunities) */
+  /** To an initiative's organisers: someone asked to join. Icon users. */
+  "initiative_join_requested",
+  /** To the member: their request to join was accepted (icon check) or declined (icon alert). */
+  "initiative_join_decided",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -84,7 +89,7 @@ export const NotificationCategory = z.enum([
   "moderation",
   /** Event reminders and changes to events you registered for (confirmations and cancellations are always sent). */
   "events",
-  /** Applications to your listings and decisions on your applications. */
+  /** Applications to your listings and decisions on them; join requests for initiatives and answers to yours. */
   "opportunities",
   "digest",
 ]);

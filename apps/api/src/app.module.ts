@@ -19,6 +19,7 @@ import { ModerationModule } from './moderation/moderation.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { LearningModule } from './learning/learning.module.js';
 import { ExamsModule } from './exams/exams.module.js';
+import { InitiativesModule } from './initiatives/initiatives.module.js';
 import { EventsModule } from './events/events.module.js';
 import { AmbassadorsModule } from './ambassadors/ambassadors.module.js';
 import { StoriesModule } from './stories/stories.module.js';
@@ -48,6 +49,7 @@ import { InvitesModule } from './invites/invites.module.js';
     AdminModule,
     LearningModule,
     ExamsModule,
+    InitiativesModule,
     EventsModule,
     AmbassadorsModule,
     StoriesModule,

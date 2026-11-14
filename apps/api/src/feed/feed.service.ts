@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, desc, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type { FeedNewQuery, FeedNewResponse, FeedQuery, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, connections, follows, users, hashtags, memberProfiles, pageAdmins, pages, postHashtags, postViews, posts, profileSectors, sectors } from '../db/schema.js';
+import { chapters, connections, follows, users, hashtags, initiativeMembers, initiatives, memberProfiles, pageAdmins, pages, postHashtags, postViews, posts, profileSectors, sectors } from '../db/schema.js';
 import { pseudonym } from '../common/crypto.js';
 import { decodeCursor, encodeCursor, paginate } from '../common/cursor.js';
 import { Errors } from '../common/errors.js';
@@ -83,7 +83,7 @@ export class FeedService {
 
     // One member's posts (profile "Recent posts"): newest first, pinned posts in place, and the
     // member's posts still show when the viewer muted them (like opening a muted topic page).
-    if (q.author || q.page) {
+    if (q.author || q.page || q.initiative) {
       const visible = listablePostsSql(viewer.id, { muteHashtags: true, muteMembers: false });
       const page = await this.newest(q, [visible, ...filters], q.limit);
       return { items: await this.serializer.posts(page.ids, viewer, blocked), nextCursor: page.nextCursor };
@@ -294,13 +294,16 @@ export class FeedService {
             or exists (select 1 from ${pageAdmins} fpa where fpa.user_id = ${viewerId} and fpa.page_id = ${posts.pageId})))
       or exists (select 1 from ${follows} ff join ${chapters} fc on fc.id = ${posts.chapterId}
                  where ff.follower_id = ${viewerId} and ff.target_type = 'chapter' and (ff.target_id = fc.id::text or ff.target_id = fc.slug))
+      or (${posts.initiativeId} is not null and (
+            exists (select 1 from ${follows} ff where ff.follower_id = ${viewerId} and ff.target_type = 'initiative' and ff.target_id = ${posts.initiativeId}::text)
+            or exists (select 1 from ${initiativeMembers} fim where fim.user_id = ${viewerId} and fim.initiative_id = ${posts.initiativeId})))
       or exists (select 1 from ${postHashtags} fph join ${hashtags} fh on fh.id = fph.hashtag_id
                  join ${follows} ff on ff.target_type = 'hashtag' and ff.target_id = fh.tag and ff.follower_id = ${viewerId}
                  where fph.post_id = ${posts.id}))`;
   }
 
   /** Author, country, sector (author's sectors), chapter (slug or id) and announcements filters (CM-FED-04). Null = nothing can match. */
-  private async filters(q: Omit<FeedQuery, 'cursor' | 'author' | 'page'> & { author?: string; page?: string }): Promise<SQL[] | null> {
+  private async filters(q: Omit<FeedQuery, 'cursor' | 'author' | 'page' | 'initiative'> & { author?: string; page?: string; initiative?: string }): Promise<SQL[] | null> {
     const out: SQL[] = [];
     if (q.author) {
       const [member] = await this.db
@@ -321,6 +324,15 @@ export class FeedService {
       if (!page) return null;
       // The page's own posts, and members' posts about it (Charter Center certificates on Charter Center's page).
       out.push(sql`(${posts.pageId} = ${page.id} or ${posts.aboutPageId} = ${page.id})`);
+    }
+    if (q.initiative) {
+      const [initiative] = await this.db
+        .select({ id: initiatives.id })
+        .from(initiatives)
+        .where(and(isUuid(q.initiative) ? eq(initiatives.id, q.initiative) : eq(initiatives.slug, q.initiative.toLowerCase()), isNull(initiatives.deletedAt)))
+        .limit(1);
+      if (!initiative) return null;
+      out.push(eq(posts.initiativeId, initiative.id));
     }
     if (q.country) out.push(sql`${posts.countryCode} = ${q.country.toUpperCase()}`);
     if (q.sector) {

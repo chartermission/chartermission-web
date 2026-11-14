@@ -325,6 +325,8 @@ export type PostView = {
   event: EventSummary | null;
   /** The post was written to share an event (true even when the event has since been taken down). */
   isEventShare: boolean;
+  /** An update an organiser posted on an initiative; null when the initiative is gone or not visible. */
+  initiative: { id: string; slug: string; title: string } | null;
   status: PostStatus;
   /** Chapter approval, shown to the author and the chapter's reviewers; absent when the post never needed it. */
   chapterReview?: ChapterReviewInfo;
@@ -384,6 +386,7 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     isRepost: z.boolean(),
     event: EventSummary.nullable(),
     isEventShare: z.boolean(),
+    initiative: z.object({ id: z.string().uuid(), slug: z.string(), title: z.string() }).nullable(),
     status: PostStatus,
     chapterReview: ChapterReviewInfo.optional(),
     createdAt: z.string(),
@@ -423,6 +426,8 @@ export const PostComposition = z.object({
   repostOfId: z.string().uuid().optional(),
   /** Share an event to the feed: the post shows the event's card. Standard posts only, without media, a poll or a repost. */
   eventId: z.string().uuid().optional(),
+  /** Post it as an update on an initiative the member organises (shown on the initiative and to its followers). */
+  initiativeId: z.string().uuid().optional(),
   chapterId: z.string().uuid().optional(),
   /** Publish as a page the member manages (the page must be live). */
   pageId: z.string().uuid().optional(),
@@ -591,6 +596,8 @@ export const FeedQuery = z.object({
   author: z.string().trim().min(1).max(60).optional(),
   /** One page's posts (page id or slug), newest first, for the page's Posts tab. Ignores `tab`. */
   page: z.string().trim().min(1).max(80).optional(),
+  /** One initiative's updates (initiative id or slug), newest first. Ignores `tab`. */
+  initiative: z.string().trim().min(1).max(120).optional(),
   /** Query-string boolean: "true"/"1" or "false"/"0" (z.coerce.boolean would read "false" as true). */
   announcements: z
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
@@ -609,7 +616,7 @@ export const FeedQuery = z.object({
 export type FeedQuery = z.infer<typeof FeedQuery>;
 
 /** GET /feed/new — same filters as /feed, counts posts newer than `since` (for the "new posts" pill). */
-export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true, page: true }).extend({
+export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true, page: true, initiative: true }).extend({
   since: z.string().datetime({ offset: true }),
 });
 export type FeedNewQuery = z.infer<typeof FeedNewQuery>;
@@ -819,6 +826,7 @@ export const UploadPurpose = z.enum([
   "post_document",
   "post_video",
   "event_cover",
+  "initiative_cover",
   "story_image",
   "story_video",
   "chapter_image",
@@ -857,6 +865,8 @@ export const UPLOAD_LIMITS = {
   post_video: { maxBytes: 1536 * 1024 * 1024, mimes: VIDEO_MIMES },
   /** Event cover image (shown 16:9 on cards and the event page). */
   event_cover: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  /** Initiative cover banner (wide, shown on the initiative page and its card). */
+  initiative_cover: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   story_image: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   story_video: { maxBytes: 250 * 1024 * 1024, mimes: VIDEO_MIMES },
   /** Chapter display picture (square, shown in a circle or rounded tile). Admins only. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { UPLOAD_LIMITS } from "@chartermission/contracts";
+import { UPLOAD_LIMITS, type UploadPurpose } from "@chartermission/contracts";
 import { Button, cn } from "@chartermission/ui";
 import { ImageCropDialog, assertCroppable } from "@/components/account/image-crop-dialog";
 import { isApiError } from "@/lib/api/client";
@@ -20,8 +20,11 @@ export function PagePictureField({
   name,
   url,
   onChange,
+  purpose: purposeOverride,
 }: {
   kind: "logo" | "cover";
+  /** Upload purpose; defaults to page_logo / page_cover (initiatives use initiative_cover). */
+  purpose?: UploadPurpose;
   /** The page name, for the logo placeholder. */
   name: string;
   url: string | null;
@@ -32,7 +35,7 @@ export function PagePictureField({
   const input = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [picked, setPicked] = useState<File | null>(null);
-  const purpose = kind === "logo" ? "page_logo" : "page_cover";
+  const purpose: UploadPurpose = purposeOverride ?? (kind === "logo" ? "page_logo" : "page_cover");
   const busy = status.kind === "uploading" || status.kind === "processing";
 
   function pick(file: File) {
@@ -88,7 +91,7 @@ export function PagePictureField({
               }}
             />
             <Button variant="secondary" size="small" disabled={busy} onClick={() => input.current?.click()} aria-describedby={`${id}-hint`}>
-              {url ? t("Change {kind}", { kind }) : t("Upload {kind}", { kind })}
+              {kind === "logo" ? (url ? t("Change logo") : t("Upload logo")) : url ? t("Change cover") : t("Upload cover")}
             </Button>
             {url && (
               <Button variant="ghost" size="small" disabled={busy} onClick={() => onChange({ fileId: null, url: null })}>

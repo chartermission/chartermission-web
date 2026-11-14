@@ -41,6 +41,7 @@ import { AuditService } from '../infra/audit.service.js';
 import { MediaService, type FileRow } from '../media/media.service.js';
 import { EventAccess, type EventRow } from '../events/event-access.js';
 import { isPublicStatus } from '../events/event-util.js';
+import { InitiativeAccess } from '../initiatives/initiative-access.service.js';
 import { PostSerializer } from './post-serializer.js';
 import { LinkPreviewService, embedPreview } from './link-preview.js';
 import { attachHashtags, syncHashtags } from './hashtags.js';
@@ -98,6 +99,7 @@ export class PostsService implements OnModuleInit {
     private readonly pageRefs: PageRefsService,
     private readonly chapterRules: ChapterRules,
     private readonly eventAccess: EventAccess,
+    private readonly initiativeAccess: InitiativeAccess,
   ) {}
 
   onModuleInit() {
@@ -152,6 +154,9 @@ export class PostsService implements OnModuleInit {
     }
     const original = input.repostOfId ? await this.repostTarget(user, input.repostOfId) : null;
     const sharedEvent = input.eventId ? await this.shareableEvent(user, input.eventId) : null;
+    // An update on an initiative: only its organisers can post one.
+    const initiative = input.initiativeId ? await this.initiativeAccess.forUpdate(user, input.initiativeId) : null;
+    if (typeof initiative === 'string') throw Errors.validation({ initiativeId: initiative });
     if (input.chapterId) {
       const [chapter] = await this.db.select({ id: chapters.id }).from(chapters).where(eq(chapters.id, input.chapterId)).limit(1);
       if (!chapter) throw Errors.validation({ chapterId: 'Choose an existing chapter' });
@@ -180,6 +185,7 @@ export class PostsService implements OnModuleInit {
           countryCode: user.countryCode,
           repostOfId: original?.id ?? null,
           eventId: sharedEvent?.id ?? null,
+          initiativeId: initiative?.id ?? null,
           pageId: input.pageId ?? null,
           linkUrl,
           // Video links get their player straight away; the title and description follow from the preview job.

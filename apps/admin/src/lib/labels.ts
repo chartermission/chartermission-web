@@ -20,6 +20,7 @@ export const TARGET_LABELS: Record<ReportTargetType, string> = {
   story: "Story",
   opportunity: "Opportunity",
   message: "Message",
+  initiative: "Initiative",
 };
 
 export const PRIORITY_CHIP: Record<ReportPriority, { label: string; tone: ChipTone }> = {

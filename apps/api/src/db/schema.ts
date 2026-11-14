@@ -473,7 +473,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','profile_video','profile_resume','message_image','message_file','voice_note')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','profile_video','profile_resume','message_image','message_file','voice_note')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -519,6 +519,8 @@ export const posts = pgTable(
     repostOfId: uuid('repost_of_id'),
     /** An event shared to the feed: the post shows the event's card (contracts PostComposition.eventId). */
     eventId: uuid('event_id').references((): AnyPgColumn => events.id, { onDelete: 'set null' }),
+    /** An update an organiser posted on an initiative (shown on it and to its followers). */
+    initiativeId: uuid('initiative_id').references((): AnyPgColumn => initiatives.id, { onDelete: 'set null' }),
     /** Published as a page by one of its admins (author_id stays the admin who wrote it). */
     pageId: uuid('page_id').references((): AnyPgColumn => pages.id, { onDelete: 'cascade' }),
     /** The page a member's post is about (certificate posts name Charter Center): listed on that page too. */
@@ -563,6 +565,7 @@ export const posts = pgTable(
     index('posts_chapter_idx').on(t.chapterId),
     index('posts_repost_idx').on(t.repostOfId),
     index('posts_event_idx').on(t.eventId),
+    index('posts_initiative_idx').on(t.initiativeId, t.createdAt),
     index('posts_type_idx').on(t.type, t.createdAt),
     index('posts_page_idx').on(t.pageId, t.createdAt),
     index('posts_about_page_idx').on(t.aboutPageId, t.createdAt),
@@ -952,7 +955,7 @@ export const contentReports = pgTable(
     uniqueIndex('reports_one_open_per_reporter_uq')
       .on(t.reporterId, t.targetType, t.targetId)
       .where(sql`${t.status} in ('open','in_review')`),
-    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag','story','opportunity','message')`),
+    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag','story','opportunity','message','initiative')`),
     check(
       'reports_status_ck',
       sql`${t.status} in ('open','in_review','actioned','dismissed','appealed','upheld','overturned')`,
@@ -2238,6 +2241,136 @@ export const pageAdmins = pgTable(
     primaryKey({ columns: [t.pageId, t.userId] }),
     index('page_admins_user_idx').on(t.userId),
     check('page_admins_role_ck', sql`${t.role} in ('owner','admin')`),
+  ],
+);
+
+/* ======================= Initiatives ======================= */
+
+/**
+ * A project members run, hosted by a member, an organisation page or a chapter (host_type and one
+ * of the host_* columns). Live when created; moderators hide or remove it (moderation_state).
+ * Deleting archives it (status 'archived', deleted_at set) so updates and history stay intact.
+ */
+export const initiatives = pgTable(
+  'initiatives',
+  {
+    id: id(),
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    description: text('description').notNull().default(''),
+    /** Theme: one of the sectors. */
+    sectorId: uuid('sector_id').references(() => sectors.id, { onDelete: 'set null' }),
+    countryCode: text('country_code').references(() => countries.code),
+    status: text('status').notNull().default('recruiting'),
+    hostType: text('host_type').notNull().default('member'),
+    hostPageId: uuid('host_page_id').references((): AnyPgColumn => pages.id, { onDelete: 'cascade' }),
+    hostChapterId: uuid('host_chapter_id').references(() => chapters.id, { onDelete: 'cascade' }),
+    /** The member who leads it (the creator, shown as "Led by"). */
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    coverFileId: uuid('cover_file_id').references(() => files.id, { onDelete: 'set null' }),
+    moderationState: text('moderation_state').notNull().default('visible'),
+    followerCount: integer('follower_count').notNull().default(0),
+    deletedAt: ts('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('initiatives_list_idx').on(t.status, t.updatedAt),
+    index('initiatives_host_page_idx').on(t.hostPageId),
+    index('initiatives_host_chapter_idx').on(t.hostChapterId),
+    index('initiatives_lead_idx').on(t.leadId),
+    check('initiatives_status_ck', sql`${t.status} in ('idea','recruiting','active','paused','completed','archived')`),
+    check('initiatives_host_ck', sql`${t.hostType} in ('member','page','chapter')`),
+    check('initiatives_moderation_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
+  ],
+);
+
+/** Roles an initiative is looking for ("Cold-chain logistics lead"). */
+export const initiativeRoles = pgTable(
+  'initiative_roles',
+  {
+    id: id(),
+    initiativeId: uuid('initiative_id')
+      .notNull()
+      .references(() => initiatives.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
+    open: boolean('open').notNull().default(true),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('initiative_roles_idx').on(t.initiativeId, t.position)],
+);
+
+/** Milestones in order; done when done_at is set. */
+export const initiativeMilestones = pgTable(
+  'initiative_milestones',
+  {
+    id: id(),
+    initiativeId: uuid('initiative_id')
+      .notNull()
+      .references(() => initiatives.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    note: text('note'),
+    /** YYYY-MM-DD. */
+    targetDate: text('target_date'),
+    doneAt: ts('done_at'),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('initiative_milestones_idx').on(t.initiativeId, t.position)],
+);
+
+/** The team. Organisers manage the initiative; the lead is always an organiser. */
+export const initiativeMembers = pgTable(
+  'initiative_members',
+  {
+    initiativeId: uuid('initiative_id')
+      .notNull()
+      .references(() => initiatives.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role'),
+    organiser: boolean('organiser').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.initiativeId, t.userId] }), index('initiative_members_user_idx').on(t.userId)],
+);
+
+/** Requests to join; accepting one adds the member to the team. One pending request per member. */
+export const initiativeJoinRequests = pgTable(
+  'initiative_join_requests',
+  {
+    id: id(),
+    initiativeId: uuid('initiative_id')
+      .notNull()
+      .references(() => initiatives.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    roleId: uuid('role_id').references(() => initiativeRoles.id, { onDelete: 'set null' }),
+    skills: text('skills'),
+    note: text('note').notNull(),
+    status: text('status').notNull().default('pending'),
+    message: text('message'),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: ts('decided_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('initiative_join_requests_idx').on(t.initiativeId, t.status, t.createdAt),
+    index('initiative_join_requests_user_idx').on(t.userId, t.createdAt),
+    uniqueIndex('initiative_join_requests_pending_uq').on(t.initiativeId, t.userId).where(sql`${t.status} = 'pending'`),
+    check('initiative_join_requests_status_ck', sql`${t.status} in ('pending','accepted','declined','withdrawn')`),
   ],
 );
 

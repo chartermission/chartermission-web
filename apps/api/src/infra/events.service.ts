@@ -32,7 +32,9 @@ export type DomainEvent =
   | { type: 'chapter.banned'; chapterId: string; userId: string; actorId: string }
   | { type: 'page.reviewed'; pageId: string; action: 'approve' | 'reject' | 'suspend' | 'restore'; actorId: string }
   | { type: 'page.admin_added'; pageId: string; userId: string; actorId: string }
-  | { type: 'verification.decided'; requestId: string };
+  | { type: 'verification.decided'; requestId: string }
+  | { type: 'initiative.join_requested'; requestId: string }
+  | { type: 'initiative.join_decided'; requestId: string };
 
 @Injectable()
 export class EventsService {

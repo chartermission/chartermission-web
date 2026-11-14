@@ -62,4 +62,5 @@ export const en: Dict = {
   "{count} answers aren’t saved yet. Check your connection; we’ll keep them on this page meanwhile.": { one: "{count} answer isn’t saved yet. Check your connection; we’ll keep it on this page meanwhile.", other: "{count} answers aren’t saved yet. Check your connection; we’ll keep them on this page meanwhile." },
   "You have answered {answered} of {total} questions. The {count} you left blank will be marked wrong.": { one: "You have answered {answered} of {total} questions. The one you left blank will be marked wrong.", other: "You have answered {answered} of {total} questions. The {count} you left blank will be marked wrong." },
   "{count} questions are still marked for review.": { one: "{count} question is still marked for review.", other: "{count} questions are still marked for review." },
+  "All {count} milestones done": { one: "{count} milestone done", other: "All {count} milestones done" },
 };

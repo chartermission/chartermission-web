@@ -23,6 +23,7 @@ import {
   comments,
   events,
   files,
+  initiatives,
   hashtags,
   mentions,
   pollOptions,
@@ -132,7 +133,7 @@ export class PostSerializer {
     }
 
     const postIds = rows.map((r) => r.id);
-    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap] = await Promise.all([
+    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap, initiativeMap] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
       this.pageRefs.refs(rows.flatMap((r) => [r.pageId, r.aboutPageId]).filter((x): x is string => !!x)),
       rows.some((r) => r.pageId) ? this.pageRefs.managedIds(viewer?.id) : Promise.resolve(new Set<string>()),
@@ -145,6 +146,7 @@ export class PostSerializer {
       this.acceptedAnswers(rows),
       this.helpOffers(rows, viewer),
       this.sharedEvents(rows, viewer),
+      this.initiatives(rows),
     ]);
 
     const out: PostView[] = [];
@@ -175,6 +177,7 @@ export class PostSerializer {
         isRepost: !!r.repostOfId,
         event: (r.eventId && eventMap.get(r.eventId)) || null,
         isEventShare: !!r.eventId,
+        initiative: (r.initiativeId && initiativeMap.get(r.initiativeId)) || null,
         status: r.status as PostView['status'],
         createdAt: r.createdAt.toISOString(),
         editedAt: r.editedAt?.toISOString() ?? null,
@@ -329,6 +332,17 @@ export class PostSerializer {
       });
     }
     return map;
+  }
+
+  /** Initiatives that posts are updates on, while they are live. */
+  private async initiatives(rows: PostRow[]): Promise<Map<string, { id: string; slug: string; title: string }>> {
+    const ids = [...new Set(rows.map((r) => r.initiativeId).filter((x): x is string => !!x))];
+    if (!ids.length) return new Map();
+    const found = await this.db
+      .select({ id: initiatives.id, slug: initiatives.slug, title: initiatives.title })
+      .from(initiatives)
+      .where(and(inArray(initiatives.id, ids), isNull(initiatives.deletedAt), eq(initiatives.moderationState, 'visible')));
+    return new Map(found.map((i) => [i.id, i]));
   }
 
   /** Shared events as the viewer sees them now; events that are no longer public are left out (the card says so). */

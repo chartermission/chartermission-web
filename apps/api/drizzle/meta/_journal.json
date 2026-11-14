@@ -162,6 +162,13 @@
       "when": 1794612486089,
       "tag": "0022_exams_by_invitation",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794614874849,
+      "tag": "0023_initiatives",
+      "breakpoints": true
     }
   ]
 }
