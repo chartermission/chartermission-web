@@ -57,35 +57,3 @@ export function FollowButton({
     </button>
   );
 }
-
-/** Copies the page address (or opens the phone's share sheet). */
-export function ShareButton({ title, className }: { title: string; className?: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function share() {
-    const url = window.location.href.split("#")[0]!;
-    try {
-      if (navigator.share && window.matchMedia("(pointer: coarse)").matches) {
-        await navigator.share({ title, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // Share sheet dismissed or clipboard unavailable: nothing to do.
-    }
-  }
-
-  return (
-    <>
-      <button type="button" onClick={() => void share()} className={buttonClasses({ variant: "ghost", className })}>
-        <Icon name="share" size={16} />
-        {copied ? "Link copied" : "Share"}
-      </button>
-      <span className="sr-only" role="status">
-        {copied ? "Link copied to clipboard" : ""}
-      </span>
-    </>
-  );
-}

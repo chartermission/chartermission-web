@@ -26,8 +26,8 @@ const MEMBER_AREAS = [
 
 /** Bots that fetch a page to draw a link preview (they are never signed in). */
 const PREVIEW_BOT = /WhatsApp|facebookexternalhit|facebookcatalog|Facebot|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterestbot|redditbot|Embedly|vkShare|Viber|Snapchat|Mastodon|Iframely|Bluesky|Google-PageRenderer|Applebot/i;
-/** Pages whose preview depends on what they show (a member, chapter, event, page, opportunity or post). */
-const PREVIEW_PATH = /^\/(?:[a-z0-9][a-z0-9-]{1,59}|(?:chapters|events|pages|opportunities|posts|articles)\/[^/]+)\/?$/i;
+/** Pages whose preview depends on what they show (a member, chapter, event, page, opportunity, initiative or post). */
+const PREVIEW_PATH = /^\/(?:[a-z0-9][a-z0-9-]{1,59}|(?:chapters|events|pages|opportunities|posts|articles|initiatives)\/[^/]+)\/?$/i;
 
 /** Public pages keep their own previews. */
 const PUBLIC_PAGES = new Set(["check-email", "forgot-password", "guidelines", "policies", "privacy", "reset-password", "sign-in", "signin", "signup", "terms", "verify-email"]);

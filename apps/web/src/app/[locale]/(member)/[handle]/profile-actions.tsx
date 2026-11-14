@@ -12,6 +12,7 @@ import { useT } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { openSendInMessage } from "@/components/messages/share-dialog";
+import { openShare } from "@/components/social/share-out";
 import { MessageMemberButton } from "@/components/network/message-member";
 import {
   ConnectControl,
@@ -186,6 +187,17 @@ export function ProfileActions({
       icon: "x",
       onSelect: () => setModal("remove"),
     });
+  menu.push({
+    label: "Share profile",
+    icon: "share",
+    onSelect: () =>
+      openShare({
+        path: `/${member.handle}`,
+        title: member.name,
+        text: member.headline ? `${member.name}: ${member.headline}` : member.name,
+        send: { type: "member", key: member.handle },
+      }),
+  });
   menu.push({
     label: "Send profile in a message",
     icon: "send",

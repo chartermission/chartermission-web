@@ -6,6 +6,7 @@ import { apiGet, getViewer } from "@/lib/api/server";
 import { LocaleSync } from "@/i18n/language-menu";
 import { InviteHost } from "@/components/invite/invite-dialog";
 import { SendInMessageHost } from "@/components/messages/share-dialog";
+import { ShareHost } from "@/components/social/share-out";
 import { VideoTrimHost } from "@/components/video/video-trim";
 import { InstallBanner } from "@/components/pwa/install-banner";
 import { ExamInviteClaim } from "@/components/exams/exam-invite";
@@ -17,7 +18,13 @@ import { ExamInviteClaim } from "@/components/exams/exam-invite";
  */
 async function ViewerChrome() {
   const viewer = await getViewer().catch(() => null);
-  if (!viewer) return <TopNavBar viewer={null} pathname={null} guest />;
+  if (!viewer)
+    return (
+      <>
+        <TopNavBar viewer={null} pathname={null} guest />
+        <ShareHost inviterHandle={null} />
+      </>
+    );
   const [unread, unreadMessages] = await Promise.all([
     apiGet<UnreadCount>("/notifications/unread-count").catch(() => ({ unread: 0 })),
     apiGet<MessagesUnread>("/messages/unread").catch((): MessagesUnread => ({ unread: 0, requests: 0 })),
@@ -44,6 +51,7 @@ async function ViewerChrome() {
       <ExamInviteClaim />
       <AccountGate viewer={account} />
       <SendInMessageHost />
+      <ShareHost inviterHandle={viewer.handle} />
       <InviteHost inviterHandle={viewer.handle} />
     </>
   );

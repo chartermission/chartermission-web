@@ -3675,4 +3675,12 @@ export const KEYS: readonly string[] = [
   "Upload logo",
   "Change cover",
   "Upload cover",
+  "Copy",
+  "People who are new to Charter Mission see your invitation first. You’re credited when they join.",
+  "Share on",
+  "More apps…",
+  "Share profile",
+  "on the team",
+  "milestones",
+  "followers",
 ];

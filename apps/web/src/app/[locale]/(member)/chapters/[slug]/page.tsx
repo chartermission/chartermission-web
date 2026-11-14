@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ChapterChat } from "@/components/chapters/chapter-chat";
-import { SendInMessageButton } from "@/components/messages/share-dialog";
+import { ShareOutButton } from "@/components/social/share-out";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -212,7 +212,16 @@ async function ChapterView({
                 inviterHandle={viewer.handle}
                 chapter={{ slug: chapter.slug, name: chapter.name }}
               />
-              <SendInMessageButton target={{ type: "chapter", key: chapter.slug }} />
+              <ShareOutButton
+                variant="secondary"
+                request={{
+                  path: `/chapters/${chapter.slug}`,
+                  title: chapter.name,
+                  text: chapter.about ? `${chapter.name}: ${chapter.about}` : chapter.name,
+                  send: { type: "chapter", key: chapter.slug },
+                  invite: { chapter: chapter.slug },
+                }}
+              />
             </div>
           </div>
           <TabList

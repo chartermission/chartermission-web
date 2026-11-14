@@ -46,6 +46,7 @@ function kindOf(path: string): string {
     opportunities: "Opportunity",
     posts: "Post",
     articles: "Article",
+    initiatives: "Initiative",
   };
   return kinds[first] ?? "Member";
 }

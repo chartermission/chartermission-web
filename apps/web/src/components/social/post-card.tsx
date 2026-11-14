@@ -13,6 +13,8 @@ import { ConfirmDialog, UnblockHint } from "./confirm-dialog";
 import { absoluteUrl, authorHref, postAnalyticsHref, postHref } from "./links";
 import { Menu, type MenuItem } from "./menu";
 import { openSendInMessage } from "@/components/messages/share-dialog";
+import { openShare } from "@/components/social/share-out";
+import { postShare } from "@/components/social/share-requests";
 import { PostAttachments } from "./post-attachments";
 import {
   AuthorName,
@@ -617,7 +619,7 @@ export function PostCard({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => copyLink(post)}
+              onClick={() => openShare(postShare(post, subject))}
               className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
             >
               <Icon name="share" size={18} />
@@ -721,7 +723,7 @@ export function PostCard({
           </button>
           <button
             type="button"
-            onClick={() => copyLink(post)}
+            onClick={() => openShare(postShare(post, subject))}
             className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
           >
             <Icon name="share" size={18} />

@@ -3677,4 +3677,12 @@ export const fr: Dict = {
   "Upload logo": "Téléverser un logo",
   "Change cover": "Changer la couverture",
   "Upload cover": "Téléverser une couverture",
+  "Copy": "Copier",
+  "People who are new to Charter Mission see your invitation first. You’re credited when they join.": "Les personnes qui découvrent Charter Mission voient d’abord votre invitation. Leur inscription vous est attribuée.",
+  "Share on": "Partager sur",
+  "More apps…": "Autres applications…",
+  "Share profile": "Partager le profil",
+  "on the team": "dans l’équipe",
+  "milestones": "étapes",
+  "followers": "abonnés",
 };

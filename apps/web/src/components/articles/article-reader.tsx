@@ -1,6 +1,8 @@
 "use client";
 
 import { openSendInMessage } from "@/components/messages/share-dialog";
+import { openShare } from "@/components/social/share-out";
+import { postShare } from "@/components/social/share-requests";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -453,7 +455,7 @@ export function ArticleReader({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={copyLink}
+                  onClick={() => openShare(postShare(post, subject))}
                   className={cn(action, "text-secondary")}
                 >
                   <Icon name="share" size={18} />
@@ -535,7 +537,7 @@ export function ArticleReader({
               </button>
               <button
                 type="button"
-                onClick={copyLink}
+                onClick={() => openShare(postShare(post, subject))}
                 className={cn(action, "text-secondary")}
               >
                 <Icon name="share" size={18} />

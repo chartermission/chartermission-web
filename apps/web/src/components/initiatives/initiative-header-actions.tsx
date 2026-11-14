@@ -10,7 +10,8 @@ import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
 import { Menu, type MenuItem } from "@/components/social/menu";
 import { toast } from "@/components/social/toast";
-import { FollowButton, ShareButton } from "./initiative-actions";
+import { ShareOutButton } from "@/components/social/share-out";
+import { FollowButton } from "./initiative-actions";
 import { JoinRequestTrigger } from "./join-request";
 import { initiativeHref } from "./format";
 import { useT } from "@/i18n/client";
@@ -79,7 +80,7 @@ export function InitiativeHeaderActions({ initiative, viewerId }: { initiative: 
         </span>
       )}
       <FollowButton initiativeId={initiative.id} title={initiative.title} following={viewer.following} size="default" onChange={() => router.refresh()} />
-      <ShareButton title={initiative.title} />
+      <ShareOutButton request={{ path: `/initiatives/${initiative.slug}`, title: initiative.title, text: `${initiative.title}: ${initiative.summary}` }} />
       {menu.length > 0 && <Menu label={t("More options for {title}", { title: initiative.title })} items={menu} />}
       {reporting && <ReportDialog targetType="initiative" targetId={initiative.id} subject={`“${initiative.title}”`} onClose={() => setReporting(false)} />}
       {leaving && (

@@ -51,4 +51,22 @@ describe('Link previews', () => {
     await t.http().get('/api/v1/public/preview').query({ path: `/posts/${hidden.id}` }).expect(404);
     await t.http().get(`/api/v1/public/preview-image/post/${hidden.id}`).expect(404);
   });
+
+  it('initiatives show their title, summary and cover; hidden or deleted ones show nothing', async () => {
+    const lead = await createMember(t, { name: 'Initiative Lead' });
+    const insert = async (slug: string, extra: Partial<typeof s.initiatives.$inferInsert> = {}) =>
+      (await t.db.insert(s.initiatives).values({ slug, title: 'Solar Schools Accra', summary: 'Rooftop solar for 10 public schools.', leadId: lead.id, ...extra }).returning())[0]!;
+    await insert('solar-schools-preview', { coverFileId: await photo(lead.id) });
+    await insert('plain-initiative-preview');
+    await insert('hidden-initiative-preview', { moderationState: 'hidden' });
+    await insert('gone-initiative-preview', { deletedAt: new Date() });
+
+    const shown = (await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/solar-schools-preview' }).expect(200)).body;
+    expect(shown).toEqual({ title: 'Solar Schools Accra', description: 'Rooftop solar for 10 public schools.', image: '/public/preview-image/initiative/solar-schools-preview' });
+    const plain = (await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/plain-initiative-preview' }).expect(200)).body;
+    expect(plain.image).toBeNull();
+    await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/hidden-initiative-preview' }).expect(404);
+    await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/gone-initiative-preview' }).expect(404);
+    await t.http().get('/api/v1/public/preview-image/initiative/hidden-initiative-preview').expect(404);
+  });
 });

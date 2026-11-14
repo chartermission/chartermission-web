@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { LinkPreviewInfo } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, events, memberProfiles, opportunities, pages, postAttachments, posts, users } from '../db/schema.js';
+import { chapters, events, initiatives, memberProfiles, opportunities, pages, postAttachments, posts, users } from '../db/schema.js';
 import { MediaService } from '../media/media.service.js';
 
 /** Where a preview picture comes from: a stored upload (served by /public/preview-image) or an outside address. */
@@ -18,7 +18,7 @@ const clip = (text: string | null | undefined, max = 200) => {
  * Link previews (WhatsApp, LinkedIn, Slack, X…) for pages whose content needs a sign-in to see.
  * Preview bots are never signed in. Each link gets its own picture:
  *  - a member: name and photo (the headline only when the profile is public);
- *  - chapters, published events, live pages and open opportunities: their title, summary and picture;
+ *  - chapters, published events, live pages, open opportunities and visible initiatives: their title, summary and picture;
  *  - posts and articles: the first picture (a repost's original when it has none of its own),
  *    else the page's or author's picture, and the start of the text. Hidden posts get nothing.
  * Pictures are re-checked against the same rules when the bot fetches them.
@@ -44,6 +44,8 @@ export class PreviewService {
         return this.page(key);
       case 'opportunities':
         return this.opportunity(key);
+      case 'initiatives':
+        return this.initiative(key);
       case 'posts':
       case 'articles':
         return this.post(key);
@@ -78,6 +80,8 @@ export class PreviewService {
         return (await this.pageRow(key))?.picture ?? null;
       case 'post':
         return (await this.postRow(key))?.picture ?? null;
+      case 'initiative':
+        return (await this.initiativeRow(key))?.picture ?? null;
       default:
         return null;
     }
@@ -183,6 +187,24 @@ export class PreviewService {
       .where(and(eq(opportunities.slug, slug), eq(opportunities.moderationState, 'visible'), isNull(opportunities.deletedAt)))
       .limit(1);
     return row ? this.out(`${row.title} · ${row.organisation}`, row.summary, null) : null;
+  }
+
+  /* ---------- initiatives ---------- */
+
+  private async initiativeRow(slug: string) {
+    if (!/^[a-z0-9-]{1,140}$/i.test(slug)) return null;
+    const [row] = await this.db
+      .select({ title: initiatives.title, summary: initiatives.summary, cover: initiatives.coverFileId, slug: initiatives.slug })
+      .from(initiatives)
+      .where(and(eq(initiatives.slug, slug.toLowerCase()), eq(initiatives.moderationState, 'visible'), isNull(initiatives.deletedAt)))
+      .limit(1);
+    if (!row) return null;
+    return { row, picture: this.file('initiative', row.slug, await this.clean(row.cover)) };
+  }
+
+  private async initiative(slug: string) {
+    const found = await this.initiativeRow(slug);
+    return found ? this.out(found.row.title, found.row.summary, found.picture) : null;
   }
 
   /* ---------- posts and articles ---------- */

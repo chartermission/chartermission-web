@@ -3677,4 +3677,12 @@ export const ar: Dict = {
   "Upload logo": "رفع شعار",
   "Change cover": "تغيير الغلاف",
   "Upload cover": "رفع غلاف",
+  "Copy": "نسخ",
+  "People who are new to Charter Mission see your invitation first. You’re credited when they join.": "يرى المنضمّون الجدد إلى Charter Mission دعوتك أولًا، ويُحتسب لك انضمامهم.",
+  "Share on": "المشاركة على",
+  "More apps…": "تطبيقات أخرى…",
+  "Share profile": "مشاركة الملف الشخصي",
+  "on the team": "في الفريق",
+  "milestones": "مراحل",
+  "followers": "متابعون",
 };
