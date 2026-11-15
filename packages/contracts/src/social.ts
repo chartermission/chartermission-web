@@ -833,6 +833,7 @@ export const UploadPurpose = z.enum([
   "chapter_cover",
   "page_logo",
   "page_cover",
+  "product_image",
   "profile_video",
   "profile_resume",
   "message_image",
@@ -876,6 +877,8 @@ export const UPLOAD_LIMITS = {
   /** Page logo (square) and page cover (wide 4:1 banner). Page admins and staff. */
   page_logo: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   page_cover: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  /** A product picture on a page (up to PRODUCT_MAX_IMAGES each). */
+  product_image: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   /** A member's intro video for their profile. Length is capped separately (MediaSettings.introVideoMaxSeconds). */
   profile_video: { maxBytes: 800 * 1024 * 1024, mimes: VIDEO_MIMES },
   /** A member's résumé or CV, shown on their profile to the people they choose. PDF only. */

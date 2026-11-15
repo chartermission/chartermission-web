@@ -23,13 +23,13 @@ async function Pages() {
   return <PagesConsole initial={data[0]} settings={data[1]} canChangeSettings={can(viewer, PERM.settingsManage)} />;
 }
 
-/** Pages for organisations: create them, review the ones members create, verify, suspend and remove. */
+/** Pages for organisations: create them, verify, suspend and remove (and review new ones if review is switched on). */
 export default function PagesPage() {
   return (
     <>
       <PageHeader
         title="Pages"
-        description="Pages for organisations, companies and initiatives. Create them here, review the ones members create, and choose who may create pages."
+        description="Pages for organisations, companies and initiatives. Members’ pages go live straight away; create pages here, verify or suspend them, and choose who may create pages."
       />
       <Suspense fallback={<SkeletonTable label="Loading pages" rows={6} />}>
         <Pages />

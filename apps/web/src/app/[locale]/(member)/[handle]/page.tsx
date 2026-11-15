@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
-import { PreviewAs, socialNetworkOf, type MemberProfile, type Page, type PostView } from "@chartermission/contracts";
+import { PreviewAs, socialNetworkOf, type MemberProfile, type MemberRef, type Page, type PostView } from "@chartermission/contracts";
 import { Chip, Icon, Panel, ProfileBadgeList, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { getClientViewer } from "@/components/social/data";
@@ -16,6 +16,8 @@ import { T } from "@/i18n/client";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { ProfileActions } from "./profile-actions";
 import { ProfileHighlightsLoader } from "@/components/stories/stories-loader";
+import { asServiceList } from "@/components/services/format";
+import { ServicesSection } from "@/components/services/services-section";
 import { getT, getIntlTag } from "@/i18n/server";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/[handle]">): Promise<Metadata> {
@@ -261,6 +263,12 @@ async function ProfileMain(props: Props) {
         </Section>
       )}
 
+      {!preview && !member.relationship.blocked && (
+        <Suspense fallback={<PanelSkeleton lines={3} />}>
+          <MemberServices member={member} own={isSelf} signedIn={!!viewer} />
+        </Suspense>
+      )}
+
       {member.experience && member.experience.length > 0 && (
         <Section title="Experience">
           <ul className="flex flex-col gap-4">
@@ -334,6 +342,27 @@ async function ProfileMain(props: Props) {
       )}
     </>
   );
+}
+
+/** GET /members/{handle}/services: the Services panel (hidden for others when there are none). */
+async function MemberServices({ member, own, signedIn }: { member: MemberProfile; own: boolean; signedIn: boolean }) {
+  const services = await apiGet<unknown>(`/members/${encodeURIComponent(member.handle)}/services`)
+    .then(asServiceList)
+    .catch(() => null);
+  if (!services || (!own && services.length === 0)) return null;
+  const ref: MemberRef = {
+    id: member.id,
+    handle: member.handle,
+    name: member.name,
+    headline: member.headline,
+    avatarUrl: member.avatarUrl,
+    tone: member.tone,
+    verified: member.verified,
+    staff: member.staff,
+    official: member.official,
+    badge: member.badge ?? null,
+  };
+  return <ServicesSection host={{ type: "member", member: ref }} services={services} canManage={own} signedIn={signedIn} />;
 }
 
 const MEMBER_POSTS_PAGE = 10;

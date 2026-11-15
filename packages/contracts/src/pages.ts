@@ -43,7 +43,7 @@ export const PagesSettings = z.object({
 });
 export type PagesSettings = z.infer<typeof PagesSettings>;
 
-export const PAGES_SETTINGS_DEFAULTS: PagesSettings = { memberCreation: "review", maxPagesPerMember: 5 };
+export const PAGES_SETTINGS_DEFAULTS: PagesSettings = { memberCreation: "open", maxPagesPerMember: 5 };
 
 export const PageSlug = z
   .string()
@@ -58,8 +58,51 @@ const Website = z
   .url("Enter a full web address, starting with https://")
   .refine((v) => /^https?:\/\//i.test(v), "Enter a full web address, starting with https://");
 
-/** POST /pages (verified members; subject to PagesSettings.memberCreation). */
-export const PageInput = z.object({
+export const PageTeamSize = z.enum(["1", "2-10", "11-50", "51-200", "201-1000", "1000+"]);
+export type PageTeamSize = z.infer<typeof PageTeamSize>;
+
+/** The page's accounts elsewhere. Each is a full https link. */
+export const PageSocialLinks = z.object({
+  linkedin: Website.nullable().optional(),
+  x: Website.nullable().optional(),
+  facebook: Website.nullable().optional(),
+  instagram: Website.nullable().optional(),
+  youtube: Website.nullable().optional(),
+});
+export type PageSocialLinks = z.infer<typeof PageSocialLinks>;
+
+/** Public contact and business details (all optional). */
+export const PageDetailsInput = z.object({
+  contactEmail: z.string().trim().toLowerCase().email("Enter an email address").max(254).nullable().optional(),
+  /** International format, e.g. +233 30 123 4567. */
+  contactPhone: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9 ()-]{6,24}$/, "Enter a phone number, e.g. +233 30 123 4567")
+    .nullable()
+    .optional(),
+  /** WhatsApp number people can message (same format). */
+  whatsapp: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9 ()-]{6,24}$/, "Enter a phone number, e.g. +233 30 123 4567")
+    .nullable()
+    .optional(),
+  address: z.string().trim().max(300).nullable().optional(),
+  /** e.g. "Mon–Fri 9:00–17:00". */
+  hours: z.string().trim().max(160).nullable().optional(),
+  foundedYear: z.number().int().min(1800).max(2100).nullable().optional(),
+  teamSize: PageTeamSize.nullable().optional(),
+  /** Sector ids from the catalogue (up to 3). */
+  sectorIds: z.array(z.string().uuid()).max(3, "Up to 3 sectors").optional(),
+  /** Short phrases, e.g. "Cold-chain logistics". */
+  specialties: z.array(z.string().trim().min(1).max(40)).max(10, "Up to 10 specialties").optional(),
+  socialLinks: PageSocialLinks.optional(),
+});
+export type PageDetailsInput = z.infer<typeof PageDetailsInput>;
+
+/** POST /pages (verified members; subject to PagesSettings.memberCreation, open by default: pages go live at once). */
+export const PageInput = PageDetailsInput.extend({
   name: z.string().trim().min(2, "Enter the page name").max(80),
   /** Defaults to one made from the name. Can't be changed later. */
   slug: PageSlug.optional(),
@@ -118,6 +161,27 @@ export const PageDetail = PageSummary.extend({
   website: z.string().nullable(),
   city: z.string().nullable(),
   coverUrl: z.string().nullable(),
+  contactEmail: z.string().nullable(),
+  contactPhone: z.string().nullable(),
+  whatsapp: z.string().nullable(),
+  address: z.string().nullable(),
+  hours: z.string().nullable(),
+  foundedYear: z.number().int().nullable(),
+  teamSize: PageTeamSize.nullable(),
+  sectors: z.array(z.object({ id: z.string(), name: z.string() })),
+  specialties: z.array(z.string()),
+  socialLinks: z.object({
+    linkedin: z.string().nullable(),
+    x: z.string().nullable(),
+    facebook: z.string().nullable(),
+    instagram: z.string().nullable(),
+    youtube: z.string().nullable(),
+  }),
+  /** Counts for the page's tabs. */
+  productCount: z.number().int(),
+  serviceCount: z.number().int(),
+  /** For the page's admins: enquiries not yet answered. */
+  newEnquiries: z.number().int().optional(),
   posts: z.number().int(),
   createdAt: z.string(),
   viewer: z.object({

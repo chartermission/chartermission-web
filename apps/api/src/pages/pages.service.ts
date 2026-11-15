@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import {
   type ManagedPage,
   type Ok,
@@ -9,6 +9,9 @@ import {
   type PageCategory,
   type PageDetail,
   type PageInput,
+  type PageRef,
+  type PageSocialLinks,
+  type PageTeamSize,
   type PagesQuery,
   type PagesSettings,
   type PageStatus,
@@ -16,7 +19,21 @@ import {
   type PageUpdateInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { countries, files, follows, memberProfiles, pageAdmins, pages, posts } from '../db/schema.js';
+import type { Tx } from '../db/client.js';
+import {
+  countries,
+  files,
+  follows,
+  memberProfiles,
+  pageAdmins,
+  pageEnquiries,
+  pageProducts,
+  pageSectors,
+  pages,
+  posts,
+  sectors,
+  services,
+} from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { MembersService, mediaUrl } from '../core/members.service.js';
 import { PageRefsService } from '../core/page-refs.service.js';
@@ -29,6 +46,11 @@ import { isUniqueViolation, likePrefix } from '../moderation/util.js';
 import { isUuid } from '../media/uuid-param.js';
 
 export type PageRow = typeof pages.$inferSelect;
+
+/** The compact page shape (contracts PageRef). */
+export function pageRef(row: PageRow): PageRef {
+  return { id: row.id, slug: row.slug, name: row.name, tagline: row.tagline, logoUrl: mediaUrl(row.logoFileId), verified: !!row.verifiedAt, official: row.official };
+}
 
 /** Most admins a page can have, the owner included. */
 export const MAX_PAGE_ADMINS = 10;
@@ -49,7 +71,35 @@ export function slugifyPageName(name: string): string {
 }
 
 /** Staff with pages.manage can see and edit any page from the member app too. */
-const isPagesStaff = (user: AuthUser | undefined) => !!user?.permissions.has('pages.manage');
+export const isPagesStaff = (user: AuthUser | undefined) => !!user?.permissions.has('pages.manage');
+
+/** The accounts a page can link to, in display order. */
+export const SOCIAL_KEYS = ['linkedin', 'x', 'facebook', 'instagram', 'youtube'] as const;
+type SocialKey = (typeof SOCIAL_KEYS)[number];
+
+/** Only the known keys, without empty ones. */
+export function cleanSocialLinks(input: PageSocialLinks | Record<string, unknown> | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of SOCIAL_KEYS) {
+    const value = (input as Record<string, unknown> | null | undefined)?.[key];
+    if (typeof value === 'string' && value.trim()) out[key] = value.trim();
+  }
+  return out;
+}
+
+/** Trimmed, with repeats dropped whatever their case (the first spelling wins). */
+export function cleanSpecialties(list: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of list) {
+    const value = raw.trim().replace(/\s+/g, ' ');
+    const key = value.toLocaleLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
 
 /**
  * Pages: an organisation's presence on Charter Mission. Members follow pages (follows with
@@ -81,7 +131,7 @@ export class PagesService {
   }
 
   /** The page if this viewer may open it: live pages for everyone, others for their admins and staff. */
-  private async visibleRow(viewer: AuthUser | undefined, idOrSlug: string): Promise<{ row: PageRow; role: PageAdminRole | null }> {
+  async visibleRow(viewer: AuthUser | undefined, idOrSlug: string): Promise<{ row: PageRow; role: PageAdminRole | null }> {
     const row = await this.findRow(idOrSlug);
     if (!row) throw Errors.notFound('Page');
     const role = await this.pageRefs.role(viewer?.id, row.id);
@@ -162,33 +212,73 @@ export class PagesService {
   async detail(viewer: AuthUser, idOrSlug: string): Promise<PageDetail> {
     const { row, role } = await this.visibleRow(viewer, idOrSlug);
     const staff = isPagesStaff(viewer);
-    const [[summary], [postCount]] = await Promise.all([
+    const manager = !!role || staff;
+    const [[summary], [postCount], sectorRows, [productCount], [serviceCount], [newEnquiries]] = await Promise.all([
       this.summaries([row.id], viewer.id),
       this.db
         .select({ n: sql<number>`count(*)::int` })
         .from(posts)
         .where(and(sql`(${posts.pageId} = ${row.id} or ${posts.aboutPageId} = ${row.id})`, sql`${posts.deletedAt} is null`, eq(posts.status, 'published'), eq(posts.moderationState, 'visible'))),
+      this.sectors(row.id),
+      this.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(pageProducts)
+        .where(and(eq(pageProducts.pageId, row.id), manager ? undefined : eq(pageProducts.active, true))),
+      this.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(services)
+        .where(and(eq(services.hostPageId, row.id), eq(services.active, true), isNull(services.deletedAt))),
+      role
+        ? this.db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(pageEnquiries)
+            .where(and(eq(pageEnquiries.pageId, row.id), eq(pageEnquiries.status, 'new')))
+        : Promise.resolve([undefined]),
     ]);
+    const links = cleanSocialLinks(row.socialLinks);
     const detail: PageDetail = {
       ...summary!,
       about: row.about,
       website: row.website,
       city: row.city,
       coverUrl: mediaUrl(row.coverFileId),
+      contactEmail: row.contactEmail,
+      contactPhone: row.contactPhone,
+      whatsapp: row.whatsapp,
+      address: row.address,
+      hours: row.hours,
+      foundedYear: row.foundedYear,
+      teamSize: (row.teamSize as PageTeamSize | null) ?? null,
+      sectors: sectorRows,
+      specialties: row.specialties,
+      socialLinks: Object.fromEntries(SOCIAL_KEYS.map((key) => [key, links[key] ?? null])) as Record<SocialKey, string | null>,
+      productCount: productCount?.n ?? 0,
+      serviceCount: serviceCount?.n ?? 0,
       posts: postCount?.n ?? 0,
       createdAt: row.createdAt.toISOString(),
       viewer: {
         role,
-        canEdit: !!role || staff,
+        canEdit: manager,
         canManageAdmins: role === 'owner' || staff,
         canPost: !!role && row.status === 'active',
       },
     };
-    if (role || staff) {
+    if (role) detail.newEnquiries = newEnquiries?.n ?? 0;
+    if (manager) {
       detail.reviewNote = row.reviewNote;
       detail.admins = await this.admins(row.id);
     }
     return detail;
+  }
+
+  /** The page's sectors, in catalogue order. */
+  private async sectors(pageId: string): Promise<{ id: string; name: string }[]> {
+    return this.db
+      .select({ id: sectors.id, name: sectors.name })
+      .from(pageSectors)
+      .innerJoin(sectors, eq(sectors.id, pageSectors.sectorId))
+      .where(eq(pageSectors.pageId, pageId))
+      .orderBy(asc(sectors.position), asc(sectors.name));
   }
 
   async admins(pageId: string): Promise<PageAdminView[]> {
@@ -217,7 +307,7 @@ export class PagesService {
     return summaries.map((s) => ({ ...s, role: roles.get(s.id)! }));
   }
 
-  /** POST /pages: live straight away, or waiting for review, as the platform setting says. */
+  /** POST /pages: live straight away (the default, "open"), or waiting for review, as the platform setting says. */
   async create(user: AuthUser, input: PageInput, ip?: string): Promise<PageDetail> {
     const staff = isPagesStaff(user);
     const policy = await this.policy();
@@ -246,6 +336,7 @@ export class PagesService {
   ): Promise<PageRow> {
     await this.assertFiles(opts.createdBy, input);
     await this.assertCountry(input.countryCode);
+    const sectorIds = await this.assertSectors(input.sectorIds);
     const base = input.slug ?? slugifyPageName(input.name);
     for (let n = 1; n <= 30; n++) {
       const slug = n === 1 ? base : `${base.slice(0, 56)}-${n}`;
@@ -268,6 +359,7 @@ export class PagesService {
               city: input.city || null,
               logoFileId: input.logoFileId ?? null,
               coverFileId: input.coverFileId ?? null,
+              ...this.detailChanges(input),
               status: opts.status,
               official: opts.official ?? false,
               verifiedAt: opts.verified ? new Date() : null,
@@ -275,6 +367,7 @@ export class PagesService {
             })
             .returning();
           await tx.insert(pageAdmins).values({ pageId: row!.id, userId: opts.ownerId, role: 'owner' });
+          if (sectorIds) await this.setSectors(tx, row!.id, sectorIds);
           return row!;
         });
       } catch (err) {
@@ -290,13 +383,11 @@ export class PagesService {
     const { row } = await this.editableRow(user, idOrSlug);
     await this.assertFiles(user.id, input);
     await this.assertCountry(input.countryCode);
+    const sectorIds = await this.assertSectors(input.sectorIds);
     const set = this.changes(input);
     const resubmit = row.status === 'rejected' && !isPagesStaff(user);
     if (resubmit) Object.assign(set, { status: 'pending', reviewNote: null });
-    await this.db
-      .update(pages)
-      .set({ ...set, updatedAt: new Date() })
-      .where(eq(pages.id, row.id));
+    await this.save(row.id, set, sectorIds);
     await this.audit.record({
       actorId: user.id,
       action: 'page.updated',
@@ -320,7 +411,55 @@ export class PagesService {
     if (input.city !== undefined) set.city = input.city || null;
     if (input.logoFileId !== undefined) set.logoFileId = input.logoFileId;
     if (input.coverFileId !== undefined) set.coverFileId = input.coverFileId;
+    return { ...set, ...this.detailChanges(input) };
+  }
+
+  /** Columns for the contact and business details that were sent. */
+  private detailChanges(input: Partial<PageInput>): Partial<typeof pages.$inferInsert> {
+    const set: Partial<typeof pages.$inferInsert> = {};
+    if (input.contactEmail !== undefined) set.contactEmail = input.contactEmail || null;
+    if (input.contactPhone !== undefined) set.contactPhone = input.contactPhone || null;
+    if (input.whatsapp !== undefined) set.whatsapp = input.whatsapp || null;
+    if (input.address !== undefined) set.address = input.address || null;
+    if (input.hours !== undefined) set.hours = input.hours || null;
+    if (input.foundedYear !== undefined) set.foundedYear = input.foundedYear;
+    if (input.teamSize !== undefined) set.teamSize = input.teamSize;
+    if (input.specialties !== undefined) set.specialties = cleanSpecialties(input.specialties);
+    if (input.socialLinks !== undefined) set.socialLinks = cleanSocialLinks(input.socialLinks);
     return set;
+  }
+
+  /**
+   * Saves column changes and, when sent, the page's sectors (replaced as a whole). Shared with the
+   * admin console; call assertSectors first.
+   */
+  async save(pageId: string, set: Partial<typeof pages.$inferInsert>, sectorIds: string[] | undefined) {
+    await this.db.transaction(async (tx) => {
+      if (Object.keys(set).length) {
+        await tx
+          .update(pages)
+          .set({ ...set, updatedAt: new Date() })
+          .where(eq(pages.id, pageId));
+      } else if (sectorIds) {
+        await tx.update(pages).set({ updatedAt: new Date() }).where(eq(pages.id, pageId));
+      }
+      if (sectorIds) await this.setSectors(tx, pageId, sectorIds);
+    });
+  }
+
+  private async setSectors(tx: Tx, pageId: string, sectorIds: string[]) {
+    await tx.delete(pageSectors).where(eq(pageSectors.pageId, pageId));
+    if (sectorIds.length) await tx.insert(pageSectors).values(sectorIds.map((sectorId) => ({ pageId, sectorId })));
+  }
+
+  /** Sector ids must be in the catalogue. Returns them without repeats (undefined when not sent). */
+  async assertSectors(ids: string[] | undefined): Promise<string[] | undefined> {
+    if (ids === undefined) return undefined;
+    const unique = [...new Set(ids.map((id) => id.toLowerCase()))];
+    if (!unique.length) return [];
+    const rows = await this.db.select({ id: sectors.id }).from(sectors).where(inArray(sectors.id, unique));
+    if (rows.length !== unique.length) throw Errors.validation({ sectorIds: 'Choose sectors from the list' });
+    return unique;
   }
 
   /** DELETE /pages/{slug}: the owner (or staff). The page's posts and followers go with it. */

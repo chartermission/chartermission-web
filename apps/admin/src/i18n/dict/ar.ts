@@ -1630,4 +1630,7 @@ export const ar: Dict = {
   "Has the exam": "لديه الاختبار",
   "{invited} haven’t opened it yet · {joined} have the exam · {took} took it · {passed} passed": "{invited} لم يفتحوه بعد · {joined} لديهم الاختبار · {took} أدّوه · {passed} اجتازوه",
   "Invitations you send appear here, with who got the exam, took and passed it.": "تظهر هنا الدعوات التي ترسلها، مع من حصل على الاختبار ومن أدّاه ومن اجتازه.",
+  "Pages for organisations, companies and initiatives. Members’ pages go live straight away; create pages here, verify or suspend them, and choose who may create pages.": "صفحات المنظمات والشركات والمبادرات. تُنشر صفحات الأعضاء فورًا؛ أنشئ الصفحات هنا، ووثّقها أو أوقفها، واختر من يمكنه إنشاء الصفحات.",
+  "On (the default): new pages go live straight away. Staff can still suspend or remove any page at any time.": "مفعّل (افتراضيًا): تُنشر الصفحات الجديدة فورًا، ويظل بإمكان الفريق إيقاف أي صفحة أو حذفها في أي وقت.",
+  "Off: new pages stay hidden under “Waiting for review” until someone approves them.": "متوقف: تبقى الصفحات الجديدة مخفية في «بانتظار المراجعة» حتى يوافق عليها أحد.",
 };

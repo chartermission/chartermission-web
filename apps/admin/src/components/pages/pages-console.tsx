@@ -157,14 +157,14 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
             hint={settings.memberCreation === "closed" ? "Off: only the team creates pages. Members see no Create a page button." : "Any verified member can create pages for their organisations."}
             checked={settings.memberCreation !== "closed"}
             disabled={!canChangeSettings || savingSettings}
-            onChange={(on) => void saveSettings({ ...settings, memberCreation: on ? "review" : "closed" })}
+            onChange={(on) => void saveSettings({ ...settings, memberCreation: on ? "open" : "closed" })}
           />
           <SettingSwitch
             label="Pages go live without approval"
             hint={
               settings.memberCreation === "open"
-                ? "On: new pages are live straight away. You can still suspend or remove a page afterwards."
-                : "Off: new pages wait under “Waiting for review” until someone approves them."
+                ? "On (the default): new pages go live straight away. Staff can still suspend or remove any page at any time."
+                : "Off: new pages stay hidden under “Waiting for review” until someone approves them."
             }
             checked={settings.memberCreation === "open"}
             disabled={!canChangeSettings || savingSettings || settings.memberCreation === "closed"}

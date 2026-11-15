@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import type { NotificationView, NotificationsQuery, Page, UnreadCount } from "@chartermission/contracts";
+import { useState, useSyncExternalStore } from "react";
+import type { NotificationType, NotificationView, NotificationsQuery, Page, UnreadCount } from "@chartermission/contracts";
 import { Button, Icon, Panel, cn, type IconName } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { ErrorNotice } from "@/components/social/errors";
 import { MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { toast } from "@/components/social/toast";
-import { useT } from "@/i18n/client";
+import { NoTranslate } from "@/i18n/auto";
+import { useIntlTag, useT } from "@/i18n/client";
 
 type Filter = NotificationsQuery["filter"];
 
@@ -27,19 +28,50 @@ const iconFor: Record<NotificationView["icon"], { name: IconName; className: str
   clock: { name: "clock", className: "bg-primary-tint text-primary" },
 };
 
+/** Types shown with their own icon and link, whatever icon the API sent. */
+const byType: Partial<Record<NotificationType, { icon: { name: IconName; className: string }; href: (item: NotificationView) => string }>> = {
+  booking_received: { icon: { name: "calendar", className: "bg-info-light text-info" }, href: bookingsHref },
+  booking_cancelled: { icon: { name: "alert", className: "bg-warning-light text-warning" }, href: bookingsHref },
+  booking_reminder: { icon: { name: "clock", className: "bg-primary-tint text-primary" }, href: bookingsHref },
+  page_enquiry: { icon: { name: "message", className: "bg-accent-light text-accent" }, href: (item) => item.href },
+};
+
+/** Booking notifications open Bookings (or the booking itself when the API links to it). */
+function bookingsHref(item: NotificationView): string {
+  return item.href.startsWith("/bookings") ? item.href : "/bookings";
+}
+
 const filters: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "mentions", label: "Mentions" },
 ];
 
+const noSubscribe = () => () => {};
+
+/** A date and time in the reader's language and zone. The server render shows the fallback (the host's zone). */
+function LocalWhen({ iso, fallback }: { iso: string; fallback: string }) {
+  const intl = useIntlTag();
+  const inBrowser = useSyncExternalStore(noSubscribe, () => true, () => false);
+  if (!inBrowser) return <NoTranslate>{fallback}</NoTranslate>;
+  const when = new Date(iso).toLocaleString(intl, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return (
+    <NoTranslate>
+      <time dateTime={iso}>{when}</time>
+    </NoTranslate>
+  );
+}
+
 function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: NotificationView) => void }) {
+  const t = useT();
   const actor = item.actors[0];
-  const icon = iconFor[item.icon];
+  const special = byType[item.type];
+  const icon = special?.icon ?? iconFor[item.icon];
+  const href = special ? special.href(item) : item.href;
   const text = item.segments.map((s) => s.text).join("");
   return (
     <li className={cn("relative flex items-start gap-3 px-5 py-4 max-sm:px-4", !item.read && "bg-primary-tint-2")}>
       <span className="relative shrink-0">
-        {item.icon === "avatar" && actor ? (
+        {item.icon === "avatar" && actor && !special ? (
           <MemberAvatar member={actor} size={40} link />
         ) : (
           <span className={cn("flex size-10 items-center justify-center rounded-full", icon.className)}>
@@ -49,10 +81,10 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <Link
-          href={item.href}
+          href={href}
           onClick={() => onOpen(item)}
           className="text-sm text-body after:absolute after:inset-0 hover:text-ink focus-visible:outline-none"
-          aria-label={`${item.read ? "" : "Unread: "}${text}`}
+          aria-label={item.read ? text : t("Unread: {text}", { text })}
         >
           {item.segments.map((segment, index) =>
             segment.strong ? (
@@ -60,7 +92,7 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
                 {segment.text}
               </strong>
             ) : (
-              <span key={index}>{segment.text}</span>
+              <span key={index}>{segment.at ? <LocalWhen iso={segment.at} fallback={segment.text} /> : segment.text}</span>
             ),
           )}
         </Link>

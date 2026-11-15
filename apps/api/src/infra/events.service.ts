@@ -34,7 +34,9 @@ export type DomainEvent =
   | { type: 'page.admin_added'; pageId: string; userId: string; actorId: string }
   | { type: 'verification.decided'; requestId: string }
   | { type: 'initiative.join_requested'; requestId: string }
-  | { type: 'initiative.join_decided'; requestId: string };
+  | { type: 'initiative.join_decided'; requestId: string }
+  | { type: 'booking.created'; bookingId: string }
+  | { type: 'booking.cancelled'; bookingId: string; actorId: string };
 
 @Injectable()
 export class EventsService {

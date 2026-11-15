@@ -77,7 +77,7 @@ export class NotificationsService {
         type: row.type as NotificationView['type'],
         actors,
         actorCount: row.actorCount,
-        segments: segments.map((s) => ({ text: s.text, strong: !!s.strong })),
+        segments: segments.map((s) => ({ text: s.text, strong: !!s.strong, ...(s.at ? { at: s.at } : {}) })),
         href: data.href ?? '/notifications',
         icon: data.icon ?? 'avatar',
         createdAt: row.updatedAt.toISOString(),

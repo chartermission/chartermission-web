@@ -8,6 +8,7 @@ import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { Toaster } from "@/components/social/toast";
 import { apiGet, requireViewer } from "@/lib/api/server";
 import { getTaxonomies, groupCountries } from "@/lib/taxonomies";
+import { sectorOptions } from "../sector-options";
 import { getT } from "@/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -43,10 +44,12 @@ async function NewPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-h2 text-ink">Create a page</h1>
         <p className="text-md text-secondary">
-          A page is the home of an organisation, company or initiative on Charter Mission. You’ll be its owner and can add other admins afterwards.
+          {settings.memberCreation === "review" && !staff
+            ? "A page is the home of an organisation, company or initiative on Charter Mission. You’ll be its owner and can add other admins afterwards."
+            : "A page is the home of an organisation, company or initiative on Charter Mission. It goes live as soon as you create it. You’ll be its owner and can add other admins afterwards."}
         </p>
       </div>
-      <PageForm countries={groupCountries(taxonomies.countries)} policy={staff ? "open" : settings.memberCreation} />
+      <PageForm countries={groupCountries(taxonomies.countries)} sectors={sectorOptions(taxonomies.sectors)} />
     </Panel>
   );
 }

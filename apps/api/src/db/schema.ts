@@ -473,7 +473,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','profile_video','profile_resume','message_image','message_file','voice_note')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','product_image','profile_video','profile_resume','message_image','message_file','voice_note')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -2201,6 +2201,18 @@ export const pages = pgTable(
     city: text('city'),
     logoFileId: uuid('logo_file_id'),
     coverFileId: uuid('cover_file_id'),
+    /* Public contact and business details (contracts PageDetailsInput). */
+    contactEmail: text('contact_email'),
+    contactPhone: text('contact_phone'),
+    whatsapp: text('whatsapp'),
+    address: text('address'),
+    hours: text('hours'),
+    foundedYear: integer('founded_year'),
+    /** contracts PageTeamSize. */
+    teamSize: text('team_size'),
+    specialties: text('specialties').array().notNull().default(sql`'{}'::text[]`),
+    /** { linkedin, x, facebook, instagram, youtube }: full links or absent. */
+    socialLinks: jsonb('social_links').$type<Record<string, string | null>>().notNull().default({}),
     status: text('status').notNull().default('active'),
     /** Shown to the page's admins when a page is rejected or suspended. */
     reviewNote: text('review_note'),
@@ -2482,4 +2494,188 @@ export const referrals = pgTable(
     index('referrals_inviter_idx').on(t.inviterId),
     check('referrals_kind_ck', sql`${t.kind} in ('member','chapter','event')`),
   ],
+);
+
+/* ======================= Pages: sectors, products, enquiries ======================= */
+
+export const pageSectors = pgTable(
+  'page_sectors',
+  {
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    sectorId: uuid('sector_id')
+      .notNull()
+      .references(() => sectors.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.pageId, t.sectorId] })],
+);
+
+export const pageProducts = pgTable(
+  'page_products',
+  {
+    id: id(),
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    /** Free text ("USD 25 / kg"); null = price on request. */
+    price: text('price'),
+    /** product_image files, in order. */
+    imageFileIds: uuid('image_file_ids').array().notNull().default(sql`'{}'::uuid[]`),
+    link: text('link'),
+    active: boolean('active').notNull().default(true),
+    position: integer('position').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('page_products_page_idx').on(t.pageId, t.position)],
+);
+
+export const pageEnquiries = pgTable(
+  'page_enquiries',
+  {
+    id: id(),
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    fromId: uuid('from_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'product' | 'service' | null; aboutId points at page_products or services. */
+    aboutType: text('about_type'),
+    aboutId: uuid('about_id'),
+    message: text('message').notNull(),
+    status: text('status').notNull().default('new'),
+    conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+    repliedBy: uuid('replied_by').references(() => users.id, { onDelete: 'set null' }),
+    repliedAt: ts('replied_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('page_enquiries_page_idx').on(t.pageId, t.status, t.createdAt),
+    index('page_enquiries_from_idx').on(t.fromId, t.createdAt),
+    check('page_enquiries_status_ck', sql`${t.status} in ('new','replied','closed')`),
+    check('page_enquiries_about_ck', sql`${t.aboutType} is null or ${t.aboutType} in ('product','service')`),
+  ],
+);
+
+/* ======================= Services and consultations ======================= */
+
+/** Offered by exactly one host: a member (hostUserId) or a page (hostPageId). */
+export const services = pgTable(
+  'services',
+  {
+    id: id(),
+    hostUserId: uuid('host_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    hostPageId: uuid('host_page_id').references(() => pages.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
+    rateNote: text('rate_note'),
+    bookable: boolean('bookable').notNull().default(false),
+    durationMinutes: integer('duration_minutes'),
+    /** contracts ConsultationMode. */
+    mode: text('mode'),
+    locationHint: text('location_hint'),
+    /** Link, number or address: shown only to the host and to bookers. */
+    meetingDetails: text('meeting_details'),
+    noticeHours: integer('notice_hours').notNull().default(12),
+    windowDays: integer('window_days').notNull().default(30),
+    active: boolean('active').notNull().default(true),
+    position: integer('position').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    deletedAt: ts('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('services_user_idx').on(t.hostUserId, t.position),
+    index('services_page_idx').on(t.hostPageId, t.position),
+    check('services_host_ck', sql`(${t.hostUserId} is null) <> (${t.hostPageId} is null)`),
+    check('services_mode_ck', sql`${t.mode} is null or ${t.mode} in ('video','phone','in_person')`),
+  ],
+);
+
+/** Weekly availability for one host (a member or a page). */
+export const hostAvailability = pgTable(
+  'host_availability',
+  {
+    id: id(),
+    hostUserId: uuid('host_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    hostPageId: uuid('host_page_id').references(() => pages.id, { onDelete: 'cascade' }),
+    timezone: text('timezone').notNull(),
+    /** [{ weekday, start, end }] in the host's time zone (contracts AvailabilityWindow). */
+    windows: jsonb('windows').$type<{ weekday: number; start: string; end: string }[]>().notNull().default([]),
+    /** YYYY-MM-DD dates with no slots. */
+    daysOff: text('days_off').array().notNull().default(sql`'{}'::text[]`),
+    bufferMinutes: integer('buffer_minutes').notNull().default(0),
+    maxPerDay: integer('max_per_day'),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('host_availability_user_uq').on(t.hostUserId).where(sql`${t.hostUserId} is not null`),
+    uniqueIndex('host_availability_page_uq').on(t.hostPageId).where(sql`${t.hostPageId} is not null`),
+    check('host_availability_host_ck', sql`(${t.hostUserId} is null) <> (${t.hostPageId} is null)`),
+  ],
+);
+
+/**
+ * A booked consultation. The host is copied from the service so the host's calendar can be
+ * checked for clashes across all their services. Double booking is prevented by taking an advisory
+ * lock on the host inside the booking transaction, then checking for overlaps.
+ */
+export const bookings = pgTable(
+  'bookings',
+  {
+    id: id(),
+    serviceId: uuid('service_id')
+      .notNull()
+      .references(() => services.id, { onDelete: 'cascade' }),
+    hostUserId: uuid('host_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    hostPageId: uuid('host_page_id').references(() => pages.id, { onDelete: 'cascade' }),
+    bookerId: uuid('booker_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    startsAt: ts('starts_at').notNull(),
+    endsAt: ts('ends_at').notNull(),
+    status: text('status').notNull().default('confirmed'),
+    note: text('note'),
+    cancelledBy: text('cancelled_by'),
+    cancelReason: text('cancel_reason'),
+    cancelledAt: ts('cancelled_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('bookings_host_user_idx').on(t.hostUserId, t.startsAt),
+    index('bookings_host_page_idx').on(t.hostPageId, t.startsAt),
+    index('bookings_booker_idx').on(t.bookerId, t.startsAt),
+    index('bookings_service_idx').on(t.serviceId, t.startsAt),
+    check('bookings_status_ck', sql`${t.status} in ('confirmed','cancelled')`),
+    check('bookings_cancelled_by_ck', sql`${t.cancelledBy} is null or ${t.cancelledBy} in ('booker','host')`),
+    check('bookings_host_ck', sql`(${t.hostUserId} is null) <> (${t.hostPageId} is null)`),
+    check('bookings_time_ck', sql`${t.endsAt} > ${t.startsAt}`),
+  ],
+);
+
+/** Makes booking reminders idempotent (same pattern as event_reminders_sent). */
+export const bookingRemindersSent = pgTable(
+  'booking_reminders_sent',
+  {
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => bookings.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    offsetMinutes: integer('offset_minutes').notNull(),
+    sentAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.bookingId, t.userId, t.offsetMinutes] })],
 );

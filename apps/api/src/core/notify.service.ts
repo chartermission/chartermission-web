@@ -75,6 +75,10 @@ export const CATEGORY_OF: Record<
   invite_joined: 'connections',
   initiative_join_requested: 'opportunities',
   initiative_join_decided: 'opportunities',
+  booking_received: 'always',
+  booking_cancelled: 'always',
+  booking_reminder: 'always',
+  page_enquiry: 'always',
 };
 
 export interface NotifyInput {

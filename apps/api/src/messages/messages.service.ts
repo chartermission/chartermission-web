@@ -189,6 +189,41 @@ export class MessagesService implements OnModuleInit {
     return this.view(user, row!.id);
   }
 
+  /**
+   * Page enquiries: `user` (one of the page's admins) answers a member who wrote to the page. The
+   * member asked first, so the direct chat is opened as active (not a message request), and an
+   * existing request or declined chat between the two is opened up again. Then `body` is sent.
+   */
+  async replyToEnquiry(user: AuthUser, memberId: string, body: string): Promise<{ conversationId: string; message: MessageView }> {
+    assertNotRestricted(user);
+    if (memberId === user.id) throw Errors.badRequest('You can’t message yourself');
+    const [other] = await this.db.select({ id: users.id, status: users.status, isOfficial: users.isOfficial }).from(users).where(eq(users.id, memberId)).limit(1);
+    if (!other || !ACTIVE.includes(other.status) || (await this.relations.isBlockedEitherWay(user.id, memberId))) throw Errors.notFound('That member');
+    if (other.isOfficial || user.isOfficial) throw Errors.forbidden('Official Charter Mission accounts don’t take private messages');
+    const [a, b] = memberId < user.id ? [memberId, user.id] : [user.id, memberId];
+    await this.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(conversations)
+        .values({ kind: 'direct', memberA: a, memberB: b, status: 'active', requestedBy: null, createdBy: user.id })
+        .onConflictDoNothing()
+        .returning();
+      if (created) {
+        await tx.insert(conversationMembers).values([
+          { conversationId: created.id, userId: user.id },
+          { conversationId: created.id, userId: memberId },
+        ]);
+      } else {
+        await tx
+          .update(conversations)
+          .set({ status: 'active' })
+          .where(and(eq(conversations.memberA, a), eq(conversations.memberB, b), ne(conversations.status, 'active')));
+      }
+    });
+    const [row] = await this.db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.memberA, a), eq(conversations.memberB, b))).limit(1);
+    const message = await this.send(user, row!.id, { body });
+    return { conversationId: row!.id, message };
+  }
+
   /** GET /messages/conversations/{id} */
   async view(user: AuthUser, conversationId: string): Promise<ConversationView> {
     const { conversation } = await this.access(user, conversationId);

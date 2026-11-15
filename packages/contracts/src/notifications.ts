@@ -75,6 +75,15 @@ export const NotificationType = z.enum([
   "initiative_join_requested",
   /** To the member: their request to join was accepted (icon check) or declined (icon alert). */
   "initiative_join_decided",
+  /* Consultations and pages (always sent: they are about the member's own booking or page) */
+  /** To the host (the member, or every admin of the page): someone booked a consultation. Icon calendar. */
+  "booking_received",
+  /** To the other side: a consultation was cancelled, with the reason. Icon alert. */
+  "booking_cancelled",
+  /** 24 h / 1 h before a consultation, to both sides. Icon clock. */
+  "booking_reminder",
+  /** To a page's admins: a member sent an enquiry. Icon message. */
+  "page_enquiry",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -108,7 +117,14 @@ export const NotificationView = z.object({
    * Text split into segments so names and objects can be bold without HTML.
    * e.g. [{text:"Amara Okafor", strong:true},{text:" mentioned you in a post about "},{text:"#AfCFTA", strong:true}]
    */
-  segments: z.array(z.object({ text: z.string(), strong: z.boolean().default(false) })),
+  segments: z.array(
+    z.object({
+      text: z.string(),
+      strong: z.boolean().default(false),
+      /** A moment in time (ISO). The app shows it as a date and time in the reader's language and zone; `text` is the fallback. */
+      at: z.string().optional(),
+    }),
+  ),
   /** Web path to open, e.g. /posts/{id}#comment-{id}. */
   href: z.string(),
   icon: z.enum(["avatar", "trending", "briefcase", "calendar", "lightbulb", "shield", "users", "flag", "alert", "check", "clock"]),

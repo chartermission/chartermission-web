@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { ConversationView, MessageSearchHit, MessagesConfig } from "@chartermission/contracts";
 import { Button, Icon, Panel, cn } from "@chartermission/ui";
 import { EmptyState } from "@/components/social/skeletons";
@@ -18,11 +18,19 @@ import { ConversationAvatar, Thread } from "./thread";
 type Box = "inbox" | "requests" | "archived";
 const LIST_POLL_MS = 60000;
 
-/** "14:05" today, "Mon" this week, "3 Nov" earlier. */
+const noSubscribe = () => () => {};
+
+/**
+ * "14:05" today, "Mon" this week, "3 Nov" earlier, in the viewer's own time zone. Empty in the
+ * server render and filled in once the page is running in the browser, so the server's zone never
+ * shows and hydration doesn't mismatch.
+ */
 function useShortWhen() {
   const { locale } = useLocale();
   const tag = INTL_LOCALE[locale];
+  const inBrowser = useSyncExternalStore(noSubscribe, () => true, () => false);
   return (iso: string) => {
+    if (!inBrowser) return "";
     const date = new Date(iso);
     if (date.toDateString() === new Date().toDateString()) return date.toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" });
     if (Date.now() - date.getTime() < 6 * 24 * 3600_000) return date.toLocaleDateString(tag, { weekday: "short" });

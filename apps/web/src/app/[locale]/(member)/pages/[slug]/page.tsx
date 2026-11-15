@@ -3,20 +3,26 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
-import { PAGE_CATEGORY_LABELS, type Page, type PageDetail, type PostView } from "@chartermission/contracts";
+import { PAGE_CATEGORY_LABELS, type Page, type PageDetail, type PostView, type ProductView, type ServiceView } from "@chartermission/contracts";
 import { Chip, Icon, Panel, type IconName } from "@chartermission/ui";
+import { TabList, TabPanel, Tabs } from "@/components/chapters/tabs";
 import { PageColumns } from "@/components/page-columns";
 import { PageActions } from "@/components/pages/page-actions";
 import { PageName } from "@/components/pages/page-card";
 import { followersLabel } from "@/components/pages/followers-label";
+import { PageAbout, hasAboutContent } from "@/components/pages/page-about";
 import { PageLogo } from "@/components/pages/page-logo";
 import { PagePosts } from "@/components/pages/page-posts";
-import { requireClientViewer } from "@/components/social/data";
+import { toPageRef } from "@/components/pages/page-ref";
+import { PageProducts } from "@/components/products/page-products";
+import { ServicesSection } from "@/components/services/services-section";
+import { requireClientViewer, settle } from "@/components/social/data";
+import { errorMessage } from "@/components/social/error-message";
 import { absoluteDate } from "@/components/social/format";
 import { memberHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import { SectionRail } from "@/components/social/section-nav";
-import { LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
+import { LoadingStatus, PanelSkeleton, SectionError } from "@/components/social/skeletons";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { T } from "@/i18n/client";
 import { getT, getIntlTag } from "@/i18n/server";
@@ -64,8 +70,25 @@ async function PageMain({ params }: { params: Params }) {
   if (!page) notFound();
   const note = statusNote[page.status];
   const location = [page.city, page.country?.name].filter(Boolean).join(", ");
+  const canManage = page.viewer.canEdit;
+  const visible = page.status === "active" || !!page.viewer.role || canManage;
   const query = { page: page.id, limit: POSTS_PAGE };
-  const posts = page.status === "active" || page.viewer.role ? await apiGet<Page<PostView>>("/feed", query).catch(() => undefined) : undefined;
+  const [posts, products, services] = await Promise.all([
+    visible ? apiGet<Page<PostView>>("/feed", query).catch(() => undefined) : undefined,
+    visible && (page.productCount > 0 || canManage) ? settle(apiGet<ProductView[]>(`/pages/${page.slug}/products`)) : null,
+    visible && (page.serviceCount > 0 || canManage) ? settle(apiGet<ServiceView[]>(`/pages/${page.slug}/services`)) : null,
+  ]);
+  const ref = toPageRef(page);
+  const bookable = !!(services?.ok && services.data.some((service) => service.bookable && service.active));
+  const showAbout = canManage || hasAboutContent(page);
+  const showProducts = canManage || page.productCount > 0;
+  const showServices = canManage || page.serviceCount > 0;
+  const tabs = [
+    { value: "posts", label: t("Posts") },
+    ...(showAbout ? [{ value: "about", label: t("About") }] : []),
+    ...(showProducts ? [{ value: "products", label: t("Products ({count})", { count: page.productCount }) }] : []),
+    ...(showServices ? [{ value: "services", label: t("Services ({count})", { count: page.serviceCount }) }] : []),
+  ];
 
   return (
     <>
@@ -79,65 +102,92 @@ async function PageMain({ params }: { params: Params }) {
         </div>
       )}
 
-      <Panel className="flex flex-col overflow-hidden">
-        {page.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- served by the API's media route
-          <img src={page.coverUrl} alt="" className="h-[132px] w-full object-cover max-sm:h-24" />
-        ) : (
-          <div className="h-[132px] w-full bg-gradient-to-r from-primary-dark via-primary to-primary-light max-sm:h-24" aria-hidden="true" />
-        )}
-        <div className="flex flex-col gap-3 px-6 pb-6 max-sm:px-4">
-          <div className="-mt-10 flex flex-wrap items-end justify-between gap-4">
-            <span className="rounded-[22px] border-4 border-card bg-card">
-              <PageLogo name={page.name} src={page.logoUrl} size={88} />
-            </span>
-            <PageActions page={page} viewer={viewer} />
-          </div>
-          <h1 className="text-h2 text-ink">
-            <PageName page={page} className="flex flex-wrap items-center gap-1.5" />
-          </h1>
-          {page.tagline && <p className="text-md text-body">{page.tagline}</p>}
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-secondary">
-            <li className="flex items-center gap-1.5">
-              <Icon name="building" size={16} />
-              {PAGE_CATEGORY_LABELS[page.category]}
-            </li>
-            {location && (
+      <Tabs values={tabs.map((tab) => tab.value)} defaultValue="posts">
+        <Panel className="flex flex-col overflow-hidden">
+          {page.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- served by the API's media route
+            <img src={page.coverUrl} alt="" className="h-[132px] w-full object-cover max-sm:h-24" />
+          ) : (
+            <div className="h-[132px] w-full bg-gradient-to-r from-primary-dark via-primary to-primary-light max-sm:h-24" aria-hidden="true" />
+          )}
+          <div className="flex flex-col gap-3 px-6 pb-4 max-sm:px-4">
+            <div className="-mt-10 flex flex-wrap items-end justify-between gap-4">
+              <span className="rounded-[22px] border-4 border-card bg-card">
+                <PageLogo name={page.name} src={page.logoUrl} size={88} />
+              </span>
+              <PageActions page={page} viewer={viewer} bookable={bookable} />
+            </div>
+            <h1 className="text-h2 text-ink">
+              <PageName page={page} className="flex flex-wrap items-center gap-1.5" />
+            </h1>
+            {page.tagline && <p className="text-md text-body">{page.tagline}</p>}
+            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-secondary">
               <li className="flex items-center gap-1.5">
-                <Icon name="map-pin" size={16} />
-                {location}
+                <Icon name="building" size={16} />
+                {PAGE_CATEGORY_LABELS[page.category]}
               </li>
-            )}
-            <li className="flex items-center gap-1.5">
-              <Icon name="users" size={16} />
-              {page.viewer.role && page.followers > 0 ? (
-                <PeopleLink source={{ path: `/pages/${page.slug}/followers`, title: t("Followers of {name}", { name: page.name }) }}>{followersLabel(t, page.followers)}</PeopleLink>
-              ) : (
-                followersLabel(t, page.followers)
+              {location && (
+                <li className="flex items-center gap-1.5">
+                  <Icon name="map-pin" size={16} />
+                  {location}
+                </li>
               )}
-            </li>
-            {page.website && (
-              <li className="flex min-w-0 items-center gap-1.5">
-                <Icon name="globe" size={16} className="shrink-0" />
-                <a href={page.website} target="_blank" rel="noopener noreferrer nofollow" className="truncate text-primary-light hover:underline">
-                  {page.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                </a>
+              <li className="flex items-center gap-1.5">
+                <Icon name="users" size={16} />
+                {page.viewer.role && page.followers > 0 ? (
+                  <PeopleLink source={{ path: `/pages/${page.slug}/followers`, title: t("Followers of {name}", { name: page.name }) }}>{followersLabel(t, page.followers)}</PeopleLink>
+                ) : (
+                  followersLabel(t, page.followers)
+                )}
               </li>
-            )}
-          </ul>
-        </div>
-      </Panel>
-
-      {page.about && (
-        <Panel className="flex flex-col gap-2 p-5">
-          <h2 className="text-h3 text-ink">About</h2>
-          <p className="whitespace-pre-line text-md text-body">{page.about}</p>
-          <p className="text-xs text-secondary"><T vars={{ date: absoluteDate(intl, page.createdAt) }}>{"On Charter Mission since {date}"}</T></p>
+              {page.website && (
+                <li className="flex min-w-0 items-center gap-1.5">
+                  <Icon name="globe" size={16} className="shrink-0" />
+                  <a href={page.website} target="_blank" rel="noopener noreferrer nofollow" className="truncate text-primary-light hover:underline">
+                    {page.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </a>
+                </li>
+              )}
+            </ul>
+          </div>
+          {visible && (
+            <div className="border-t border-line px-6 pt-3 max-sm:px-4">
+              <TabList label={t("{name} sections", { name: page.name })} tabs={tabs} />
+            </div>
+          )}
         </Panel>
-      )}
 
-      <h2 className="sr-only">Posts</h2>
-      <PagePosts page={{ id: page.id, name: page.name, canPost: page.viewer.canPost }} initial={posts} viewer={viewer} limit={POSTS_PAGE} />
+        <TabPanel value="posts">
+          <h2 className="sr-only">Posts</h2>
+          <PagePosts page={{ id: page.id, name: page.name, canPost: page.viewer.canPost }} initial={posts} viewer={viewer} limit={POSTS_PAGE} />
+        </TabPanel>
+
+        {showAbout && (
+          <TabPanel value="about">
+            <PageAbout page={page} since={absoluteDate(intl, page.createdAt)} canEdit={canManage} editHref={`/pages/${page.slug}/edit`} />
+          </TabPanel>
+        )}
+
+        {showProducts && (
+          <TabPanel value="products">
+            {products && !products.ok ? (
+              <SectionError message={errorMessage(products.error)} retryHref={`/pages/${page.slug}#products`} />
+            ) : (
+              <PageProducts page={ref} initial={products?.ok ? products.data : []} canManage={canManage} />
+            )}
+          </TabPanel>
+        )}
+
+        {showServices && (
+          <TabPanel value="services">
+            {services && !services.ok ? (
+              <SectionError message={errorMessage(services.error)} retryHref={`/pages/${page.slug}#services`} />
+            ) : (
+              <ServicesSection host={{ type: "page", page: ref }} services={services?.ok ? services.data : []} canManage={canManage} />
+            )}
+          </TabPanel>
+        )}
+      </Tabs>
     </>
   );
 }

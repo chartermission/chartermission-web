@@ -30,6 +30,8 @@ import { seedModeration } from './seed-moderation.js';
 import { seedChaptersAndOpportunities } from './seed-opportunities.js';
 import { seedPages } from './seed-pages.js';
 import { seedInitiatives } from './seed-initiatives.js';
+import { seedServices } from './seed-services.js';
+import { seedPageDetails } from './seed-page-details.js';
 import { CHAPTER_PHOTOS } from './chapter-photos.js';
 import { seedDemoMfa } from './seed-accounts.js';
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
@@ -328,7 +330,9 @@ async function main() {
     await seedModeration(db, ctx);
     await seedChaptersAndOpportunities(db, ctx);
     await seedPages(db, ctx);
+    await seedPageDetails(db, ctx);
     await seedInitiatives(db, ctx);
+    await seedServices(db, ctx);
     const mfa = await seedDemoMfa(db);
     console.log(`Seeded ${Object.keys(ids).length} demo members (password: ${DEMO_PASSWORD})`);
     if (mfa.length) console.log(`Two-step verification preset for ${mfa.length} staff accounts: ${mfa.join(', ')} (see the demo accounts PDF)`);

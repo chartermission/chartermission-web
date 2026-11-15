@@ -88,7 +88,7 @@ const PAGES: DemoPage[] = [
     country: 'ZA',
     city: 'Johannesburg',
     owner: 'thabo',
-    status: 'pending',
+    status: 'active',
     followers: [],
     posts: [],
   },

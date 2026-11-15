@@ -14,11 +14,17 @@ import { Menu, type MenuItem } from "@/components/social/menu";
 import { announcePostCreated } from "@/components/social/post-events";
 import { toast } from "@/components/social/toast";
 import type { Viewer } from "@/components/social/viewer";
+import { EnquiryButton } from "./enquiry-dialog";
 import { FollowPageButton } from "./follow-page-button";
+import { toPageRef } from "./page-ref";
 import { useT } from "@/i18n/client";
 
-/** Header actions on a page: Follow for members; Create post, Edit and Analytics for its admins. */
-export function PageActions({ page, viewer }: { page: PageDetail; viewer: Viewer }) {
+/**
+ * Header actions on a page: Follow and Contact for members; Create post, Manage, Analytics and
+ * Enquiries (with the number of new ones) for its admins, plus Availability when it offers
+ * bookable services.
+ */
+export function PageActions({ page, viewer, bookable = false }: { page: PageDetail; viewer: Viewer; bookable?: boolean }) {
   const t = useT();
   const router = useRouter();
   const [composing, setComposing] = useState(0);
@@ -53,7 +59,9 @@ export function PageActions({ page, viewer }: { page: PageDetail; viewer: Viewer
     },
     { label: "Copy link", icon: "link", onSelect: copyLink },
     { label: "Send in a message", icon: "send", onSelect: () => openSendInMessage({ type: "page", key: page.slug }) },
+    ...(page.viewer.canEdit && bookable ? [{ label: t("Availability"), icon: "calendar" as const, onSelect: () => router.push(`${pageHref(page.slug)}/availability`) }] : []),
   ];
+  const newEnquiries = page.newEnquiries ?? 0;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -69,14 +77,27 @@ export function PageActions({ page, viewer }: { page: PageDetail; viewer: Viewer
             Manage page
           </Link>
           {page.status === "active" && (
-            <Link href={`/analytics?page=${page.slug}`} className={buttonClasses({ variant: "secondary" })}>
-              <Icon name="chart" size={18} />
-              Analytics
-            </Link>
+            <>
+              <Link href={`/analytics?page=${page.slug}`} className={buttonClasses({ variant: "secondary" })}>
+                <Icon name="chart" size={18} />
+                Analytics
+              </Link>
+              <Link href={`${pageHref(page.slug)}/enquiries`} className={buttonClasses({ variant: "secondary" })}>
+                <Icon name="mail" size={18} />
+                Enquiries
+                {newEnquiries > 0 && (
+                  <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs font-semibold leading-5 text-inverse">
+                    <span aria-hidden="true">{newEnquiries > 99 ? "99+" : newEnquiries}</span>
+                    <span className="sr-only">{t("{count} new", { count: newEnquiries })}</span>
+                  </span>
+                )}
+              </Link>
+            </>
           )}
         </>
       )}
       {page.status === "active" && !page.viewer.role && <FollowPageButton page={page} following={page.following} size="default" onChange={() => router.refresh()} />}
+      {page.status === "active" && !page.viewer.role && <EnquiryButton page={toPageRef(page)} label={t("Contact")} />}
       <Menu
         label={t("More actions for {name}", { name: page.name })}
         items={menu}

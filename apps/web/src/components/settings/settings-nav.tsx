@@ -10,6 +10,7 @@ const items: { href: string; label: string; icon: IconName }[] = [
   { href: "/settings/profile", label: "Profile", icon: "users" },
   { href: "/settings/privacy", label: "Privacy & visibility", icon: "eye" },
   { href: "/settings/notifications", label: "Notifications", icon: "bell" },
+  { href: "/settings/availability", label: "Availability", icon: "clock" },
   { href: "/settings/security", label: "Security & sign-in", icon: "shield" },
   { href: "/settings/verification", label: "Verification", icon: "verified" },
   { href: "/settings/blocked", label: "Blocked & muted", icon: "x" },

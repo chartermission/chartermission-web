@@ -169,6 +169,13 @@
       "when": 1794614874849,
       "tag": "0023_initiatives",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794716883952,
+      "tag": "0024_services_bookings_products",
+      "breakpoints": true
     }
   ]
 }

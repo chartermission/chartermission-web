@@ -104,6 +104,7 @@ export function UserMenu({ viewer }: { viewer: UserMenuViewer }) {
 
   const links: { href: string; label: string; icon: IconName }[] = [
     { href: `/${viewer.handle}`, label: t("menu.viewProfile"), icon: "user" },
+    { href: "/bookings", label: t("Bookings"), icon: "calendar" },
     { href: "/analytics", label: t("menu.analytics"), icon: "chart" },
     { href: "/pages", label: t("menu.pages"), icon: "building" },
     { href: "/settings", label: t("menu.settings"), icon: "shield" },

@@ -1,12 +1,19 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { pageAdmins, pages } from '../db/schema.js';
+import { pageAdmins, pageEnquiries, pages } from '../db/schema.js';
 import { MembersService } from '../core/members.service.js';
 import { NotifyService } from '../core/notify.service.js';
 import { EventsService } from '../infra/events.service.js';
+import { QueueService } from '../infra/queue.service.js';
+import { ENQUIRY_CREATED_JOB, PageEnquiriesService } from './enquiries.service.js';
 
-/** Notifications for page reviews and new page admins (from domain events, never inline). */
+const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+/**
+ * Notifications for page reviews, new page admins and enquiries (from domain events and jobs on the
+ * events queue, never inline).
+ */
 @Injectable()
 export class PagesEvents implements OnModuleInit {
   constructor(
@@ -14,6 +21,8 @@ export class PagesEvents implements OnModuleInit {
     private readonly events: EventsService,
     private readonly notify: NotifyService,
     private readonly members: MembersService,
+    private readonly queue: QueueService,
+    private readonly enquiries: PageEnquiriesService,
   ) {}
 
   onModuleInit() {
@@ -79,6 +88,57 @@ export class PagesEvents implements OnModuleInit {
           buttonLabel: 'Open the page',
         },
       });
+    });
+
+    // Enquiries: every admin of the page is told, with the message and what it's about.
+    this.queue.process('events', async (name, data: { enquiryId?: string }) => {
+      if (name !== ENQUIRY_CREATED_JOB || !data.enquiryId) return;
+      const [row] = await this.db
+        .select({ e: pageEnquiries, page: pages })
+        .from(pageEnquiries)
+        .innerJoin(pages, eq(pages.id, pageEnquiries.pageId))
+        .where(eq(pageEnquiries.id, data.enquiryId))
+        .limit(1);
+      // Re-read, so a retry after the enquiry was answered sends nothing stale.
+      if (!row || row.e.status !== 'new' || row.page.status !== 'active') return;
+      const actor = await this.members.ref(row.e.fromId);
+      if (!actor) return;
+      const about = row.e.aboutType && row.e.aboutId ? await this.enquiries.aboutTitle(row.page.id, row.e.aboutType, row.e.aboutId, false) : null;
+      const message = row.e.message.trim();
+      for (const userId of await this.enquiries.adminIds(row.page.id)) {
+        await this.notify.notify({
+          userId,
+          type: 'page_enquiry',
+          actorId: row.e.fromId,
+          objectType: 'page_enquiry',
+          objectId: row.e.id,
+          segments: [
+            { text: actor.name, strong: true },
+            { text: ' sent an enquiry to ', strong: false },
+            { text: row.page.name, strong: true },
+            ...(about
+              ? [
+                  { text: ' about ', strong: false },
+                  { text: about, strong: true },
+                ]
+              : []),
+            { text: `: “${clip(message, 140)}”`, strong: false },
+          ],
+          href: `/pages/${row.page.slug}/enquiries`,
+          icon: 'avatar',
+          dedupeKey: `page-enquiry:${row.e.id}`,
+          email: {
+            subject: `New enquiry for ${row.page.name}`,
+            heading: `${actor.name} sent ${row.page.name} an enquiry`,
+            paragraphs: [
+              ...(about ? [`It’s about ${about}.`] : []),
+              `Their message: “${message}”`,
+              'Reply from the page’s enquiries. Your answer goes to them in Messages.',
+            ],
+            buttonLabel: 'See enquiries',
+          },
+        });
+      }
     });
   }
 }

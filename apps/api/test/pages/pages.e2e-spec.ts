@@ -78,7 +78,12 @@ describe('Official accounts, pages, verification and post analytics', () => {
   });
 
   describe('pages', () => {
-    it('a member-created page waits for review, then goes live and can post to its followers', async () => {
+    it('lets members create pages that go live at once unless staff choose otherwise', async () => {
+      expect((await kwame.get('/pages/settings').expect(200)).body).toEqual({ memberCreation: 'open', maxPagesPerMember: 5 });
+    });
+
+    it('under the review policy a member-created page waits for review, then goes live and can post to its followers', async () => {
+      // Pages go live at once by default ("open"); staff can choose to review them first.
       await setPolicy('review');
       const created = await amara.post('/pages', PAGE).expect(201);
       const page = PageDetail.parse(created.body);
@@ -167,7 +172,7 @@ describe('Official accounts, pages, verification and post analytics', () => {
       expect(page.viewer.canManageAdmins).toBe(true);
     });
 
-    it('follows the creation policy: open goes live at once, closed is for staff only', async () => {
+    it('follows the creation policy: open (the default) goes live at once, closed is for staff only', async () => {
       await setPolicy('open');
       const live = await kwame.post('/pages', { name: 'PayBridge', category: 'company' }).expect(201);
       expect(live.body.status).toBe('active');
@@ -178,7 +183,7 @@ describe('Official accounts, pages, verification and post analytics', () => {
 
       await setPolicy('closed');
       await kwame.post('/pages', { name: 'Not allowed', category: 'community' }).expect(403);
-      await setPolicy('review');
+      await setPolicy('open');
     });
 
     it('admins create official pages for a member, verify, suspend and remove them', async () => {
@@ -216,7 +221,7 @@ describe('Official accounts, pages, verification and post analytics', () => {
       await mod.get('/admin/pages').expect(403);
       expect((await admin.put('/admin/settings/pages', { memberCreation: 'open', maxPagesPerMember: 3 }).expect(200)).body.memberCreation).toBe('open');
       expect((await kwame.get('/pages/settings').expect(200)).body).toEqual({ memberCreation: 'open', maxPagesPerMember: 3 });
-      await setPolicy('review');
+      await setPolicy('open');
     });
   });
 

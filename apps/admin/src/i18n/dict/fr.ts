@@ -1630,4 +1630,7 @@ export const fr: Dict = {
   "Has the exam": "A l’examen",
   "{invited} haven’t opened it yet · {joined} have the exam · {took} took it · {passed} passed": "{invited} ne l’ont pas encore ouvert · {joined} ont l’examen · {took} l’ont passé · {passed} l’ont réussi",
   "Invitations you send appear here, with who got the exam, took and passed it.": "Les invitations envoyées apparaissent ici, avec qui a obtenu l’examen, l’a passé et l’a réussi.",
+  "Pages for organisations, companies and initiatives. Members’ pages go live straight away; create pages here, verify or suspend them, and choose who may create pages.": "Pages d’organisations, d’entreprises et d’initiatives. Les pages des membres sont publiées immédiatement ; créez des pages ici, vérifiez-les ou suspendez-les, et choisissez qui peut créer des pages.",
+  "On (the default): new pages go live straight away. Staff can still suspend or remove any page at any time.": "Activé (par défaut) : les nouvelles pages sont publiées immédiatement. L’équipe peut toujours suspendre ou supprimer une page à tout moment.",
+  "Off: new pages stay hidden under “Waiting for review” until someone approves them.": "Désactivé : les nouvelles pages restent masquées dans « En attente d’examen » jusqu’à leur approbation.",
 };

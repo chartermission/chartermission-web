@@ -160,15 +160,11 @@ export class AdminPagesService {
     const before = await this.pages.findRow(id);
     if (!before) throw Errors.notFound('That page');
     const { owner, official, verified, ...fields } = input;
+    const sectorIds = await this.pages.assertSectors(fields.sectorIds);
     const set = this.pages.changes(fields);
     if (official !== undefined) set.official = official;
     if (verified !== undefined && verified !== !!before.verifiedAt) set.verifiedAt = verified ? new Date() : null;
-    if (Object.keys(set).length) {
-      await this.db
-        .update(pages)
-        .set({ ...set, updatedAt: new Date() })
-        .where(eq(pages.id, id));
-    }
+    await this.pages.save(id, set, sectorIds);
     if (owner) {
       const ownerId = await this.ownerId(owner);
       await this.pages.setOwner(id, ownerId, true);

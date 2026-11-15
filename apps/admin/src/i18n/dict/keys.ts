@@ -1628,4 +1628,7 @@ export const KEYS: readonly string[] = [
   "Has the exam",
   "{invited} haven’t opened it yet · {joined} have the exam · {took} took it · {passed} passed",
   "Invitations you send appear here, with who got the exam, took and passed it.",
+  "Pages for organisations, companies and initiatives. Members’ pages go live straight away; create pages here, verify or suspend them, and choose who may create pages.",
+  "On (the default): new pages go live straight away. Staff can still suspend or remove any page at any time.",
+  "Off: new pages stay hidden under “Waiting for review” until someone approves them.",
 ];
