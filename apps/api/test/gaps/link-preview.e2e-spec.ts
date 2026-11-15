@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
+import sharp from 'sharp';
+import { MediaService } from '../../src/media/media.service.js';
 
 /** Link previews for bots that are never signed in: only what a visitor may already see. */
 describe('Link previews', () => {
@@ -68,5 +70,42 @@ describe('Link previews', () => {
     await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/hidden-initiative-preview' }).expect(404);
     await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/gone-initiative-preview' }).expect(404);
     await t.http().get('/api/v1/public/preview-image/initiative/hidden-initiative-preview').expect(404);
+  });
+
+  it('serves preview pictures as small JPEGs, never a redirect: 1200×630 for wide photos, a square for avatars', async () => {
+    const storage = t.app.get(MediaService).storage;
+    const lead = await createMember(t, { name: 'Picture Person' });
+    const store = async (key: string, data: Buffer) => {
+      await storage.write(key, data, 'image/jpeg');
+      const [row] = await t.db
+        .insert(s.files)
+        .values({ ownerId: lead.id, purpose: 'initiative_cover', mime: 'image/jpeg', declaredMime: 'image/jpeg', originalName: 'x.jpg', sizeBytes: data.length, storageKey: key, scanStatus: 'clean' })
+        .returning();
+      return row!.id;
+    };
+    // A big, noisy "phone photo" (several MB) and a square avatar.
+    const noise = Buffer.alloc(3000 * 2000 * 3);
+    for (let i = 0; i < noise.length; i++) noise[i] = (i * 2654435761) >>> 24;
+    const photoJpeg = await sharp(noise, { raw: { width: 3000, height: 2000, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+    expect(photoJpeg.length).toBeGreaterThan(2_000_000);
+    const avatarJpeg = await sharp({ create: { width: 512, height: 512, channels: 3, background: '#067239' } }).jpeg().toBuffer();
+    await t.db.insert(s.initiatives).values({ slug: 'wide-photo-preview', title: 'Wide', summary: 'A wide photo.', leadId: lead.id, coverFileId: await store(`uploads/test/${lead.id}-wide`, photoJpeg) });
+    await t.db.update(s.memberProfiles).set({ avatarFileId: await store(`uploads/test/${lead.id}-avatar`, avatarJpeg) }).where(eq(s.memberProfiles.userId, lead.id));
+    const [{ handle }] = await t.db.select({ handle: s.memberProfiles.handle }).from(s.memberProfiles).where(eq(s.memberProfiles.userId, lead.id));
+
+    const wide = await t.http().get('/api/v1/public/preview-image/initiative/wide-photo-preview').responseType('blob').expect(200);
+    expect(wide.headers['content-type']).toBe('image/jpeg');
+    expect(wide.headers.location).toBeUndefined();
+    const wideMeta = await sharp(wide.body as Buffer).metadata();
+    expect([wideMeta.width, wideMeta.height, wideMeta.format]).toEqual([1200, 630, 'jpeg']);
+    expect((wide.body as Buffer).length).toBeLessThan(600_000);
+
+    const square = await t.http().get(`/api/v1/public/preview-image/member/${handle}`).responseType('blob').expect(200);
+    const squareMeta = await sharp(square.body as Buffer).metadata();
+    expect([squareMeta.width, squareMeta.height]).toEqual([512, 512]);
+
+    // Made once, then served from storage.
+    const cached = await storage.read(`previews/${(await t.db.select({ id: s.initiatives.coverFileId }).from(s.initiatives).where(eq(s.initiatives.slug, 'wide-photo-preview')))[0]!.id}-v1.jpg`);
+    expect(cached?.length).toBe((wide.body as Buffer).length);
   });
 });

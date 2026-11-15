@@ -29,6 +29,7 @@ import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { ArticleRedirect } from "./article-redirect";
 import { Comments } from "./comments";
 import { getT } from "@/i18n/server";
+import { loadPreviewInfo, previewMetadata } from "@/lib/link-preview";
 
 type Params = PageProps<"/[locale]/posts/[id]">["params"];
 
@@ -40,8 +41,12 @@ export async function generateMetadata({
   if (!isUuid(id)) return { title: "Post" };
   const post = await apiGetOrNull<PostView>(`/posts/${id}`).catch(() => null);
   if (!post) return { title: "Post" };
+  // Full share previews for any crawler, not only the bots the proxy sends to /link-preview.
+  const preview = previewMetadata(`/posts/${id}`, await loadPreviewInfo(`/posts/${id}`));
+  const share = { description: preview.description, openGraph: preview.openGraph, twitter: preview.twitter };
   if (post.article)
     return {
+      ...share,
       title: post.article.title,
       description:
         post.article.subtitle ?? stripMarkdown(post.body).slice(0, 160),
@@ -51,6 +56,7 @@ export async function generateMetadata({
     post.request?.title ??
     stripMarkdown(post.body).slice(0, 70);
   return {
+    ...share,
     title: lead
       ? `${post.author.name}: ${lead}`
       : t("Post by {name}", { name: post.author.name }),
