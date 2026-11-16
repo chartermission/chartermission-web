@@ -5,6 +5,7 @@ import {
   type LearningAccess,
   type LearningAccessRules,
   type LearningRequirement,
+  type ProfileCompletenessField,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { connections, learningAccessOverrides, memberProfiles, posts, users } from '../db/schema.js';
@@ -15,19 +16,23 @@ import { AppError, Errors } from '../common/errors.js';
 import { likeContains } from './courses.service.js';
 import type { AuthUser } from '../core/auth-context.js';
 
-/** Profile fields shown to members in the "complete your profile" item (photo is its own rule). */
-const PROFILE_FIELD_LABELS: Record<string, string> = {
-  headline: 'Headline',
-  country: 'Country',
-  city: 'City',
-  bio: 'About',
-  organisation: 'Organisation',
-  skills: 'Skills',
-  sectors: 'Sectors',
-  interests: 'Interests',
-  languages: 'Languages',
-  experience: 'Experience',
-};
+/**
+ * The profile fields the "Fill in your profile" rule checks, in the order they are listed, with their
+ * labels (the photo is its own rule). Deliberately fixed: profile completeness counts more parts
+ * (intro video, cover photo) with weights, and those must not start locking Learning.
+ */
+const PROFILE_INFO_FIELDS: { key: ProfileCompletenessField; label: string }[] = [
+  { key: 'headline', label: 'Headline' },
+  { key: 'country', label: 'Country' },
+  { key: 'city', label: 'City' },
+  { key: 'bio', label: 'About' },
+  { key: 'organisation', label: 'Organisation' },
+  { key: 'skills', label: 'Skills' },
+  { key: 'sectors', label: 'Sectors' },
+  { key: 'interests', label: 'Interests' },
+  { key: 'languages', label: 'Languages' },
+  { key: 'experience', label: 'Experience' },
+];
 
 const SEARCH_LIMIT = 20;
 
@@ -108,7 +113,8 @@ export class LearningAccessService {
       out.push({ key, label, done, current: done ? 1 : 0, target: 1, href, ...extra });
 
     if (rules.requireProfileInfo) {
-      const missing = own.completeness.missing.filter((f) => f !== 'avatar').map((f) => PROFILE_FIELD_LABELS[f] ?? f);
+      const done = new Set(own.completeness.items.filter((i) => i.done).map((i) => i.key));
+      const missing = PROFILE_INFO_FIELDS.filter((f) => !done.has(f.key)).map((f) => f.label);
       yesNo('profile_info', 'Fill in your profile', missing.length === 0, '/settings/profile', { missing });
     }
     if (rules.requirePhoto) yesNo('photo', 'Add a profile photo', !!own.avatarUrl, '/settings/profile#basics');

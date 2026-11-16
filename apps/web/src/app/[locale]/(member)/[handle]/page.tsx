@@ -2,7 +2,7 @@ import { NetworkCounts } from "@/components/people/network-counts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, cache, type ReactNode } from "react";
 import { PreviewAs, socialNetworkOf, type MemberProfile, type MemberRef, type Page, type PostView } from "@chartermission/contracts";
 import { Chip, Icon, Panel, ProfileBadgeList, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
@@ -18,6 +18,8 @@ import { ProfileActions } from "./profile-actions";
 import { ProfileHighlightsLoader } from "@/components/stories/stories-loader";
 import { asServiceList } from "@/components/services/format";
 import { ServicesSection } from "@/components/services/services-section";
+import { ProfileCompletionCard } from "@/components/people/profile-completion";
+import { ProfileTagList } from "@/components/people/profile-tag-list";
 import { getT, getIntlTag } from "@/i18n/server";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/[handle]">): Promise<Metadata> {
@@ -67,22 +69,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="text-h3 text-ink">{title}</h2>
       {children}
     </Panel>
-  );
-}
-
-function ChipList({ label, items }: { label: string; items?: { id: string; name: string }[] }) {
-  if (!items?.length) return null;
-  return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-label uppercase text-secondary">{label}</h3>
-      <ul className="flex flex-wrap gap-2">
-        {items.map((item) => (
-          <li key={item.id}>
-            <Chip>{item.name}</Chip>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
@@ -138,6 +124,14 @@ async function ProfileMain(props: Props) {
 
   return (
     <>
+      {isSelf && (
+        // Below xl the right rail is hidden: the completion card leads the main column instead.
+        <div className="empty:hidden xl:hidden">
+          <Suspense fallback={null}>
+            <ProfileCompletionCard variant="main" />
+          </Suspense>
+        </div>
+      )}
       {preview && (
         <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-info/40 bg-info-light px-4 py-3 text-sm text-ink">
           <span className="flex items-center gap-2">
@@ -250,10 +244,22 @@ async function ProfileMain(props: Props) {
       {isSelf && !preview && !member.introVideo && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-dashed border-line-strong bg-card px-4 py-3 text-sm text-secondary">
           <Icon name="video" size={16} />
-          <T>Introduce yourself with a short video, attach your résumé and add your social links.</T>
-          <Link href="/settings/profile#intro" className="font-medium text-primary-light hover:underline">
-            <T>Add them to your profile</T>
-          </Link>
+          {/* Only ask for what's missing: the résumé and links may already be there. */}
+          {member.resume || links.length > 0 ? (
+            <>
+              <T>Introduce yourself with a short video so members can put a face to your name.</T>
+              <Link href="/settings/profile#intro" className="font-medium text-primary-light hover:underline">
+                <T>Add an intro video</T>
+              </Link>
+            </>
+          ) : (
+            <>
+              <T>Introduce yourself with a short video, attach your résumé and add your social links.</T>
+              <Link href="/settings/profile#intro" className="font-medium text-primary-light hover:underline">
+                <T>Add them to your profile</T>
+              </Link>
+            </>
+          )}
         </p>
       )}
 
@@ -264,9 +270,12 @@ async function ProfileMain(props: Props) {
       )}
 
       {!preview && !member.relationship.blocked && (
-        <Suspense fallback={<PanelSkeleton lines={3} />}>
-          <MemberServices member={member} own={isSelf} signedIn={!!viewer} />
-        </Suspense>
+        // From xl up, Services sit in the right rail (compact); this copy is for smaller screens.
+        <div className="empty:hidden xl:hidden">
+          <Suspense fallback={<PanelSkeleton lines={3} />}>
+            <MemberServices member={member} own={isSelf} signedIn={!!viewer} />
+          </Suspense>
+        </div>
       )}
 
       {member.experience && member.experience.length > 0 && (
@@ -294,10 +303,10 @@ async function ProfileMain(props: Props) {
 
       {hasTags && (
         <Section title="Skills and interests">
-          <ChipList label="Sectors" items={member.sectors} />
-          <ChipList label="Skills" items={member.skills} />
-          <ChipList label="Interests" items={member.interests} />
-          <ChipList label="Languages" items={member.languages} />
+          <ProfileTagList label="Sectors" items={member.sectors} />
+          <ProfileTagList label="Skills" items={member.skills} />
+          <ProfileTagList label="Interests" items={member.interests} />
+          <ProfileTagList label="Languages" items={member.languages} />
         </Section>
       )}
 
@@ -344,11 +353,16 @@ async function ProfileMain(props: Props) {
   );
 }
 
-/** GET /members/{handle}/services: the Services panel (hidden for others when there are none). */
-async function MemberServices({ member, own, signedIn }: { member: MemberProfile; own: boolean; signedIn: boolean }) {
-  const services = await apiGet<unknown>(`/members/${encodeURIComponent(member.handle)}/services`)
+/** GET /members/{handle}/services, once per request (the rail and the narrow-screen copy share it). */
+const getMemberServices = cache((handle: string) =>
+  apiGet<unknown>(`/members/${encodeURIComponent(handle)}/services`)
     .then(asServiceList)
-    .catch(() => null);
+    .catch(() => null),
+);
+
+/** The Services panel (hidden for others when there are none). `compact` for the right rail. */
+async function MemberServices({ member, own, signedIn, compact = false }: { member: MemberProfile; own: boolean; signedIn: boolean; compact?: boolean }) {
+  const services = await getMemberServices(member.handle);
   if (!services || (!own && services.length === 0)) return null;
   const ref: MemberRef = {
     id: member.id,
@@ -362,7 +376,7 @@ async function MemberServices({ member, own, signedIn }: { member: MemberProfile
     official: member.official,
     badge: member.badge ?? null,
   };
-  return <ServicesSection host={{ type: "member", member: ref }} services={services} canManage={own} signedIn={signedIn} />;
+  return <ServicesSection host={{ type: "member", member: ref }} services={services} canManage={own} signedIn={signedIn} compact={compact} />;
 }
 
 const MEMBER_POSTS_PAGE = 10;
@@ -399,23 +413,39 @@ async function MemberPosts({
   );
 }
 
+/** Right rail: profile completion (own profile only), Services, Chapters. */
 async function ProfileRightRail(props: Props) {
-  const { member } = await loadProfile(props).catch(() => ({ member: null }));
-  if (!member || member.chapters.length === 0) return null;
+  const { member, viewer, preview } = await loadProfile(props).catch(() => ({ member: null, viewer: null, preview: null }));
+  if (!member) return null;
+  const isSelf = member.relationship.self && !preview;
   return (
-    <Panel className="flex flex-col gap-3 p-5">
-      <h2 className="text-h3 text-ink">Chapters</h2>
-      <ul className="flex flex-col gap-3">
-        {member.chapters.map((chapter) => (
-          <li key={chapter.id}>
-            <Link href={`/chapters/${chapter.slug}`} className="group flex items-center gap-2.5">
-              <Icon name="globe" size={20} className="shrink-0 text-primary-light" />
-              <span className="text-sm font-medium text-ink group-hover:underline">{chapter.name}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Panel>
+    <>
+      {isSelf && (
+        <Suspense fallback={<PanelSkeleton className="h-[220px]" lines={4} />}>
+          <ProfileCompletionCard variant="rail" />
+        </Suspense>
+      )}
+      {!preview && !member.relationship.blocked && (
+        <Suspense fallback={<PanelSkeleton lines={3} />}>
+          <MemberServices member={member} own={isSelf} signedIn={!!viewer} compact />
+        </Suspense>
+      )}
+      {member.chapters.length > 0 && (
+        <Panel className="flex flex-col gap-3 p-5">
+          <h2 className="text-h3 text-ink">Chapters</h2>
+          <ul className="flex flex-col gap-3">
+            {member.chapters.map((chapter) => (
+              <li key={chapter.id}>
+                <Link href={`/chapters/${chapter.slug}`} className="group flex items-center gap-2.5">
+                  <Icon name="globe" size={20} className="shrink-0 text-primary-light" />
+                  <span className="text-sm font-medium text-ink group-hover:underline">{chapter.name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+    </>
   );
 }
 

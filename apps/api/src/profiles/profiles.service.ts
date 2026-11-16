@@ -1,16 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
-import type {
-  ChapterRef,
-  ExperienceItem,
-  MemberProfile,
-  OwnProfile,
-  HandleAvailability,
-  PreviewAs,
-  PrivacySettingsInput,
-  ProfileField,
-  Relationship,
-  UpdateProfileInput,
+import {
+  PROFILE_COMPLETENESS_WEIGHTS,
+  type ChapterRef,
+  type ExperienceItem,
+  type HandleAvailability,
+  type MemberProfile,
+  type OwnProfile,
+  type PreviewAs,
+  type PrivacySettingsInput,
+  type ProfileCompleteness,
+  type ProfileCompletenessField,
+  type ProfileField,
+  type Relationship,
+  type UpdateProfileInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { chapters, connections, files, follows, handleHistory, memberProfiles, posts, profileExperiences, users } from '../db/schema.js';
@@ -27,21 +30,6 @@ import { canSeeField, effectiveVisibility, isAdminViewer, type ViewerRelation } 
 
 /** Statuses whose profiles are gone for everyone but admins. */
 const HIDDEN_STATUSES = new Set(['deactivated', 'deletion_pending', 'deleted']);
-
-/** Fields that count towards completeness: non-sensitive only, never contact details (CM-PRF-04). */
-const COMPLETENESS_FIELDS = [
-  'avatar',
-  'headline',
-  'country',
-  'city',
-  'bio',
-  'organisation',
-  'skills',
-  'sectors',
-  'interests',
-  'languages',
-  'experience',
-] as const;
 
 const profileColumns = {
   userId: memberProfiles.userId,
@@ -353,7 +341,7 @@ export class ProfilesService {
       discoverable: row.discoverable,
       findableByEmail: row.findableByEmail,
       connectionRequestsFrom: row.connectionRequestsFrom as OwnProfile['connectionRequestsFrom'],
-      completeness: completeness(row, tax, experience.length),
+      completeness: completeness(row, tax, experience.length, !!media.introVideo),
     };
   }
 
@@ -556,24 +544,36 @@ function handleTaken() {
   return new AppError(409, 'CONFLICT', 'That handle is taken', { handle: 'That handle is taken' });
 }
 
-/** CM-PRF-04: completeness from non-sensitive fields only (no email, website or links). */
-export function completeness(row: ProfileRow, tax: ProfileTaxonomies, experienceCount: number) {
-  const done: Record<(typeof COMPLETENESS_FIELDS)[number], boolean> = {
+/**
+ * CM-PRF-04: weighted completeness from non-sensitive fields only (never email, website or links).
+ * Weights are PROFILE_COMPLETENESS_WEIGHTS (they add up to 100); items keep its order, `missing`
+ * lists what is not done, heaviest first. The intro video counts once it has passed its checks
+ * (the same rule as showing it on the profile).
+ */
+export function completeness(row: ProfileRow, tax: ProfileTaxonomies, experienceCount: number, hasIntroVideo: boolean): ProfileCompleteness {
+  const done: Record<ProfileCompletenessField, boolean> = {
     avatar: !!row.avatarFileId,
     headline: !!row.headline,
-    country: !!row.countryCode,
-    city: !!row.city,
     bio: !!row.bio,
-    organisation: !!row.organisation,
+    experience: experienceCount > 0,
+    introVideo: hasIntroVideo,
+    cover: !!row.coverFileId,
     skills: tax.skills.length > 0,
     sectors: tax.sectors.length > 0,
     interests: tax.interests.length > 0,
     languages: tax.languages.length > 0,
-    experience: experienceCount > 0,
+    country: !!row.countryCode,
+    city: !!row.city,
+    organisation: !!row.organisation,
   };
-  const missing = COMPLETENESS_FIELDS.filter((f) => !done[f]);
-  return {
-    percent: Math.round(((COMPLETENESS_FIELDS.length - missing.length) / COMPLETENESS_FIELDS.length) * 100),
-    missing: [...missing],
-  };
+  const items = (Object.keys(PROFILE_COMPLETENESS_WEIGHTS) as ProfileCompletenessField[]).map((key) => ({
+    key,
+    weight: PROFILE_COMPLETENESS_WEIGHTS[key],
+    done: done[key],
+  }));
+  const total = items.reduce((sum, i) => sum + i.weight, 0);
+  const earned = items.reduce((sum, i) => sum + (i.done ? i.weight : 0), 0);
+  // Array.sort is stable: equal weights stay in display order.
+  const missing = items.filter((i) => !i.done).sort((a, b) => b.weight - a.weight).map((i) => i.key);
+  return { percent: total ? Math.round((earned / total) * 100) : 100, missing, items };
 }

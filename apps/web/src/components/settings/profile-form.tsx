@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   PROFILE_LINKS_MAX,
   SOCIAL_NETWORKS,
@@ -23,7 +23,7 @@ import { Field, describedBy, inputClasses } from "@/components/auth/fields";
 import { ChipPicker } from "@/components/onboarding/chip-picker";
 import { SaveBar } from "./save-bar";
 import { SettingsCard } from "./settings-card";
-import { T, useT } from "@/i18n/client";
+import { T, useLocale, useT } from "@/i18n/client";
 
 type Draft = {
   name: string;
@@ -53,6 +53,8 @@ const missingLabels: Record<string, string> = {
   interests: "interests",
   languages: "languages",
   experience: "experience",
+  introVideo: "an intro video",
+  cover: "a cover photo",
 };
 
 function draftFrom(profile: OwnProfile): Draft {
@@ -127,6 +129,7 @@ export function ProfileForm({
   tone: AvatarTone;
 }) {
   const t = useT();
+  const { locale } = useLocale();
   const id = useId();
   const router = useRouter();
   const [saved, setSaved] = useState<Draft>(() => draftFrom(profile));
@@ -138,6 +141,13 @@ export function ProfileForm({
   const [justSaved, setJustSaved] = useState(false);
   const pending = useMemo(() => changes(draft, saved), [draft, saved]);
   const dirty = Object.keys(pending).length > 0;
+
+  // Links such as /settings/profile#cover arrive before this streamed-in form exists, so the
+  // browser can't jump to the section by itself: do it once the form (and #intro beside it) is in.
+  useEffect(() => {
+    const target = window.location.hash.slice(1);
+    if (target) document.getElementById(decodeURIComponent(target))?.scrollIntoView({ block: "start" });
+  }, []);
 
   function update(patch: Partial<Draft>) {
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -250,20 +260,25 @@ export function ProfileForm({
         <p className="text-sm text-secondary">
           {completeness.missing.length === 0
             ? "Your profile is complete. Members can see who you are and what you work on."
-            : t("Add {fields} to help members find you.", { fields: completeness.missing.map((key) => t(missingLabels[key] ?? key)).join(", ") })}
+            : t("Add {fields} to help members find you.", { fields: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(completeness.missing.map((key) => t(missingLabels[key] ?? key))) })}
         </p>
       </Panel>
 
       {formError?.restricted && <RestrictedPrompt message={formError.text} />}
 
       <Section id="basics" title="Photo and basics">
-        <AvatarUploader
-          name={draft.name || profile.name}
-          tone={tone}
-          avatarUrl={profile.avatarUrl}
-          onChange={() => router.refresh()}
-        />
-        <CoverUploader coverUrl={profile.coverUrl} onChange={() => router.refresh()} />
+        {/* Anchors for the profile completion card's links (/settings/profile#photo, #cover). */}
+        <div id="photo" className="scroll-mt-24">
+          <AvatarUploader
+            name={draft.name || profile.name}
+            tone={tone}
+            avatarUrl={profile.avatarUrl}
+            onChange={() => router.refresh()}
+          />
+        </div>
+        <div id="cover" className="scroll-mt-24">
+          <CoverUploader coverUrl={profile.coverUrl} onChange={() => router.refresh()} />
+        </div>
         {text("name", "Display name", { max: 80, autoComplete: "name" })}
         {text("headline", "Headline", { max: 120, placeholder: "e.g. Renewable energy engineer · Lagos", hint: true })}
         <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
@@ -400,6 +415,7 @@ export function ProfileForm({
           max={30}
         />
         <ChipPicker
+          id="sectors"
           label="Sectors"
           options={taxonomies.sectors.map((t) => ({ id: t.id, label: t.name }))}
           selected={draft.sectorIds}
@@ -407,6 +423,7 @@ export function ProfileForm({
           max={10}
         />
         <ChipPicker
+          id="interests"
           label="Interests"
           options={taxonomies.interests.map((t) => ({ id: t.id, label: t.name }))}
           selected={draft.interestIds}
@@ -414,6 +431,7 @@ export function ProfileForm({
           max={20}
         />
         <ChipPicker
+          id="languages"
           label="Languages"
           options={taxonomies.languages.map((t) => ({ id: t.id, label: t.name }))}
           selected={draft.languageIds}

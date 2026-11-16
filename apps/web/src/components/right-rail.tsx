@@ -20,7 +20,11 @@ async function Trending() {
   return <TrendingTopics initial={initial} country={code && name ? { code, name } : null} />;
 }
 
-/** "People you may know" — GET /members/suggestions, each labelled with its reason (CM-DSH-03). */
+/**
+ * "People you may know" — GET /members/suggestions (up to 10), each labelled with its reason
+ * (CM-DSH-03). Four show; the rest refill the list as requests are sent. Rendered per request
+ * (apiGet is uncached), so every page load gets a fresh list.
+ */
 async function PeopleYouMayKnow() {
   const suggestions = await apiGet<SuggestedMember[]>("/members/suggestions").catch(() => null);
   if (!suggestions) return null;
@@ -35,7 +39,7 @@ async function PeopleYouMayKnow() {
         </Link>
       </div>
       {suggestions.length ? (
-        <SuggestionList members={suggestions.slice(0, 4)} />
+        <SuggestionList members={suggestions} limit={4} />
       ) : (
         <p className="text-sm text-secondary">
           No suggestions yet. Add your sectors and skills in{" "}

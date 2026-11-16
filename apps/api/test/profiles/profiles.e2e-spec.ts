@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { DEFAULT_FIELD_VISIBILITY, MemberProfile, OwnProfile, type FieldVisibilityMap } from '@chartermission/contracts';
+import { DEFAULT_FIELD_VISIBILITY, MemberProfile, OwnProfile, PROFILE_COMPLETENESS_WEIGHTS, type FieldVisibilityMap } from '@chartermission/contracts';
 import { client, createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { resetLimits, setLimitCounter } from '../auth/support.js';
 
@@ -141,6 +141,45 @@ describe('Profiles: per-viewer allow-list, privacy, directory (spec 4.3, 4.6)', 
     expect(after.body.avatarUrl).toContain(`/media/${mine!.id}`);
     expect(after.body.completeness.percent).toBeGreaterThan(before.completeness.percent);
     await b.get('/members/new-handle').expect(200);
+  });
+
+  it('completeness is weighted: intro video (once it has passed its checks) and cover photo count', async () => {
+    const m = await createMember(t, { name: 'Weighted Member', countryCode: 'KE' });
+    const own = async () => OwnProfile.parse((await m.get('/me/profile').expect(200)).body).completeness;
+    const file = async (purpose: 'avatar' | 'profile_cover' | 'profile_video', scanStatus: 'clean' | 'pending') => {
+      const mime = purpose === 'profile_video' ? 'video/mp4' : 'image/png';
+      const [f] = await t.db
+        .insert(s.files)
+        .values({ ownerId: m.id, purpose, storageKey: `w-${purpose}-${scanStatus}-${m.id}`, declaredMime: mime, mime, sizeBytes: 10, scanStatus })
+        .returning();
+      return f!.id;
+    };
+
+    const start = await own();
+    // Every part, in the contract's order, with its weight; only the country is filled in.
+    expect(start.items.map((i) => i.key)).toEqual(Object.keys(PROFILE_COMPLETENESS_WEIGHTS));
+    expect(start.items.map((i) => i.weight)).toEqual(Object.values(PROFILE_COMPLETENESS_WEIGHTS));
+    expect(start.items.filter((i) => i.done).map((i) => i.key)).toEqual(['country']);
+    expect(start.percent).toBe(5);
+    // Heaviest first; equal weights keep the display order.
+    expect(start.missing).toEqual(['avatar', 'headline', 'bio', 'experience', 'introVideo', 'skills', 'sectors', 'cover', 'organisation', 'interests', 'languages', 'city']);
+
+    await m.patch('/me/profile', { avatarFileId: await file('avatar', 'clean'), headline: 'Trade lawyer', bio: 'Cross-border contracts.' }).expect(200);
+    expect((await own()).percent).toBe(5 + 14 + 10 + 10);
+
+    // A video still being checked doesn't count (and isn't shown); once clean it does.
+    const video = await file('profile_video', 'pending');
+    await t.db.update(s.memberProfiles).set({ introVideoFileId: video }).where(eq(s.memberProfiles.userId, m.id));
+    expect((await own()).items.find((i) => i.key === 'introVideo')!.done).toBe(false);
+    await t.db.update(s.files).set({ scanStatus: 'clean' }).where(eq(s.files.id, video));
+    let c = await own();
+    expect(c.items.find((i) => i.key === 'introVideo')!.done).toBe(true);
+    expect(c.percent).toBe(39 + 10);
+
+    await m.patch('/me/profile', { coverFileId: await file('profile_cover', 'clean'), city: 'Nairobi', organisation: 'Kamau & Co' }).expect(200);
+    c = await own();
+    expect(c.percent).toBe(49 + 6 + 4 + 6);
+    expect(c.missing).toEqual(['experience', 'skills', 'sectors', 'interests', 'languages']);
   });
 
   it('blocked either way: profile 404, cannot connect or follow; connection and follows removed', async () => {

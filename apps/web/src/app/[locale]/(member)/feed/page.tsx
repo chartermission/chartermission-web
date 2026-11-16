@@ -51,6 +51,17 @@ function isHome(query: FeedQuery) {
   return query.tab === "for_you" && !query.type && !query.country && !query.sector && !query.chapter && !query.announcements && !query.author;
 }
 
+/** The plain Latest feed: where the welcome strip's "N new posts" are shown in place. */
+function isPlainLatest(query: FeedQuery) {
+  return query.tab === "latest" && !query.type && !query.country && !query.sector && !query.chapter && !query.announcements && !query.author;
+}
+
+/** ?since= from the welcome strip's "N new posts": a valid time, or nothing. */
+function sinceParam(params: Awaited<SearchParams>) {
+  const value = Array.isArray(params.since) ? params.since[0] : params.since;
+  return value && !Number.isNaN(Date.parse(value)) ? value : undefined;
+}
+
 /** Moments go after the 2nd post, then after every 5th. */
 const MOMENTS_AFTER = 2;
 const MOMENTS_EVERY = 5;
@@ -176,6 +187,8 @@ async function FeedMain({ searchParams }: { searchParams: SearchParams }) {
           acceptNew
           newPostsPath="/feed/new"
           interleave={interleave}
+          revealSince={sinceParam(params)}
+          revealRequests={isPlainLatest(query)}
         />
       ) : (
         <SectionError message={errorMessage(page.error)} retryHref="/feed" />

@@ -25,6 +25,7 @@ export class HomeService {
   async welcome(viewer: AuthUser): Promise<WelcomeSummary> {
     const lastVisit = await this.recordVisit(viewer.id);
     const now = Date.now();
+    // The "new posts" window; returned as newPostsSince so the feed can show exactly these posts.
     const since = new Date(lastVisit?.getTime() ?? now - DAY_MS).toISOString();
     const weekAgo = new Date(now - WEEK_DAYS * DAY_MS).toISOString();
     const visible = listablePostsSql(viewer.id, { muteHashtags: true });
@@ -37,7 +38,21 @@ export class HomeService {
       return row?.n ?? 0;
     };
 
-    const [[me], chapters, newPosts, openQuestions, celebrations, [posted]] = await Promise.all([
+    /**
+     * New posts since the window start, with the post's id when there is exactly one. The same
+     * visibility as the feed (listablePostsSql: no deleted, blocked, muted, suspended-author or
+     * dead-page posts), and only what is live for others: published and not hidden by moderation.
+     */
+    const newPostsQuery = async () => {
+      const [row] = await this.db
+        .select({ n: sql<number>`count(*)::int`, firstId: sql<string | null>`(array_agg(${posts.id}))[1]` })
+        .from(posts)
+        .where(and(othersPublished, sql`${posts.createdAt} > ${since}::timestamptz`));
+      const n = row?.n ?? 0;
+      return { n, id: n === 1 ? (row?.firstId ?? null) : null };
+    };
+
+    const [[me], chapters, fresh, openQuestions, celebrations, [posted]] = await Promise.all([
       this.db
         .select({
           name: memberProfiles.displayName,
@@ -50,7 +65,7 @@ export class HomeService {
         .where(eq(users.id, viewer.id))
         .limit(1),
       this.queries.followedChapters(viewer.id),
-      countPosts(othersPublished, sql`${posts.createdAt} > ${since}::timestamptz`),
+      newPostsQuery(),
       countPosts(
         othersPublished,
         eq(posts.type, 'question'),
@@ -106,7 +121,7 @@ export class HomeService {
       isNewMember: now - me.joinedAt.getTime() < NEW_MEMBER_DAYS * DAY_MS,
       lastVisitAt: lastVisit?.toISOString() ?? null,
       chapter,
-      stats: { newPosts, openQuestions, newMembers: joined?.n ?? 0, celebrations },
+      stats: { newPosts: fresh.n, newPostId: fresh.id, newPostsSince: since, openQuestions, newMembers: joined?.n ?? 0, celebrations },
       nudge,
     };
   }

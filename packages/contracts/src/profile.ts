@@ -151,6 +151,53 @@ export const MemberProfile = MemberRef.extend({
 export type MemberProfile = z.infer<typeof MemberProfile>;
 
 /** GET /me/profile — the owner's full editable profile, including visibility settings. */
+/**
+ * What a complete profile has, and how much each part counts (weights add up to 100). The intro
+ * video counts too. `percent` is the sum of the weights of the parts that are done.
+ */
+export const PROFILE_COMPLETENESS_WEIGHTS = {
+  avatar: 14,
+  headline: 10,
+  bio: 10,
+  experience: 10,
+  introVideo: 10,
+  cover: 6,
+  skills: 8,
+  sectors: 7,
+  interests: 5,
+  languages: 5,
+  country: 5,
+  city: 4,
+  organisation: 6,
+} as const;
+export type ProfileCompletenessField = keyof typeof PROFILE_COMPLETENESS_WEIGHTS;
+
+/** Short labels for each part, for "what's missing" lists. */
+export const PROFILE_COMPLETENESS_LABELS: Record<ProfileCompletenessField, string> = {
+  avatar: "Profile photo",
+  headline: "Headline",
+  bio: "About",
+  experience: "Experience",
+  introVideo: "Intro video",
+  cover: "Cover photo",
+  skills: "Skills",
+  sectors: "Sectors",
+  interests: "Interests",
+  languages: "Languages",
+  country: "Country",
+  city: "City",
+  organisation: "Organisation",
+};
+
+export const ProfileCompleteness = z.object({
+  percent: z.number().int(),
+  /** Field keys (ProfileCompletenessField) not done yet, heaviest first. */
+  missing: z.array(z.string()),
+  /** Every part, in display order: done or not, and its weight. */
+  items: z.array(z.object({ key: z.string(), weight: z.number().int(), done: z.boolean() })),
+});
+export type ProfileCompleteness = z.infer<typeof ProfileCompleteness>;
+
 export const OwnProfile = z.object({
   handle: z.string(),
   name: z.string(),
@@ -179,7 +226,7 @@ export const OwnProfile = z.object({
   discoverable: z.boolean(),
   findableByEmail: z.boolean(),
   connectionRequestsFrom: z.enum(["members", "nobody"]),
-  completeness: z.object({ percent: z.number().int(), missing: z.array(z.string()) }),
+  completeness: ProfileCompleteness,
 });
 export type OwnProfile = z.infer<typeof OwnProfile>;
 

@@ -2,6 +2,15 @@ import type { Dict } from "../translate";
 
 // English singular forms for sentences that carry {count}.
 export const en: Dict = {
+  "new posts since your last visit": { one: "new post since your last visit", other: "new posts since your last visit" },
+  "new posts today": { one: "new post today", other: "new posts today" },
+  "new posts": { one: "new post", other: "new posts" },
+  "open questions": { one: "open question", other: "open questions" },
+  "new members in {chapter}": { one: "new member in {chapter}", other: "new members in {chapter}" },
+  "new members this week": { one: "new member this week", other: "new members this week" },
+  "new members": { one: "new member", other: "new members" },
+  "celebrations this week": { one: "celebration this week", other: "celebrations this week" },
+  "celebrations": { one: "celebration", other: "celebrations" },
   "In the last {count} days": { one: "In the last day", other: "In the last {count} days" },
   "{count} upcoming events": { one: "{count} upcoming event", other: "{count} upcoming events" },
   "{count} more events loaded.": { one: "{count} more event loaded.", other: "{count} more events loaded." },
@@ -63,4 +72,6 @@ export const en: Dict = {
   "You have answered {answered} of {total} questions. The {count} you left blank will be marked wrong.": { one: "You have answered {answered} of {total} questions. The one you left blank will be marked wrong.", other: "You have answered {answered} of {total} questions. The {count} you left blank will be marked wrong." },
   "{count} questions are still marked for review.": { one: "{count} question is still marked for review.", other: "{count} questions are still marked for review." },
   "All {count} milestones done": { one: "{count} milestone done", other: "All {count} milestones done" },
+  "{count} new posts at the top of the feed": { one: "{count} new post at the top of the feed", other: "{count} new posts at the top of the feed" },
+  "{count} matches": { one: "{count} match", other: "{count} matches" },
 };

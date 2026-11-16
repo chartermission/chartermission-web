@@ -6,6 +6,8 @@ import type { WelcomeNudgeKind, WelcomeSummary } from "@chartermission/contracts
 import { Icon, buttonClasses, cn, type IconName } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import { formatCount } from "@/components/social/format";
+import { postHref } from "@/components/social/links";
+import { requestNewPosts } from "@/components/social/new-posts-request";
 import { postTypeMeta } from "@/components/social/post-types/meta";
 import { requestCompose } from "./compose-request";
 import { greetingFor, useDayPeriod, type DayPeriod } from "./day-period";
@@ -44,10 +46,22 @@ const nudgeIcon: Record<WelcomeNudgeKind, IconName> = {
   answer_question: postTypeMeta.question.icon,
 };
 
-/** `short` is the phone wording, where the strip has to stay compact. */
-type Stat = { key: string; count: number; text: string; short: string; href: string; icon: IconName };
+/**
+ * `short` is the phone wording, where the strip has to stay compact. `reveal` (new posts on the
+ * Latest feed) is the start of the window: the open feed shows them in place when it can.
+ */
+type Stat = { key: string; count: number; text: string; short: string; href: string; icon: IconName; reveal?: string };
 
-function statsOf(t: Translate, { stats, chapter, lastVisitAt }: WelcomeSummary): Stat[] {
+/** Where "N new posts" leads: the post itself when there is just one, else the Latest feed from `since`. */
+function newPostsTarget({ stats, lastVisitAt }: WelcomeSummary): { href: string; reveal?: string } {
+  if (stats.newPosts === 1 && stats.newPostId) return { href: postHref(stats.newPostId) };
+  const since = stats.newPostsSince || lastVisitAt;
+  if (!since) return { href: "/feed?tab=latest" };
+  return { href: `/feed?tab=latest&since=${encodeURIComponent(since)}`, reveal: since };
+}
+
+function statsOf(t: Translate, summary: WelcomeSummary): Stat[] {
+  const { stats, chapter, lastVisitAt } = summary;
   // The number is printed separately, before each phrase; it is passed only to pick singular or plural.
   const all: Stat[] = [
     {
@@ -55,7 +69,7 @@ function statsOf(t: Translate, { stats, chapter, lastVisitAt }: WelcomeSummary):
       count: stats.newPosts,
       text: lastVisitAt ? t("new posts since your last visit", { count: stats.newPosts }) : t("new posts today", { count: stats.newPosts }),
       short: t("new posts", { count: stats.newPosts }),
-      href: "/feed?tab=latest",
+      ...newPostsTarget(summary),
       icon: "message",
     },
     { key: "questions", count: stats.openQuestions, text: t("open questions", { count: stats.openQuestions }), short: t("open questions", { count: stats.openQuestions }), href: "/feed?type=question&unanswered=true", icon: postTypeMeta.question.icon },
@@ -101,6 +115,12 @@ export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
     if (nudge?.kind === "first_post" && !event.metaKey && !event.ctrlKey && !event.shiftKey && requestCompose()) event.preventDefault();
   }
 
+  function openNewPosts(event: MouseEvent<HTMLAnchorElement>, since: string) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    // Already on the Latest feed: it scrolls to the new posts and highlights them, no round trip.
+    if (requestNewPosts(since)) event.preventDefault();
+  }
+
   function hideNudge() {
     hideForToday(nudgeKey);
     setAnnouncement("Suggestion hidden until tomorrow");
@@ -135,9 +155,14 @@ export function WelcomeStrip({ summary }: { summary: WelcomeSummary }) {
             <p className="text-sm text-secondary max-sm:hidden">{intro}</p>
             {stats.length > 0 ? (
               <ul aria-label="Today in the community" className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-sm text-body max-sm:gap-x-3">
-                {stats.map((stat) => (
+                {stats.map(({ reveal, ...stat }) => (
                   <li key={stat.key}>
-                    <Link href={stat.href} className="group flex items-center gap-1.5 rounded-sm hover:text-primary-light">
+                    <Link
+                      href={stat.href}
+                      scroll={reveal ? false : undefined}
+                      onClick={reveal ? (event) => openNewPosts(event, reveal) : undefined}
+                      className="group flex items-center gap-1.5 rounded-sm hover:text-primary-light"
+                    >
                       <Icon name={stat.icon} size={15} className="shrink-0 text-secondary group-hover:text-primary-light" />
                       <span className="group-hover:underline">
                         <span className="font-semibold text-ink group-hover:text-primary-light">{formatCount(stat.count)}</span>{" "}

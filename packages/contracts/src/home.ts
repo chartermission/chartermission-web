@@ -34,6 +34,10 @@ export const WelcomeSummary = z.object({
   stats: z.object({
     /** Posts by others since lastVisitAt (last 24 hours on the first visit). */
     newPosts: z.number().int(),
+    /** When newPosts is 1: that post's id, so the strip can open it. Otherwise null. */
+    newPostId: z.string().uuid().nullable(),
+    /** The start of the "new posts" window (lastVisitAt, or 24 hours ago on the first visit), as the feed's `since`. */
+    newPostsSince: z.string(),
     /** Questions from the last 14 days with no accepted answer, not by the viewer. */
     openQuestions: z.number().int(),
     /** Members who joined in the last 7 days: in the viewer's chapter when they have one, otherwise everywhere. */

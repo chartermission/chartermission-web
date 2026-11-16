@@ -14,6 +14,8 @@ import { ConsultationFacts } from "./service-parts";
 
 /** Descriptions longer than this (or with several paragraphs) start clamped with "Show more". */
 const CLAMP_CHARS = 240;
+/** Skills shown on a compact card. */
+const COMPACT_SKILLS = 3;
 
 /**
  * One service: title, description (clamped, expandable), skills, rate note and, for consultations,
@@ -28,6 +30,7 @@ export function ServiceCard({
   clamp = true,
   headingLevel = 3,
   bare = false,
+  compact = false,
   className,
 }: {
   service: ServiceView;
@@ -41,6 +44,8 @@ export function ServiceCard({
   headingLevel?: 1 | 2 | 3;
   /** No border or padding: when the card sits inside another panel (the service's own page). */
   bare?: boolean;
+  /** Tighter card for a narrow side rail: smaller title and padding, the first few skills. */
+  compact?: boolean;
   className?: string;
 }) {
   const t = useT();
@@ -90,7 +95,7 @@ export function ServiceCard({
   }
 
   return (
-    <article aria-labelledby={`${id}-title`} className={cn("flex flex-col gap-3", !bare && "rounded-[10px] border border-line p-4", !bare && (service.active ? "bg-card" : "border-dashed bg-surface"), className)}>
+    <article aria-labelledby={`${id}-title`} className={cn("flex flex-col", compact ? "gap-2.5" : "gap-3", !bare && "rounded-[10px] border border-line", !bare && (compact ? "p-3.5" : "p-4"), !bare && (service.active ? "bg-card" : "border-dashed bg-surface"), className)}>
       <div className="flex items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -102,7 +107,7 @@ export function ServiceCard({
               </Chip>
             )}
           </div>
-          <Heading id={`${id}-title`} className={cn("text-ink", headingLevel === 1 ? "text-h1 max-sm:text-h2" : "text-h3")}>
+          <Heading id={`${id}-title`} className={cn("text-ink", headingLevel === 1 ? "text-h1 max-sm:text-h2" : compact ? "break-words text-md font-semibold" : "text-h3")}>
             {linkTitle ? (
               <Link href={serviceHref(service.id)} className="hover:underline">
                 {titleText}
@@ -137,13 +142,16 @@ export function ServiceCard({
 
       {service.skills.length > 0 && (
         <ul aria-label="Skills" className="flex flex-wrap gap-1.5">
-          {service.skills.map((skill) => (
+          {(compact ? service.skills.slice(0, COMPACT_SKILLS) : service.skills).map((skill) => (
             <li key={skill}>
-              <Chip tone="filter" className="py-1 text-xs">
+              <Chip tone="filter" className={cn("py-1 text-xs", compact && "max-w-full truncate")}>
                 <NoTranslate>{skill}</NoTranslate>
               </Chip>
             </li>
           ))}
+          {compact && service.skills.length > COMPACT_SKILLS && (
+            <li className="self-center text-xs text-secondary">{t("+{count} more", { count: service.skills.length - COMPACT_SKILLS })}</li>
+          )}
         </ul>
       )}
 

@@ -94,6 +94,52 @@ describe('Home: welcome strip and community moments', () => {
       expect((await welcome(viewer)).stats.newPosts).toBe(1);
     });
 
+    it('new posts: the window start, the single post id, and only posts the viewer can see', async () => {
+      const viewer = await createMember(t);
+      const friend = await createMember(t);
+      const blocked = await createMember(t);
+      const muted = await createMember(t);
+      const suspended = await createMember(t, { status: 'suspended' });
+      await block(t, viewer.id, blocked.id);
+      await t.db.insert(s.mutes).values({ userId: viewer.id, targetType: 'member', targetId: muted.id });
+
+      const before = Date.now();
+      const first = await welcome(viewer);
+      expect(first.stats).toMatchObject({ newPosts: 0, newPostId: null });
+      // First visit: the last 24 hours.
+      const firstSince = Date.parse(first.stats.newPostsSince);
+      expect(firstSince).toBeGreaterThanOrEqual(before - DAY - 1000);
+      expect(firstSince).toBeLessThanOrEqual(Date.now() - DAY + 1000);
+
+      // None of these count: members-only post of a blocked member, a muted member, a suspended
+      // author, a deleted post, one waiting for its media, one waiting for chapter approval, a hidden one.
+      await addPost(t, blocked.id, 'Members only, but blocked', { ago: H });
+      await addPost(t, muted.id, 'Muted', { ago: H });
+      await addPost(t, suspended.id, 'Suspended author', { ago: H });
+      const gone = await addPost(t, friend.id, 'Deleted', { ago: H });
+      await t.db.update(s.posts).set({ deletedAt: new Date() }).where(eq(s.posts.id, gone.id));
+      const pending = await addPost(t, friend.id, 'Video still processing', { ago: H });
+      await t.db.update(s.posts).set({ status: 'pending_media' }).where(eq(s.posts.id, pending.id));
+      const review = await addPost(t, friend.id, 'Waiting for the chapter', { ago: H });
+      await t.db.update(s.posts).set({ status: 'in_review' }).where(eq(s.posts.id, review.id));
+      await addPost(t, friend.id, 'Hidden', { ago: H, moderationState: 'hidden' });
+      await addPost(t, viewer.id, 'Mine', { ago: H });
+      expect((await welcome(viewer)).stats).toMatchObject({ newPosts: 0, newPostId: null });
+
+      const one = await addPost(t, friend.id, 'The only new one', { ago: H });
+      expect((await welcome(viewer)).stats).toMatchObject({ newPosts: 1, newPostId: one.id });
+      const another = await addPost(t, friend.id, 'And another', { ago: H / 2 });
+      expect((await welcome(viewer)).stats).toMatchObject({ newPosts: 2, newPostId: null });
+
+      // A later visit: the window starts at the previous visit.
+      const earlier = new Date(Date.now() - 40 * 60_000);
+      await setProfile(t, viewer.id, { homeSeenAt: earlier });
+      const back = await welcome(viewer);
+      expect(back.lastVisitAt).toBe(earlier.toISOString());
+      expect(back.stats.newPostsSince).toBe(earlier.toISOString());
+      expect(back.stats).toMatchObject({ newPosts: 1, newPostId: another.id });
+    });
+
     it('stats: open questions, new members in the chapter, celebrations', async () => {
       const viewer = await createMember(t);
       const asker = await createMember(t);

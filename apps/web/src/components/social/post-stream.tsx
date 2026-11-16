@@ -9,6 +9,7 @@ import { staggerStyle } from "@/components/motion";
 import { ErrorNotice } from "./errors";
 import { PostCard } from "./post-card";
 import type { MenuItem } from "./menu";
+import { onNewPostsRequest } from "./new-posts-request";
 import { onPostCreated, onPostRemoved } from "./post-events";
 import { PostSkeleton } from "./skeletons";
 import { toast } from "./toast";
@@ -45,6 +46,11 @@ function interleavedAt(interleave: StreamInterleave | undefined, position: numbe
 
 const newest = (posts: PostView[]) => posts.reduce<string | null>((max, p) => (!max || p.createdAt > max ? p.createdAt : max), null);
 
+/** Compare ISO times as instants (the API and the URL may write them differently). */
+const after = (iso: string, since: string) => Date.parse(iso) > Date.parse(since);
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 /**
  * Cursor-paginated list of posts from any endpoint that returns Page<PostView>
  * (GET /feed, /topics/{tag}/posts, /me/bookmarks). Server data comes in as `initial`.
@@ -54,6 +60,10 @@ const newest = (posts: PostView[]) => posts.reduce<string | null>((max, p) => (!
  *
  * With `newPostsPath` (the feed: "/feed/new"), it polls for newer posts every minute while
  * the tab is visible and offers a "See N new posts" pill that prepends them.
+ *
+ * `revealSince` and `revealRequests` serve the welcome strip's "N new posts since your last
+ * visit": the list scrolls into view, fetches the newest page, adds what's missing at the top,
+ * highlights every post newer than `since` and focuses the first.
  */
 export function PostStream({
   path,
@@ -68,6 +78,8 @@ export function PostStream({
   interleave,
   extraMenu,
   acceptCreated,
+  revealSince,
+  revealRequests = false,
 }: {
   path: string;
   query?: Query;
@@ -91,6 +103,10 @@ export function PostStream({
   extraMenu?: (post: PostView) => MenuItem[];
   /** With acceptNew: which newly created posts belong in this list (default: all). */
   acceptCreated?: (post: PostView) => boolean;
+  /** On mount: show the posts newer than this (the feed opened from "N new posts", ?since=). */
+  revealSince?: string;
+  /** Answer requestNewPosts() in place (the Latest feed, where those posts belong). */
+  revealRequests?: boolean;
 }) {
   const t = useT();
   const [posts, setPosts] = useState<PostView[]>(initial?.items ?? []);
@@ -211,6 +227,19 @@ export function PostStream({
     setCreated((current) => current.filter(keep));
   };
 
+  /**
+   * Scroll the top of the list into view, under the sticky top nav. Returns how long arriving
+   * cards should wait, so a long smooth scroll mostly finishes before they slide in.
+   */
+  const scrollToList = useCallback(() => {
+    const section = sectionRef.current;
+    if (!section) return 80;
+    const top = Math.max(0, section.getBoundingClientRect().top + window.scrollY - 88);
+    const delay = Math.round(Math.min(450, 80 + Math.abs(window.scrollY - top) / 6));
+    window.scrollTo({ top, behavior: reducedMotion() ? "auto" : "smooth" });
+    return delay;
+  }, []);
+
   /** Prepend the first page's new posts (from the pill), scroll to the top of the list and focus the first one. */
   const showNew = useCallback(
     async (since: string) => {
@@ -222,21 +251,68 @@ export function PostStream({
       const added = fresh.length ? fresh : unseen;
       const addedIds = new Set(added.map((p) => p.id));
       setPosts((current) => [...added, ...current.filter((p) => !addedIds.has(p.id))]);
-      const section = sectionRef.current;
-      const top = section ? Math.max(0, section.getBoundingClientRect().top + window.scrollY - 88) : 0;
-      // Let a long smooth scroll mostly finish before the cards slide in.
-      const delay = Math.round(Math.min(450, 80 + Math.abs(window.scrollY - top) / 6));
+      const delay = scrollToList();
       setEntrances((current) => ({ ...current, ...Object.fromEntries(added.map((p, order) => [p.id, { kind: "arrive", order, delay } as Entrance])) }));
       const first = added[0];
       setAnnouncement(added.length ? t("{count} new posts added to the top of the feed", { count: added.length }) : "No new posts");
-      if (section) {
-        window.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-      }
       if (first) requestAnimationFrame(() => focusPost(first.id));
       return added.length;
     },
-    [path, focusPost, t],
+    [path, focusPost, scrollToList, t],
   );
+
+  /**
+   * The welcome strip's "N new posts": scroll to the list, add the newest page's missing posts
+   * newer than `since` at the top, then highlight every post by others newer than `since` and
+   * focus the first one.
+   */
+  const reveal = useCallback(
+    async (since: string) => {
+      if (Number.isNaN(Date.parse(since))) return;
+      const delay = scrollToList();
+      setAnnouncement("Loading new posts");
+      let added: PostView[] = [];
+      try {
+        const page = await api<Page<PostView>>(path, { query: { ...queryRef.current } });
+        const shown = new Set(postsRef.current.map((p) => p.id));
+        added = page.items.filter((p) => !shown.has(p.id) && after(p.createdAt, since));
+      } catch (e) {
+        // What's already on screen still gets highlighted.
+        toast.error(e);
+      }
+      const addedIds = new Set(added.map((p) => p.id));
+      if (added.length) setPosts((current) => [...added, ...current.filter((p) => !addedIds.has(p.id))]);
+      const fresh = [...added, ...postsRef.current.filter((p) => !addedIds.has(p.id))].filter((p) => p.author.id !== viewer.id && after(p.createdAt, since));
+      setEntrances((current) => ({ ...current, ...Object.fromEntries(fresh.map((p, order) => [p.id, { kind: "arrive", order, delay } as Entrance])) }));
+      setAnnouncement(fresh.length ? t("{count} new posts at the top of the feed", { count: fresh.length }) : "No new posts since your last visit");
+      const first = fresh[0];
+      if (first) requestAnimationFrame(() => focusPost(first.id));
+    },
+    [path, focusPost, scrollToList, t, viewer.id],
+  );
+
+  // Opened from "N new posts" (?since=): once the page has settled, show them, then drop the
+  // parameter so reloading or sharing the address doesn't repeat it.
+  const revealed = useRef<string | null>(null);
+  useEffect(() => {
+    if (!revealSince || revealed.current === revealSince) return;
+    const frame = requestAnimationFrame(() => {
+      revealed.current = revealSince;
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("since") === revealSince) {
+        url.searchParams.delete("since");
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+      void reveal(revealSince);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [revealSince, reveal]);
+
+  // Already on the Latest feed: the strip asks this list directly instead of navigating.
+  useEffect(() => {
+    if (!revealRequests) return;
+    return onNewPostsRequest((since) => void reveal(since));
+  }, [revealRequests, reveal]);
 
   const since = newest(posts);
 
@@ -321,7 +397,11 @@ function NewPostsPill({
   const [busy, setBusy] = useState(false);
   // An empty list counts from when it was opened.
   const [openedAt] = useState(() => new Date().toISOString());
-  const since = newestShown ?? openedAt;
+  // After the pill is used, count from then: on ranked tabs the new posts may not be on the
+  // first page, so the newest post shown can stay the same and the pill would never go away.
+  const [shownAt, setShownAt] = useState<string | null>(null);
+  const base = newestShown ?? openedAt;
+  const since = shownAt && Date.parse(shownAt) > Date.parse(base) ? shownAt : base;
   const queryRef = useRef(query);
   const lastCheck = useRef(0);
   const sinceRef = useRef(since);
@@ -371,6 +451,7 @@ function NewPostsPill({
     setBusy(true);
     try {
       await onShow(since);
+      setShownAt(new Date().toISOString());
     } catch (e) {
       toast.error(e);
     } finally {

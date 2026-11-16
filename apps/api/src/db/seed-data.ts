@@ -88,20 +88,81 @@ export const COUNTRIES: [string, string, string][] = [
   ['EH', 'Western Sahara', 'North Africa'], ['YE', 'Yemen', 'Diaspora'], ['AX', 'Åland Islands', 'Diaspora'],
 ];
 
+/*
+ * Profile catalogues. seedReference() inserts them on every start (by slug, existing rows untouched),
+ * and each item's position is its index here: only ever append, so existing items keep their place.
+ * Forms show the first few up front and the rest behind "Show more", so the most widely useful
+ * additions come first. Names must give distinct slugs (seed.ts slug()).
+ */
+/** The slug a catalogue item is stored under (seedReference): lowercase, & as "and", other symbols as hyphens. */
+export const taxonomySlug = (v: string) => v.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
 export const SECTORS = [
   'Agriculture & food', 'Climate & energy', 'Education', 'Finance & fintech', 'Health', 'Technology',
   'Trade & logistics', 'Creative industries', 'Public policy', 'Infrastructure', 'Manufacturing', 'Social impact',
+  // Added Nov 2026.
+  'Professional services', 'Media & communications', 'Real estate & construction', 'Telecommunications',
+  'Mining & natural resources', 'Oil & gas', 'Tourism & hospitality', 'Retail & e-commerce',
+  'International development', 'Legal services', 'Transport & mobility', 'Consumer goods',
+  'Pharmaceuticals & life sciences', 'Research & academia', 'Water & sanitation', 'Environment & conservation',
+  'Fisheries & blue economy', 'Sports', 'Diplomacy & international affairs',
 ];
 export const SKILLS = [
   'Product management', 'Software engineering', 'Data analysis', 'Design', 'Marketing', 'Sales',
   'Fundraising', 'Policy research', 'Project management', 'Supply chain', 'Solar', 'Grid finance',
   'Partnerships', 'M&E', 'Public speaking', 'Mentoring', 'Legal', 'Accounting',
+  // Added Nov 2026: widely used skills first, then by field (tech and data, finance, law, health,
+  // agriculture, energy and climate, trade, engineering, creative, policy and education).
+  'Leadership', 'Strategy', 'Business development', 'Communications', 'Entrepreneurship', 'Negotiation', 'Research',
+  'Writing', 'Financial analysis', 'Digital marketing', 'Operations management', 'Team management',
+  'Stakeholder engagement', 'Data science', 'Machine learning', 'Web development', 'Mobile development',
+  'Cybersecurity', 'Cloud computing', 'Grant writing', 'Investment analysis', 'Financial modelling',
+  'Training & facilitation', 'Coaching', 'Community organising', 'Event management', 'Human resources',
+  'Recruitment', 'Public relations', 'Social media management', 'Content creation', 'Customer service', 'Teaching',
+  'Public health', 'Procurement', 'Python', 'JavaScript', 'SQL', 'Artificial intelligence', 'Data engineering',
+  'Data visualisation', 'Statistics', 'Excel', 'DevOps', 'User research', 'GIS & mapping', 'Agile delivery',
+  'Business analysis', 'Survey design', 'Corporate finance', 'Financial reporting', 'Auditing', 'Tax',
+  'Risk management', 'Compliance', 'Due diligence', 'Venture capital', 'Private equity', 'Impact investing',
+  'Microfinance', 'Payments', 'Credit analysis', 'Budgeting', 'Public financial management', 'Trade finance',
+  'Blended finance', 'Contract drafting', 'Corporate law', 'Intellectual property', 'Dispute resolution',
+  'Data protection & privacy', 'Epidemiology', 'Clinical research', 'Nursing', 'Pharmacy', 'Health informatics',
+  'Health policy', 'Maternal & child health', 'Nutrition', 'Counselling', 'Agronomy',
+  'Agribusiness', 'Value chain development', 'Climate-smart agriculture', 'Irrigation', 'Livestock management',
+  'Aquaculture', 'Food processing', 'Food safety', 'Renewable energy', 'Energy efficiency', 'Mini-grids',
+  'Power systems engineering', 'Energy policy', 'Climate adaptation', 'Carbon markets', 'ESG',
+  'Environmental impact assessment', 'Water resources management', 'Waste management', 'Import & export',
+  'Customs & trade compliance', 'Freight forwarding', 'Cold chain', 'Market research', 'Civil engineering',
+  'Electrical engineering', 'Mechanical engineering', 'Architecture', 'Urban planning', 'Construction management',
+  'Quantity surveying', 'Geology', 'Graphic design', 'Brand strategy', 'Journalism', 'Photography',
+  'Video production', 'Music production', 'Fashion design', 'Translation & interpreting', 'Advocacy', 'Governance',
+  'Public administration', 'Economics', 'Trade policy', 'Diplomacy', 'Legislative drafting', 'Peacebuilding',
+  'Humanitarian response', 'Gender mainstreaming', 'Programme design', 'Curriculum design', 'E-learning',
+  'Early childhood education', 'Career guidance', 'Change management',
 ];
 export const INTERESTS = [
   'AfCFTA and trade', 'Diaspora investment', 'Clean cooking', 'Youth employment', 'Women in leadership',
   'AgriTech', 'Fintech', 'African tech', 'Climate action', 'Health tech', 'Education access', 'Creative economy',
+  // Added Nov 2026.
+  'Entrepreneurship', 'Artificial intelligence', 'Mentorship', 'Renewable energy', 'Venture capital',
+  'Impact investing', 'Pan-Africanism', 'Career development', 'Leadership development', 'Food security',
+  'Public health', 'Digital inclusion', 'Small business', 'Gender equality', 'Diaspora return', 'Remittances',
+  'Infrastructure finance', 'Smart cities', 'Affordable housing', 'Water access', 'Mental health',
+  'Maternal health', 'EdTech', 'Scholarships and study abroad', 'Youth leadership', 'STEM education',
+  'Social enterprise', 'Philanthropy', 'Volunteering', 'Governance and accountability', 'Democracy and elections',
+  'Human rights', 'Peace and security', 'Migration and refugees', 'Disability inclusion', 'E-commerce',
+  'Blockchain and crypto', 'Space technology', 'Circular economy', 'Conservation and wildlife', 'Ocean economy',
+  'Industrialisation', 'Mining and minerals', 'Energy access', 'Capital markets', 'Media and journalism',
+  'Film and television', 'Music', 'Fashion', 'Visual arts', 'Sports', 'Tourism and travel', 'African history',
+  'Heritage and culture', 'African languages', 'Science and research',
 ];
-export const LANGUAGES = ['English', 'French', 'Arabic', 'Portuguese', 'Swahili', 'Hausa', 'Yoruba', 'Igbo', 'Amharic', 'Zulu', 'Wolof', 'Twi'];
+export const LANGUAGES = [
+  'English', 'French', 'Arabic', 'Portuguese', 'Swahili', 'Hausa', 'Yoruba', 'Igbo', 'Amharic', 'Zulu', 'Wolof', 'Twi',
+  // Added Nov 2026: major African languages and the main languages of diaspora host countries.
+  'Spanish', 'German', 'Somali', 'Oromo', 'Afrikaans', 'Xhosa', 'Lingala', 'Kinyarwanda', 'Shona', 'Fula',
+  'Tigrinya', 'Nigerian Pidgin', 'Luganda', 'Malagasy', 'Tamazight', 'Mandarin Chinese', 'Italian', 'Dutch',
+  'Bambara', 'Ewe', 'Sesotho', 'Setswana', 'Kirundi', 'Kikuyu', 'Chichewa', 'Kikongo', 'Ga', 'Krio', 'Luo', 'Bemba',
+  'Sepedi', 'Haitian Creole', 'Turkish',
+];
 
 /** Event categories (reference data, GET /events/categories), in display order. */
 export const EVENT_CATEGORIES = ['Conference', 'Workshop', 'Webinar', 'Meet-up', 'Networking', 'Hackathon', 'Panel', 'Training'];
@@ -279,17 +340,20 @@ export type SeedMember = {
   organisation?: string;
   /** Account age at seed time (the home feed's "new members" use the join date). */
   joinedDaysAgo: number;
-  /** Sector names from SECTORS. */
+  /** Profile selections, by name from SECTORS, SKILLS, INTERESTS and LANGUAGES (the seed rejects unknown names). */
   sectors?: string[];
+  skills?: string[];
+  interests?: string[];
+  languages?: string[];
 };
 
 /** Demo accounts for development and staging. All share DEMO_PASSWORD. */
 export const DEMO_PASSWORD = 'CharterMission@123';
 
 export const MEMBERS: SeedMember[] = [
-  { key: 'owais', name: 'Owais Iqbal', handle: 'owais-iqbal', email: 'owais@example.com', headline: 'Founder · Dubai, UAE', country: 'AE', city: 'Dubai', tone: 'primary', organisation: 'HyseTech Software Design', joinedDaysAgo: 420, sectors: ['Technology'] },
+  { key: 'owais', name: 'Owais Iqbal', handle: 'owais-iqbal', email: 'owais@example.com', headline: 'Founder · Dubai, UAE', country: 'AE', city: 'Dubai', tone: 'primary', organisation: 'HyseTech Software Design', joinedDaysAgo: 420, sectors: ['Technology', 'Professional services'], skills: ['Leadership', 'Strategy', 'Entrepreneurship', 'Business development', 'Software engineering', 'Product management', 'Cloud computing', 'Cybersecurity', 'Artificial intelligence', 'DevOps', 'Negotiation'], interests: ['African tech', 'Artificial intelligence', 'Entrepreneurship', 'Diaspora investment', 'Digital inclusion'], languages: ['English', 'Arabic'] },
   { key: 'team', name: 'Charter Mission', handle: 'charter-mission', email: 'team@example.com', headline: 'Official platform team', country: 'GB', city: 'London', tone: 'primary', verified: true, joinedDaysAgo: 480 },
-  { key: 'aisha', name: 'Aisha Mohammed', handle: 'aisha-mohammed', email: 'aisha@example.com', headline: 'Community organiser', country: 'NG', city: 'Abuja', tone: 'info', joinedDaysAgo: 300 },
+  { key: 'aisha', name: 'Aisha Mohammed', handle: 'aisha-mohammed', email: 'aisha@example.com', headline: 'Community organiser', country: 'NG', city: 'Abuja', tone: 'info', joinedDaysAgo: 300, sectors: ['Social impact', 'Public policy'], skills: ['Community organising', 'Advocacy', 'Event management', 'Public speaking', 'Stakeholder engagement', 'Training & facilitation', 'Fundraising', 'Social media management'], interests: ['Youth leadership', 'Women in leadership', 'Governance and accountability', 'Volunteering', 'Democracy and elections'], languages: ['English', 'Hausa', 'Nigerian Pidgin'] },
   // A spam account whose posts, comment and story are reported: the Moderator's demo queue (seed-moderation.ts).
   { key: 'spammer', name: 'Easy Profits Hub', handle: 'easy-profits-hub', email: 'promo@example.com', headline: 'Daily crypto signals', country: 'NG', city: 'Lagos', tone: 'warning', joinedDaysAgo: 20 },
   // Staff accounts (admin console). Two-step verification is mandatory for them: the seed presets a known
@@ -299,17 +363,17 @@ export const MEMBERS: SeedMember[] = [
   { key: 'platformAdmin', name: 'Platform Admin', handle: 'cm-platform-admin', email: 'platform-admin@chartermission.com', headline: 'Charter Mission platform team', country: 'GB', city: 'London', tone: 'primary', staff: true, roles: ['platform_admin'], joinedDaysAgo: 490 },
   { key: 'moderator', name: 'Moderator', handle: 'cm-moderator', email: 'moderator@chartermission.com', headline: 'Charter Mission moderation team', country: 'NG', city: 'Abuja', tone: 'info', staff: true, roles: ['moderator'], joinedDaysAgo: 320 },
   { key: 'ambManager', name: 'Ambassador Manager', handle: 'cm-ambassador-manager', email: 'amb-manager@chartermission.com', headline: 'Ambassador programme, Charter Mission', country: 'NG', city: 'Lagos', tone: 'accent', staff: true, joinedDaysAgo: 200 },
-  { key: 'amara', name: 'Amara Okafor', handle: 'amara-okafor', email: 'amara@example.com', headline: 'Founder, Lagos AgriHub', country: 'NG', city: 'Lagos', tone: 'accent', verified: true, organisation: 'Lagos AgriHub', bio: 'Agronomist turned founder. Lagos AgriHub connects 4,000+ smallholder farmers to cold storage and export buyers in Ghana, Côte d’Ivoire and the UK.', joinedDaysAgo: 260, sectors: ['Agriculture & food', 'Trade & logistics'] },
-  { key: 'kwame', name: 'Kwame Mensah', handle: 'kwame-mensah', email: 'kwame@example.com', headline: 'Product Lead, PayBridge', country: 'GH', city: 'Accra', tone: 'success', verified: true, organisation: 'PayBridge', bio: 'Product lead at PayBridge, building cross-border settlement for small exporters. Ten years in payments across Accra, Lagos and Nairobi; always happy to talk mobile money interoperability.', joinedDaysAgo: 240, sectors: ['Finance & fintech', 'Technology'] },
-  { key: 'wanjiru', name: 'Wanjiru Kamau', handle: 'wanjiru-kamau', email: 'wanjiru@example.com', headline: 'Climate Policy Analyst', country: 'KE', city: 'Nairobi', tone: 'info', bio: 'Climate policy analyst tracking adaptation finance at county level. I co-organise the Kenya chapter’s clean-cooking work in Nairobi and love a good budget spreadsheet.', joinedDaysAgo: 210, sectors: ['Climate & energy', 'Public policy'] },
-  { key: 'leila', name: 'Leila Benali', handle: 'leila-benali', email: 'leila@example.com', headline: 'Trade Economist', country: 'MA', city: 'Casablanca', tone: 'info', verified: true, bio: 'Trade economist specialising in rules of origin. I translate AfCFTA legal texts into checklists exporters can actually use.', joinedDaysAgo: 190, sectors: ['Trade & logistics', 'Public policy'] },
-  { key: 'thabo', name: 'Thabo Nkosi', handle: 'thabo-nkosi', email: 'thabo@example.com', headline: 'Renewable energy engineer', country: 'ZA', city: 'Johannesburg', tone: 'warning', organisation: 'GreenGrid Africa', bio: 'Engineer and co-founder at GreenGrid Africa. We design solar micro-grids for villages and clinics, and train young installers along the way.', joinedDaysAgo: 170, sectors: ['Climate & energy', 'Infrastructure'] },
-  { key: 'fatou', name: 'Fatou Diallo', handle: 'fatou-diallo', email: 'fatou@example.com', headline: 'Fintech investor', country: 'SN', city: 'Dakar', tone: 'accent', bio: 'Early-stage investor backing West African fintech and women-led funds. Office hours every Thursday for founders raising their first round.', joinedDaysAgo: 150, sectors: ['Finance & fintech', 'Social impact'] },
-  { key: 'yohannes', name: 'Yohannes Tesfaye', handle: 'yohannes-tesfaye', email: 'yohannes@example.com', headline: 'Health-tech founder', country: 'ET', city: 'Addis Ababa', tone: 'info', bio: 'Founder of an offline-first clinic records app used in 60 health centres across Ethiopia. Previously a hospital pharmacist.', joinedDaysAgo: 120, sectors: ['Health', 'Technology'] },
-  { key: 'chinedu', name: 'Chinedu Eze', handle: 'chinedu-eze', email: 'chinedu@example.com', headline: 'Product Designer', country: 'GB', city: 'London', tone: 'success', bio: 'Product designer in London working on tools for African exporters. Interested in design systems for low-bandwidth products and African languages.', joinedDaysAgo: 90, sectors: ['Technology', 'Creative industries'] },
+  { key: 'amara', name: 'Amara Okafor', handle: 'amara-okafor', email: 'amara@example.com', headline: 'Founder, Lagos AgriHub', country: 'NG', city: 'Lagos', tone: 'accent', verified: true, organisation: 'Lagos AgriHub', bio: 'Agronomist turned founder. Lagos AgriHub connects 4,000+ smallholder farmers to cold storage and export buyers in Ghana, Côte d’Ivoire and the UK.', joinedDaysAgo: 260, sectors: ['Agriculture & food', 'Trade & logistics', 'Social impact'], skills: ['Agronomy', 'Agribusiness', 'Entrepreneurship', 'Value chain development', 'Cold chain', 'Import & export', 'Supply chain', 'Food safety', 'Fundraising', 'Partnerships', 'Leadership'], interests: ['AgriTech', 'AfCFTA and trade', 'Food security', 'Entrepreneurship', 'Women in leadership', 'Small business'], languages: ['English', 'Igbo', 'Yoruba', 'Nigerian Pidgin'] },
+  { key: 'kwame', name: 'Kwame Mensah', handle: 'kwame-mensah', email: 'kwame@example.com', headline: 'Product Lead, PayBridge', country: 'GH', city: 'Accra', tone: 'success', verified: true, organisation: 'PayBridge', bio: 'Product lead at PayBridge, building cross-border settlement for small exporters. Ten years in payments across Accra, Lagos and Nairobi; always happy to talk mobile money interoperability.', joinedDaysAgo: 240, sectors: ['Finance & fintech', 'Technology'], skills: ['Product management', 'Payments', 'Strategy', 'User research', 'Data analysis', 'Business analysis', 'Agile delivery', 'SQL', 'Compliance', 'Stakeholder engagement', 'Team management', 'Leadership'], interests: ['Fintech', 'AfCFTA and trade', 'Remittances', 'Digital inclusion', 'African tech', 'Small business'], languages: ['English', 'Twi', 'Ga', 'French'] },
+  { key: 'wanjiru', name: 'Wanjiru Kamau', handle: 'wanjiru-kamau', email: 'wanjiru@example.com', headline: 'Climate Policy Analyst', country: 'KE', city: 'Nairobi', tone: 'info', bio: 'Climate policy analyst tracking adaptation finance at county level. I co-organise the Kenya chapter’s clean-cooking work in Nairobi and love a good budget spreadsheet.', joinedDaysAgo: 210, sectors: ['Climate & energy', 'Public policy', 'International development'], skills: ['Policy research', 'Climate adaptation', 'Public financial management', 'Budgeting', 'Data analysis', 'Excel', 'Energy policy', 'M&E', 'Research', 'Writing', 'Advocacy', 'Stakeholder engagement'], interests: ['Climate action', 'Clean cooking', 'Energy access', 'Governance and accountability', 'Gender equality'], languages: ['English', 'Swahili', 'Kikuyu'] },
+  { key: 'leila', name: 'Leila Benali', handle: 'leila-benali', email: 'leila@example.com', headline: 'Trade Economist', country: 'MA', city: 'Casablanca', tone: 'info', verified: true, bio: 'Trade economist specialising in rules of origin. I translate AfCFTA legal texts into checklists exporters can actually use.', joinedDaysAgo: 190, sectors: ['Trade & logistics', 'Public policy', 'Research & academia'], skills: ['Economics', 'Trade policy', 'Policy research', 'Customs & trade compliance', 'Import & export', 'Research', 'Statistics', 'Data analysis', 'Legislative drafting', 'Writing', 'Public speaking'], interests: ['AfCFTA and trade', 'Pan-Africanism', 'Industrialisation', 'Small business', 'Governance and accountability'], languages: ['Arabic', 'French', 'English', 'Tamazight'] },
+  { key: 'thabo', name: 'Thabo Nkosi', handle: 'thabo-nkosi', email: 'thabo@example.com', headline: 'Renewable energy engineer', country: 'ZA', city: 'Johannesburg', tone: 'warning', organisation: 'GreenGrid Africa', bio: 'Engineer and co-founder at GreenGrid Africa. We design solar micro-grids for villages and clinics, and train young installers along the way.', joinedDaysAgo: 170, sectors: ['Climate & energy', 'Infrastructure'], skills: ['Solar', 'Mini-grids', 'Renewable energy', 'Power systems engineering', 'Electrical engineering', 'Energy efficiency', 'Grid finance', 'Project management', 'Construction management', 'Entrepreneurship', 'Training & facilitation', 'Mentoring'], interests: ['Energy access', 'Renewable energy', 'Climate action', 'Youth employment', 'STEM education'], languages: ['English', 'Zulu', 'Afrikaans', 'Sesotho'] },
+  { key: 'fatou', name: 'Fatou Diallo', handle: 'fatou-diallo', email: 'fatou@example.com', headline: 'Fintech investor', country: 'SN', city: 'Dakar', tone: 'accent', bio: 'Early-stage investor backing West African fintech and women-led funds. Office hours every Thursday for founders raising their first round.', joinedDaysAgo: 150, sectors: ['Finance & fintech', 'Social impact'], skills: ['Venture capital', 'Impact investing', 'Investment analysis', 'Due diligence', 'Financial modelling', 'Corporate finance', 'Payments', 'Fundraising', 'Negotiation', 'Mentoring', 'Coaching'], interests: ['Fintech', 'Venture capital', 'Impact investing', 'Women in leadership', 'Gender equality', 'Diaspora investment', 'Entrepreneurship'], languages: ['French', 'Wolof', 'English'] },
+  { key: 'yohannes', name: 'Yohannes Tesfaye', handle: 'yohannes-tesfaye', email: 'yohannes@example.com', headline: 'Health-tech founder', country: 'ET', city: 'Addis Ababa', tone: 'info', bio: 'Founder of an offline-first clinic records app used in 60 health centres across Ethiopia. Previously a hospital pharmacist.', joinedDaysAgo: 120, sectors: ['Health', 'Technology'], skills: ['Health informatics', 'Pharmacy', 'Public health', 'Health policy', 'Product management', 'Software engineering', 'Mobile development', 'Entrepreneurship', 'Fundraising', 'Leadership'], interests: ['Health tech', 'Public health', 'Maternal health', 'Digital inclusion', 'African tech'], languages: ['Amharic', 'English', 'Oromo'] },
+  { key: 'chinedu', name: 'Chinedu Eze', handle: 'chinedu-eze', email: 'chinedu@example.com', headline: 'Product Designer', country: 'GB', city: 'London', tone: 'success', bio: 'Product designer in London working on tools for African exporters. Interested in design systems for low-bandwidth products and African languages.', joinedDaysAgo: 90, sectors: ['Technology', 'Creative industries'], skills: ['Design', 'User research', 'Graphic design', 'Brand strategy', 'Product management', 'Web development', 'JavaScript', 'Mobile development', 'Public speaking', 'Mentoring'], interests: ['African tech', 'Creative economy', 'African languages', 'Digital inclusion', 'Diaspora investment', 'Visual arts'], languages: ['English', 'Igbo'] },
   // Joined in the last fortnight: the home feed's "new members" card and welcome stats.
-  { key: 'tunde', name: 'Tunde Bakare', handle: 'tunde-bakare', email: 'tunde@example.com', headline: 'Cold-chain logistics engineer', country: 'NG', city: 'Lagos', tone: 'warning', organisation: 'ColdLink NG', bio: 'Logistics engineer keeping produce cold from farm gate to port. Five years running reefer fleets in Lagos and Ogun; now building shared cold rooms for co-ops.', joinedDaysAgo: 2, sectors: ['Agriculture & food', 'Trade & logistics'] },
-  { key: 'ngozi', name: 'Ngozi Adebayo', handle: 'ngozi-adebayo', email: 'ngozi@example.com', headline: 'Youth employment programme lead', country: 'NG', city: 'Lagos', tone: 'success', bio: 'I run paid apprenticeship programmes that place young people in agribusiness and logistics roles across Lagos State. Always looking for host employers.', joinedDaysAgo: 5, sectors: ['Education', 'Social impact'] },
-  { key: 'kofi', name: 'Kofi Asante', handle: 'kofi-asante', email: 'kofi@example.com', headline: 'Solar mini-grid developer', country: 'GH', city: 'Kumasi', tone: 'accent', bio: 'Developing solar mini-grids for market towns in the Ashanti region. Interested in productive-use financing and pay-as-you-go models.', joinedDaysAgo: 7, sectors: ['Climate & energy'] },
-  { key: 'zainab', name: 'Zainab Abdi', handle: 'zainab-abdi', email: 'zainab@example.com', headline: 'Health data scientist', country: 'KE', city: 'Nairobi', tone: 'info', bio: 'Data scientist working on maternal health dashboards for county health teams. I like turning messy clinic data into decisions.', joinedDaysAgo: 9, sectors: ['Health', 'Technology'] },
+  { key: 'tunde', name: 'Tunde Bakare', handle: 'tunde-bakare', email: 'tunde@example.com', headline: 'Cold-chain logistics engineer', country: 'NG', city: 'Lagos', tone: 'warning', organisation: 'ColdLink NG', bio: 'Logistics engineer keeping produce cold from farm gate to port. Five years running reefer fleets in Lagos and Ogun; now building shared cold rooms for co-ops.', joinedDaysAgo: 2, sectors: ['Agriculture & food', 'Trade & logistics'], skills: ['Cold chain', 'Supply chain', 'Operations management', 'Freight forwarding', 'Mechanical engineering', 'Procurement', 'Food safety', 'Project management', 'Team management'], interests: ['AgriTech', 'Food security', 'AfCFTA and trade', 'Small business'], languages: ['English', 'Yoruba', 'Nigerian Pidgin'] },
+  { key: 'ngozi', name: 'Ngozi Adebayo', handle: 'ngozi-adebayo', email: 'ngozi@example.com', headline: 'Youth employment programme lead', country: 'NG', city: 'Lagos', tone: 'success', bio: 'I run paid apprenticeship programmes that place young people in agribusiness and logistics roles across Lagos State. Always looking for host employers.', joinedDaysAgo: 5, sectors: ['Education', 'Social impact'], skills: ['Programme design', 'Career guidance', 'Training & facilitation', 'Recruitment', 'Human resources', 'Partnerships', 'Stakeholder engagement', 'Community organising', 'M&E', 'Fundraising', 'Mentoring'], interests: ['Youth employment', 'Career development', 'Education access', 'Women in leadership', 'Social enterprise'], languages: ['English', 'Yoruba', 'Igbo'] },
+  { key: 'kofi', name: 'Kofi Asante', handle: 'kofi-asante', email: 'kofi@example.com', headline: 'Solar mini-grid developer', country: 'GH', city: 'Kumasi', tone: 'accent', bio: 'Developing solar mini-grids for market towns in the Ashanti region. Interested in productive-use financing and pay-as-you-go models.', joinedDaysAgo: 7, sectors: ['Climate & energy', 'Infrastructure'], skills: ['Mini-grids', 'Solar', 'Renewable energy', 'Grid finance', 'Financial modelling', 'Project management', 'Business development', 'Stakeholder engagement'], interests: ['Energy access', 'Renewable energy', 'Climate action', 'Infrastructure finance'], languages: ['English', 'Twi'] },
+  { key: 'zainab', name: 'Zainab Abdi', handle: 'zainab-abdi', email: 'zainab@example.com', headline: 'Health data scientist', country: 'KE', city: 'Nairobi', tone: 'info', bio: 'Data scientist working on maternal health dashboards for county health teams. I like turning messy clinic data into decisions.', joinedDaysAgo: 9, sectors: ['Health', 'Technology'], skills: ['Data science', 'Data analysis', 'Python', 'SQL', 'Statistics', 'Data visualisation', 'Machine learning', 'Epidemiology', 'Maternal & child health', 'Health informatics', 'Survey design'], interests: ['Health tech', 'Maternal health', 'Public health', 'Artificial intelligence', 'Gender equality'], languages: ['English', 'Swahili', 'Somali'] },
 ];

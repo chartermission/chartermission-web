@@ -59,7 +59,10 @@ describe('Learning: e-learning access rules', () => {
     expect(a).toMatchObject({ unlocked: false, reason: 'locked' });
     expect(a.requirements.map((r) => r.key)).toEqual(['profile_info', 'photo', 'cover_photo', 'chapter', 'posts', 'connections']);
     expect(a.requirements.find((r) => r.key === 'connections')).toMatchObject({ done: false, current: 0, target: 50 });
-    expect(a.requirements.find((r) => r.key === 'profile_info')!.missing).toEqual(expect.arrayContaining(['Headline', 'About']));
+    // The same fields, labels and order as before profile completeness was weighted: no intro video, no cover.
+    expect(a.requirements.find((r) => r.key === 'profile_info')!.missing).toEqual([
+      'Headline', 'City', 'About', 'Organisation', 'Skills', 'Sectors', 'Interests', 'Languages', 'Experience',
+    ]);
 
     for (const url of ['/learning', '/courses', '/courses/carbon-finance-fundamentals', '/learning/paths/from-idea-to-first-export']) {
       expect((await m.get(url).expect(403)).body.error.code).toBe('LEARNING_LOCKED');
@@ -73,6 +76,10 @@ describe('Learning: e-learning access rules', () => {
     const m = await createMember(t, { name: 'Busy Member' });
 
     await fillProfile(m);
+    // The profile rule is met without an intro video or cover photo, though completeness counts them.
+    const filled = (await m.get('/me/profile').expect(200)).body as OwnProfile;
+    expect(filled.completeness.missing).toEqual(expect.arrayContaining(['introVideo', 'cover', 'avatar']));
+    expect((await access(m)).requirements.find((r) => r.key === 'profile_info')).toMatchObject({ done: true, missing: [] });
     await m.patch('/me/profile', { avatarFileId: await cleanFile(m.id, 'avatar') }).expect(200);
     // A cover photo must be the member's own profile_cover upload.
     await m.patch('/me/profile', { coverFileId: await cleanFile(m.id, 'avatar') }).expect(422);

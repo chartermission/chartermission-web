@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { SERVICES_MAX_PER_HOST, type AvailabilityView, type ServiceHost, type ServiceView } from "@chartermission/contracts";
-import { Button, Icon, Panel } from "@chartermission/ui";
+import { Button, Icon, Panel, cn } from "@chartermission/ui";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
 import { Menu, type MenuItem } from "@/components/social/menu";
 import { toast } from "@/components/social/toast";
@@ -26,14 +26,22 @@ export function ServicesSection({
   services,
   canManage,
   signedIn = true,
+  compact = false,
 }: {
   host: ServiceHost;
   services: ServiceView[];
   canManage: boolean;
   /** False for visitors who aren't signed in (they're offered sign in instead of Message / Enquire). */
   signedIn?: boolean;
+  /**
+   * Narrow layout for a 320px side rail (the profile's right rail). It carries no #services
+   * anchor: the full-width copy in the main column (shown on smaller screens) keeps it.
+   */
+  compact?: boolean;
 }) {
   const t = useT();
+  const compactId = useId();
+  const headingId = compact ? `${compactId}-heading` : "services-heading";
   const router = useRouter();
   const [list, setList] = useState(() => sortServices(services));
   const [prop, setProp] = useState(services);
@@ -120,9 +128,9 @@ export function ServicesSection({
   const canAdd = canManage && list.length < SERVICES_MAX_PER_HOST;
 
   return (
-    <Panel id="services" aria-labelledby="services-heading" className="flex scroll-mt-24 flex-col gap-4 p-5">
+    <Panel id={compact ? undefined : "services"} aria-labelledby={headingId} className={cn("flex scroll-mt-24 flex-col p-5", compact ? "gap-3" : "gap-4")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="services-heading" className="text-h3 text-ink">
+        <h2 id={headingId} className="text-h3 text-ink">
           Services
         </h2>
         {canManage && list.length > 0 && (
@@ -146,7 +154,7 @@ export function ServicesSection({
       )}
 
       {canManage && list.length === 0 ? (
-        <div className="flex flex-col items-start gap-3 rounded-[10px] border border-dashed border-line-strong px-4 py-5">
+        <div className={cn("flex flex-col items-start gap-3 rounded-[10px] border border-dashed border-line-strong", compact ? "px-3.5 py-4" : "px-4 py-5")}>
           <p className="text-sm text-body">
             {pageHost
               ? "List what the page offers. Visitors can book a free consultation or send an enquiry."
@@ -161,7 +169,7 @@ export function ServicesSection({
         <ul className="flex flex-col gap-3">
           {shown.map((service) => (
             <li key={service.id}>
-              <ServiceCard service={service} signedIn={signedIn} menu={canManage ? menuFor(service, list.indexOf(service)) : undefined} />
+              <ServiceCard service={service} signedIn={signedIn} compact={compact} menu={canManage ? menuFor(service, list.indexOf(service)) : undefined} />
             </li>
           ))}
         </ul>

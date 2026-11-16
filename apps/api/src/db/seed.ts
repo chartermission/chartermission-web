@@ -4,7 +4,6 @@ import { createDb, createPool, type Db } from './client.js';
 import * as s from './schema.js';
 import {
   BADGES,
-  CHAPTERS,
   CHAPTERS_PHOTO_VERSION,
   CHAPTERS_PROFILE_VERSION,
   chapterSets,
@@ -19,6 +18,7 @@ import {
   MEMBERS,
   SECTORS,
   SKILLS,
+  taxonomySlug as slug,
   type SeedContext,
 } from './seed-data.js';
 import { seedEvents } from './seed-events.js';
@@ -40,7 +40,6 @@ import { DEFAULT_FIELD_VISIBILITY } from '@chartermission/contracts';
 import { isMain } from './is-main.js';
 import { chapterDefaults } from '../chapters/chapter-defaults.js';
 
-const slug = (v: string) => v.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 export async function seedReference(db: Db) {
   await db.insert(s.countries).values(COUNTRIES.map(([code, name, region]) => ({ code, name, region }))).onConflictDoNothing();
@@ -91,7 +90,7 @@ const SEEDS_KEY = 'reference_seeds';
  */
 async function seedCatalogues(db: Db) {
   const [row] = await db.select({ value: s.platformSettings.value }).from(s.platformSettings).where(eq(s.platformSettings.key, SEEDS_KEY));
-  const done = { ...((row?.value as Record<string, number> | undefined) ?? {}) };
+  const done: Record<string, number> = { ...(row?.value as Record<string, number> | undefined) };
   const due = (k: keyof typeof REFERENCE_SEED_VERSIONS) => (done[k] ?? 0) < REFERENCE_SEED_VERSIONS[k];
 
   if (due('chapters')) {
@@ -210,7 +209,15 @@ export async function seedMembers(db: Db): Promise<Record<string, string>> {
   const ids: Record<string, string> = {};
   const roleRows = await db.select().from(s.roles);
   const versions = SETTING_DEFAULTS.policy_versions;
-  const sectorRows = await db.select({ id: s.sectors.id, name: s.sectors.name }).from(s.sectors);
+  const catalogues = [
+    { field: 'sectors', items: s.sectors, join: s.profileSectors },
+    { field: 'skills', items: s.skills, join: s.profileSkills },
+    { field: 'interests', items: s.interests, join: s.profileInterests },
+    { field: 'languages', items: s.languages, join: s.profileLanguages },
+  ] as const;
+  const idsByName = await Promise.all(
+    catalogues.map(async (c) => new Map((await db.select({ id: c.items.id, name: c.items.name }).from(c.items)).map((r) => [r.name, r.id]))),
+  );
   for (const m of MEMBERS) {
     const joinedAt = new Date(Date.now() - m.joinedDaysAgo * 86_400_000);
     const [u] = await db
@@ -248,12 +255,18 @@ export async function seedMembers(db: Db): Promise<Record<string, string>> {
         createdAt: joinedAt,
       })
       .onConflictDoNothing();
-    const sectorIds = (m.sectors ?? []).map((name) => sectorRows.find((r) => r.name === name)?.id).filter((x): x is string => !!x);
-    if (sectorIds.length) {
-      await db
-        .insert(s.profileSectors)
-        .values(sectorIds.map((itemId) => ({ userId: id, itemId })))
-        .onConflictDoNothing();
+    for (const [i, c] of catalogues.entries()) {
+      const itemIds = (m[c.field] ?? []).map((name) => {
+        const itemId = idsByName[i]!.get(name);
+        if (!itemId) throw new Error(`Demo member ${m.key}: "${name}" is not in the ${c.field} list`);
+        return itemId;
+      });
+      if (itemIds.length) {
+        await db
+          .insert(c.join)
+          .values(itemIds.map((itemId) => ({ userId: id, itemId })))
+          .onConflictDoNothing();
+      }
     }
     await db
       .insert(s.consentRecords)
