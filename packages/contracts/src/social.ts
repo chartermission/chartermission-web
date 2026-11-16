@@ -839,6 +839,7 @@ export const UploadPurpose = z.enum([
   "message_image",
   "message_file",
   "voice_note",
+  "certificate_signature",
 ]);
 export type UploadPurpose = z.infer<typeof UploadPurpose>;
 
@@ -889,6 +890,8 @@ export const UPLOAD_LIMITS = {
   message_file: { maxBytes: 20 * 1024 * 1024, mimes: MESSAGE_FILE_MIMES },
   /** Voice notes, up to VOICE_NOTE_MAX_SECONDS. */
   voice_note: { maxBytes: 25 * 1024 * 1024, mimes: VOICE_MIMES },
+  /** An exam certificate's signature (admin console). Served publicly: Charter Center fetches it. */
+  certificate_signature: { maxBytes: 2 * 1024 * 1024, mimes: ["image/png", "image/jpeg", "image/webp"] },
 } as const;
 
 /**

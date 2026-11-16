@@ -176,6 +176,13 @@
       "when": 1794716883952,
       "tag": "0024_services_bookings_products",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794837917511,
+      "tag": "0025_exam_certificate_settings",
+      "breakpoints": true
     }
   ]
 }

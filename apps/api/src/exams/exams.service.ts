@@ -75,6 +75,7 @@ export class ExamsService {
       questionCount: count,
       timeLimitMinutes: exam.timeLimitMinutes,
       passPercent: exam.passPercent,
+      awardsCertificate: !!exam.certificate,
     };
   }
 
@@ -99,6 +100,7 @@ export class ExamsService {
       credit: exam.credit,
       sections: sections.views.filter((s) => s.questionCount > 0),
       attempts: attempts.map(attemptSummary),
+      awardsCertificate: !!exam.certificate,
       certificate,
     };
   }

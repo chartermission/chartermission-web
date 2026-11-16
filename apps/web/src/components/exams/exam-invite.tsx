@@ -138,10 +138,12 @@ export function ExamInviteSignedOut({ exam }: { exam: ExamJoinInfo }) {
           {exam.timeLimitMinutes && <span>{t("{count} minutes", { count: exam.timeLimitMinutes })}</span>}
           <span>{t("Pass mark {percent}%", { percent: exam.passPercent })}</span>
         </p>
-        <p className="flex items-start gap-2 rounded-[10px] bg-primary-tint-2 p-3 text-sm text-ink">
-          <Icon name="verified" size={16} className="mt-0.5 shrink-0 text-primary-light" />
-          Pass it to receive your Charter Center certificate.
-        </p>
+        {exam.awardsCertificate && (
+          <p className="flex items-start gap-2 rounded-[10px] bg-primary-tint-2 p-3 text-sm text-ink">
+            <Icon name="verified" size={16} className="mt-0.5 shrink-0 text-primary-light" />
+            Pass it to receive your Charter Center certificate.
+          </p>
+        )}
       </div>
       <div className="flex flex-col gap-3">
         <p className="text-md text-body">You’ve been invited to take this exam. Create your free Charter Mission account, or sign in, and it will be waiting on your Learning page.</p>

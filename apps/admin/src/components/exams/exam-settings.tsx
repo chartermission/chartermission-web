@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { EXAM_LANGUAGE_NAMES, type AdminExamDetail, type ExamLanguage, type ExamReview, type UpdateExamInput } from "@chartermission/contracts";
-import { Button, cn } from "@chartermission/ui";
+import { Button, Icon, cn } from "@chartermission/ui";
 import { Field } from "@/components/ambassadors/modal";
 import { FormNotice, TextField, inputClasses } from "@/components/form-field";
 import { ApiError, api, errorMessage } from "@/lib/api/client";
 import { webHref } from "@/lib/navigation";
+import { uploadFile } from "@/lib/upload";
 import { useT } from "@/i18n/client";
 import { LANGUAGE_OPTIONS, dirOf } from "./exam-labels";
 import { Select } from "./select";
@@ -32,6 +33,63 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** The issuer's signature: uploaded here (PNG, JPEG or WebP), sent to Charter Center as a public link. */
+function SignatureField({ preview, error, onUploaded }: { preview: string | null; error?: string; onUploaded: (fileId: string, url: string | null) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const shown = problem ?? error;
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      const view = await uploadFile(file, "certificate_signature");
+      onUploaded(view.id, view.url);
+    } catch (e) {
+      setProblem(errorMessage(e));
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = "";
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium text-ink">Issuer’s signature</span>
+      <div className="flex flex-wrap items-center gap-4">
+        <div
+          className={cn(
+            "flex h-[84px] w-[240px] items-center justify-center overflow-hidden rounded-lg border bg-white",
+            shown ? "border-error" : "border-line",
+          )}
+        >
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element -- a stored upload, not a static asset
+            <img src={preview} alt="Issuer’s signature" className="max-h-[72px] max-w-[220px] object-contain" />
+          ) : (
+            <span className="text-xs text-secondary">No signature yet</span>
+          )}
+        </div>
+        <div className="flex flex-col items-start gap-1.5">
+          <Button type="button" variant="secondary" size="small" disabled={busy} aria-busy={busy} onClick={() => input.current?.click()}>
+            <Icon name="image" size={16} />
+            {busy ? "Uploading…" : preview ? "Replace signature" : "Upload signature"}
+          </Button>
+          <span className="text-xs text-secondary">A PNG with a transparent background works best. Up to 2 MB.</span>
+        </div>
+        <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => void pick(e.target.files?.[0])} />
+      </div>
+      {shown && (
+        <p role="alert" className="text-xs text-error">
+          {shown}
+        </p>
+      )}
+    </div>
+  );
+}
+
 type Draft = {
   title: string;
   titleAlt: string;
@@ -47,6 +105,14 @@ type Draft = {
   review: ExamReview;
   credit: string;
   shareCertificates: boolean;
+  awardCertificate: boolean;
+  certTitle: string;
+  certIssuer: string;
+  certSignatureId: string;
+  /** What to show for the signature: the saved one's address, or the one just uploaded. */
+  certSignaturePreview: string | null;
+  certStart: string;
+  certEnd: string;
 };
 
 const draftOf = (e: AdminExamDetail): Draft => ({
@@ -64,6 +130,13 @@ const draftOf = (e: AdminExamDetail): Draft => ({
   review: e.review,
   credit: e.credit ?? "",
   shareCertificates: e.shareCertificates,
+  awardCertificate: !!e.certificate,
+  certTitle: e.certificate?.title ?? "",
+  certIssuer: e.certificate?.issuerName ?? "",
+  certSignatureId: e.certificate?.signatureFileId ?? "",
+  certSignaturePreview: e.certificate?.signatureUrl ?? null,
+  certStart: e.certificate?.startDate ?? "",
+  certEnd: e.certificate?.endDate ?? "",
 });
 
 /** The Settings tab (PATCH /admin/exams/:id): what the exam is called and its rules. Who can take it: whoever opens its invitation link. */
@@ -95,6 +168,14 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
     const maxAttempts = d.maxAttempts.trim() === "" ? null : whole(d.maxAttempts, 1, 50);
     if (d.maxAttempts.trim() !== "" && maxAttempts === null) errors.maxAttempts = t("Enter a number from 1 to 50, or leave it empty for no limit");
     if (d.title.trim().length < 3) errors.title = t("Give the exam a title");
+    if (d.awardCertificate) {
+      if (d.certTitle.trim().length < 2) errors["certificate.title"] = t("Write the title for the certificate");
+      if (d.certIssuer.trim().length < 2) errors["certificate.issuerName"] = t("Write the issuer’s name");
+      if (!d.certSignatureId) errors["certificate.signatureFileId"] = t("Upload the issuer’s signature");
+      if (!d.certStart) errors["certificate.startDate"] = t("Choose the start date");
+      if (!d.certEnd) errors["certificate.endDate"] = t("Choose the end date");
+      else if (d.certStart && d.certEnd < d.certStart) errors["certificate.endDate"] = t("The end date can’t be before the start date");
+    }
     setFields(errors);
     setError(null);
     setSaved(false);
@@ -114,6 +195,9 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
       review: d.review,
       credit: d.credit.trim() || null,
       shareCertificates: d.shareCertificates,
+      certificate: d.awardCertificate
+        ? { title: d.certTitle.trim(), issuerName: d.certIssuer.trim(), signatureFileId: d.certSignatureId, startDate: d.certStart, endDate: d.certEnd }
+        : null,
     };
     setBusy(true);
     try {
@@ -250,16 +334,74 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
       </Group>
 
       <Group title="Charter Center certificate">
-        <p className="text-sm text-body">
-          Everyone who passes gets a certificate from Charter Center. Charter Mission sends Charter Center the member’s email, their name and
-          this exam’s title, so keep the title as it should read on the certificate.
-        </p>
         <Checkbox
-          checked={d.shareCertificates}
-          onChange={(v) => set("shareCertificates", v)}
-          label="Share certificates on the feed"
-          note="Posts the certificate as the member (a Certification celebration) that every member sees, also listed on Charter Center’s page. Members can delete the post."
+          checked={d.awardCertificate}
+          onChange={(v) => {
+            set("awardCertificate", v);
+            if (v && !d.certTitle) set("certTitle", d.title);
+          }}
+          label="Award a certificate to members who pass"
+          note="When a member passes, Charter Center receives their name with the details below and sends back their certificate."
         />
+        {d.awardCertificate && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField
+                label="Title on the certificate"
+                value={d.certTitle}
+                maxLength={200}
+                dir="auto"
+                placeholder="PMP Exam Prep"
+                error={fields["certificate.title"]}
+                onChange={(e) => set("certTitle", e.target.value)}
+              />
+              <TextField
+                label="Issuer’s name"
+                value={d.certIssuer}
+                maxLength={120}
+                dir="auto"
+                placeholder="Eng. Abdalla Yousif"
+                hint="Printed under the signature."
+                error={fields["certificate.issuerName"]}
+                onChange={(e) => set("certIssuer", e.target.value)}
+              />
+              <TextField
+                label="Start date"
+                type="date"
+                value={d.certStart}
+                error={fields["certificate.startDate"]}
+                onChange={(e) => set("certStart", e.target.value)}
+              />
+              <TextField
+                label="End date"
+                type="date"
+                value={d.certEnd}
+                min={d.certStart || undefined}
+                error={fields["certificate.endDate"]}
+                onChange={(e) => set("certEnd", e.target.value)}
+              />
+            </div>
+            <SignatureField
+              preview={d.certSignaturePreview}
+              error={fields["certificate.signatureFileId"]}
+              onUploaded={(id, url) => {
+                set("certSignatureId", id);
+                set("certSignaturePreview", url);
+                setFields((prev) => {
+                  const next = { ...prev };
+                  delete next["certificate.signatureFileId"];
+                  return next;
+                });
+              }}
+            />
+            <Checkbox
+              checked={d.shareCertificates}
+              onChange={(v) => set("shareCertificates", v)}
+              label="Share certificates on the feed"
+              note="Posts the certificate as the member (a Certification celebration) that every member sees, also listed on Charter Center’s page. Members can delete the post."
+            />
+          </>
+        )}
       </Group>
 
       {saved && <FormNotice tone="success">Saved.</FormNotice>}

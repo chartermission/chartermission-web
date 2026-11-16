@@ -1,4 +1,5 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   AdminExamAttemptsQuery,
   ExamImportInput,
@@ -33,6 +34,7 @@ import { UuidParam } from '../media/uuid-param.js';
 import { ExamsService } from './exams.service.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
 import { AdminExamsService } from './admin-exams.service.js';
+import { ExamCertificatesService } from './exam-certificates.service.js';
 
 /** Exams for signed-in members: their invited exams, take and review. Marking happens here, never in the browser. */
 @Controller()
@@ -105,6 +107,26 @@ export class ExamJoinController {
   @Get(':slug')
   info(@Param('slug') slug: string): Promise<ExamJoinInfo> {
     return this.exams.joinInfo(slug);
+  }
+}
+
+/**
+ * Certificate signatures, served without signing in: Charter Center fetches them from the
+ * instructor_signature_url it is sent when a member passes.
+ */
+@Controller('exam-signatures')
+export class ExamSignaturesController {
+  constructor(private readonly certificates: ExamCertificatesService) {}
+
+  @Get(':file')
+  async signature(@Param('file') file: string, @Res() res: Response): Promise<void> {
+    const { data, mime } = await this.certificates.signatureFile(file);
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Length', String(data.length));
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.end(data);
   }
 }
 

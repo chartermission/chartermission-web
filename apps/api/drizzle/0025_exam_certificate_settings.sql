@@ -1,0 +1,4 @@
+ALTER TABLE "files" DROP CONSTRAINT "files_purpose_ck";--> statement-breakpoint
+ALTER TABLE "exam_certificates" ADD COLUMN "request" jsonb;--> statement-breakpoint
+ALTER TABLE "exams" ADD COLUMN "certificate" jsonb;--> statement-breakpoint
+ALTER TABLE "files" ADD CONSTRAINT "files_purpose_ck" CHECK ("files"."purpose" in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','product_image','profile_video','profile_resume','message_image','message_file','voice_note','certificate_signature'));

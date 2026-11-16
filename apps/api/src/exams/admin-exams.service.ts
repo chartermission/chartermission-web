@@ -24,7 +24,7 @@ import {
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { examAccess, examAttempts, examCertificates, examInvites, examQuestions, examSections, exams, memberProfiles, pages, users } from '../db/schema.js';
+import { examAccess, examAttempts, examCertificates, examInvites, examQuestions, examSections, exams, files, memberProfiles, pages, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
@@ -37,7 +37,7 @@ import { likeContains } from '../learning/courses.service.js';
 import { isUuid } from '../media/uuid-param.js';
 import { ensureSections, importExam, insertExam, insertQuestions, questionColumns } from './exam-store.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
-import { ExamCertificatesService } from './exam-certificates.service.js';
+import { ExamCertificatesService, signatureUrl } from './exam-certificates.service.js';
 import { CHARTER_CENTER_EXAMS_CLIENT, type CharterCenterExamsClient } from './charter-center-exams.client.js';
 import { attemptSummary, examBase, questionCounts, reviewOf, sectionsOf, type ExamQuestionRow, type ExamRow } from './exam-views.js';
 
@@ -76,10 +76,13 @@ export class AdminExamsService {
   /** GET /admin/exams/:id */
   async detail(id: string, db: Db | Tx = this.db): Promise<AdminExamDetail> {
     const exam = await this.find(id, db);
-    const [sections, questions, stats] = await Promise.all([
+    const [sections, questions, stats, signature] = await Promise.all([
       sectionsOf(db, exam.id),
       db.select().from(examQuestions).where(eq(examQuestions.examId, exam.id)).orderBy(asc(examQuestions.position), asc(examQuestions.createdAt)),
       this.stats([exam.id]),
+      exam.certificate
+        ? db.select({ mime: files.mime, scanStatus: files.scanStatus }).from(files).where(eq(files.id, exam.certificate.signatureFileId)).limit(1)
+        : Promise.resolve([]),
     ]);
     return {
       ...this.summary(exam, questions.length, stats.get(exam.id) ?? NO_STATS),
@@ -90,6 +93,12 @@ export class AdminExamsService {
       review: reviewOf(exam),
       credit: exam.credit,
       shareCertificates: exam.shareCertificates,
+      certificate: exam.certificate
+        ? {
+            ...exam.certificate,
+            signatureUrl: signature[0]?.scanStatus === 'clean' ? signatureUrl(exam.certificate.signatureFileId, signature[0].mime) : null,
+          }
+        : null,
       sections: sections.views,
       questions: questions.map(questionView),
     };
@@ -97,6 +106,7 @@ export class AdminExamsService {
 
   /** POST /admin/exams — a new draft. */
   async create(ctx: AuthContext, input: ExamSettingsInput, ip?: string): Promise<AdminExamDetail> {
+    if (input.certificate) await this.useSignature(input.certificate.signatureFileId);
     const exam = await insertExam(this.db, input, ctx.user.id);
     await this.audit.record({ actorId: ctx.user.id, action: 'exam.created', targetType: 'exam', targetId: exam.id, after: { title: exam.title, slug: exam.slug }, ip });
     return this.detail(exam.id);
@@ -104,6 +114,7 @@ export class AdminExamsService {
 
   /** POST /admin/exams/import — a draft with its sections and questions, all or nothing. */
   async import(ctx: AuthContext, input: ExamImportInput, ip?: string): Promise<AdminExamDetail> {
+    if (input.certificate) await this.useSignature(input.certificate.signatureFileId);
     const id = await this.db.transaction(async (tx) => {
       const exam = await importExam(tx, input, ctx.user.id);
       await this.audit.record(
@@ -117,6 +128,7 @@ export class AdminExamsService {
 
   /** PATCH /admin/exams/:id — settings and status. Publishing needs at least one question. */
   async update(ctx: AuthContext, id: string, input: UpdateExamInput, ip?: string): Promise<AdminExamDetail> {
+    if (input.certificate) await this.useSignature(input.certificate.signatureFileId);
     const examId = await this.db.transaction(async (tx) => {
       const [before] = await tx.select().from(exams).where(eq(exams.id, this.uuid(id))).for('update').limit(1);
       if (!before) throw Errors.notFound('Exam');
@@ -474,8 +486,19 @@ export class AdminExamsService {
     return row;
   }
 
+  /**
+   * A certificate signature uploaded in the console (purpose certificate_signature, checked clean).
+   * Marked attached so it is kept; it is served publicly from GET /exam-signatures/{id}.
+   */
+  private async useSignature(fileId: string) {
+    const [file] = await this.db.select().from(files).where(eq(files.id, fileId.toLowerCase())).limit(1);
+    if (!file || file.purpose !== 'certificate_signature') throw Errors.validation({ 'certificate.signatureFileId': 'Upload the issuer’s signature again' });
+    if (file.scanStatus !== 'clean') throw Errors.validation({ 'certificate.signatureFileId': 'The signature is still being checked. Try again in a moment.' });
+    if (!file.attachedAt) await this.db.update(files).set({ attachedAt: new Date() }).where(eq(files.id, file.id));
+  }
+
   private summary(row: ExamRow, questionCount: number, stats: AdminExamStats): AdminExamSummary {
-    return { ...examBase(row), questionCount, stats, publishedAt: row.publishedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
+    return { ...examBase(row), awardsCertificate: !!row.certificate, questionCount, stats, publishedAt: row.publishedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
   }
 
   private async stats(examIds: string[]): Promise<Map<string, AdminExamStats>> {

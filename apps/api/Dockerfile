@@ -15,7 +15,7 @@ RUN pnpm --filter @chartermission/api deploy --prod --legacy /out \
 
 FROM node:22-bookworm-slim AS runtime
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates tini \
+ && apt-get install -y --no-install-recommends ffmpeg poppler-utils curl ca-certificates tini \
  && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production PORT=4000 FFMPEG_PATH=/usr/bin/ffmpeg FFPROBE_PATH=/usr/bin/ffprobe STORAGE_LOCAL_DIR=/app/.uploads
 WORKDIR /app

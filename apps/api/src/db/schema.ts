@@ -5,6 +5,7 @@
  * columns as text with check constraints, foreign keys indexed.
  */
 import { sql } from 'drizzle-orm';
+import type { ExamCertificateSettings } from '@chartermission/contracts';
 import {
   bigserial,
   type AnyPgColumn,
@@ -473,7 +474,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','product_image','profile_video','profile_resume','message_image','message_file','voice_note')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','product_image','profile_video','profile_resume','message_image','message_file','voice_note','certificate_signature')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -1449,6 +1450,8 @@ export const exams = pgTable(
     credit: text('credit'),
     /** Post the certificate on the member's behalf (shown in everyone's feed). */
     shareCertificates: boolean('share_certificates').notNull().default(true),
+    /** What Charter Center prints on the certificate (title, issuer, signature, period); null: no certificate. */
+    certificate: jsonb('certificate').$type<ExamCertificateSettings | null>(),
     publishedAt: ts('published_at'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
@@ -1581,6 +1584,8 @@ export const examCertificates = pgTable(
     attemptId: uuid('attempt_id').references(() => examAttempts.id, { onDelete: 'set null' }),
     status: text('status').notNull().default('pending'),
     externalId: text('external_id'),
+    /** Exactly what was sent to Charter Center, fixed when the member passed (retries resend it). */
+    request: jsonb('request').$type<Record<string, string> | null>(),
     imageFileId: uuid('image_file_id').references(() => files.id, { onDelete: 'set null' }),
     pdfFileId: uuid('pdf_file_id').references(() => files.id, { onDelete: 'set null' }),
     postId: uuid('post_id').references((): AnyPgColumn => posts.id, { onDelete: 'set null' }),

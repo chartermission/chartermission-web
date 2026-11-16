@@ -140,6 +140,10 @@ export class MediaService implements OnModuleInit {
     if ((input.purpose === 'chapter_image' || input.purpose === 'chapter_cover') && !user.permissions.has('chapters.admin')) {
       throw Errors.forbidden('Only admins can upload chapter pictures.');
     }
+    // Certificate signatures are set on exams in the admin console.
+    if (input.purpose === 'certificate_signature' && !user.permissions.has('exam.manage')) {
+      throw Errors.forbidden('Only admins who manage exams can upload certificate signatures.');
+    }
     // Page pictures: anyone who may create or manage a page (the page itself checks ownership when the file is used).
     const limit = UPLOAD_LIMITS[input.purpose];
     // Recorders label files "audio/webm;codecs=opus": the parameters don't matter here.

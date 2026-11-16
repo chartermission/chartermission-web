@@ -87,6 +87,47 @@ const optionalText = (max: number) =>
     .nullish()
     .transform((v) => (v ? v : null));
 
+/* ---------------- Certificate settings ---------------- */
+
+const isoDate = (message: string) =>
+  z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, message)
+    .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v), message);
+
+/**
+ * What Charter Center prints on the certificate of an exam. When a member passes, it is sent to
+ * Charter Center with the member's name (docs/CHARTER-CENTER-EXAMS-API.md). An exam without these
+ * settings awards no certificate.
+ */
+export const ExamCertificateSettings = z
+  .object({
+    /** The title on the certificate (course_title), e.g. "PMP Exam Prep". */
+    title: z.string().trim().min(2, "Write the title for the certificate").max(200, "At most 200 characters"),
+    /** Who signs it (instructor_name), e.g. "Eng. Abdalla Yousif". */
+    issuerName: z.string().trim().min(2, "Write the issuer’s name").max(120, "At most 120 characters"),
+    /** The signature image, uploaded with purpose "certificate_signature" (sent as instructor_signature_url). */
+    signatureFileId: z.string({ message: "Upload the issuer’s signature" }).uuid("Upload the issuer’s signature"),
+    /** The period on the certificate (start_from, start_end), as YYYY-MM-DD. */
+    startDate: isoDate("Choose the start date"),
+    endDate: isoDate("Choose the end date"),
+  })
+  .refine((v) => v.endDate >= v.startDate, { message: "The end date can’t be before the start date", path: ["endDate"] });
+export type ExamCertificateSettings = z.infer<typeof ExamCertificateSettings>;
+
+/** The certificate settings as the admin console shows them. */
+export const ExamCertificateSettingsView = z.object({
+  title: z.string(),
+  issuerName: z.string(),
+  signatureFileId: z.string().uuid(),
+  /** Public address of the signature image: the one Charter Center is sent. */
+  signatureUrl: z.string().nullable(),
+  startDate: z.string(),
+  endDate: z.string(),
+});
+export type ExamCertificateSettingsView = z.infer<typeof ExamCertificateSettingsView>;
+
 /* ---------------- Admin inputs ---------------- */
 
 const settingsShape = {
@@ -112,6 +153,8 @@ const settingsShape = {
   credit: optionalText(300),
   /** Post the certificate on the member's behalf, shown in everyone's feed. */
   shareCertificates: z.boolean().default(true),
+  /** What's printed on the certificate; null: the exam awards no certificate. */
+  certificate: ExamCertificateSettings.nullish().transform((v) => v ?? null),
 };
 
 const differentLanguages = (v: { language?: string; secondLanguage?: string | null }) => !v.secondLanguage || v.secondLanguage !== v.language;
@@ -138,6 +181,8 @@ export const UpdateExamInput = z
     review: ExamReview.optional(),
     credit: z.string().trim().max(300).nullable().optional(),
     shareCertificates: z.boolean().optional(),
+    /** The certificate settings, all together; null stops awarding certificates. */
+    certificate: ExamCertificateSettings.nullable().optional(),
     status: ExamStatus.optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), "Nothing to change");
@@ -328,6 +373,8 @@ export const ExamDetail = ExamSummary.extend({
   sections: z.array(ExamSection),
   /** The viewer's attempts, newest first. */
   attempts: z.array(ExamAttemptSummary),
+  /** Passing earns a Charter Center certificate (the exam has certificate settings). */
+  awardsCertificate: z.boolean(),
   /** The viewer's certificate, once they have passed. */
   certificate: ExamCertificateView.nullable(),
 });
@@ -411,7 +458,7 @@ export const ExamAttemptView = z.object({
   questions: z.array(ExamAttemptQuestion),
   /** Present once submitted. */
   result: ExamResult.nullable(),
-  /** Passing earns a Charter Center certificate (every exam does; a staff preview of a draft doesn't). */
+  /** Passing earns a Charter Center certificate (exams with certificate settings; a staff preview of a draft doesn't). */
   awardsCertificate: z.boolean(),
   /** The member's certificate for this exam, once a submitted attempt passed. */
   certificate: ExamCertificateView.nullable(),
@@ -459,6 +506,8 @@ export const AdminExamSummary = z.object({
   timeLimitMinutes: z.number().int().nullable(),
   passPercent: z.number().int(),
   maxAttempts: z.number().int().nullable(),
+  /** The exam has certificate settings, so passing it earns a Charter Center certificate. */
+  awardsCertificate: z.boolean(),
   stats: AdminExamStats,
   publishedAt: z.string().nullable(),
   updatedAt: z.string(),
@@ -488,6 +537,7 @@ export const AdminExamDetail = AdminExamSummary.extend({
   review: ExamReview,
   credit: z.string().nullable(),
   shareCertificates: z.boolean(),
+  certificate: ExamCertificateSettingsView.nullable(),
   sections: z.array(ExamSection),
   /** In exam order. */
   questions: z.array(AdminExamQuestion),
@@ -538,6 +588,7 @@ export const ExamJoinInfo = z.object({
   questionCount: z.number().int(),
   timeLimitMinutes: z.number().int().nullable(),
   passPercent: z.number().int(),
+  awardsCertificate: z.boolean(),
 });
 export type ExamJoinInfo = z.infer<typeof ExamJoinInfo>;
 

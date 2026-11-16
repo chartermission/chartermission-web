@@ -81,7 +81,8 @@ const Env = z.object({
    * Charter Center certificate API for exams (docs/CHARTER-CENTER-EXAMS-API.md).
    * "mock" (default until Charter Center ships it): certificates are generated samples, so the
    * exam → certificate flow can be tried end to end; in production none are issued (they wait).
-   * "live": POST {CHARTER_CENTER_API_URL}/certificates with the same key.
+   * "live": POST {CHARTER_CENTER_API_URL}/certificate (https://charter-center.com/api/partner/certificate
+   * when CHARTER_CENTER_API_URL is unset), with CHARTER_CENTER_API_KEY as a Bearer token when set.
    */
   CHARTER_CENTER_EXAMS_API: z.enum(['mock', 'live']).default('mock'),
   /**

@@ -134,7 +134,8 @@ export class ExamAttemptsService {
       sections: sections.views,
       questions,
       result: submitted ? await this.result(viewer, exam, attempt) : null,
-      awardsCertificate: !attempt.preview,
+      awardsCertificate: !!exam.certificate && !attempt.preview,
+      // A certificate already earned stays, even if the exam's certificate settings were removed since.
       certificate: submitted && !attempt.preview ? await this.certificates.forMember(exam.id, viewer.id) : null,
     };
   }

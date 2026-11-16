@@ -200,7 +200,7 @@ async function ExamMain({ params }: { params: Props["params"] }) {
         <div className="flex min-w-0 flex-col gap-8 lg:col-start-1 lg:row-start-1">
           {exam.certificate && <CertificateCard examId={exam.id} initial={exam.certificate} finishProfile={!viewer.onboarding.completed} />}
 
-          {!exam.certificate && exam.status !== "draft" && (
+          {!exam.certificate && exam.awardsCertificate && exam.status !== "draft" && (
             <p className="flex items-start gap-2.5 rounded-[10px] bg-primary-tint-2 p-3.5 text-sm text-ink">
               <Icon name="clipboard" size={18} className="mt-0.5 shrink-0 text-primary-light" />
               <span>

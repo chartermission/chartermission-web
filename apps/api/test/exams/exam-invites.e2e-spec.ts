@@ -13,8 +13,11 @@ import type {
   PostView,
 } from '@chartermission/contracts';
 import { LEARNING_ACCESS_DEFAULTS } from '@chartermission/contracts';
+import sharp from 'sharp';
 import { ExamCertificatesService } from '../../src/exams/exam-certificates.service.js';
+import { CHARTER_CENTER_EXAMS_CLIENT, MockCharterCenterExamsClient, type CertificateRequest } from '../../src/exams/charter-center-exams.client.js';
 import { createMember, createTestApp, lastEmail, s, type TestApp } from '../helpers.js';
+import { uploadBytes } from '../social/social-helpers.js';
 
 type Member = Awaited<ReturnType<typeof createMember>>;
 
@@ -24,11 +27,14 @@ const question = (prompt: string, correctIndex: number) => ({
   correctIndex,
 });
 
-describe('Exams by invitation link, and Charter Center certificates for everyone who passes', () => {
+describe('Exams by invitation link, and Charter Center certificates for those who pass', () => {
   let t: TestApp;
   let admin: Member;
   let exam: AdminExamDetail;
   let pageId: string;
+  let signatureFileId: string;
+  /** What the (mock) Charter Center was sent. */
+  const sent: CertificateRequest[] = [];
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -40,15 +46,27 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
       .returning();
     pageId = page!.id;
 
+    const mock = t.app.get<MockCharterCenterExamsClient>(CHARTER_CENTER_EXAMS_CLIENT);
+    const original = mock.certificate.bind(mock);
+    mock.certificate = (r) => (sent.push(r), original(r));
+
+    // The issuer's signature, uploaded in the console.
+    const signature = await sharp({ create: { width: 300, height: 100, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+    signatureFileId = await uploadBytes(t, admin, { purpose: 'certificate_signature' as 'post_image', fileName: 'signature.png', mime: 'image/png', data: signature });
+    await admin.post(`/uploads/${signatureFileId}/complete`).expect(200);
+
     exam = (await admin.post('/admin/exams', { title: 'CAPM Mock Exam', passPercent: 50 }).expect(201)).body as AdminExamDetail;
+    expect(exam).toMatchObject({ awardsCertificate: false, certificate: null });
     for (const [i, p] of ['First', 'Second'].entries()) await admin.post(`/admin/exams/${exam.id}/questions`, question(`${p} question?`, i)).expect(201);
-    exam = (await admin.patch(`/admin/exams/${exam.id}`, { status: 'published' }).expect(200)).body as AdminExamDetail;
-    expect(exam).toMatchObject({ shareCertificates: true });
+    exam = (await admin.patch(`/admin/exams/${exam.id}`, { status: 'published', certificate: CERTIFICATE() }).expect(200)).body as AdminExamDetail;
+    expect(exam).toMatchObject({ shareCertificates: true, awardsCertificate: true, certificate: { ...CERTIFICATE(), signatureUrl: expect.stringMatching(new RegExp(`/exam-signatures/${signatureFileId}\\.png$`)) } });
     expect(exam).not.toHaveProperty('charterCenterCourseId');
   });
   afterAll(async () => {
     await t.close();
   });
+
+  const CERTIFICATE = () => ({ title: 'PMP Exam Prep', issuerName: 'Eng. Abdalla Yousif', signatureFileId, startDate: '2026-01-01', endDate: '2026-01-15' });
 
   const invite = (m: Member, slug = exam.slug) => m.post(`/exams/${slug}/access`);
 
@@ -64,7 +82,7 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
 
   it('shows the exam on the public invitation page (published exams only)', async () => {
     const info = (await t.http().get(`/api/v1/exam-join/${exam.slug}`).expect(200)).body as ExamJoinInfo;
-    expect(info).toEqual({ slug: 'capm-mock-exam', title: 'CAPM Mock Exam', titleAlt: null, language: 'en', secondLanguage: null, questionCount: 2, timeLimitMinutes: null, passPercent: 50 });
+    expect(info).toEqual({ slug: 'capm-mock-exam', title: 'CAPM Mock Exam', titleAlt: null, language: 'en', secondLanguage: null, questionCount: 2, timeLimitMinutes: null, passPercent: 50, awardsCertificate: true });
     const draft = (await admin.post('/admin/exams', { title: 'Hidden Draft' }).expect(201)).body as AdminExamDetail;
     await t.http().get(`/api/v1/exam-join/${draft.slug}`).expect(404);
     await t.http().get('/api/v1/exam-join/no-such-exam').expect(404);
@@ -93,7 +111,7 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
     expect(((await m.get('/exams').expect(200)).body as ExamSummary[]).map((e) => e.slug)).toEqual([exam.slug]);
     const detail = (await m.get(`/exams/${exam.slug}`).expect(200)).body as ExamDetail;
     expect(detail).toMatchObject({ certificate: null });
-    expect(detail).not.toHaveProperty('awardsCertificate');
+    expect(detail).toMatchObject({ awardsCertificate: true });
 
     // Links to drafts or exams that don't exist give nothing.
     const draft = (await admin.post('/admin/exams', { title: 'Another Draft' }).expect(201)).body as AdminExamDetail;
@@ -111,7 +129,26 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
     await admin.put('/admin/settings/learning-access', LEARNING_ACCESS_DEFAULTS).expect(200);
   });
 
-  it('every exam awards a certificate: Charter Center gets the email, name and exam title; it is stored and shared', async () => {
+  it('checks the certificate settings, and serves the signature to Charter Center without signing in', async () => {
+    const bad = (certificate: object) => admin.patch(`/admin/exams/${exam.id}`, { certificate }).expect(422);
+    expect(JSON.stringify((await bad({ ...CERTIFICATE(), endDate: '2025-12-31' })).body)).toContain('end date');
+    await bad({ ...CERTIFICATE(), startDate: '2026-02-30' });
+    await bad({ ...CERTIFICATE(), issuerName: '' });
+    const notASignature = await uploadBytes(t, admin, { purpose: 'post_image', fileName: 'x.png', mime: 'image/png', data: await sharp({ create: { width: 10, height: 10, channels: 3, background: '#fff' } }).png().toBuffer() });
+    await admin.post(`/uploads/${notASignature}/complete`).expect(200);
+    expect(JSON.stringify((await bad({ ...CERTIFICATE(), signatureFileId: notASignature })).body)).toContain('signature');
+
+    const res = await t.http().get(new URL(exam.certificate!.signatureUrl!).pathname).expect(200);
+    expect(res.headers['content-type']).toBe('image/png');
+    await t.http().get(`/api/v1/exam-signatures/${notASignature}.png`).expect(404);
+    const plain = await createMember(t, { name: 'Not Staff' });
+    await plain.post('/uploads', { purpose: 'certificate_signature', fileName: 's.png', mime: 'image/png', sizeBytes: 100 }).expect(403);
+
+    // Members see whether passing earns a certificate.
+    expect(((await t.http().get(`/api/v1/exam-join/${exam.slug}`).expect(200)).body as ExamJoinInfo).awardsCertificate).toBe(true);
+  });
+
+  it('passing sends Charter Center the member’s name and the exam’s certificate settings; the certificate is stored and shared', async () => {
     const m = await createMember(t, { name: 'Amina Yusuf', email: 'amina.yusuf@example.test' });
     await invite(m).expect(200);
 
@@ -125,6 +162,14 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
     expect(passed.result?.passed).toBe(true);
     expect(passed.certificate).toMatchObject({ status: 'issued', certificateId: expect.stringMatching(/^CC-\d{4}-\d{6}$/) });
     expect(passed.certificate!.imageUrl).toMatch(/\/media\//);
+    expect(sent.at(-1)).toEqual({
+      student_name: 'Amina Yusuf',
+      course_title: 'PMP Exam Prep',
+      start_from: '2026-01-01',
+      start_end: '2026-01-15',
+      instructor_name: 'Eng. Abdalla Yousif',
+      instructor_signature_url: exam.certificate!.signatureUrl,
+    });
     const cert = (await m.get(`/exams/${exam.id}/certificate`).expect(200)).body as ExamCertificateView;
     expect(cert.postId).toBeTruthy();
 
@@ -136,7 +181,7 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
     // The post: a "Certification" celebration by the member, about Charter Center's page, headed with the exam's title.
     const post = (await m.get(`/posts/${cert.postId}`).expect(200)).body as PostView;
     expect(post.author.name).toBe('Amina Yusuf');
-    expect(post.celebration).toMatchObject({ category: 'certification', headline: 'CAPM Mock Exam', organisation: 'Charter Center' });
+    expect(post.celebration).toMatchObject({ category: 'certification', headline: 'PMP Exam Prep', organisation: 'Charter Center' });
     expect(post.aboutPage).toMatchObject({ id: pageId, name: 'Charter Center' });
 
     // Everyone sees it, without following Amina.
@@ -161,15 +206,15 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
     expect(row).toMatchObject({ tries: 1, status: 'pending' });
     expect(row!.lastError).toContain('no certificate');
 
-    // Charter Center now has it (the mock's "pending" rule is on the email): an admin retries.
-    await t.db.update(s.users).set({ email: 'ready.student@example.test' }).where(eq(s.users.id, m.id));
+    // Charter Center now has it (the mock's "pending" rule is on the name sent, fixed when they passed): an admin retries.
+    await t.db.update(s.examCertificates).set({ request: { ...row!.request!, student_name: 'Ready Student' } }).where(eq(s.examCertificates.id, row!.id));
     await admin.post(`/admin/exam-certificates/${row!.id}/retry`).expect(200);
     expect((await m.get(`/exams/${exam.id}/certificate`).expect(200)).body).toMatchObject({ status: 'issued' });
     await admin.post(`/admin/exam-certificates/${row!.id}/retry`).expect(409);
   });
 
   it('gives up after the last retry, and the sweep picks due ones up', async () => {
-    const m = await createMember(t, { name: 'Never Ready', email: 'pending.forever@example.test' });
+    const m = await createMember(t, { name: 'Pending Forever', email: 'never.ready@example.test' });
     await invite(m).expect(200);
     await passExam(m, 2);
     const [row] = await t.db.select().from(s.examCertificates).where(eq(s.examCertificates.userId, m.id));
@@ -177,6 +222,50 @@ describe('Exams by invitation link, and Charter Center certificates for everyone
     await t.app.get(ExamCertificatesService).sweep();
     const [after] = await t.db.select().from(s.examCertificates).where(eq(s.examCertificates.id, row!.id));
     expect(after).toMatchObject({ status: 'failed', tries: 9 });
+  });
+
+  it('exams without certificate settings award none; asked-for certificates wait for the settings', async () => {
+    await admin.patch(`/admin/exams/${exam.id}`, { certificate: null }).expect(200);
+    const m = await createMember(t, { name: 'No Settings' });
+    await invite(m).expect(200);
+    const result = await passExam(m, 2);
+    expect(result).toMatchObject({ awardsCertificate: false, certificate: null });
+    expect(((await m.get(`/exams/${exam.slug}`).expect(200)).body as ExamDetail).awardsCertificate).toBe(false);
+
+    // One asked for before the settings were removed waits (no try used), then goes through once they're back.
+    const [row] = await t.db.insert(s.examCertificates).values({ examId: exam.id, userId: m.id, status: 'pending', nextTryAt: new Date() }).returning();
+    await t.app.get(ExamCertificatesService).run(row!.id);
+    const [waiting] = await t.db.select().from(s.examCertificates).where(eq(s.examCertificates.id, row!.id));
+    expect(waiting).toMatchObject({ status: 'pending', tries: 0 });
+    expect(waiting!.lastError).toContain('certificate settings');
+    await admin.patch(`/admin/exams/${exam.id}`, { certificate: CERTIFICATE() }).expect(200);
+    await t.db.update(s.examCertificates).set({ nextTryAt: new Date() }).where(eq(s.examCertificates.id, row!.id));
+    await t.app.get(ExamCertificatesService).run(row!.id);
+    const [done] = await t.db.select().from(s.examCertificates).where(eq(s.examCertificates.id, row!.id));
+    expect(done).toMatchObject({ status: 'issued', request: expect.objectContaining({ student_name: 'No Settings', course_title: 'PMP Exam Prep' }) });
+  });
+
+  it('a certificate sent as a PDF only gets a picture of its first page; one sent as a picture only gets a PDF', async () => {
+    const mock = t.app.get<MockCharterCenterExamsClient>(CHARTER_CENTER_EXAMS_CLIENT);
+    const before = mock.certificate;
+    const sample = (await new MockCharterCenterExamsClient().certificate(sent[0]!))!;
+    for (const [name, answer] of [
+      ['Pdf Only', { certificateId: null, pdf: sample.pdf, image: null }],
+      ['Picture Only', { certificateId: 'CC-9', pdf: null, image: sample.image }],
+    ] as const) {
+      mock.certificate = async () => answer;
+      const m = await createMember(t, { name });
+      await invite(m).expect(200);
+      const cert = (await passExam(m, 2)).certificate!;
+      expect(cert).toMatchObject({ status: 'issued', imageUrl: expect.stringMatching(/\/media\//), downloadUrl: expect.stringMatching(/\/media\//) });
+      const picture = await m.get(new URL(cert.imageUrl!, 'http://x').pathname.replace(/^\/api\/v1/, '')).expect(200);
+      expect(picture.headers['content-type']).toBe('image/jpeg');
+      const pdf = await m.get(new URL(cert.downloadUrl!, 'http://x').pathname.replace(/^\/api\/v1/, '')).expect(200);
+      expect(pdf.headers['content-type']).toBe('application/pdf');
+      const post = (await m.get(`/posts/${cert.postId}`).expect(200)).body as PostView;
+      expect(post.attachments[0]?.kind).toBe('image');
+    }
+    mock.certificate = before;
   });
 
   it('exams that don’t share certificates still issue them, without a post', async () => {
