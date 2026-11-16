@@ -35,9 +35,8 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
   const [certificates, setCertificates] = useState<AdminExamCertificatesSummary | null>(null);
   const chip = STATUS_CHIP[exam.status];
   const taken = exam.stats.attempts > 0;
-  // The Certificates tab: for exams that award one, and for any that has certificates already.
-  const certificateCount = certificates ? certificates.issued + certificates.pending + certificates.failed : 0;
-  const showCertificates = exam.certificate !== null || certificateCount > 0;
+  // The Certificates tab is always there: it lists what was issued, and says what's missing when the
+  // exam has no certificate settings (it doesn't depend on the count below loading).
   const certificateKey = JSON.stringify(exam.certificate);
 
   // How many certificates the exam has (and how many are outdated) isn't part of the exam: ask for
@@ -132,9 +131,7 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
           { value: "settings", label: t("Settings") },
           { value: "invite", label: t("Invite") },
           { value: "results", label: `${t("Results")} · ${exam.stats.attempts}` },
-          ...(showCertificates
-            ? [{ value: "certificates" as const, label: certificates ? `${t("Certificates")} · ${certificates.issued}` : t("Certificates") }]
-            : []),
+          { value: "certificates", label: certificates ? `${t("Certificates")} · ${certificates.issued}` : t("Certificates") },
         ]}
       />
 
@@ -142,7 +139,7 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
       {tab === "settings" && <ExamSettings exam={exam} onChange={setExam} issuedCertificates={certificates?.issued ?? 0} onOpenCertificates={() => setTab("certificates")} />}
       {tab === "invite" && <ExamInvites exam={exam} />}
       {tab === "results" && <ExamResults exam={exam} onChange={setExam} />}
-      {tab === "certificates" && showCertificates && <ExamCertificates exam={exam} onSummary={setCertificates} />}
+      {tab === "certificates" && <ExamCertificates exam={exam} onSummary={setCertificates} />}
 
       {confirm === "publish" && (
         <ReasonDialog
