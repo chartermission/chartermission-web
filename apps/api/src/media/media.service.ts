@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type';
 import type { Readable } from 'node:stream';
@@ -22,7 +22,8 @@ import {
   type UploadPurpose,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { files } from '../db/schema.js';
+import { files, memberProfiles, pages, postAttachments, posts, users } from '../db/schema.js';
+import { authorActiveSql, pageLiveSql } from '../posts/visibility.js';
 import { Errors } from '../common/errors.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 import { EventsService } from '../infra/events.service.js';
@@ -487,13 +488,15 @@ export class MediaService implements OnModuleInit {
   }
 
   /**
-   * GET /media/{fileId}: clean files only. Avatars and post media are members-only
-   * unless the file is public.
+   * GET /media/{fileId}: clean files only. Avatars and post media are members-only unless the file
+   * is public, or people outside Charter Mission may see it anyway (guestMayLoad): what's attached to
+   * a public post anyone may view (such as a shared certificate), a member's current profile photo,
+   * and a live page's logo — the same pictures link previews show.
    */
   async resolveForServing(viewer: AuthUser | undefined, fileId: string) {
     const file = await this.find(fileId);
     if (!file || file.scanStatus !== 'clean') throw Errors.notFound('File');
-    if (!file.isPublic && !viewer) throw Errors.unauthenticated();
+    if (!file.isPublic && !viewer && !(await this.guestMayLoad(file))) throw Errors.unauthenticated();
     const inline = file.mime.startsWith('image/') || file.mime.startsWith('video/') || file.mime.startsWith('audio/');
     const name = safeFileName(file.originalName ?? 'file', file.mime);
     const disposition = `${inline ? 'inline' : 'attachment'}; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
@@ -501,11 +504,50 @@ export class MediaService implements OnModuleInit {
     return { file, disposition, redirect };
   }
 
+  /** Pictures visitors without an account may load (see resolveForServing). */
+  private async guestMayLoad(file: FileRow): Promise<boolean> {
+    if (file.purpose === 'avatar') {
+      const [m] = await this.db
+        .select({ id: users.id })
+        .from(memberProfiles)
+        .innerJoin(users, eq(users.id, memberProfiles.userId))
+        .where(and(eq(memberProfiles.avatarFileId, file.id), sql`${users.status} in ('active','unverified')`))
+        .limit(1);
+      if (m) return true;
+    }
+    if (file.purpose === 'page_logo') {
+      const [p] = await this.db.select({ id: pages.id }).from(pages).where(and(eq(pages.logoFileId, file.id), eq(pages.status, 'active'))).limit(1);
+      if (p) return true;
+    }
+    return this.onPublicPost(file.id);
+  }
+
+  /** The file is attached to a published, visible public post by an active author (or a live page). */
+  private async onPublicPost(fileId: string): Promise<boolean> {
+    const [hit] = await this.db
+      .select({ id: posts.id })
+      .from(postAttachments)
+      .innerJoin(posts, eq(posts.id, postAttachments.postId))
+      .where(
+        and(
+          eq(postAttachments.fileId, fileId),
+          eq(posts.visibility, 'public'),
+          eq(posts.status, 'published'),
+          eq(posts.moderationState, 'visible'),
+          isNull(posts.deletedAt),
+          sql`(${posts.pageId} is not null or ${authorActiveSql()})`,
+          pageLiveSql,
+        ),
+      )
+      .limit(1);
+    return !!hit;
+  }
+
   /** GET /media/{fileId}/poster: a video's still frame, with the same access rules as the video. */
   async resolvePoster(viewer: AuthUser | undefined, fileId: string) {
     const file = await this.find(fileId);
     if (!file || file.scanStatus !== 'clean' || !file.posterKey) throw Errors.notFound('File');
-    if (!file.isPublic && !viewer) throw Errors.unauthenticated();
+    if (!file.isPublic && !viewer && !(await this.guestMayLoad(file))) throw Errors.unauthenticated();
     const redirect = await this.storage.presignDownload(file.posterKey, { mime: 'image/jpeg', disposition: 'inline; filename="poster.jpg"' });
     return { key: file.posterKey, redirect };
   }

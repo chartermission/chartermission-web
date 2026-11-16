@@ -1171,4 +1171,5 @@ export const ar: Record<string, string> = {
   "Reply from the page’s enquiries. Your answer goes to them in Messages.": "ردّ من قسم الاستفسارات في الصفحة. يصله ردّك في الرسائل.",
   "See enquiries": "عرض الاستفسارات",
   "Your consultation: {title} with {name}.": "استشارتك: {title} مع {name}.",
+  "Your certificate isn’t ready yet.": "شهادتك ليست جاهزة بعد.",
 };

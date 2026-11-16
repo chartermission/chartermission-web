@@ -1171,4 +1171,5 @@ export const fr: Record<string, string> = {
   "Reply from the page’s enquiries. Your answer goes to them in Messages.": "Répondez depuis les demandes de la page. Votre réponse lui parvient dans Messages.",
   "See enquiries": "Voir les demandes",
   "Your consultation: {title} with {name}.": "Votre consultation : {title} avec {name}.",
+  "Your certificate isn’t ready yet.": "Votre certificat n’est pas encore prêt.",
 };

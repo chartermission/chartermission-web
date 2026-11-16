@@ -3,31 +3,62 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ExamCertificateView } from "@chartermission/contracts";
-import { Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
+import { Button, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
+import { openShare } from "@/components/social/share-out";
+import { toast } from "@/components/social/toast";
 import { NoTranslate } from "@/i18n/auto";
+import { useT } from "@/i18n/client";
 
 /** Asks again every few seconds while Charter Center prepares the certificate, then less often. */
 const POLL_MS = [4000, 4000, 6000, 8000, 10_000, 15_000, 30_000];
 
 /**
  * The member's Charter Center certificate for an exam they passed: on its way (checked again while
- * the page is open), ready to download and shared on their feed, or not available.
+ * the page is open), ready to download, or not available. Once issued it can always be shared: on
+ * the feed (again, if they deleted the first post) and, through that public post, on LinkedIn,
+ * WhatsApp, X and the rest.
  */
 export function CertificateCard({
   examId,
+  examTitle,
   initial,
   finishProfile = false,
   className,
 }: {
   examId: string;
+  /** For the line that goes with the link when it's shared elsewhere. */
+  examTitle?: string;
   initial: ExamCertificateView | null;
   /** The member joined from an invitation and hasn't finished their profile yet. */
   finishProfile?: boolean;
   className?: string;
 }) {
+  const t = useT();
   const [cert, setCert] = useState(initial);
+  const [posting, setPosting] = useState(false);
   const waiting = !cert || cert.status === "pending";
+
+  function shareOut(postId: string) {
+    const line = examTitle
+      ? t("I passed “{exam}” and earned my Charter Center certificate.", { exam: examTitle })
+      : t("I earned my Charter Center certificate.");
+    openShare({ path: `/posts/${postId}`, title: line, text: line, send: { type: "post", key: postId } });
+  }
+
+  async function shareToFeed() {
+    setPosting(true);
+    try {
+      const next = await api<ExamCertificateView>(`/exams/${examId}/certificate/post`, { method: "POST" });
+      setCert(next);
+      toast.success("Shared on your feed");
+      if (next.postId) shareOut(next.postId);
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setPosting(false);
+    }
+  }
 
   useEffect(() => {
     if (!waiting) return;
@@ -90,14 +121,31 @@ export function CertificateCard({
                 Download PDF
               </a>
             )}
-            {postHref && (
-              <Link href={postHref} className={buttonClasses({ variant: "secondary" })}>
+            {cert.postId ? (
+              <>
+                <Button variant="secondary" onClick={() => shareOut(cert.postId!)}>
+                  <Icon name="share" size={18} />
+                  Share
+                </Button>
+                {postHref && (
+                  <Link href={postHref} className={buttonClasses({ variant: "secondary" })}>
+                    <Icon name="arrow-up-right" size={18} className="rtl:-scale-x-100" />
+                    See it on the feed
+                  </Link>
+                )}
+              </>
+            ) : (
+              <Button variant="secondary" disabled={posting} onClick={() => void shareToFeed()}>
                 <Icon name="share" size={18} />
-                See it on the feed
-              </Link>
+                {posting ? t("Sharing…") : t("Share to feed")}
+              </Button>
             )}
           </div>
-          {cert.postId && <p className="text-xs text-secondary">We shared it on your behalf so the community can congratulate you. You can edit or delete the post like any other.</p>}
+          <p className="text-xs text-secondary">
+            {cert.postId
+              ? "It’s on your feed as a public post, so you can share it on LinkedIn, WhatsApp and elsewhere. You can edit or delete the post like any other."
+              : "Share it on your feed so the community can congratulate you. It’s a public post, so you can then share it on LinkedIn, WhatsApp and elsewhere."}
+          </p>
           {finishProfile && (
             <p className="flex items-start gap-2 rounded-[10px] bg-info-light p-3 text-sm text-body">
               <Icon name="user" size={16} className="mt-0.5 shrink-0 text-info" />

@@ -79,6 +79,17 @@ export class ExamsController {
     return this.exams.certificate(ctx.user, id);
   }
 
+  /**
+   * Shares the member's issued certificate on their feed as a public post, again if they deleted
+   * the first one. Returns the certificate with the post's id (the live post if there already is one).
+   */
+  @Post('exams/:id/certificate/post')
+  @Access('member')
+  @HttpCode(200)
+  shareCertificate(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<ExamCertificateView> {
+    return this.exams.shareCertificate(ctx.user, id);
+  }
+
   @Get('exam-attempts/:id')
   @Access('member')
   attempt(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<ExamAttemptView> {

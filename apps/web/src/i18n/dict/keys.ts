@@ -3993,4 +3993,9 @@ export const KEYS: readonly string[] = [
   "on",
   "is coming up:",
   "Unread: {text}",
+  "I passed “{exam}” and earned my Charter Center certificate.",
+  "I earned my Charter Center certificate.",
+  "Shared on your feed",
+  "It’s on your feed as a public post, so you can share it on LinkedIn, WhatsApp and elsewhere. You can edit or delete the post like any other.",
+  "Share it on your feed so the community can congratulate you. It’s a public post, so you can then share it on LinkedIn, WhatsApp and elsewhere.",
 ];

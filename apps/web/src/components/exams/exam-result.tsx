@@ -193,7 +193,7 @@ export function ExamResultView({ attempt, finishProfile = false }: { attempt: Ex
 
       {/* Passing an exam tied to a Charter Center course earns its certificate. */}
       {attempt.awardsCertificate && (result.passed || attempt.certificate) && (
-        <CertificateCard examId={exam.id} initial={attempt.certificate} finishProfile={finishProfile} />
+        <CertificateCard examId={exam.id} examTitle={exam.title} initial={attempt.certificate} finishProfile={finishProfile} />
       )}
 
       {result.sections.length > 0 && (

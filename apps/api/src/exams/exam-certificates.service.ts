@@ -10,6 +10,7 @@ import type { ExamCertificateSettings, ExamCertificateView } from '@chartermissi
 import { InjectDb, type Db } from '../db/db.module.js';
 import { examCertificates, exams, files, memberProfiles, pages, posts, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
+import type { AuthUser } from '../core/auth-context.js';
 import { env, isProd } from '../config/env.js';
 import { SessionService } from '../core/session.service.js';
 import { mediaUrl } from '../core/members.service.js';
@@ -167,6 +168,28 @@ export class ExamCertificatesService implements OnModuleInit {
     return certificateView(row, await this.postAlive(row.postId));
   }
 
+  /**
+   * POST /exams/{id}/certificate/post: the member shares their issued certificate on the feed (a
+   * public post), whatever the exam's auto-share setting, and again if they deleted the first post.
+   */
+  async shareForMember(examId: string, viewer: AuthUser): Promise<ExamCertificateView> {
+    const [row] = await this.db
+      .select()
+      .from(examCertificates)
+      .where(and(eq(examCertificates.examId, examId), eq(examCertificates.userId, viewer.id)))
+      .limit(1);
+    if (!row || row.status !== 'issued') throw Errors.conflict('Your certificate isn’t ready yet.');
+    if (!(row.imageFileId ?? row.pdfFileId)) throw Errors.conflict('Your certificate isn’t ready yet.');
+    if (!(await this.postAlive(row.postId))) {
+      // A deleted post keeps its files marked as attached (posts are soft-deleted): free the
+      // certificate's own files so the new post can carry them.
+      const own = [row.imageFileId, row.pdfFileId].filter((id): id is string => !!id);
+      if (row.postId && own.length) await this.db.update(files).set({ attachedAt: null }).where(inArray(files.id, own));
+      await this.share(row, { requested: true });
+    }
+    return this.forMember(examId, viewer.id) as Promise<ExamCertificateView>;
+  }
+
   /** POST /admin/exam-certificates/:id/retry — ask again now (also brings a failed one back). */
   async retry(id: string): Promise<void> {
     if (!isUuid(id)) throw Errors.notFound('Certificate');
@@ -305,12 +328,14 @@ export class ExamCertificatesService implements OnModuleInit {
   }
 
   /** Posts the certificate as the member: a "Certification" celebration everyone sees, linked to Charter Center's page. */
-  private async share(row: CertificateRow) {
+  private async share(row: CertificateRow, opts: { requested?: boolean } = {}) {
     if (row.postId && (await this.postAlive(row.postId))) return;
-    if (row.postId) return; // The member deleted the post: don't post it again.
+    // The member deleted the automatic post: only post it again when they ask (shareForMember).
+    if (row.postId && !opts.requested) return;
     const [exam] = await this.db.select().from(exams).where(eq(exams.id, row.examId)).limit(1);
     const attachment = row.imageFileId ?? row.pdfFileId;
-    if (!exam?.shareCertificates || !attachment) return;
+    if (!exam || !attachment) return;
+    if (!exam.shareCertificates && !opts.requested) return;
     const author = await this.sessions.userById(row.userId);
     if (!author) return;
     const subject = (row.request as unknown as CertificateRequest | null)?.course_title || exam.certificate?.title || exam.title;

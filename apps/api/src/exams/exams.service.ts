@@ -111,6 +111,11 @@ export class ExamsService {
     return this.certificates.forMember(exam.id, viewer.id);
   }
 
+  async shareCertificate(viewer: AuthUser, examId: string) {
+    const exam = await this.findVisible(viewer, { id: examId });
+    return this.certificates.shareForMember(exam.id, viewer);
+  }
+
   /**
    * The exam, if this member may see it: published and given to them; a draft or any exam for staff
    * who manage exams; or an archived exam the member has taken (so their results stay reachable).

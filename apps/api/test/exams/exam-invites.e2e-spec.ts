@@ -276,6 +276,37 @@ describe('Exams by invitation link, and Charter Center certificates for those wh
     await admin.patch(`/admin/exams/${exam.id}`, { shareCertificates: true }).expect(200);
   });
 
+  it('members can always share their certificate on the feed, as a public post outsiders can see', async () => {
+    await admin.patch(`/admin/exams/${exam.id}`, { shareCertificates: false }).expect(200);
+    const m = await createMember(t, { name: 'Sharing Student' });
+    await invite(m).expect(200);
+    const cert = (await passExam(m, 2)).certificate!;
+    expect(cert.postId).toBeNull();
+    await admin.patch(`/admin/exams/${exam.id}`, { shareCertificates: true }).expect(200);
+
+    // Before passing there's nothing to share.
+    const other = await createMember(t, { name: 'Not Passed Yet' });
+    await invite(other).expect(200);
+    await other.post(`/exams/${exam.id}/certificate/post`).expect(409);
+
+    const shared = (await m.post(`/exams/${exam.id}/certificate/post`).expect(200)).body as ExamCertificateView;
+    expect(shared.postId).toBeTruthy();
+    // Asking again keeps the same live post.
+    expect(((await m.post(`/exams/${exam.id}/certificate/post`).expect(200)).body as ExamCertificateView).postId).toBe(shared.postId);
+
+    // Public: people without an account can open the post and its certificate picture.
+    expect(((await t.http().get(`/api/v1/posts/${shared.postId}`).expect(200)).body as PostView).id).toBe(shared.postId);
+    const picture = new URL(cert.imageUrl!, 'http://x').pathname;
+    await t.http().get(picture).expect((r) => expect([200, 302]).toContain(r.status));
+
+    // Deleted: the picture is members-only again, and sharing posts it anew.
+    await m.delete(`/posts/${shared.postId}`).expect((r) => expect([200, 204]).toContain(r.status));
+    await t.http().get(picture).expect(401);
+    const again = (await m.post(`/exams/${exam.id}/certificate/post`).expect(200)).body as ExamCertificateView;
+    expect(again.postId).toBeTruthy();
+    expect(again.postId).not.toBe(shared.postId);
+  });
+
   it('a closed exam stays with those who have it; nobody new gets it', async () => {
     const quiz = (await admin.post('/admin/exams/import', { title: 'Closing Soon', questions: [question('C1', 0)] }).expect(201)).body as AdminExamDetail;
     await admin.patch(`/admin/exams/${quiz.id}`, { status: 'published' }).expect(200);

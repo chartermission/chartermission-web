@@ -3995,4 +3995,9 @@ export const ar: Dict = {
   "on": "بتاريخ",
   "is coming up:": "يقترب موعده:",
   "Unread: {text}": "غير مقروء: {text}",
+  "I passed “{exam}” and earned my Charter Center certificate.": "نجحت في «{exam}» وحصلت على شهادتي من Charter Center.",
+  "I earned my Charter Center certificate.": "حصلت على شهادتي من Charter Center.",
+  "Shared on your feed": "تمت المشاركة في خلاصتك",
+  "It’s on your feed as a public post, so you can share it on LinkedIn, WhatsApp and elsewhere. You can edit or delete the post like any other.": "إنها في خلاصتك كمنشور عام، لذا يمكنك مشاركتها على LinkedIn وWhatsApp وغيرها. يمكنك تعديل المنشور أو حذفه مثل أي منشور آخر.",
+  "Share it on your feed so the community can congratulate you. It’s a public post, so you can then share it on LinkedIn, WhatsApp and elsewhere.": "شاركها في خلاصتك ليهنّئك المجتمع. إنه منشور عام، لذا يمكنك بعد ذلك مشاركته على LinkedIn وWhatsApp وغيرها.",
 };
