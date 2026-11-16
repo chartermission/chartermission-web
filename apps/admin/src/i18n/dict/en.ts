@@ -25,4 +25,10 @@ export const en: Dict = {
   "{count} questions ready to import from {name}.": { one: "{count} question ready to import from {name}.", other: "{count} questions ready to import from {name}." },
   "{count} rows will be skipped:": { one: "{count} row will be skipped:", other: "{count} rows will be skipped:" },
   "Exam imported with {count} questions. Check it, then publish it.": { one: "Exam imported with {count} question. Check it, then publish it.", other: "Exam imported with {count} questions. Check it, then publish it." },
+  "{count} tries": { one: "{count} try", other: "{count} tries" },
+  "{count} replacements queued": { one: "{count} replacement queued", other: "{count} replacements queued" },
+  "{count} certificates are outdated": { one: "{count} certificate is outdated", other: "{count} certificates are outdated" },
+  "{count} members get a new certificate built from the current settings.": { one: "{count} member gets a new certificate built from the current settings.", other: "{count} members get a new certificate built from the current settings." },
+  "All {count} issued certificates are replaced with new ones built from the current settings, including those already up to date.": { one: "The issued certificate is replaced with a new one built from the current settings, even if it’s already up to date.", other: "All {count} issued certificates are replaced with new ones built from the current settings, including those already up to date." },
+  "Replaced {count} times": { one: "Replaced once", other: "Replaced {count} times" },
 };

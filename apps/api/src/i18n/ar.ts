@@ -1172,4 +1172,11 @@ export const ar: Record<string, string> = {
   "See enquiries": "عرض الاستفسارات",
   "Your consultation: {title} with {name}.": "استشارتك: {title} مع {name}.",
   "Your certificate isn’t ready yet.": "شهادتك ليست جاهزة بعد.",
+  "Only issued certificates can be replaced": "لا يمكن استبدال إلا الشهادات الصادرة",
+  "A new certificate is already on its way": "شهادة جديدة في الطريق بالفعل",
+  "This exam has no certificate settings": "لا توجد إعدادات شهادة لهذا الاختبار",
+  "Your Charter Center certificate was updated": "تم تحديث شهادتك من Charter Center",
+  "Your certificate was updated": "تم تحديث شهادتك",
+  "The details on your Charter Center certificate for “{title}” were corrected, and Charter Center issued you a new one.": "صُحّحت بيانات شهادتك من Charter Center لـ«{title}»، وأصدر لك Charter Center شهادة جديدة.",
+  "It replaces the old certificate on Charter Mission, including in the post that shared it. If you downloaded the old one, download the new one.": "تحل محل الشهادة القديمة على Charter Mission، بما في ذلك المنشور الذي شاركها. إن كنت قد نزّلت القديمة، فنزّل الجديدة.",
 };

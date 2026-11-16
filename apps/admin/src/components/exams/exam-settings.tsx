@@ -139,12 +139,28 @@ const draftOf = (e: AdminExamDetail): Draft => ({
   certEnd: e.certificate?.endDate ?? "",
 });
 
+/** What goes on a certificate, to tell whether a save changed it. */
+const certificateText = (c: AdminExamDetail["certificate"]) => (c ? [c.title, c.issuerName, c.signatureFileId, c.startDate, c.endDate].join("\u0000") : "");
+
 /** The Settings tab (PATCH /admin/exams/:id): what the exam is called and its rules. Who can take it: whoever opens its invitation link. */
-export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChange: (exam: AdminExamDetail) => void }) {
+export function ExamSettings({
+  exam,
+  onChange,
+  issuedCertificates = 0,
+  onOpenCertificates,
+}: {
+  exam: AdminExamDetail;
+  onChange: (exam: AdminExamDetail) => void;
+  /** Certificates already issued for the exam: after their settings change, they can be replaced. */
+  issuedCertificates?: number;
+  onOpenCertificates?: () => void;
+}) {
   const t = useT();
   const [d, setD] = useState<Draft>(() => draftOf(exam));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  /** The last save changed what goes on the certificate. */
+  const [certificateChanged, setCertificateChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
@@ -202,6 +218,7 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
     setBusy(true);
     try {
       const next = await api<AdminExamDetail>(`/admin/exams/${exam.id}`, { method: "PATCH", body });
+      setCertificateChanged(!!next.certificate && certificateText(next.certificate) !== certificateText(exam.certificate));
       onChange(next);
       setD(draftOf(next));
       setSaved(true);
@@ -405,6 +422,17 @@ export function ExamSettings({ exam, onChange }: { exam: AdminExamDetail; onChan
       </Group>
 
       {saved && <FormNotice tone="success">Saved.</FormNotice>}
+      {saved && certificateChanged && issuedCertificates > 0 && (
+        <p role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-secondary">
+          <Icon name="info" size={14} className="shrink-0 text-info" />
+          <span>Certificates already issued keep the old details. Replace them from the Certificates tab.</span>
+          {onOpenCertificates && (
+            <button type="button" onClick={onOpenCertificates} className="font-medium text-primary hover:underline">
+              Open the Certificates tab
+            </button>
+          )}
+        </p>
+      )}
       {error && <FormNotice tone="error">{error}</FormNotice>}
       <div className="flex justify-end">
         <Button type="submit" size="small" disabled={busy} aria-busy={busy}>

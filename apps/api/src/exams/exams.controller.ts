@@ -2,6 +2,7 @@ import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, Res } 
 import type { Response } from 'express';
 import {
   AdminExamAttemptsQuery,
+  AdminExamCertificatesQuery,
   ExamImportInput,
   ExamQuestionInput,
   ExamQuestionOrderInput,
@@ -9,10 +10,14 @@ import {
   ExamSectionsInput,
   ExamSettingsInput,
   SaveExamAnswerInput,
+  ReissueExamCertificatesInput,
   SendExamInvitesInput,
   UpdateExamInput,
   UpdateExamsSettingsInput,
   type AdminExamAttempt,
+  type AdminExamCertificate,
+  type AdminExamCertificatesPage,
+  type ReissueExamCertificatesResult,
   type AdminExamDetail,
   type AdminExamSummary,
   type ExamAnswerSaved,
@@ -34,6 +39,7 @@ import { UuidParam } from '../media/uuid-param.js';
 import { ExamsService } from './exams.service.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
 import { AdminExamsService } from './admin-exams.service.js';
+import { AdminExamCertificatesService } from './admin-exam-certificates.service.js';
 import { ExamCertificatesService } from './exam-certificates.service.js';
 
 /** Exams for signed-in members: their invited exams, take and review. Marking happens here, never in the browser. */
@@ -141,10 +147,13 @@ export class ExamSignaturesController {
   }
 }
 
-/** Admin console: Charter Center connection for exams, and certificate retries. */
+/** Admin console: Charter Center connection for exams, certificate retries and replacements. */
 @Controller('admin')
 export class AdminExamsSettingsController {
-  constructor(private readonly admin: AdminExamsService) {}
+  constructor(
+    private readonly admin: AdminExamsService,
+    private readonly certificates: AdminExamCertificatesService,
+  ) {}
 
   @Get('exams-settings')
   @Access('admin', 'exam.manage')
@@ -164,12 +173,23 @@ export class AdminExamsSettingsController {
   retryCertificate(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @Req() req: AppRequest): Promise<Ok> {
     return this.admin.retryCertificate(ctx, id, clientIp(req));
   }
+
+  /** Replace an issued certificate with a new one from Charter Center (the exam's current settings). */
+  @Post('exam-certificates/:id/reissue')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  reissueCertificate(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @Req() req: AppRequest): Promise<AdminExamCertificate> {
+    return this.certificates.reissueOne(ctx, id, clientIp(req));
+  }
 }
 
 /** Admin console Exams section: the exam builder and members' results (exam.manage). */
 @Controller('admin/exams')
 export class AdminExamsController {
-  constructor(private readonly admin: AdminExamsService) {}
+  constructor(
+    private readonly admin: AdminExamsService,
+    private readonly certificates: AdminExamCertificatesService,
+  ) {}
 
   @Get()
   @Access('admin', 'exam.manage')
@@ -275,5 +295,25 @@ export class AdminExamsController {
   @Access('admin', 'exam.manage')
   attempts(@UuidParam('id') id: string, @ZQuery(AdminExamAttemptsQuery) q: AdminExamAttemptsQuery): Promise<Page<AdminExamAttempt>> {
     return this.admin.attemptList(id, q);
+  }
+
+  /** The exam's certificates, newest first, with how each differs from the current settings. */
+  @Get(':id/certificates')
+  @Access('admin', 'exam.manage')
+  certificateList(@UuidParam('id') id: string, @ZQuery(AdminExamCertificatesQuery) q: AdminExamCertificatesQuery): Promise<AdminExamCertificatesPage> {
+    return this.certificates.list(id, q);
+  }
+
+  /** Replace the outdated (or all) issued certificates: queued, a few a second. */
+  @Post(':id/certificates/reissue')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  reissueCertificates(
+    @Auth() ctx: AuthContext,
+    @UuidParam('id') id: string,
+    @ZBody(ReissueExamCertificatesInput) input: ReissueExamCertificatesInput,
+    @Req() req: AppRequest,
+  ): Promise<ReissueExamCertificatesResult> {
+    return this.certificates.reissueMany(ctx, id, input, clientIp(req));
   }
 }

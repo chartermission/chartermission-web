@@ -1592,6 +1592,15 @@ export const examCertificates = pgTable(
     tries: integer('tries').notNull().default(0),
     nextTryAt: ts('next_try_at'),
     lastError: text('last_error'),
+    /* Replacing an issued certificate (contracts AdminExamCertificate.replacement): asked for at,
+       tries so far, next try, and why the last one failed. The old certificate stays until the new
+       one arrives. */
+    replaceRequestedAt: ts('replace_requested_at'),
+    replaceTries: integer('replace_tries').notNull().default(0),
+    replaceNextTryAt: ts('replace_next_try_at'),
+    replaceError: text('replace_error'),
+    /** Certificates this one replaced: [{ externalId, imageFileId, pdfFileId, request, issuedAt, replacedAt }]. */
+    history: jsonb('history').$type<Record<string, unknown>[]>().notNull().default([]),
     issuedAt: ts('issued_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

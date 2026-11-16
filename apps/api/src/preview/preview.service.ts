@@ -64,7 +64,9 @@ export class PreviewService {
     return {
       title: clip(title, 120),
       description: clip(description, 220),
-      image: picture ? (picture.kind === 'url' ? picture.url : picture.route) : null,
+      // Versioned by the file: when the picture changes (a new photo, a replaced certificate), its
+      // address changes too, so WhatsApp, LinkedIn and CDNs don't keep showing a cached old one.
+      image: picture ? (picture.kind === 'url' ? picture.url : `${picture.route}?v=${picture.fileId.slice(0, 8)}`) : null,
     };
   }
 

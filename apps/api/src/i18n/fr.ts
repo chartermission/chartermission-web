@@ -1172,4 +1172,11 @@ export const fr: Record<string, string> = {
   "See enquiries": "Voir les demandes",
   "Your consultation: {title} with {name}.": "Votre consultation : {title} avec {name}.",
   "Your certificate isn’t ready yet.": "Votre certificat n’est pas encore prêt.",
+  "Only issued certificates can be replaced": "Seuls les certificats délivrés peuvent être remplacés",
+  "A new certificate is already on its way": "Un nouveau certificat est déjà en route",
+  "This exam has no certificate settings": "Cet examen n’a pas de réglages de certificat",
+  "Your Charter Center certificate was updated": "Votre certificat Charter Center a été mis à jour",
+  "Your certificate was updated": "Votre certificat a été mis à jour",
+  "The details on your Charter Center certificate for “{title}” were corrected, and Charter Center issued you a new one.": "Les informations de votre certificat Charter Center pour « {title} » ont été corrigées et Charter Center vous en a délivré un nouveau.",
+  "It replaces the old certificate on Charter Mission, including in the post that shared it. If you downloaded the old one, download the new one.": "Il remplace l’ancien certificat sur Charter Mission, y compris dans la publication qui l’a partagé. Si vous aviez téléchargé l’ancien, téléchargez le nouveau.",
 };

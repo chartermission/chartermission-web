@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AdminExamDetail, ExamStatus } from "@chartermission/contracts";
+import type { AdminExamCertificatesPage, AdminExamCertificatesSummary, AdminExamDetail, ExamStatus } from "@chartermission/contracts";
 import { Button, Chip, Icon, SegmentedControl, buttonClasses } from "@chartermission/ui";
 import { FormNotice } from "@/components/form-field";
 import { ReasonDialog } from "@/components/reason-dialog";
@@ -16,8 +16,9 @@ import { ExamQuestions } from "./exam-questions";
 import { ExamResults } from "./exam-results";
 import { ExamInvites } from "./exam-invites";
 import { ExamSettings } from "./exam-settings";
+import { ExamCertificates } from "./exam-certificates";
 
-type Tab = "questions" | "settings" | "invite" | "results";
+type Tab = "questions" | "settings" | "invite" | "results" | "certificates";
 type Confirm = "publish" | "unpublish" | "archive" | "delete";
 
 /**
@@ -31,8 +32,25 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
   const [exam, setExam] = useState(initial);
   const [tab, setTab] = useState<Tab>("questions");
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [certificates, setCertificates] = useState<AdminExamCertificatesSummary | null>(null);
   const chip = STATUS_CHIP[exam.status];
   const taken = exam.stats.attempts > 0;
+  // The Certificates tab: for exams that award one, and for any that has certificates already.
+  const certificateCount = certificates ? certificates.issued + certificates.pending + certificates.failed : 0;
+  const showCertificates = exam.certificate !== null || certificateCount > 0;
+  const certificateKey = JSON.stringify(exam.certificate);
+
+  // How many certificates the exam has (and how many are outdated) isn't part of the exam: ask for
+  // the first one alone, again whenever the certificate settings change.
+  const loadCertificates = useCallback(() => {
+    api<AdminExamCertificatesPage>(`/admin/exams/${exam.id}/certificates`, { query: { limit: 1 } }).then(
+      (page) => setCertificates(page.summary),
+      () => undefined,
+    );
+  }, [exam.id]);
+  useEffect(() => {
+    loadCertificates();
+  }, [certificateKey, loadCertificates]);
 
   async function setStatus(status: ExamStatus, done: string) {
     setExam(await api<AdminExamDetail>(`/admin/exams/${exam.id}`, { method: "PATCH", body: { status } }));
@@ -114,13 +132,17 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
           { value: "settings", label: t("Settings") },
           { value: "invite", label: t("Invite") },
           { value: "results", label: `${t("Results")} · ${exam.stats.attempts}` },
+          ...(showCertificates
+            ? [{ value: "certificates" as const, label: certificates ? `${t("Certificates")} · ${certificates.issued}` : t("Certificates") }]
+            : []),
         ]}
       />
 
       {tab === "questions" && <ExamQuestions exam={exam} taken={taken} onChange={setExam} />}
-      {tab === "settings" && <ExamSettings exam={exam} onChange={setExam} />}
+      {tab === "settings" && <ExamSettings exam={exam} onChange={setExam} issuedCertificates={certificates?.issued ?? 0} onOpenCertificates={() => setTab("certificates")} />}
       {tab === "invite" && <ExamInvites exam={exam} />}
       {tab === "results" && <ExamResults exam={exam} onChange={setExam} />}
+      {tab === "certificates" && showCertificates && <ExamCertificates exam={exam} onSummary={setCertificates} />}
 
       {confirm === "publish" && (
         <ReasonDialog

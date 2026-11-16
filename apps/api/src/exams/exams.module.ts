@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { MediaModule } from '../media/media.module.js';
 import { PostsModule } from '../posts/posts.module.js';
 import { AdminExamsService } from './admin-exams.service.js';
+import { AdminExamCertificatesService } from './admin-exam-certificates.service.js';
 import {
   CHARTER_CENTER_EXAMS_CLIENT,
   DEFAULT_CHARTER_CENTER_API_URL,
@@ -37,6 +38,7 @@ import { ExamsService } from './exams.service.js';
     ExamAttemptsService,
     ExamCertificatesService,
     AdminExamsService,
+    AdminExamCertificatesService,
   ],
   exports: [ExamsService],
 })

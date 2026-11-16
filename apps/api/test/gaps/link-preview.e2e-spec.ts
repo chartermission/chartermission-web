@@ -28,10 +28,10 @@ describe('Link previews', () => {
     const [{ handle: quietHandle }] = await t.db.select({ handle: s.memberProfiles.handle }).from(s.memberProfiles).where(eq(s.memberProfiles.userId, quiet.id));
 
     const shown = (await t.http().get('/api/v1/public/preview').query({ path: `/${openHandle}` }).expect(200)).body;
-    expect(shown).toMatchObject({ title: 'Open Person · Charter Mission', description: 'Builder', image: `/public/preview-image/member/${openHandle}` });
+    expect(shown).toMatchObject({ title: 'Open Person · Charter Mission', description: 'Builder', image: expect.stringMatching(new RegExp(`^${escapeRe(`/public/preview-image/member/${openHandle}`)}\\?v=[0-9a-f]{8}$`)) });
 
     const membersOnly = (await t.http().get('/api/v1/public/preview').query({ path: `/${quietHandle}` }).expect(200)).body;
-    expect(membersOnly).toEqual({ title: 'Quiet Person · Charter Mission', description: 'Member of Charter Mission', image: `/public/preview-image/member/${quietHandle}` });
+    expect(membersOnly).toEqual({ title: 'Quiet Person · Charter Mission', description: 'Member of Charter Mission', image: expect.stringMatching(new RegExp(`^${escapeRe(`/public/preview-image/member/${quietHandle}`)}\\?v=[0-9a-f]{8}$`)) });
     await t.http().get('/api/v1/public/preview').query({ path: '/nobody-here-at-all' }).expect(404);
     await t.http().get('/api/v1/public/preview').query({ path: 'https://evil.example' }).expect(404);
   });
@@ -47,9 +47,9 @@ describe('Link previews', () => {
     const hidden = await insert(author.id, 'Taken down', { moderationState: 'hidden' });
 
     const own = (await t.http().get('/api/v1/public/preview').query({ path: `/posts/${withImage.id}` }).expect(200)).body;
-    expect(own).toEqual({ title: 'Picture Poster on Charter Mission', description: 'Harvest day in Tamale', image: `/public/preview-image/post/${withImage.id}` });
+    expect(own).toEqual({ title: 'Picture Poster on Charter Mission', description: 'Harvest day in Tamale', image: expect.stringMatching(new RegExp(`^${escapeRe(`/public/preview-image/post/${withImage.id}`)}\\?v=[0-9a-f]{8}$`)) });
     const re = (await t.http().get('/api/v1/public/preview').query({ path: `/posts/${repost.id}` }).expect(200)).body;
-    expect(re).toEqual({ title: 'Re Poster reposted on Charter Mission', description: 'Harvest day in Tamale', image: `/public/preview-image/post/${repost.id}` });
+    expect(re).toEqual({ title: 'Re Poster reposted on Charter Mission', description: 'Harvest day in Tamale', image: expect.stringMatching(new RegExp(`^${escapeRe(`/public/preview-image/post/${repost.id}`)}\\?v=[0-9a-f]{8}$`)) });
     await t.http().get('/api/v1/public/preview').query({ path: `/posts/${hidden.id}` }).expect(404);
     await t.http().get(`/api/v1/public/preview-image/post/${hidden.id}`).expect(404);
   });
@@ -64,7 +64,7 @@ describe('Link previews', () => {
     await insert('gone-initiative-preview', { deletedAt: new Date() });
 
     const shown = (await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/solar-schools-preview' }).expect(200)).body;
-    expect(shown).toEqual({ title: 'Solar Schools Accra', description: 'Rooftop solar for 10 public schools.', image: '/public/preview-image/initiative/solar-schools-preview' });
+    expect(shown).toEqual({ title: 'Solar Schools Accra', description: 'Rooftop solar for 10 public schools.', image: expect.stringMatching(new RegExp(`^${escapeRe('/public/preview-image/initiative/solar-schools-preview')}\\?v=[0-9a-f]{8}$`)) });
     const plain = (await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/plain-initiative-preview' }).expect(200)).body;
     expect(plain.image).toBeNull();
     await t.http().get('/api/v1/public/preview').query({ path: '/initiatives/hidden-initiative-preview' }).expect(404);
@@ -109,3 +109,7 @@ describe('Link previews', () => {
     expect(cached?.length).toBe((wide.body as Buffer).length);
   });
 });
+
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

@@ -45,6 +45,9 @@ import { z } from "zod";
  *  GET    /admin/exams/:id/invites              ExamInviteRow[]
  *  POST   /admin/exams/:id/invites              SendExamInvitesInput → SendExamInvitesResult
  *  POST   /admin/exam-certificates/:id/retry    Ok. Ask Charter Center again now.
+ *  GET    /admin/exams/:id/certificates         AdminExamCertificatesPage; AdminExamCertificatesQuery
+ *  POST   /admin/exam-certificates/:id/reissue  AdminExamCertificate. Replace one issued certificate.
+ *  POST   /admin/exams/:id/certificates/reissue ReissueExamCertificatesInput → ReissueExamCertificatesResult
  *  GET    /admin/exams-settings                 ExamsAdminSettings
  *  PUT    /admin/exams-settings                 UpdateExamsSettingsInput → ExamsAdminSettings
  *
@@ -644,3 +647,104 @@ export const UpdateExamsSettingsInput = z.object({
   certificatePageSlug: z.string().trim().toLowerCase().max(100).nullable(),
 });
 export type UpdateExamsSettingsInput = z.infer<typeof UpdateExamsSettingsInput>;
+
+/* ---------------- Issued certificates and replacing them ---------------- */
+
+/*
+ * When an exam's certificate settings were wrong (a misspelt course title, the wrong dates or
+ * issuer), certificates already issued can be replaced. A replacement asks Charter Center for a new
+ * certificate built from the exam's current settings and the member's current name; until it
+ * arrives the member keeps the old one. When it arrives it replaces the old one everywhere: the
+ * exam page and the member's account (download link and picture), and the certificate post on the
+ * feed (its picture, its "Certification" headline, and the old title in its text). The member gets
+ * an email. The old certificate is kept in the certificate's history (not shown to members).
+ */
+
+/** Ways an issued certificate differs from what would be issued now. */
+export const ExamCertificateDifference = z.enum(["title", "issuer", "dates", "signature", "name"]);
+export type ExamCertificateDifference = z.infer<typeof ExamCertificateDifference>;
+
+/** What a certificate was issued with: what Charter Center was sent. */
+export const ExamCertificateIssuedWith = z.object({
+  studentName: z.string(),
+  courseTitle: z.string(),
+  issuerName: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+});
+export type ExamCertificateIssuedWith = z.infer<typeof ExamCertificateIssuedWith>;
+
+/** One certificate of an exam, as the admin console lists it. */
+export const AdminExamCertificate = z.object({
+  id: z.string().uuid(),
+  member: z.object({ id: z.string().uuid(), name: z.string(), handle: z.string(), email: z.string(), avatarUrl: z.string().nullable() }),
+  status: ExamCertificateStatus,
+  /** Charter Center's certificate number. */
+  certificateId: z.string().nullable(),
+  /** Null when nothing has been sent to Charter Center yet. */
+  issuedWith: ExamCertificateIssuedWith.nullable(),
+  /** Empty when it matches the exam's current settings and the member's current name. */
+  differences: z.array(ExamCertificateDifference),
+  imageUrl: z.string().nullable(),
+  downloadUrl: z.string().nullable(),
+  /** The certificate post on the feed, if it's still there. */
+  postId: z.string().uuid().nullable(),
+  issuedAt: z.string().nullable(),
+  /** A replacement has been asked for and is on its way (the old certificate stays until it arrives). */
+  replacement: z
+    .object({
+      requestedAt: z.string(),
+      tries: z.number().int(),
+      lastError: z.string().nullable(),
+      /** Stopped trying (Charter Center kept failing, or the member's account is gone): replace it again to retry. */
+      gaveUp: z.boolean(),
+    })
+    .nullable(),
+  /** How many times this certificate has been replaced. */
+  replacedCount: z.number().int(),
+  lastError: z.string().nullable(),
+});
+export type AdminExamCertificate = z.infer<typeof AdminExamCertificate>;
+
+/** GET /admin/exams/:id/certificates — newest first. */
+export const AdminExamCertificatesQuery = z.object({
+  /** Member name, handle, email or certificate number. */
+  q: z.string().trim().max(100).optional(),
+  status: z.enum(["all", "issued", "pending", "failed"]).default("all"),
+  /** Only issued certificates that differ from the current settings. */
+  outdated: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type AdminExamCertificatesQuery = z.infer<typeof AdminExamCertificatesQuery>;
+
+export const AdminExamCertificatesSummary = z.object({
+  issued: z.number().int(),
+  pending: z.number().int(),
+  failed: z.number().int(),
+  /** Issued ones that differ from the exam's current settings or the member's name. */
+  outdated: z.number().int(),
+  /** Replacements on their way. */
+  replacing: z.number().int(),
+});
+export type AdminExamCertificatesSummary = z.infer<typeof AdminExamCertificatesSummary>;
+
+export const AdminExamCertificatesPage = z.object({
+  items: z.array(AdminExamCertificate),
+  nextCursor: z.string().nullable(),
+  summary: AdminExamCertificatesSummary,
+});
+export type AdminExamCertificatesPage = z.infer<typeof AdminExamCertificatesPage>;
+
+/** POST /admin/exams/:id/certificates/reissue — replace many at once (queued, a few a second). */
+export const ReissueExamCertificatesInput = z.object({
+  /** outdated: issued certificates that differ from the current settings; all: every issued one. */
+  scope: z.enum(["outdated", "all"]),
+});
+export type ReissueExamCertificatesInput = z.infer<typeof ReissueExamCertificatesInput>;
+
+export const ReissueExamCertificatesResult = z.object({ queued: z.number().int() });
+export type ReissueExamCertificatesResult = z.infer<typeof ReissueExamCertificatesResult>;
