@@ -4000,4 +4000,5 @@ export const ar: Dict = {
   "Shared on your feed": "تمت المشاركة في خلاصتك",
   "It’s on your feed as a public post, so you can share it on LinkedIn, WhatsApp and elsewhere. You can edit or delete the post like any other.": "إنها في خلاصتك كمنشور عام، لذا يمكنك مشاركتها على LinkedIn وWhatsApp وغيرها. يمكنك تعديل المنشور أو حذفه مثل أي منشور آخر.",
   "Share it on your feed so the community can congratulate you. It’s a public post, so you can then share it on LinkedIn, WhatsApp and elsewhere.": "شاركها في خلاصتك ليهنّئك المجتمع. إنه منشور عام، لذا يمكنك بعد ذلك مشاركته على LinkedIn وWhatsApp وغيرها.",
+  "Showing {shown} of {count} members": "الأعضاء: عرض {shown} من أصل {count}",
 };

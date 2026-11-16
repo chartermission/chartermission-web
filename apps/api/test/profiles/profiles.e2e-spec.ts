@@ -160,6 +160,7 @@ describe('Profiles: per-viewer allow-list, privacy, directory (spec 4.3, 4.6)', 
     const follows = await t.db.select().from(s.follows).where(eq(s.follows.targetType, 'member'));
     expect(follows.filter((f) => [a.id, b.id].includes(f.followerId) && [a.id, b.id].includes(f.targetId))).toHaveLength(0);
     expect((await a.get('/me/connections?filter=connected').expect(200)).body.items).toHaveLength(0);
+    expect((await a.get('/me/connections?filter=connected').expect(200)).body.total).toBe(0);
 
     // Only the blocker sees the block.
     expect((await a.get('/me/blocks').expect(200)).body.map((x: { member: { id: string } }) => x.member.id)).toEqual([b.id]);
@@ -225,6 +226,11 @@ describe('Profiles: per-viewer allow-list, privacy, directory (spec 4.3, 4.6)', 
     const page2 = await viewer.get(`/members?sector=${sector.id}&sort=name&limit=2&cursor=${page1.body.nextCursor}`).expect(200);
     expect(page2.body.items.map((m: { name: string }) => m.name)).toEqual(['Paging Charlie']);
     expect(page2.body.nextCursor).toBeNull();
+
+    // The real number of matches, not just the page: asked for with count=true, on the first page.
+    expect((await viewer.get(`/members?sector=${sector.slug}&sort=name&limit=2&count=true`).expect(200)).body.total).toBe(3);
+    expect(page1.body.total).toBeNull();
+    expect((await viewer.get(`/members?sector=${sector.id}&sort=name&limit=2&count=true&cursor=${page1.body.nextCursor}`).expect(200)).body.total).toBeNull();
 
     const recent = await viewer.get(`/members?sector=${sector.slug}&sort=recent&limit=1`).expect(200);
     expect(recent.body.items[0].id).toBe(people[2]!.id);

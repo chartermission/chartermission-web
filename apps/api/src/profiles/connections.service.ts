@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm';
-import type { ConnectionView, ConnectionsQuery, CreateConnectionInput, Page } from '@chartermission/contracts';
+import type { ConnectionView, ConnectionsPage, ConnectionsQuery, CreateConnectionInput } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { connections, users } from '../db/schema.js';
+import { connections, memberProfiles, users } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
@@ -148,7 +148,7 @@ export class ConnectionsService {
   }
 
   /** GET /me/connections?filter=connected|incoming|outgoing */
-  async list(userId: string, query: ConnectionsQuery): Promise<Page<ConnectionView>> {
+  async list(userId: string, query: ConnectionsQuery): Promise<ConnectionsPage> {
     const cursor = decodeCursor<{ c: string; id: string }>(query.cursor);
     const other = sql`case when ${connections.requesterId} = ${userId} then ${connections.addresseeId} else ${connections.requesterId} end`;
     const filter =
@@ -157,18 +157,23 @@ export class ConnectionsService {
         : query.filter === 'incoming'
           ? and(eq(connections.status, 'pending'), eq(connections.addresseeId, userId))
           : and(eq(connections.status, 'pending'), eq(connections.requesterId, userId));
+    const shown = and(filter, sql`${users.status} not in ('deactivated', 'deletion_pending', 'deleted')`, this.relations.notBlockedSql(userId, other));
+    // How many in this list in all, on the first page only (the same people the list shows).
+    const total = cursor
+      ? null
+      : ((
+          await this.db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(connections)
+            .innerJoin(users, sql`${users.id} = ${other}`)
+            .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
+            .where(shown)
+        )[0]?.n ?? 0);
     const rows = await this.db
       .select({ row: connections, cursorAt: sql<string>`${connections.createdAt}::text` })
       .from(connections)
       .innerJoin(users, sql`${users.id} = ${other}`)
-      .where(
-        and(
-          filter,
-          sql`${users.status} not in ('deactivated', 'deletion_pending', 'deleted')`,
-          this.relations.notBlockedSql(userId, other),
-          cursor ? sql`(${connections.createdAt}, ${connections.id}) < (${cursor.c}::timestamptz, ${cursor.id}::uuid)` : undefined,
-        ),
-      )
+      .where(and(shown, cursor ? sql`(${connections.createdAt}, ${connections.id}) < (${cursor.c}::timestamptz, ${cursor.id}::uuid)` : undefined))
       .orderBy(desc(connections.createdAt), desc(connections.id))
       .limit(query.limit + 1);
     const page = paginate(rows, query.limit, (r) => ({ c: r.cursorAt, id: r.row.id }));
@@ -176,6 +181,7 @@ export class ConnectionsService {
     return {
       items: page.items.map((r) => this.toView(r.row, userId, refs)).filter((v): v is ConnectionView => !!v),
       nextCursor: page.nextCursor,
+      total,
     };
   }
 

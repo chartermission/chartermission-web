@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type {
   ConnectionView,
+  ConnectionsPage,
   ConnectionsQuery,
   Page,
 } from "@chartermission/contracts";
@@ -16,7 +17,7 @@ import { ErrorNotice } from "@/components/social/errors";
 import { memberHref } from "@/components/social/links";
 import { MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { toast } from "@/components/social/toast";
-import { T, useT } from "@/i18n/client";
+import { T, useIntlTag, useT } from "@/i18n/client";
 
 type Filter = ConnectionsQuery["filter"];
 
@@ -170,13 +171,16 @@ export function ConnectionList({
   empty,
 }: {
   filter: Filter;
-  initial: Page<ConnectionView>;
+  initial: ConnectionsPage;
   title: string;
   empty: ReactNode;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
+  /** How many in this list in all; goes down as requests are answered or connections removed here. */
+  const [total, setTotal] = useState(initial.total);
+  const intl = useIntlTag();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -201,13 +205,17 @@ export function ConnectionList({
 
   function done(id: string, message: string) {
     setItems((current) => current.filter((c) => c.id !== id));
+    setTotal((n) => (n == null ? n : Math.max(0, n - 1)));
     toast.success(message);
     router.refresh();
   }
 
   return (
     <Panel aria-label={title} className="flex flex-col">
-      <h2 className="px-5 pb-1 pt-4 text-h3 text-ink max-sm:px-4">{title}</h2>
+      <h2 className="px-5 pb-1 pt-4 text-h3 text-ink max-sm:px-4">
+        {title}
+        {total != null && total > 0 && <span className="ms-1.5 font-normal text-secondary">({total.toLocaleString(intl)})</span>}
+      </h2>
       {items.length === 0 ? (
         <div className="px-5 pb-6 pt-2 text-sm text-secondary max-sm:px-4">
           {empty}

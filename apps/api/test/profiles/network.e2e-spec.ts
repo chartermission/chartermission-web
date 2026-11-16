@@ -30,6 +30,7 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
 
     const incoming = await b.get('/me/connections?filter=incoming').expect(200);
     expect(incoming.body.items.map((c: { id: string; direction: string }) => [c.id, c.direction])).toEqual([[req.body.id, 'incoming']]);
+    expect(incoming.body.total).toBe(1);
     expect((await a.get('/me/connections?filter=outgoing').expect(200)).body.items).toHaveLength(1);
 
     const [requestNote] = await notificationsFor(t, b.id, 'connection_request');
@@ -48,6 +49,7 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
 
     const connected = await a.get('/me/connections?filter=connected').expect(200);
     expect(connected.body.items[0]).toMatchObject({ id: req.body.id, status: 'accepted', member: { id: b.id } });
+    expect(connected.body.total).toBe(1);
     expect((await a.get(`/members/${b.handle}`).expect(200)).body.relationship).toMatchObject({ connection: 'connected', connectionId: req.body.id });
 
     const removed = await b.delete(`/connections/${req.body.id}`).expect(200);

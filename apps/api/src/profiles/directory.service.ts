@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { and, eq, ne, sql, type SQL } from 'drizzle-orm';
-import type { DirectoryMember, DirectoryQuery, Page } from '@chartermission/contracts';
+import type { DirectoryMember, DirectoryPage, DirectoryQuery } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { chapters, countries, follows, memberProfiles, profileSectors, profileSkills, users } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
@@ -30,7 +30,7 @@ export class DirectoryService {
     private readonly limits: RateLimitService,
   ) {}
 
-  async search(ctx: AuthContext, query: DirectoryQuery): Promise<Page<DirectoryMember>> {
+  async search(ctx: AuthContext, query: DirectoryQuery): Promise<DirectoryPage> {
     const viewerId = ctx.user.id;
     await this.limits.consume(`directory:${viewerId}`, 60, 60);
 
@@ -47,7 +47,7 @@ export class DirectoryService {
         .from(chapters)
         .where(and(sql`(${chapters.slug} = ${query.chapter} or ${chapters.id}::text = ${query.chapter})`, eq(chapters.status, 'active')))
         .limit(1);
-      if (!chapter) return { items: [], nextCursor: null };
+      if (!chapter) return { items: [], nextCursor: null, total: query.count ? 0 : null };
       conditions.push(
         sql`exists (select 1 from ${follows} f where f.target_type = 'chapter' and f.target_id = ${chapter.id} and f.follower_id = ${memberProfiles.userId})`,
       );
@@ -85,7 +85,7 @@ export class DirectoryService {
     ] as const) {
       if (!value) continue;
       const id = await this.taxonomy.resolve(kind, value);
-      if (!id) return { items: [], nextCursor: null };
+      if (!id) return { items: [], nextCursor: null, total: query.count ? 0 : null };
       conditions.push(
         sql`exists (select 1 from ${join} j where j.user_id = ${memberProfiles.userId} and j.item_id = ${id})`,
         fieldVisibleToMemberSql(kind, viewerId),
@@ -94,6 +94,8 @@ export class DirectoryService {
 
     const sort = query.sort === 'relevance' && !score ? 'recent' : query.sort;
     const cursor = decodeCursor<{ k: string; id: string }>(query.cursor);
+    // How many match in all (before the cursor narrows it), on the first page only.
+    const total = query.count && !cursor ? await this.count(conditions) : null;
     let sortKey: SQL;
     let order: SQL;
     if (sort === 'relevance') {
@@ -138,6 +140,15 @@ export class DirectoryService {
       const location = r.locationVisible ? [r.city, r.countryName].filter(Boolean).join(', ') || null : null;
       items.push({ ...ref, location, mutualConnections: mutual.get(r.userId) ?? 0, relationship: rels.get(r.userId)! });
     }
-    return { items, nextCursor: page.nextCursor };
+    return { items, nextCursor: page.nextCursor, total };
+  }
+
+  private async count(conditions: (SQL | undefined)[]): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(memberProfiles)
+      .innerJoin(users, eq(users.id, memberProfiles.userId))
+      .where(and(...conditions));
+    return row?.n ?? 0;
   }
 }

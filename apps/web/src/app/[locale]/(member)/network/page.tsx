@@ -4,9 +4,8 @@ import { Suspense } from "react";
 import {
   type MyReferrals,
   DirectoryQuery,
-  type ConnectionView,
-  type DirectoryMember,
-  type Page,
+  type ConnectionsPage,
+  type DirectoryPage,
   type SuggestedMember,
 } from "@chartermission/contracts";
 import { cn } from "@chartermission/ui";
@@ -74,7 +73,7 @@ function TabNav({ active, incoming }: { active: Tab; incoming: number }) {
 const noMember = { self: false, connection: "none", connectionId: null, following: false, followsYou: false, blocked: false, muted: false } as const;
 
 async function ConnectionsTab() {
-  const result = await settle(apiGet<Page<ConnectionView>>("/me/connections", { filter: "connected" }));
+  const result = await settle(apiGet<ConnectionsPage>("/me/connections", { filter: "connected" }));
   if (!result.ok) return <SectionError message={errorMessage(result.error)} retryHref="/network?tab=connections" />;
   return (
     <ConnectionList
@@ -98,13 +97,13 @@ async function ConnectionsTab() {
   );
 }
 
-async function InvitationsTab({ incoming }: { incoming: Page<ConnectionView> | null }) {
-  const outgoing = await settle(apiGet<Page<ConnectionView>>("/me/connections", { filter: "outgoing" }));
+async function InvitationsTab({ incoming }: { incoming: ConnectionsPage | null }) {
+  const outgoing = await settle(apiGet<ConnectionsPage>("/me/connections", { filter: "outgoing" }));
   return (
     <>
       <ConnectionList
         filter="incoming"
-        initial={incoming ?? { items: [], nextCursor: null }}
+        initial={incoming ?? { items: [], nextCursor: null, total: 0 }}
         title="Received"
         empty="No pending invitations. Requests from other members appear here."
       />
@@ -205,7 +204,7 @@ async function DirectoryTab({ sp }: { sp: Awaited<SearchParams> }) {
   const query = parsed.success ? parsed.data : DirectoryQuery.parse({});
   const filters = { q: query.q, country: query.country, sector: query.sector, skill: query.skill, sort: query.sort };
   const [page, taxonomies] = await Promise.all([
-    settle(apiGet<Page<DirectoryMember>>("/members", { ...filters, sort: query.sort === "relevance" ? undefined : query.sort })),
+    settle(apiGet<DirectoryPage>("/members", { ...filters, sort: query.sort === "relevance" ? undefined : query.sort, count: "true" })),
     getTaxonomies().catch(() => ({ countries: [], sectors: [], skills: [] })),
   ]);
   if (!page.ok) return <SectionError message={errorMessage(page.error)} retryHref="/network?tab=directory" />;
@@ -217,10 +216,10 @@ async function NetworkMain({ searchParams }: { searchParams: SearchParams }) {
   const tabParam = first(sp.tab);
   const tab: Tab = tabs.some((t) => t.value === tabParam) ? (tabParam as Tab) : "connections";
   await requireClientViewer("/network");
-  const incoming = await apiGet<Page<ConnectionView>>("/me/connections", { filter: "incoming", limit: 50 }).catch(() => null);
+  const incoming = await apiGet<ConnectionsPage>("/me/connections", { filter: "incoming", limit: 50 }).catch(() => null);
   return (
     <>
-      <TabNav active={tab} incoming={incoming?.items.length ?? 0} />
+      <TabNav active={tab} incoming={incoming?.total ?? incoming?.items.length ?? 0} />
       {tab === "connections" && <ConnectionsTab />}
       {tab === "invitations" && <InvitationsTab incoming={incoming} />}
       {tab === "suggestions" && <SuggestionsTab />}

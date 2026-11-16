@@ -13,7 +13,8 @@ import {
   type HandleAvailability,
   type BlockView,
   type ConnectionView,
-  type DirectoryMember,
+  type ConnectionsPage,
+  type DirectoryPage,
   type FollowView,
   type MemberProfile,
   type MuteView,
@@ -52,7 +53,7 @@ export class ProfilesController {
 
   @Get('members')
   @Access('member')
-  search(@Auth() ctx: AuthContext, @ZQuery(DirectoryQuery) query: DirectoryQuery): Promise<Page<DirectoryMember>> {
+  search(@Auth() ctx: AuthContext, @ZQuery(DirectoryQuery) query: DirectoryQuery): Promise<DirectoryPage> {
     return this.directory.search(ctx, query);
   }
 
@@ -144,7 +145,7 @@ export class ConnectionsController {
 
   @Get('me/connections')
   @Access('session')
-  list(@Auth() ctx: AuthContext, @ZQuery(ConnectionsQuery) query: ConnectionsQuery): Promise<Page<ConnectionView>> {
+  list(@Auth() ctx: AuthContext, @ZQuery(ConnectionsQuery) query: ConnectionsQuery): Promise<ConnectionsPage> {
     return this.connections.list(ctx.user.id, query);
   }
 }

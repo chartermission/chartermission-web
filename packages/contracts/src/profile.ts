@@ -295,8 +295,19 @@ export const DirectoryQuery = z.object({
   sort: z.enum(["relevance", "recent", "name"]).default("relevance"),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(24),
+  /** "true": also count every match (DirectoryPage.total). Off for quick lookups such as @mentions. */
+  count: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
 });
 export type DirectoryQuery = z.infer<typeof DirectoryQuery>;
+
+/**
+ * GET /members: a page of the directory. `total` is how many members match the search and filters
+ * (the viewer excluded), when asked for with count=true and on the first page only; otherwise null.
+ */
+export type DirectoryPage = { items: DirectoryMember[]; nextCursor: string | null; total: number | null };
 
 export const DirectoryMember = MemberRef.extend({
   location: z.string().nullable(),
@@ -339,6 +350,9 @@ export const ConnectionsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 export type ConnectionsQuery = z.infer<typeof ConnectionsQuery>;
+
+/** GET /me/connections: `total` in that list (connections, received or sent), on the first page only. */
+export type ConnectionsPage = { items: ConnectionView[]; nextCursor: string | null; total: number | null };
 
 /** GET /me/follows?type= → Page<FollowView> */
 export const FollowsQuery = z.object({

@@ -5,6 +5,7 @@ import { usePathname, useT } from "@/i18n/client";
 import { useState, useTransition, type FormEvent } from "react";
 import type {
   DirectoryMember,
+  DirectoryPage,
   DirectoryQuery,
   Page,
   Taxonomies,
@@ -40,7 +41,7 @@ export function Directory({
   taxonomies,
 }: {
   filters: Filters;
-  initial: Page<DirectoryMember>;
+  initial: DirectoryPage;
   taxonomies: Pick<Taxonomies, "countries" | "sectors" | "skills">;
 }) {
   const t = useT();
@@ -50,6 +51,8 @@ export function Directory({
   const [draft, setDraft] = useState<Filters>(filters);
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
+  /** How many members match in all (from the first page), not just the ones loaded so far. */
+  const total = initial.total;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -222,9 +225,13 @@ export function Directory({
         <p className="text-md font-medium text-ink" aria-live="polite">
           {items.length === 0
             ? "No members found"
-            : cursor
-              ? t("Showing {count}+ members", { count: items.length })
-              : t("Showing {count} members", { count: items.length })}
+            : total != null && total > items.length
+              ? t("Showing {shown} of {count} members", { shown: items.length, count: total })
+              : total != null
+                ? t("{count} members", { count: total })
+                : cursor
+                  ? t("Showing {count}+ members", { count: items.length })
+                  : t("Showing {count} members", { count: items.length })}
         </p>
         {items.length > 0 ? (
           <ul className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3">

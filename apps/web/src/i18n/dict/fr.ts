@@ -4000,4 +4000,5 @@ export const fr: Dict = {
   "Shared on your feed": "Partagé sur votre fil",
   "It’s on your feed as a public post, so you can share it on LinkedIn, WhatsApp and elsewhere. You can edit or delete the post like any other.": "Il figure sur votre fil en publication publique : vous pouvez donc le partager sur LinkedIn, WhatsApp et ailleurs. Vous pouvez modifier ou supprimer la publication comme les autres.",
   "Share it on your feed so the community can congratulate you. It’s a public post, so you can then share it on LinkedIn, WhatsApp and elsewhere.": "Partagez-le sur votre fil pour que la communauté vous félicite. C’est une publication publique : vous pourrez ensuite la partager sur LinkedIn, WhatsApp et ailleurs.",
+  "Showing {shown} of {count} members": "{shown} membres affichés sur {count}",
 };
