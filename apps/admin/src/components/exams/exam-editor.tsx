@@ -139,7 +139,7 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
       {tab === "settings" && <ExamSettings exam={exam} onChange={setExam} issuedCertificates={certificates?.issued ?? 0} onOpenCertificates={() => setTab("certificates")} />}
       {tab === "invite" && <ExamInvites exam={exam} />}
       {tab === "results" && <ExamResults exam={exam} onChange={setExam} />}
-      {tab === "certificates" && <ExamCertificates exam={exam} onSummary={setCertificates} />}
+      {tab === "certificates" && <ExamCertificates exam={exam} onSummary={setCertificates} onOpenSettings={() => setTab("settings")} />}
 
       {confirm === "publish" && (
         <ReasonDialog

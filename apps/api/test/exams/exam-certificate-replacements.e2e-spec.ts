@@ -242,6 +242,21 @@ describe('Replacing issued exam certificates', () => {
     await admin.post(`/admin/exams/${exam.id}/certificates/reissue`, { scope: 'everything' }).expect(422);
   });
 
+  it('a renamed exam: its certificate keeps its own title, and a replacement puts the new name in the post', async () => {
+    const renamed = 'PMP Exam Prep 2026';
+    const exam2 = (await admin.patch(`/admin/exams/${exam.id}`, { title: renamed }).expect(200)).body as AdminExamDetail;
+    // Renaming the exam doesn't touch the title on the certificate, so nothing is outdated.
+    expect(exam2.certificate?.title).toBe(NEW_TITLE);
+    expect((await list()).summary.outdated).toBe(0);
+
+    await admin.post(`/admin/exam-certificates/${before.first!.id}/reissue`).expect(200);
+    await t.app.get(ExamCertificatesService).sweep();
+    const view = (await members.first!.get(`/exams/${exam.id}/certificate`).expect(200)).body as ExamCertificateView;
+    const post = (await members.first!.get(`/posts/${view.postId}`).expect(200)).body as PostView;
+    expect(post.body.startsWith(`I passed “${renamed}” on Charter Mission`)).toBe(true);
+    expect(post.celebration?.headline).toBe(NEW_TITLE);
+  });
+
   it('needs certificate settings, and is for admins with exam.manage only', async () => {
     const plain = await createMember(t, { name: 'Not Staff' });
     await plain.get(`/admin/exams/${exam.id}/certificates`).expect(403);

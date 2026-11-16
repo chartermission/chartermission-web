@@ -126,6 +126,15 @@ export function certificateView(row: CertificateRow, postAlive: boolean): ExamCe
  * never issues anything: certificates wait as pending until the real API is switched on, so no
  * sample certificate is ever posted to the feed.
  */
+/** The opening of the automatic certificate post (see share()): "I passed “<exam title>” on Charter Mission". */
+const PASSED_LINE = /^I passed “[^”\n]*” on Charter Mission/;
+
+/** The automatic post's text with the exam's current name, when it still starts as it was posted. */
+export function renameExam(body: string, examTitle: string): string {
+  const title = examTitle.replace(/[”\n]/g, '');
+  return PASSED_LINE.test(body) ? body.replace(PASSED_LINE, () => `I passed “${title}” on Charter Mission`) : body;
+}
+
 @Injectable()
 export class ExamCertificatesService implements OnModuleInit {
   private readonly logger = new Logger('ExamCertificates');
@@ -366,7 +375,7 @@ export class ExamCertificatesService implements OnModuleInit {
       await this.db.update(examCertificates).set({ replaceNextTryAt: null, replaceError: 'The member’s account is gone' }).where(eq(examCertificates.id, row.id));
       return;
     }
-    const [exam] = await this.db.select({ certificate: exams.certificate }).from(exams).where(eq(exams.id, row.examId)).limit(1);
+    const [exam] = await this.db.select({ certificate: exams.certificate, title: exams.title }).from(exams).where(eq(exams.id, row.examId)).limit(1);
     if (!exam) return;
     const request = exam.certificate ? await this.buildRequest(exam.certificate, row.userId) : null;
     if (!request) {
@@ -432,7 +441,7 @@ export class ExamCertificatesService implements OnModuleInit {
           )
           .returning({ id: examCertificates.id });
         if (!updated) return false;
-        if (row.postId) await this.replaceOnPost(tx, row.postId, old, stored, request);
+        if (row.postId) await this.replaceOnPost(tx, row.postId, old, stored, request, exam.title);
         return true;
       });
       if (!done) return;
@@ -492,9 +501,10 @@ export class ExamCertificatesService implements OnModuleInit {
   /**
    * The certificate post, when it is still there: the new certificate's files take the old ones'
    * places (same position), the "Certification" headline and the text get the new course title
-   * (only where the old title appears as it was). A post the member deleted is left alone.
+   * (only where the old title appears as it was), and the automatic "I passed “…”" line gets the
+   * exam's current name (the exam may have been renamed since). A post the member deleted is left alone.
    */
-  private async replaceOnPost(tx: Tx, postId: string, old: ReplacedCertificate, next: StoredCertificate, request: CertificateRequest) {
+  private async replaceOnPost(tx: Tx, postId: string, old: ReplacedCertificate, next: StoredCertificate, request: CertificateRequest, examTitle: string) {
     const [post] = await tx
       .select({ id: posts.id, body: posts.body, type: posts.type, details: posts.details, deletedAt: posts.deletedAt })
       .from(posts)
@@ -532,7 +542,7 @@ export class ExamCertificatesService implements OnModuleInit {
     const newTitle = request.course_title;
     const retitle = (text: string) => (oldTitle && oldTitle !== newTitle && text.includes(oldTitle) ? text.split(oldTitle).join(newTitle) : text);
     const patch: Partial<typeof posts.$inferInsert> = {};
-    const body = retitle(post.body);
+    const body = retitle(renameExam(post.body, examTitle));
     if (body !== post.body) patch.body = body;
     const details = post.details as { headline?: unknown } | null;
     if (post.type === 'celebration' && details && typeof details.headline === 'string') {

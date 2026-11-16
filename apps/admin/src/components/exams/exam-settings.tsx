@@ -234,7 +234,20 @@ export function ExamSettings({
     <form noValidate onSubmit={onSubmit} className="flex max-w-[860px] flex-col gap-5">
       <Group title="About the exam">
         <div className={cn("grid gap-4", second && "sm:grid-cols-2")}>
-          <TextField label="Title" value={d.title} maxLength={160} required dir="auto" error={fields.title} onChange={(e) => set("title", e.target.value)} />
+          <TextField
+            label="Title"
+            value={d.title}
+            maxLength={160}
+            required
+            dir="auto"
+            error={fields.title}
+            onChange={(e) => {
+              const next = e.target.value;
+              // The certificate said the exam's title: renaming the exam renames the certificate too.
+              if (d.awardCertificate && d.certTitle.trim() === d.title.trim()) set("certTitle", next);
+              set("title", next);
+            }}
+          />
           {second && (
             <TextField
               label={t("Title in {language}", { language: secondName })}
@@ -370,6 +383,18 @@ export function ExamSettings({
                 dir="auto"
                 placeholder="PMP Exam Prep"
                 error={fields["certificate.title"]}
+                hint={
+                  d.title.trim() && d.certTitle.trim() !== d.title.trim() ? (
+                    <span className="flex flex-wrap items-center gap-x-2">
+                      <span>{t("Not the exam’s title (“{title}”).", { title: d.title.trim() })}</span>
+                      <button type="button" onClick={() => set("certTitle", d.title.trim())} className="font-medium text-primary hover:underline">
+                        Use the exam’s title
+                      </button>
+                    </span>
+                  ) : (
+                    "This is the title new certificates get."
+                  )
+                }
                 onChange={(e) => set("certTitle", e.target.value)}
               />
               <TextField

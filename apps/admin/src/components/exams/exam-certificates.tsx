@@ -141,12 +141,65 @@ function CertificateStatus({ c }: { c: AdminExamCertificate }) {
 }
 
 /**
+ * What a new or replacement certificate is built from (the Settings tab's certificate details),
+ * with a warning when its title isn't the exam's: renaming the exam doesn't rename its certificate.
+ */
+function CurrentSettings({ exam, onOpenSettings }: { exam: AdminExamDetail; onOpenSettings?: () => void }) {
+  const t = useT();
+  const tag = useIntlTag();
+  const c = exam.certificate;
+  if (!c) return null;
+  const day = (value: string) => (/^\d{4}-\d{2}-\d{2}$/.test(value) ? formatDate(`${value}T00:00:00Z`, "UTC", tag) : value);
+  const differs = c.title.trim() !== exam.title.trim();
+  const edit = onOpenSettings && (
+    <button type="button" onClick={onOpenSettings} className="font-medium text-primary hover:underline">
+      Edit in Settings
+    </button>
+  );
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-lg border border-line bg-surface p-3 text-sm">
+        <span className="min-w-0">
+          <span className="text-secondary">{t("Title on new certificates:")} </span>
+          <bdi className="font-medium text-ink">{c.title}</bdi>
+          <span className="text-secondary">
+            {" · "}
+            {t("Signed by {name}", { name: c.issuerName })} · {day(c.startDate)} – {day(c.endDate)}
+          </span>
+        </span>
+        {edit}
+      </div>
+      {differs && (
+        <p role="status" className="flex flex-wrap items-start gap-2 rounded-lg bg-warning-light p-3 text-sm text-body">
+          <Icon name="alert" size={16} className="mt-0.5 shrink-0 text-warning" />
+          <span className="min-w-0 flex-1">
+            {t(
+              "The title on the certificate isn’t the exam’s title (“{title}”). Renaming the exam doesn’t change its certificate: update “Title on the certificate” in Settings, then replace.",
+              { title: exam.title },
+            )}
+          </span>
+          {edit}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * The Certificates tab (GET /admin/exams/:id/certificates): every certificate issued for the exam,
  * what it was issued with, and replacing those issued with details that have since changed (one at
  * a time, the outdated ones, or all of them). Lists refresh themselves while replacements are on
  * their way.
  */
-export function ExamCertificates({ exam, onSummary }: { exam: AdminExamDetail; onSummary?: (summary: AdminExamCertificatesSummary) => void }) {
+export function ExamCertificates({
+  exam,
+  onSummary,
+  onOpenSettings,
+}: {
+  exam: AdminExamDetail;
+  onSummary?: (summary: AdminExamCertificatesSummary) => void;
+  onOpenSettings?: () => void;
+}) {
   const t = useT();
   const ids = useId();
   const [q, setQ] = useState("");
@@ -286,6 +339,8 @@ export function ExamCertificates({ exam, onSummary }: { exam: AdminExamDetail; o
           <Stat label={t("Failed")} value={summary.failed} />
         </div>
       )}
+
+      {exam.certificate && <CurrentSettings exam={exam} onOpenSettings={onOpenSettings} />}
 
       {!canReplace && summary && summary.issued > 0 && (
         <p role="status" className="flex items-start gap-2 rounded-lg bg-info-light p-3 text-sm text-body">
@@ -479,6 +534,7 @@ export function ExamCertificates({ exam, onSummary }: { exam: AdminExamDetail; o
           description={
             <span className="flex flex-col gap-2">
               <span>{t("{count} members get a new certificate built from the current settings.", { count: summary.outdated })}</span>
+              <span>{t("New certificates say “{title}”.", { title: exam.certificate?.title ?? "" })}</span>
               <span>{howItWorks}</span>
             </span>
           }
@@ -494,6 +550,7 @@ export function ExamCertificates({ exam, onSummary }: { exam: AdminExamDetail; o
           description={
             <span className="flex flex-col gap-2">
               <span>{t("All {count} issued certificates are replaced with new ones built from the current settings, including those already up to date.", { count: summary.issued })}</span>
+              <span>{t("New certificates say “{title}”.", { title: exam.certificate?.title ?? "" })}</span>
               <span>{howItWorks}</span>
             </span>
           }
@@ -506,10 +563,17 @@ export function ExamCertificates({ exam, onSummary }: { exam: AdminExamDetail; o
       {confirm?.kind === "one" && (
         <ReasonDialog
           title="Replace this certificate?"
-          description={t(
-            "{name} gets a new certificate built from the current settings. They keep their current one until the new one arrives from Charter Center. Then it replaces the old one on their account and on their certificate post, and they get an email.",
-            { name: confirm.certificate.member.name },
-          )}
+          description={
+            <span className="flex flex-col gap-2">
+              <span>
+                {t(
+                  "{name} gets a new certificate built from the current settings. They keep their current one until the new one arrives from Charter Center. Then it replaces the old one on their account and on their certificate post, and they get an email.",
+                  { name: confirm.certificate.member.name },
+                )}
+              </span>
+              <span>{t("New certificates say “{title}”.", { title: exam.certificate?.title ?? "" })}</span>
+            </span>
+          }
           confirmLabel="Replace"
           reasonField="none"
           onClose={() => setConfirm(null)}
