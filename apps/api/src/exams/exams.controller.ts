@@ -3,6 +3,8 @@ import type { Response } from 'express';
 import {
   AdminExamAttemptsQuery,
   AdminExamCertificatesQuery,
+  ConfirmCertificateNameInput,
+  DeclineCertificateNameInput,
   ExamImportInput,
   ExamQuestionInput,
   ExamQuestionOrderInput,
@@ -17,6 +19,7 @@ import {
   type AdminExamAttempt,
   type AdminExamCertificate,
   type AdminExamCertificatesPage,
+  type AskCertificateNamesResult,
   type ReissueExamCertificatesResult,
   type AdminExamDetail,
   type AdminExamSummary,
@@ -94,6 +97,17 @@ export class ExamsController {
   @HttpCode(200)
   shareCertificate(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<ExamCertificateView> {
     return this.exams.shareCertificate(ctx.user, id);
+  }
+
+  /**
+   * The member confirms the name to print on their certificate (after passing, or when an admin
+   * asked). Their profile name goes straight through; another name waits for an admin's approval.
+   */
+  @Post('exams/:id/certificate/name')
+  @Access('member')
+  @HttpCode(200)
+  confirmCertificateName(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(ConfirmCertificateNameInput) input: ConfirmCertificateNameInput): Promise<ExamCertificateView> {
+    return this.exams.confirmCertificateName(ctx.user, id, input.name);
   }
 
   @Get('exam-attempts/:id')
@@ -180,6 +194,35 @@ export class AdminExamsSettingsController {
   @Access('admin', 'exam.manage')
   reissueCertificate(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @Req() req: AppRequest): Promise<AdminExamCertificate> {
     return this.certificates.reissueOne(ctx, id, clientIp(req));
+  }
+
+  /** Ask the member to confirm the name on their issued certificate (notice, email, one reminder). */
+  @Post('exam-certificates/:id/ask-name')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  askCertificateName(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @Req() req: AppRequest): Promise<AdminExamCertificate> {
+    return this.certificates.askName(ctx, id, clientIp(req));
+  }
+
+  /** The name the member asked for is printed (sent, or the issued certificate replaced). */
+  @Post('exam-certificates/:id/name/approve')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  approveCertificateName(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @Req() req: AppRequest): Promise<AdminExamCertificate> {
+    return this.certificates.approveName(ctx, id, clientIp(req));
+  }
+
+  /** The name the member asked for isn't approved: they are asked to confirm their name again. */
+  @Post('exam-certificates/:id/name/decline')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  declineCertificateName(
+    @Auth() ctx: AuthContext,
+    @UuidParam('id') id: string,
+    @ZBody(DeclineCertificateNameInput) input: DeclineCertificateNameInput,
+    @Req() req: AppRequest,
+  ): Promise<AdminExamCertificate> {
+    return this.certificates.declineName(ctx, id, input, clientIp(req));
   }
 }
 
@@ -315,5 +358,13 @@ export class AdminExamsController {
     @Req() req: AppRequest,
   ): Promise<ReissueExamCertificatesResult> {
     return this.certificates.reissueMany(ctx, id, input, clientIp(req));
+  }
+
+  /** Ask every member with an issued certificate (not already asked) to confirm their name. */
+  @Post(':id/certificates/ask-names')
+  @HttpCode(200)
+  @Access('admin', 'exam.manage')
+  askCertificateNames(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @Req() req: AppRequest): Promise<AskCertificateNamesResult> {
+    return this.certificates.askNames(ctx, id, clientIp(req));
   }
 }

@@ -18,6 +18,8 @@ export function ExamStatusChip({ exam }: { exam: Pick<ExamSummary, "status" | "v
   if (exam.status === "draft") return <Chip tone="warning" className={chip}>Draft · team only</Chip>;
   if (exam.status === "archived") return <Chip tone="neutral" className={chip}>No longer open</Chip>;
   if (exam.viewer.inProgressAttemptId) return <Chip tone="info" className={chip}>In progress</Chip>;
+  if (exam.viewer.certificateName === "awaiting") return <Chip tone="warning" className={chip}>Confirm your name</Chip>;
+  if (exam.viewer.certificateName === "review") return <Chip tone="info" className={chip}>Name being checked</Chip>;
   if (exam.viewer.passed) return <Chip tone="success" className={chip}>Passed</Chip>;
   return null;
 }

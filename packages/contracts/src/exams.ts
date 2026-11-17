@@ -308,6 +308,33 @@ export type ExamSection = z.infer<typeof ExamSection>;
 export const ExamCertificateStatus = z.enum(["pending", "issued", "failed"]);
 export type ExamCertificateStatus = z.infer<typeof ExamCertificateStatus>;
 
+/**
+ * The member's name as it should be printed on a certificate. Members confirm it before anything is
+ * sent to Charter Center: after passing, and when an admin asks them to (to correct an issued one).
+ * Spaces are trimmed and runs of spaces become one.
+ */
+export const CertificateName = z
+  .string({ message: "Enter your name" })
+  .transform((v) => v.trim().replace(/\s+/g, " "))
+  .pipe(
+    z
+      .string()
+      .min(2, "Enter your name as it should appear on your certificate")
+      .max(120, "At most 120 characters")
+      .regex(/^[\p{L}\p{M}][\p{L}\p{M} .'’-]*$/u, "Use letters only, with spaces, hyphens, apostrophes or full stops"),
+  );
+
+/**
+ * Confirming the name: awaiting = the member hasn't confirmed yet (nothing is sent to Charter Center
+ * until they do); review = they asked for a name that isn't their profile name, and an admin checks it.
+ */
+export const CertificateNameStatus = z.enum(["awaiting", "review"]);
+export type CertificateNameStatus = z.infer<typeof CertificateNameStatus>;
+
+/** POST /exams/:id/certificate/name — the member confirms (or corrects) the name on their certificate. */
+export const ConfirmCertificateNameInput = z.object({ name: CertificateName });
+export type ConfirmCertificateNameInput = z.infer<typeof ConfirmCertificateNameInput>;
+
 /** A member's Charter Center certificate for an exam they passed. */
 export const ExamCertificateView = z.object({
   id: z.string().uuid(),
@@ -321,6 +348,27 @@ export const ExamCertificateView = z.object({
   /** The post that shared it, while it exists. */
   postId: z.string().uuid().nullable(),
   issuedAt: z.string().nullable(),
+  /** The name printed on it (or to be printed, once confirmed); null until there's one. */
+  name: z.string().nullable(),
+  /**
+   * Set while the member has to confirm their name (status awaiting) or a name they asked for is
+   * being checked (status review). Null otherwise.
+   */
+  nameCheck: z
+    .object({
+      status: CertificateNameStatus,
+      /** Their name on their profile now. */
+      profileName: z.string(),
+      /** What to put in the box: the name on their certificate if they have one, else their profile name. */
+      suggestedName: z.string(),
+      /** review: the name they asked for. */
+      proposedName: z.string().nullable(),
+      /** awaiting, after an admin declined the name they asked for: the admin's reason, if given. */
+      declinedReason: z.string().nullable(),
+      /** True for an issued certificate: confirming replaces it with a new one (if the name changes). */
+      replacing: z.boolean(),
+    })
+    .nullable(),
 });
 export type ExamCertificateView = z.infer<typeof ExamCertificateView>;
 
@@ -338,6 +386,8 @@ export const ExamViewerProgress = z.object({
   inProgressAttemptId: z.string().uuid().nullable(),
   /** The most recent finished attempt, to open its result. */
   lastAttemptId: z.string().uuid().nullable(),
+  /** Their certificate is waiting for them to confirm their name (awaiting) or for a name to be approved (review). */
+  certificateName: CertificateNameStatus.nullable(),
 });
 export type ExamViewerProgress = z.infer<typeof ExamViewerProgress>;
 
@@ -714,6 +764,21 @@ export const AdminExamCertificate = z.object({
   /** How many times this certificate has been replaced. */
   replacedCount: z.number().int(),
   lastError: z.string().nullable(),
+  /** The name the member confirmed for their certificate (null: never asked, their profile name is used). */
+  certificateName: z.string().nullable(),
+  /** The member has been asked to confirm their name (awaiting) or asked for a different one (review). */
+  nameCheck: z
+    .object({
+      status: CertificateNameStatus,
+      /** review: the name they asked for (their profile name is member.name). */
+      proposedName: z.string().nullable(),
+      requestedAt: z.string(),
+      /** The one reminder, sent 3 days after asking if they hadn't confirmed. */
+      remindedAt: z.string().nullable(),
+      /** awaiting after a decline: the reason given to the member. */
+      declinedReason: z.string().nullable(),
+    })
+    .nullable(),
 });
 export type AdminExamCertificate = z.infer<typeof AdminExamCertificate>;
 
@@ -721,7 +786,8 @@ export type AdminExamCertificate = z.infer<typeof AdminExamCertificate>;
 export const AdminExamCertificatesQuery = z.object({
   /** Member name, handle, email or certificate number. */
   q: z.string().trim().max(100).optional(),
-  status: z.enum(["all", "issued", "pending", "failed"]).default("all"),
+  /** awaiting_name: waiting for the member to confirm their name; name_review: a name to approve. */
+  status: z.enum(["all", "issued", "pending", "failed", "awaiting_name", "name_review"]).default("all"),
   /** Only issued certificates that differ from the current settings. */
   outdated: z
     .enum(["true", "false"])
@@ -740,6 +806,10 @@ export const AdminExamCertificatesSummary = z.object({
   outdated: z.number().int(),
   /** Replacements on their way. */
   replacing: z.number().int(),
+  /** Waiting for the member to confirm their name. */
+  awaitingName: z.number().int(),
+  /** Names members asked for, waiting for an admin to approve or decline. */
+  nameReview: z.number().int(),
 });
 export type AdminExamCertificatesSummary = z.infer<typeof AdminExamCertificatesSummary>;
 
@@ -759,3 +829,18 @@ export type ReissueExamCertificatesInput = z.infer<typeof ReissueExamCertificate
 
 export const ReissueExamCertificatesResult = z.object({ queued: z.number().int() });
 export type ReissueExamCertificatesResult = z.infer<typeof ReissueExamCertificatesResult>;
+
+/**
+ * POST /admin/exams/:id/certificates/ask-names — ask every member with an issued certificate (and
+ * not already asked) to confirm their name. POST /admin/exam-certificates/:id/ask-name asks one.
+ * Each gets a notice and an email, and one reminder after 3 days.
+ */
+export const AskCertificateNamesResult = z.object({ asked: z.number().int() });
+export type AskCertificateNamesResult = z.infer<typeof AskCertificateNamesResult>;
+
+/**
+ * POST /admin/exam-certificates/:id/name/decline — the name a member asked for isn't approved: they
+ * are asked to confirm their name again, with this reason. (…/name/approve takes no body.)
+ */
+export const DeclineCertificateNameInput = z.object({ reason: z.string().trim().max(300).optional() });
+export type DeclineCertificateNameInput = z.infer<typeof DeclineCertificateNameInput>;

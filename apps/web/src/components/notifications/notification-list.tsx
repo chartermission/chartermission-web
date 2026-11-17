@@ -34,6 +34,8 @@ const byType: Partial<Record<NotificationType, { icon: { name: IconName; classNa
   booking_cancelled: { icon: { name: "alert", className: "bg-warning-light text-warning" }, href: bookingsHref },
   booking_reminder: { icon: { name: "clock", className: "bg-primary-tint text-primary" }, href: bookingsHref },
   page_enquiry: { icon: { name: "message", className: "bg-accent-light text-accent" }, href: (item) => item.href },
+  // Confirm the name on a certificate (or a name that wasn't approved): opens the exam at #certificate.
+  exam_certificate_name: { icon: { name: "alert", className: "bg-warning-light text-warning" }, href: (item) => item.href },
 };
 
 /** Booking notifications open Bookings (or the booking itself when the API links to it). */

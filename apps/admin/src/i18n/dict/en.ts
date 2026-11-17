@@ -32,4 +32,5 @@ export const en: Dict = {
   "{count} members get a new certificate built from the current settings.": { one: "{count} member gets a new certificate built from the current settings.", other: "{count} members get a new certificate built from the current settings." },
   "All {count} issued certificates are replaced with new ones built from the current settings, including those already up to date.": { one: "The issued certificate is replaced with a new one built from the current settings, even if it’s already up to date.", other: "All {count} issued certificates are replaced with new ones built from the current settings, including those already up to date." },
   "Replaced {count} times": { one: "Replaced once", other: "Replaced {count} times" },
+  "Asked {count} members.": { one: "Asked {count} member.", other: "Asked {count} members." },
 };

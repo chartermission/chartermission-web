@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type {
   ExamAttemptSummary,
   ExamLanguage,
@@ -8,7 +8,7 @@ import type {
   ExamViewerProgress,
 } from '@chartermission/contracts';
 import type { Db, Tx } from '../db/client.js';
-import { examAttempts, examQuestions, examSections, exams } from '../db/schema.js';
+import { examAttempts, examCertificates, examQuestions, examSections, exams } from '../db/schema.js';
 
 export type ExamRow = typeof exams.$inferSelect;
 export type ExamSectionRow = typeof examSections.$inferSelect;
@@ -76,7 +76,7 @@ export function attemptSummary(row: ExamAttemptRow): ExamAttemptSummary {
   };
 }
 
-const NO_PROGRESS: ExamViewerProgress = { attempts: 0, attemptsLeft: null, bestPercent: null, passed: false, inProgressAttemptId: null, lastAttemptId: null };
+const NO_PROGRESS: ExamViewerProgress = { attempts: 0, attemptsLeft: null, bestPercent: null, passed: false, inProgressAttemptId: null, lastAttemptId: null, certificateName: null };
 
 /**
  * A member's progress on each exam. Attempts made while trying out a draft (preview) show in the
@@ -107,10 +107,24 @@ export async function viewerProgress(db: Db | Tx, userId: string, list: Pick<Exa
     )
     .groupBy(examAttempts.examId);
   const byExam = new Map(rows.map((r) => [r.examId, r]));
+  const names = await db
+    .select({ examId: examCertificates.examId, status: examCertificates.nameStatus })
+    .from(examCertificates)
+    .where(
+      and(
+        eq(examCertificates.userId, userId),
+        isNotNull(examCertificates.nameStatus),
+        inArray(
+          examCertificates.examId,
+          list.map((e) => e.id),
+        ),
+      ),
+    );
+  const nameByExam = new Map(names.map((n) => [n.examId, n.status === 'review' ? ('review' as const) : ('awaiting' as const)]));
   for (const exam of list) {
     const r = byExam.get(exam.id);
     if (!r) {
-      map.set(exam.id, { ...NO_PROGRESS, attemptsLeft: exam.status === 'draft' ? null : exam.maxAttempts });
+      map.set(exam.id, { ...NO_PROGRESS, attemptsLeft: exam.status === 'draft' ? null : exam.maxAttempts, certificateName: nameByExam.get(exam.id) ?? null });
       continue;
     }
     map.set(exam.id, {
@@ -120,6 +134,7 @@ export async function viewerProgress(db: Db | Tx, userId: string, list: Pick<Exa
       passed: r.passed,
       inProgressAttemptId: r.open,
       lastAttemptId: r.last,
+      certificateName: nameByExam.get(exam.id) ?? null,
     });
   }
   return map;

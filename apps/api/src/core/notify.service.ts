@@ -79,6 +79,7 @@ export const CATEGORY_OF: Record<
   booking_cancelled: 'always',
   booking_reminder: 'always',
   page_enquiry: 'always',
+  exam_certificate_name: 'always',
 };
 
 export interface NotifyInput {

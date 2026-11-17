@@ -84,6 +84,12 @@ export const NotificationType = z.enum([
   "booking_reminder",
   /** To a page's admins: a member sent an enquiry. Icon message. */
   "page_enquiry",
+  /* Exams (always sent: about the member's own certificate) */
+  /**
+   * Confirm the name on your certificate: asked after passing or by an admin, the 3-day reminder, and
+   * when a name they asked for was declined (with the reason). Icon alert.
+   */
+  "exam_certificate_name",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 

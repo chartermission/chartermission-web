@@ -7,6 +7,8 @@ import type {
   AdminExamCertificatesQuery,
   AdminExamCertificatesSummary,
   AdminExamDetail,
+  AskCertificateNamesResult,
+  DeclineCertificateNameInput,
   ExamCertificateDifference,
   ExamCertificateIssuedWith,
   ReissueExamCertificatesInput,
@@ -26,7 +28,12 @@ import { useIntlTag, useT } from "@/i18n/client";
 
 type Status = AdminExamCertificatesQuery["status"];
 type Scope = ReissueExamCertificatesInput["scope"];
-type Confirm = { kind: "bulk"; scope: Scope } | { kind: "one"; certificate: AdminExamCertificate };
+type NameCheck = NonNullable<AdminExamCertificate["nameCheck"]>;
+type Confirm =
+  | { kind: "bulk"; scope: Scope }
+  | { kind: "one"; certificate: AdminExamCertificate }
+  | { kind: "ask-names" }
+  | { kind: "ask-name" | "approve-name" | "decline-name"; certificate: AdminExamCertificate };
 
 const PAGE_SIZE = 50;
 const POLL_MS = 15_000;
@@ -47,12 +54,25 @@ const replacementFailed = (c: AdminExamCertificate) => !!c.replacement?.gaveUp;
 /** A replacement asked for and not arrived yet: the old certificate stays until it does. */
 const replacing = (c: AdminExamCertificate) => c.replacement !== null && !replacementFailed(c);
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "warning" }) {
-  return (
-    <div className={cn("flex flex-col gap-1 rounded-card border px-4 py-3", tone === "warning" ? "border-warning bg-warning-light" : "border-line bg-card")}>
+/** A count above the list; with onClick it also filters the list (pressed while that filter is on). */
+function Stat({ label, value, tone, pressed, onClick }: { label: string; value: number; tone?: "warning"; pressed?: boolean; onClick?: () => void }) {
+  const classes = cn(
+    "flex min-w-0 flex-col gap-1 rounded-card border px-4 py-3 text-start",
+    tone === "warning" ? "border-warning bg-warning-light" : "border-line bg-card",
+    onClick && tone !== "warning" && "hover:border-line-strong",
+    pressed && "ring-2 ring-primary-light/40",
+  );
+  const body = (
+    <>
       <span className={cn("text-xs", tone === "warning" ? "text-warning" : "text-secondary")}>{label}</span>
       <span className="text-h2 text-ink tabular-nums">{value}</span>
-    </div>
+    </>
+  );
+  if (!onClick) return <div className={classes}>{body}</div>;
+  return (
+    <button type="button" aria-pressed={pressed} onClick={onClick} className={classes}>
+      {body}
+    </button>
   );
 }
 
@@ -86,12 +106,44 @@ function IssuedWith({ issuedWith, differences }: { issuedWith: ExamCertificateIs
   );
 }
 
-/** Where the certificate stands: issued, still coming, failed, or being replaced. */
+/** The member's name for the certificate: a name they asked for, to review, or waiting for them to confirm it. */
+function NameState({ check }: { check: NameCheck }) {
+  const t = useT();
+  const tag = useIntlTag();
+  if (check.status === "review") {
+    return (
+      <span className="flex items-center gap-1 font-medium text-warning">
+        <Icon name="alert" size={12} />
+        Name to review
+      </span>
+    );
+  }
+  return (
+    <>
+      <span className="flex items-center gap-1 text-info">
+        <Icon name="clock" size={12} />
+        Waiting for name
+      </span>
+      <span className="text-secondary">
+        {t("Asked {time}", { time: formatDate(check.requestedAt, undefined, tag) })}
+        {check.remindedAt && <> · {t("reminded {date}", { date: formatDate(check.remindedAt, undefined, tag) })}</>}
+      </span>
+      {check.declinedReason && <span className="break-words text-secondary">{t("Declined: {reason}", { reason: check.declinedReason })}</span>}
+    </>
+  );
+}
+
+/**
+ * Where the certificate stands: issued, still coming, failed, or being replaced, after the member's
+ * name when it's being checked. Nothing is sent to Charter Center while a new pass waits for its name.
+ */
 function CertificateStatus({ c }: { c: AdminExamCertificate }) {
   const t = useT();
   const tag = useIntlTag();
   let state: ReactNode;
-  if (c.replacement && replacementFailed(c)) {
+  if (c.nameCheck && c.status !== "issued" && !c.replacement) {
+    state = null;
+  } else if (c.replacement && replacementFailed(c)) {
     state = (
       <>
         <span className="flex items-center gap-1 text-error">
@@ -136,6 +188,8 @@ function CertificateStatus({ c }: { c: AdminExamCertificate }) {
   }
   return (
     <span className="flex flex-col gap-0.5 text-xs">
+      {c.nameCheck && <NameState check={c.nameCheck} />}
+      {c.nameCheck && state && <span aria-hidden className="mt-1" />}
       {state}
       {c.replacedCount > 0 && <span className="text-secondary">{c.replacedCount === 1 ? "Replaced once" : t("Replaced {count} times", { count: c.replacedCount })}</span>}
     </span>
@@ -313,9 +367,14 @@ export function ExamCertificates({
     }
   }
 
+  /** Puts the row the API sent back in place of the old one. */
+  function updateRow(next: AdminExamCertificate) {
+    setRows((list) => list?.map((row) => (row.id === next.id ? next : row)) ?? list);
+  }
+
   async function replaceOne(c: AdminExamCertificate) {
     const next = await api<AdminExamCertificate>(`/admin/exam-certificates/${c.id}/reissue`, { method: "POST" });
-    setRows((list) => list?.map((row) => (row.id === next.id ? next : row)) ?? list);
+    updateRow(next);
     toast(t("Replacing {name}’s certificate. It changes when Charter Center sends the new one.", { name: c.member.name }));
     setConfirm(null);
     void load(true); // also drops a list request already on its way, which would bring back the old row
@@ -329,16 +388,59 @@ export function ExamCertificates({
     await load(true);
   }
 
+  async function askName(c: AdminExamCertificate) {
+    updateRow(await api<AdminExamCertificate>(`/admin/exam-certificates/${c.id}/ask-name`, { method: "POST" }));
+    toast(t("Asked {name} to confirm their name.", { name: c.member.name }));
+    setConfirm(null);
+    void load(true);
+  }
+
+  async function askNames() {
+    const result = await api<AskCertificateNamesResult>(`/admin/exams/${exam.id}/certificates/ask-names`, { method: "POST" });
+    toast(result.asked > 0 ? t("Asked {count} members.", { count: result.asked }) : t("Everyone with a certificate has already been asked."));
+    setConfirm(null);
+    await load(true);
+  }
+
+  async function approveName(c: AdminExamCertificate) {
+    updateRow(await api<AdminExamCertificate>(`/admin/exam-certificates/${c.id}/name/approve`, { method: "POST" }));
+    toast(t("Name approved for {name}.", { name: c.member.name }));
+    setConfirm(null);
+    void load(true);
+  }
+
+  async function declineName(c: AdminExamCertificate, reason: string) {
+    const body: DeclineCertificateNameInput = reason ? { reason } : {};
+    updateRow(await api<AdminExamCertificate>(`/admin/exam-certificates/${c.id}/name/decline`, { method: "POST", body }));
+    toast(t("Name declined. {name} is asked to confirm their name again.", { name: c.member.name }));
+    setConfirm(null);
+    void load(true);
+  }
+
+  /** The name tiles filter the list; pressing the one that's on shows everything again. */
+  function filterBy(next: Status) {
+    setOutdated(false);
+    setStatus((current) => (current === next ? "all" : next));
+  }
+
   const howItWorks =
     "Members keep their current certificate until the new one arrives from Charter Center. Then it replaces the old one on their account and on their certificate post, and they get an email.";
 
   return (
     <section className="flex flex-col gap-4">
       {summary && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
           <Stat label={t("Issued")} value={summary.issued} />
           <Stat label={t("Outdated")} value={summary.outdated} tone={summary.outdated > 0 ? "warning" : undefined} />
           <Stat label={t("Being replaced")} value={summary.replacing} />
+          <Stat
+            label={t("Names to review")}
+            value={summary.nameReview}
+            tone={summary.nameReview > 0 ? "warning" : undefined}
+            pressed={status === "name_review"}
+            onClick={() => filterBy("name_review")}
+          />
+          <Stat label={t("Waiting for names")} value={summary.awaitingName} pressed={status === "awaiting_name"} onClick={() => filterBy("awaiting_name")} />
           <Stat label={t("Pending")} value={summary.pending} />
           <Stat label={t("Failed")} value={summary.failed} />
         </div>
@@ -398,6 +500,8 @@ export function ExamCertificates({
             { value: "issued", label: t("Issued") },
             { value: "pending", label: t("Pending") },
             { value: "failed", label: t("Failed") },
+            { value: "name_review", label: t("Names to review") },
+            { value: "awaiting_name", label: t("Waiting for the member’s name") },
           ]}
         />
         <button
@@ -414,6 +518,12 @@ export function ExamCertificates({
           <Button variant="ghost" size="small" onClick={() => setConfirm({ kind: "bulk", scope: "all" })}>
             <Icon name="repeat" size={16} />
             Replace all issued
+          </Button>
+        )}
+        {canReplace && summary && summary.issued > 0 && (
+          <Button variant="ghost" size="small" onClick={() => setConfirm({ kind: "ask-names" })}>
+            <Icon name="user" size={16} />
+            Ask everyone to confirm their name
           </Button>
         )}
       </div>
@@ -446,7 +556,7 @@ export function ExamCertificates({
                     <th scope="col" className="w-[150px] py-3 pe-3 text-start font-semibold">Certificate</th>
                     <th scope="col" className="py-3 pe-3 text-start font-semibold">Issued with</th>
                     <th scope="col" className="w-[210px] py-3 pe-3 text-start font-semibold">Status</th>
-                    <th scope="col" className="w-[150px] py-3 pe-4 text-start font-semibold">
+                    <th scope="col" className="w-[170px] py-3 pe-4 text-start font-semibold">
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
@@ -455,17 +565,37 @@ export function ExamCertificates({
                   {rows.map((c) => {
                     const busy = busyId === c.id;
                     const showReplace = canReplace && c.status === "issued" && !replacing(c);
-                    const showAskAgain = c.status !== "issued";
+                    // Nothing goes to Charter Center while the member's name is being checked.
+                    const showAskAgain = c.status !== "issued" && !c.nameCheck;
+                    const review = c.nameCheck?.status === "review" ? c.nameCheck : null;
+                    const showAskName = canReplace && c.status === "issued" && !c.nameCheck;
+                    const certificateName = c.certificateName && c.certificateName !== c.member.name ? c.certificateName : null;
                     return (
                       <tr key={c.id} className="align-top text-sm text-body">
                         <td className="py-3 ps-4 pe-3">
-                          <span className="flex min-w-0 items-center gap-3">
+                          <span className={cn("flex min-w-0 gap-3", review || certificateName ? "items-start" : "items-center")}>
                             <Avatar name={c.member.name} src={c.member.avatarUrl ?? undefined} size={32} />
                             <span className="flex min-w-0 flex-col">
                               <span className="truncate font-medium text-ink">{c.member.name}</span>
                               <span className="truncate text-xs text-secondary">
                                 @{c.member.handle} · {c.member.email}
                               </span>
+                              {review && (
+                                <span className="mt-1.5 flex flex-col gap-0.5 rounded-md bg-warning-light px-2 py-1 text-xs">
+                                  <span className="break-words">
+                                    <span className="text-secondary">{t("Asked for:")} </span>
+                                    <bdi className="font-medium text-ink">{review.proposedName ?? ""}</bdi>
+                                  </span>
+                                  <span className="break-words text-secondary">
+                                    {t("Profile name:")} <bdi>{c.member.name}</bdi>
+                                  </span>
+                                </span>
+                              )}
+                              {certificateName && (
+                                <span className="mt-1 text-xs break-words text-secondary">
+                                  {t("Name on certificate:")} <bdi className="text-ink">{certificateName}</bdi>
+                                </span>
+                              )}
                             </span>
                           </span>
                         </td>
@@ -483,6 +613,18 @@ export function ExamCertificates({
                         </td>
                         <td className="py-3 pe-4">
                           <span className="flex flex-col items-start gap-1.5 text-xs">
+                            {review && (
+                              <span className="flex flex-wrap items-center gap-1.5">
+                                <Button size="small" className="px-2.5!" disabled={busy} onClick={() => setConfirm({ kind: "approve-name", certificate: c })}>
+                                  <span className="sr-only">{c.member.name}: </span>
+                                  Approve name
+                                </Button>
+                                <Button variant="secondary" size="small" className="px-2.5!" disabled={busy} onClick={() => setConfirm({ kind: "decline-name", certificate: c })}>
+                                  <span className="sr-only">{c.member.name}: </span>
+                                  Decline
+                                </Button>
+                              </span>
+                            )}
                             {showReplace && (
                               <Button variant="secondary" size="small" className="px-2.5!" disabled={busy} onClick={() => setConfirm({ kind: "one", certificate: c })}>
                                 <span className="sr-only">{c.member.name}: </span>
@@ -494,6 +636,12 @@ export function ExamCertificates({
                                 <span className="sr-only">{c.member.name}: </span>
                                 Ask again
                               </Button>
+                            )}
+                            {showAskName && (
+                              <button type="button" className={cn(linkClasses, "text-start")} disabled={busy} onClick={() => setConfirm({ kind: "ask-name", certificate: c })}>
+                                <span className="sr-only">{c.member.name}: </span>
+                                Ask to confirm name
+                              </button>
                             )}
                             {c.imageUrl && (
                               <a href={c.imageUrl} target="_blank" rel="noopener noreferrer" className={linkClasses}>
@@ -582,6 +730,59 @@ export function ExamCertificates({
           reasonField="none"
           onClose={() => setConfirm(null)}
           onConfirm={() => replaceOne(confirm.certificate)}
+        />
+      )}
+      {confirm?.kind === "ask-names" && (
+        <ReasonDialog
+          title="Ask members to confirm their names?"
+          description={
+            <span className="flex flex-col gap-2">
+              <span>Members with a certificate for this exam who haven’t been asked yet get a notice and an email, and a reminder after 3 days.</span>
+              <span>If a member’s name changes, their certificate is replaced automatically.</span>
+            </span>
+          }
+          confirmLabel="Ask everyone"
+          reasonField="none"
+          onClose={() => setConfirm(null)}
+          onConfirm={askNames}
+        />
+      )}
+      {confirm?.kind === "ask-name" && (
+        <ReasonDialog
+          title={t("Ask {name} to confirm their name?", { name: confirm.certificate.member.name })}
+          description="They get a notice and an email, and a reminder after 3 days. If their name changes, their certificate is replaced automatically."
+          confirmLabel="Ask to confirm name"
+          reasonField="none"
+          onClose={() => setConfirm(null)}
+          onConfirm={() => askName(confirm.certificate)}
+        />
+      )}
+      {confirm?.kind === "approve-name" && (
+        <ReasonDialog
+          title={t("Approve “{name}”?", { name: confirm.certificate.nameCheck?.proposedName ?? "" })}
+          description={
+            confirm.certificate.status === "issued"
+              ? t("Charter Center will print this name on {member}’s certificate, and their current certificate will be replaced.", { member: confirm.certificate.member.name })
+              : t("Charter Center will print this name on {member}’s certificate.", { member: confirm.certificate.member.name })
+          }
+          confirmLabel="Approve name"
+          reasonField="none"
+          onClose={() => setConfirm(null)}
+          onConfirm={() => approveName(confirm.certificate)}
+        />
+      )}
+      {confirm?.kind === "decline-name" && (
+        <ReasonDialog
+          title={t("Decline “{name}”?", { name: confirm.certificate.nameCheck?.proposedName ?? "" })}
+          description={t("{member} is asked to confirm their name again, with your reason if you give one.", { member: confirm.certificate.member.name })}
+          confirmLabel="Decline name"
+          reasonField="optional"
+          reasonPlaceholder="Why this name can’t be used"
+          reasonHint="Sent to the member."
+          minReasonLength={1}
+          maxReasonLength={300}
+          onClose={() => setConfirm(null)}
+          onConfirm={(reason) => declineName(confirm.certificate, reason)}
         />
       )}
     </section>

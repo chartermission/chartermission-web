@@ -7,6 +7,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { and, eq, ilike, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import type { ExamCertificateDifference, ExamCertificateSettings, ExamCertificateView } from '@chartermission/contracts';
+import { NotifyService } from '../core/notify.service.js';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
 import { examCertificates, exams, files, memberProfiles, pages, postAttachments, posts, users } from '../db/schema.js';
@@ -31,6 +32,14 @@ export const CERTIFICATE_JOB = 'exam-certificate';
 /** Replacing an issued certificate with a new one from Charter Center (see replace()). */
 export const REPLACE_JOB = 'exam-certificate-replace';
 const SWEEP_JOB = 'exam-certificates-sweep';
+/** Asking a member to confirm the name on their certificate (one notice and email; see sendNameNotice). */
+export const NAME_NOTICE_JOB = 'exam-certificate-name';
+/** Asking every member an admin picked at once (see AdminExamCertificatesService.askNames). */
+export const NAME_NOTICES_JOB = 'exam-certificate-names';
+/** Members who haven't confirmed their name are reminded once, this long after being asked. */
+export const NAME_REMIND_AFTER_MS = 3 * 24 * 3600_000;
+/** Reminders the sweep sends at a time (the next sweep sends the rest). */
+const NAME_REMIND_BATCH = 200;
 /** Waits before asking Charter Center again; after the last one the certificate is marked failed (about two days in all). */
 export const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 3600_000, 3 * 3600_000, 6 * 3600_000, 12 * 3600_000, 24 * 3600_000];
 /** With the sample (mock) Charter Center on the live site, certificates wait and are checked again this often. */
@@ -41,6 +50,21 @@ const CLAIM_MS = 10 * 60_000;
 const NO_SETTINGS_WAIT_MS = 3600_000;
 /** Replacements the sweep picks up at a time (the queue jobs do the rest). */
 const REPLACE_SWEEP_BATCH = 100;
+
+/** A replacement is on its way (asked for, and not given up). */
+export const replacingSql = sql`(${examCertificates.replaceRequestedAt} is not null and ${examCertificates.replaceNextTryAt} is not null)`;
+
+/** Why a member is asked for their name: after passing, by an admin (issued certificate), or after a declined name. */
+export type NameNoticeKind = 'passed' | 'asked' | 'declined';
+
+/** A name as it is compared and printed: trimmed, runs of spaces made one (as CertificateName does). */
+export const normalName = (name: string | null | undefined): string => (name ?? '').trim().replace(/\s+/g, ' ');
+
+/**
+ * Certificates that may be sent to Charter Center: none while the member's name is being confirmed
+ * (name_status set), unless Charter Center already sent it (only sharing is left to do).
+ */
+const sendable = or(isNull(examCertificates.nameStatus), isNotNull(examCertificates.imageFileId), isNotNull(examCertificates.pdfFileId))!;
 
 /** What a certificate is stored as once Charter Center has sent it. */
 interface StoredCertificate {
@@ -61,7 +85,8 @@ export interface ReplacedCertificate {
 
 /**
  * How a request sent to Charter Center differs from what would be sent now: the exam's certificate
- * settings, and (when given) the member's current name. The signature is compared by its file, so
+ * settings, and (when given) the name that would be printed now (the name the member confirmed for
+ * the certificate, else their current profile name). The signature is compared by its file, so
  * a change of the API's public address doesn't make every certificate look outdated.
  * Keep in step with the SQL in AdminExamCertificatesService.
  */
@@ -101,7 +126,10 @@ export async function renderFirstPage(pdf: Buffer): Promise<Buffer | null> {
   }
 }
 
-export function certificateView(row: CertificateRow, postAlive: boolean): ExamCertificateView {
+/** profileName: the member's name on their profile now (normalised; '' if none). */
+export function certificateView(row: CertificateRow, postAlive: boolean, profileName: string): ExamCertificateView {
+  const request = row.request as Partial<CertificateRequest> | null;
+  const status = row.nameStatus as 'awaiting' | 'review' | null;
   return {
     id: row.id,
     status: row.status as ExamCertificateView['status'],
@@ -110,12 +138,24 @@ export function certificateView(row: CertificateRow, postAlive: boolean): ExamCe
     downloadUrl: row.pdfFileId ? mediaUrl(row.pdfFileId) : null,
     postId: postAlive ? row.postId : null,
     issuedAt: row.issuedAt?.toISOString() ?? null,
+    name: row.certificateName ?? request?.student_name ?? null,
+    nameCheck: status
+      ? {
+          status,
+          profileName,
+          suggestedName: row.certificateName ?? request?.student_name ?? profileName,
+          proposedName: status === 'review' ? row.proposedName : null,
+          declinedReason: status === 'awaiting' ? row.nameDeclinedReason : null,
+          replacing: row.status === 'issued',
+        }
+      : null,
   };
 }
 
 /**
- * Charter Center certificates, for exams with certificate settings. When a member passes, we send
- * Charter Center their name with the exam's certificate settings (kept in exam_certificates.request;
+ * Charter Center certificates, for exams with certificate settings. When a member passes, they are
+ * asked to confirm the name to print on it (see confirmName; nothing is sent until they do). Once
+ * they have, we send Charter Center that name with the exam's certificate settings (kept in exam_certificates.request;
  * if the exam's settings are corrected before the certificate arrives, the request is rebuilt with
  * them) and get the certificate back. Until it has one we keep asking (RETRY_DELAYS_MS). Once it arrives, the image and PDF are stored here and, when the exam
  * shares certificates, posted as a celebration by the member that every member sees, linked to
@@ -150,32 +190,141 @@ export class ExamCertificatesService implements OnModuleInit {
     private readonly settings: SettingsService,
     private readonly mail: MailService,
     private readonly analytics: AnalyticsService,
+    private readonly notifyService: NotifyService,
   ) {}
 
   onModuleInit() {
-    this.queue.process('maintenance', async (name, data: { id?: string }) => {
+    this.queue.process('maintenance', async (name, data: { id?: string; kind?: NameNoticeKind; at?: number; examId?: string }) => {
       if (name === CERTIFICATE_JOB && data.id) await this.run(data.id);
       if (name === REPLACE_JOB && data.id) await this.replace(data.id);
       if (name === SWEEP_JOB) await this.sweep();
+      if (name === NAME_NOTICE_JOB && data.id && data.kind && data.at) await this.nameNoticeJob(data.id, data.kind, data.at);
+      if (name === NAME_NOTICES_JOB && data.examId && data.at) await this.nameNoticesJob(data.examId, data.at);
     });
     void this.queue.every('maintenance', SWEEP_JOB, 15 * 60_000).catch((err: unknown) => this.logger.warn(`Could not schedule the certificate sweep: ${String(err)}`));
   }
 
-  /** After a passing attempt is marked: one certificate per member and exam, when the exam awards one. */
+  /**
+   * After a passing attempt is marked: one certificate per member and exam, when the exam awards one.
+   * Nothing is sent to Charter Center yet: the member is asked to confirm their name first (confirmName).
+   */
   async onPassed(examId: string, userId: string, attemptId: string): Promise<void> {
     const [exam] = await this.db.select({ certificate: exams.certificate }).from(exams).where(eq(exams.id, examId)).limit(1);
     if (!exam?.certificate) return;
-    const request = await this.buildRequest(exam.certificate, userId);
+    const now = new Date();
     const [row] = await this.db
       .insert(examCertificates)
-      .values({ examId, userId, attemptId, request: request ? { ...request } : null, status: 'pending', nextTryAt: new Date() })
+      .values({ examId, userId, attemptId, request: null, status: 'pending', nextTryAt: null, nameStatus: 'awaiting', nameRequestedAt: now })
       .onConflictDoNothing()
       .returning({ id: examCertificates.id });
-    if (row) await this.enqueue(row.id);
+    if (row) await this.enqueueNameNotice(row.id, 'passed', now);
   }
 
-  /** What Charter Center is sent: the member's name as on their profile, and the exam's certificate settings. */
-  async buildRequest(settings: ExamCertificateSettings, userId: string): Promise<CertificateRequest | null> {
+  /**
+   * POST /exams/:id/certificate/name — the member confirms the name to print on their certificate.
+   * Their profile name goes straight through (the certificate is sent, or an issued one replaced if
+   * the name changes); any other name waits for an admin (review). While in review they can change it.
+   */
+  async confirmName(examId: string, userId: string, name: string): Promise<ExamCertificateView> {
+    const [row] = await this.db
+      .select()
+      .from(examCertificates)
+      .where(and(eq(examCertificates.examId, examId), eq(examCertificates.userId, userId)))
+      .limit(1);
+    if (!row) throw Errors.notFound('Certificate');
+    if (!row.nameStatus) throw Errors.conflict('There’s no name to confirm for this certificate');
+    const wanted = normalName(name);
+    const profileName = await this.profileName(userId);
+    if (wanted === profileName) {
+      const settled = await this.settleName(row.id, wanted, row.nameStatus);
+      if (!settled) throw Errors.conflict('There’s no name to confirm for this certificate');
+      await this.proceed(settled);
+    } else {
+      const [updated] = await this.db
+        .update(examCertificates)
+        .set({ nameStatus: 'review', proposedName: wanted, nameDeclinedReason: null })
+        .where(and(eq(examCertificates.id, row.id), isNotNull(examCertificates.nameStatus)))
+        .returning({ id: examCertificates.id });
+      if (!updated) throw Errors.conflict('There’s no name to confirm for this certificate');
+    }
+    return (await this.forMember(examId, userId))!;
+  }
+
+  /**
+   * The name is settled (the member confirmed their profile name, or an admin approved the one they
+   * asked for): it becomes the certificate's name. Only while name_status is still `from`. Null if it changed.
+   */
+  async settleName(id: string, name: string, from: string): Promise<CertificateRow | null> {
+    const [row] = await this.db
+      .update(examCertificates)
+      .set({ certificateName: name, nameStatus: null, proposedName: null, nameDeclinedReason: null, nameConfirmedAt: new Date() })
+      .where(and(eq(examCertificates.id, id), eq(examCertificates.nameStatus, from)))
+      .returning();
+    return row ?? null;
+  }
+
+  /**
+   * After the name is settled: a certificate not issued yet is sent to Charter Center with it; an
+   * issued one is replaced if it was printed with another name.
+   */
+  async proceed(row: CertificateRow): Promise<void> {
+    const request = row.request as Partial<CertificateRequest> | null;
+    if (row.status === 'issued' || row.imageFileId || row.pdfFileId) {
+      if (row.certificateName && request?.student_name !== row.certificateName) await this.requestReplacement(row.id);
+      return;
+    }
+    const [exam] = await this.db.select({ certificate: exams.certificate }).from(exams).where(eq(exams.id, row.examId)).limit(1);
+    const fresh = exam?.certificate ? await this.buildRequest(exam.certificate, row.userId, row.certificateName) : null;
+    const [marked] = await this.db
+      .update(examCertificates)
+      .set({ request: fresh ? { ...fresh } : null, status: 'pending', tries: 0, nextTryAt: new Date(), lastError: null })
+      .where(and(eq(examCertificates.id, row.id), isNull(examCertificates.nameStatus), isNull(examCertificates.imageFileId), isNull(examCertificates.pdfFileId)))
+      .returning({ id: examCertificates.id });
+    if (marked) await this.enqueue(marked.id);
+  }
+
+  /**
+   * Marks an issued certificate for replacement (the queue job or the sweep does it: see replace()).
+   * False when it isn't issued or a replacement is already on its way.
+   */
+  async markReplacement(id: string): Promise<boolean> {
+    const now = new Date();
+    const [marked] = await this.db
+      .update(examCertificates)
+      .set({ replaceRequestedAt: now, replaceTries: 0, replaceNextTryAt: now, replaceError: null })
+      .where(and(eq(examCertificates.id, id), eq(examCertificates.status, 'issued'), sql`not ${replacingSql}`))
+      .returning({ id: examCertificates.id });
+    return !!marked;
+  }
+
+  /** Marks an issued certificate for replacement and queues it, as an admin's reissue does. */
+  async requestReplacement(id: string): Promise<boolean> {
+    if (!(await this.markReplacement(id))) return false;
+    await this.enqueueReplacement(id);
+    return true;
+  }
+
+  /** Queues the notice and email asking the member to confirm their name (asked at `at`). */
+  async enqueueNameNotice(id: string, kind: NameNoticeKind, at: Date): Promise<void> {
+    await this.queue.add('maintenance', NAME_NOTICE_JOB, { id, kind, at: at.getTime() }, { jobId: `exam-certificate-name-${id}-${kind}-${at.getTime()}` });
+  }
+
+  /** Queues the notices for everyone an admin asked at once (all asked at `at`). */
+  async enqueueNameNotices(examId: string, at: Date): Promise<void> {
+    await this.queue.add('maintenance', NAME_NOTICES_JOB, { examId, at: at.getTime() }, { jobId: `exam-certificate-names-${examId}-${at.getTime()}` });
+  }
+
+  /** The member's name on their profile now, normalised ('' if none). */
+  async profileName(userId: string): Promise<string> {
+    const [p] = await this.db.select({ name: memberProfiles.displayName }).from(memberProfiles).where(eq(memberProfiles.userId, userId)).limit(1);
+    return normalName(p?.name);
+  }
+
+  /**
+   * What Charter Center is sent: the name the member confirmed for the certificate (else their name
+   * as on their profile), and the exam's certificate settings.
+   */
+  async buildRequest(settings: ExamCertificateSettings, userId: string, certificateName?: string | null): Promise<CertificateRequest | null> {
     const [member] = await this.db
       .select({ name: memberProfiles.displayName, email: users.email })
       .from(users)
@@ -185,7 +334,7 @@ export class ExamCertificatesService implements OnModuleInit {
     const [signature] = await this.db.select({ mime: files.mime }).from(files).where(eq(files.id, settings.signatureFileId)).limit(1);
     if (!member) return null;
     return {
-      student_name: member.name?.trim() || member.email.split('@')[0]!,
+      student_name: certificateName || member.name?.trim() || member.email.split('@')[0]!,
       course_title: settings.title,
       start_from: settings.startDate,
       start_end: settings.endDate,
@@ -217,7 +366,8 @@ export class ExamCertificatesService implements OnModuleInit {
       .where(and(eq(examCertificates.examId, examId), eq(examCertificates.userId, userId)))
       .limit(1);
     if (!row) return null;
-    return certificateView(row, await this.postAlive(row.postId));
+    const [postAlive, profileName] = await Promise.all([this.postAlive(row.postId), row.nameStatus ? this.profileName(userId) : Promise.resolve('')]);
+    return certificateView(row, postAlive, profileName);
   }
 
   /**
@@ -248,9 +398,13 @@ export class ExamCertificatesService implements OnModuleInit {
     const [row] = await this.db
       .update(examCertificates)
       .set({ status: 'pending', tries: 0, nextTryAt: new Date(), lastError: null })
-      .where(and(eq(examCertificates.id, id.toLowerCase()), sql`(${examCertificates.status} <> 'issued' or ${examCertificates.postId} is null)`))
+      .where(and(eq(examCertificates.id, id.toLowerCase()), sql`(${examCertificates.status} <> 'issued' or ${examCertificates.postId} is null)`, sendable))
       .returning({ id: examCertificates.id, status: examCertificates.status });
-    if (!row) throw Errors.conflict('This certificate is already issued and shared');
+    if (!row) {
+      const [waiting] = await this.db.select({ id: examCertificates.id }).from(examCertificates).where(and(eq(examCertificates.id, id.toLowerCase()), sql`not ${sendable}`)).limit(1);
+      if (waiting) throw Errors.conflict('Waiting for the member to confirm their name');
+      throw Errors.conflict('This certificate is already issued and shared');
+    }
     await this.enqueue(row.id);
   }
 
@@ -259,7 +413,7 @@ export class ExamCertificatesService implements OnModuleInit {
     const due = await this.db
       .select({ id: examCertificates.id })
       .from(examCertificates)
-      .where(and(eq(examCertificates.status, 'pending'), lte(examCertificates.nextTryAt, new Date())))
+      .where(and(eq(examCertificates.status, 'pending'), lte(examCertificates.nextTryAt, new Date()), sendable))
       .limit(200);
     for (const row of due) await this.run(row.id);
     const replacements = await this.db
@@ -269,6 +423,38 @@ export class ExamCertificatesService implements OnModuleInit {
       .orderBy(examCertificates.replaceNextTryAt)
       .limit(REPLACE_SWEEP_BATCH);
     for (const row of replacements) await this.replace(row.id);
+    await this.remindNames();
+  }
+
+  /**
+   * The one reminder to confirm the name, 3 days after asking, while the member still hasn't. Rows
+   * are claimed (name_reminded_at set) before anything is sent, so overlapping sweeps send it once.
+   */
+  async remindNames(now = new Date()): Promise<number> {
+    const before = new Date(now.getTime() - NAME_REMIND_AFTER_MS);
+    const claimed = await this.db
+      .update(examCertificates)
+      .set({ nameRemindedAt: now })
+      .where(
+        sql`${examCertificates.id} in (
+          select id from exam_certificates
+          where name_status = 'awaiting' and name_reminded_at is null and name_requested_at <= ${before.toISOString()}::timestamptz
+          order by name_requested_at
+          limit ${NAME_REMIND_BATCH}
+          for update skip locked
+        ) and ${examCertificates.nameStatus} = 'awaiting' and ${examCertificates.nameRemindedAt} is null`,
+      )
+      .returning();
+    let sent = 0;
+    for (const row of claimed) {
+      try {
+        await this.sendNameNotice(row, row.status === 'issued' ? 'asked' : 'passed', true);
+        sent++;
+      } catch (err) {
+        this.logger.warn(`Certificate ${row.id}: name reminder not sent: ${String(err)}`);
+      }
+    }
+    return sent;
   }
 
   /** One try: ask Charter Center, store the files, share the post. Safe to call twice. */
@@ -277,7 +463,15 @@ export class ExamCertificatesService implements OnModuleInit {
     const [row] = await this.db
       .update(examCertificates)
       .set({ nextTryAt: new Date(Date.now() + CLAIM_MS) })
-      .where(and(eq(examCertificates.id, id), eq(examCertificates.status, 'pending'), or(isNull(examCertificates.nextTryAt), lte(examCertificates.nextTryAt, new Date()))))
+      .where(
+        and(
+          eq(examCertificates.id, id),
+          eq(examCertificates.status, 'pending'),
+          or(isNull(examCertificates.nextTryAt), lte(examCertificates.nextTryAt, new Date())),
+          // Never sent while the member's name is being confirmed.
+          sendable,
+        ),
+      )
       .returning();
     if (!row) return;
     const [user] = await this.db.select({ status: users.status }).from(users).where(eq(users.id, row.userId)).limit(1);
@@ -290,7 +484,7 @@ export class ExamCertificatesService implements OnModuleInit {
     // Asked for before the exam had certificate settings: wait for them (no try is used up).
     let request = row.request as unknown as CertificateRequest | null;
     if (!request && !row.imageFileId && !row.pdfFileId) {
-      request = exam.certificate ? await this.buildRequest(exam.certificate, row.userId) : null;
+      request = exam.certificate ? await this.buildRequest(exam.certificate, row.userId, row.certificateName) : null;
       if (!request) {
         await this.db
           .update(examCertificates)
@@ -302,7 +496,7 @@ export class ExamCertificatesService implements OnModuleInit {
     } else if (request && !row.imageFileId && !row.pdfFileId && exam.certificate && requestDifferences(request, exam.certificate).length) {
       // Not issued yet, and the exam's certificate settings were changed since the member passed:
       // send the current ones, so it isn't issued with settings already corrected.
-      const fresh = await this.buildRequest(exam.certificate, row.userId);
+      const fresh = await this.buildRequest(exam.certificate, row.userId, row.certificateName);
       if (fresh) {
         request = fresh;
         await this.db.update(examCertificates).set({ request: { ...request } }).where(eq(examCertificates.id, row.id));
@@ -379,7 +573,7 @@ export class ExamCertificatesService implements OnModuleInit {
     }
     const [exam] = await this.db.select({ certificate: exams.certificate, title: exams.title }).from(exams).where(eq(exams.id, row.examId)).limit(1);
     if (!exam) return;
-    const request = exam.certificate ? await this.buildRequest(exam.certificate, row.userId) : null;
+    const request = exam.certificate ? await this.buildRequest(exam.certificate, row.userId, row.certificateName) : null;
     if (!request) {
       await this.db
         .update(examCertificates)
@@ -615,6 +809,88 @@ export class ExamCertificatesService implements OnModuleInit {
     if (!postId) return false;
     const [p] = await this.db.select({ deletedAt: posts.deletedAt }).from(posts).where(eq(posts.id, postId)).limit(1);
     return !!p && !p.deletedAt;
+  }
+
+  /** NAME_NOTICE_JOB: sends the notice unless the member was asked again since, or already answered. */
+  private async nameNoticeJob(id: string, kind: NameNoticeKind, at: number) {
+    const [row] = await this.db.select().from(examCertificates).where(eq(examCertificates.id, id)).limit(1);
+    if (!row || row.nameStatus !== 'awaiting' || row.nameRequestedAt?.getTime() !== at) return;
+    await this.sendNameNotice(row, kind, false);
+  }
+
+  /** NAME_NOTICES_JOB: everyone an admin asked at `at` for this exam, who hasn't answered yet. */
+  private async nameNoticesJob(examId: string, at: number) {
+    const rows = await this.db
+      .select()
+      .from(examCertificates)
+      .where(and(eq(examCertificates.examId, examId), eq(examCertificates.nameStatus, 'awaiting'), eq(examCertificates.nameRequestedAt, new Date(at))));
+    for (const row of rows) {
+      try {
+        await this.sendNameNotice(row, 'asked', false);
+      } catch (err) {
+        this.logger.warn(`Certificate ${row.id}: name notice not sent: ${String(err)}`);
+      }
+    }
+  }
+
+  /** The notice and email asking the member to confirm the name on their certificate (always sent). */
+  async sendNameNotice(row: CertificateRow, kind: NameNoticeKind, reminder: boolean): Promise<void> {
+    const [exam] = await this.db.select({ title: exams.title, slug: exams.slug }).from(exams).where(eq(exams.id, row.examId)).limit(1);
+    if (!exam) return;
+    const at = row.nameRequestedAt?.getTime() ?? 0;
+    const title = `“${exam.title}”`;
+    // Notices show the title in bold instead of in quotes (curly quotes around a Latin title read badly in Arabic).
+    const bold = { text: exam.title, strong: true };
+    const re = reminder ? 'Reminder: ' : '';
+    const copy =
+      kind === 'declined'
+        ? {
+            segments: [
+              { text: 'The name you asked for on your certificate for ', strong: false },
+              bold,
+              { text: ' wasn’t approved', strong: false },
+            ],
+            subject: 'Please confirm your name again',
+            heading: 'Please confirm your name again',
+            paragraphs: [
+              `The name you asked for on your certificate for ${title} wasn’t approved.`,
+              ...(row.nameDeclinedReason ? [`Reason: ${row.nameDeclinedReason}`] : []),
+              'Please confirm your name as it should be printed.',
+            ],
+          }
+        : kind === 'asked'
+          ? {
+              segments: [
+                { text: `${re}Check the name on your certificate for `, strong: false },
+                bold,
+              ],
+              subject: `${re}Check the name on your certificate`,
+              heading: 'Check the name on your certificate',
+              paragraphs: [`We’re checking the names on Charter Center certificates for ${title}. Please confirm your name as it should be printed. If it changes, you’ll get a new certificate.`],
+            }
+          : {
+              segments: [
+                { text: `${re}Confirm the name for your certificate for `, strong: false },
+                bold,
+              ],
+              subject: `${re}Confirm the name on your certificate`,
+              heading: 'Confirm the name on your certificate',
+              paragraphs: [
+                `Congratulations on passing ${title}. Before Charter Center issues your certificate, check the name we’ll print on it.`,
+                'Your certificate is sent as soon as you confirm.',
+              ],
+            };
+    await this.notifyService.notify({
+      userId: row.userId,
+      type: 'exam_certificate_name',
+      objectType: 'exam_certificate',
+      objectId: row.id,
+      segments: copy.segments,
+      href: `/exams/${exam.slug}#certificate`,
+      icon: 'alert',
+      dedupeKey: `exam-certificate-name:${row.id}:${reminder ? 'reminder' : kind}:${at}`,
+      email: { subject: copy.subject, heading: copy.heading, paragraphs: copy.paragraphs, buttonLabel: 'Confirm my name' },
+    });
   }
 
   private async notify(row: CertificateRow) {

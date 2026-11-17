@@ -116,6 +116,12 @@ export class ExamsService {
     return this.certificates.shareForMember(exam.id, viewer);
   }
 
+  /** POST /exams/:id/certificate/name — the member confirms the name on their certificate. */
+  async confirmCertificateName(viewer: AuthUser, examId: string, name: string) {
+    const exam = await this.findVisible(viewer, { id: examId });
+    return this.certificates.confirmName(exam.id, viewer.id, name);
+  }
+
   /**
    * The exam, if this member may see it: published and given to them; a draft or any exam for staff
    * who manage exams; or an archived exam the member has taken (so their results stay reachable).

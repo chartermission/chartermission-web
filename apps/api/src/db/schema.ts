@@ -1601,6 +1601,17 @@ export const examCertificates = pgTable(
     replaceError: text('replace_error'),
     /** Certificates this one replaced: [{ externalId, imageFileId, pdfFileId, request, issuedAt, replacedAt }]. */
     history: jsonb('history').$type<Record<string, unknown>[]>().notNull().default([]),
+    /* The name on the certificate, confirmed by the member (contracts ExamCertificateView.nameCheck).
+       certificateName: the confirmed name, sent as student_name (null: never asked, profile name used).
+       nameStatus: awaiting (asked, not confirmed; nothing is sent to Charter Center meanwhile) or
+       review (they asked for a name that isn't their profile name; an admin approves or declines). */
+    certificateName: text('certificate_name'),
+    nameStatus: text('name_status'),
+    proposedName: text('proposed_name'),
+    nameDeclinedReason: text('name_declined_reason'),
+    nameRequestedAt: ts('name_requested_at'),
+    nameRemindedAt: ts('name_reminded_at'),
+    nameConfirmedAt: ts('name_confirmed_at'),
     issuedAt: ts('issued_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -1609,6 +1620,8 @@ export const examCertificates = pgTable(
     uniqueIndex('exam_certificates_member_uq').on(t.examId, t.userId),
     index('exam_certificates_due_idx').on(t.status, t.nextTryAt),
     check('exam_certificates_status_ck', sql`${t.status} in ('pending','issued','failed')`),
+    check('exam_certificates_name_status_ck', sql`${t.nameStatus} is null or ${t.nameStatus} in ('awaiting','review')`),
+    index('exam_certificates_name_idx').on(t.nameStatus, t.nameRequestedAt),
   ],
 );
 

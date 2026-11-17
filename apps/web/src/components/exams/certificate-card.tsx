@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ExamCertificateView } from "@chartermission/contracts";
 import { Button, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
+import { NameCheckPanel, SLOT, Sentence } from "./certificate-name";
 import { openShare } from "@/components/social/share-out";
 import { toast } from "@/components/social/toast";
 import { NoTranslate } from "@/i18n/auto";
@@ -18,6 +19,10 @@ const POLL_MS = [4000, 4000, 6000, 8000, 10_000, 15_000, 30_000];
  * the page is open), ready to download, or not available. Once issued it can always be shared: on
  * the feed (again, if they deleted the first post) and, through that public post, on LinkedIn,
  * WhatsApp, X and the rest.
+ *
+ * While the member has to confirm the name printed on it (`nameCheck`), that comes first: nothing is
+ * sent to Charter Center until they do. An issued certificate they're asked to check stays below.
+ * The whole card is `#certificate`, where the notice and email about the name link to.
  */
 export function CertificateCard({
   examId,
@@ -37,7 +42,8 @@ export function CertificateCard({
   const t = useT();
   const [cert, setCert] = useState(initial);
   const [posting, setPosting] = useState(false);
-  const waiting = !cert || cert.status === "pending";
+  // Nothing is asked of Charter Center while the name is unconfirmed or being checked.
+  const waiting = !cert || (cert.status === "pending" && !cert.nameCheck);
 
   function shareOut(postId: string) {
     const line = examTitle
@@ -84,12 +90,21 @@ export function CertificateCard({
     };
   }, [examId, waiting]);
 
+  const nameCheck = cert?.nameCheck ? <NameCheckPanel key={`${cert.nameCheck.status}:${cert.nameCheck.proposedName ?? ""}`} examId={examId} check={cert.nameCheck} onChange={setCert} /> : null;
+
+  const wrap = (content: ReactNode) => (
+    <div id="certificate" className={cn("flex scroll-mt-24 flex-col gap-4", className)}>
+      {nameCheck}
+      {content}
+    </div>
+  );
+
   if (cert?.status === "issued") {
     // Members who joined from an invitation finish their profile before the rest of the site opens.
     const postHref = cert.postId ? (finishProfile ? `/onboarding?next=${encodeURIComponent(`/posts/${cert.postId}`)}` : `/posts/${cert.postId}`) : null;
     const finishHref = postHref && finishProfile ? postHref : "/onboarding";
-    return (
-      <Panel aria-labelledby="certificate-heading" className={cn("flex flex-wrap items-center gap-6 p-5 max-sm:p-4", className)}>
+    return wrap(
+      <Panel aria-labelledby="certificate-heading" className="flex flex-wrap items-center gap-6 p-5 max-sm:p-4">
         {cert.imageUrl && (
           <a href={cert.imageUrl} target="_blank" rel="noopener" className="block w-[260px] shrink-0 overflow-hidden rounded-lg border border-line max-sm:w-full">
             {/* eslint-disable-next-line @next/next/no-img-element -- served by the API with its own access rules */}
@@ -158,24 +173,27 @@ export function CertificateCard({
             </p>
           )}
         </div>
-      </Panel>
+      </Panel>,
     );
   }
 
+  // Asked to confirm the name before anything is sent: the name panel takes the place of the rest.
+  if (cert?.nameCheck) return wrap(null);
+
   if (cert?.status === "failed") {
-    return (
-      <Panel role="status" className={cn("flex items-start gap-3 p-5 max-sm:p-4", className)}>
+    return wrap(
+      <Panel role="status" className="flex items-start gap-3 p-5 max-sm:p-4">
         <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-warning" />
         <div className="flex flex-col gap-1">
           <h2 className="text-md font-semibold text-ink">Your certificate isn’t here yet</h2>
           <p className="text-sm text-body">Charter Center hasn’t sent it to us yet. The Charter Mission team can see this and will follow it up. We’ll email you when it arrives.</p>
         </div>
-      </Panel>
+      </Panel>,
     );
   }
 
-  return (
-    <Panel role="status" aria-live="polite" className={cn("flex items-start gap-3 p-5 max-sm:p-4", className)}>
+  return wrap(
+    <Panel role="status" aria-live="polite" className="flex items-start gap-3 p-5 max-sm:p-4">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-tint-2 text-primary-light">
         <Icon name="clipboard" size={20} />
       </span>
@@ -184,7 +202,12 @@ export function CertificateCard({
         <p className="text-sm text-body">
           Charter Center is preparing your certificate. It appears here, and we email you, as soon as it’s ready. It’s also shared on the feed so the community can congratulate you.
         </p>
+        {cert?.name && (
+          <p className="text-xs text-secondary">
+            <Sentence text={t("Name on your certificate: {name}", { name: SLOT })} value={cert.name} />
+          </p>
+        )}
       </div>
-    </Panel>
+    </Panel>,
   );
 }

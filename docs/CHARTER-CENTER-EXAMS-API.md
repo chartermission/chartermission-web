@@ -18,15 +18,19 @@ Authorization: Bearer <CHARTER_CENTER_API_KEY>      (only sent when a key is set
 }
 ```
 
-- `student_name`: the member's name as on their Charter Mission profile, when they passed.
+- `student_name`: the name the member confirmed for their certificate. After passing, members are asked to
+  confirm the name to print (their profile name, or another name an admin approves); nothing is sent until
+  they have.
 - `course_title`, `start_from`, `start_end`, `instructor_name`: the exam's certificate settings in the
   Charter Mission admin console. Dates are `YYYY-MM-DD`.
 - `exam_hours`: the study hours set on the exam's certificate, a number (up to one decimal place,
   like `35` or `1.5`), or `null` when the exam has no hours set.
 - `instructor_signature_url`: the signature uploaded on the exam, publicly downloadable (PNG, JPEG or WebP).
 
-The request is sent once per member and exam. The details are fixed when the member passes, so a
-retry sends exactly the same thing.
+The request is sent once per member and exam, as soon as the member has confirmed their name. The
+details are fixed then, so a retry sends exactly the same thing. (When an issued certificate is
+corrected, the same request is sent again with the corrected details, and the new certificate replaces
+the old one.)
 
 ## What Charter Mission accepts back
 

@@ -46,7 +46,11 @@ describe('Replacing issued exam certificates', () => {
       const optionId = exam.questions.find((k) => k.id === q.id)!.correctOptionId;
       await m.put(`/exam-attempts/${attempt.id}/answers`, { questionId: q.id, optionId }).expect(200);
     }
-    return (await m.post(`/exam-attempts/${attempt.id}/submit`).expect(200)).body as ExamAttemptView;
+    const view = (await m.post(`/exam-attempts/${attempt.id}/submit`).expect(200)).body as ExamAttemptView;
+    // Nothing is sent until the member confirms their name: they confirm their profile name.
+    expect(view.certificate).toMatchObject({ status: 'pending', nameCheck: { status: 'awaiting' } });
+    const certificate = (await m.post(`/exams/${exam.id}/certificate/name`, { name: view.certificate!.nameCheck!.profileName }).expect(200)).body as ExamCertificateView;
+    return { ...view, certificate };
   }
 
   beforeAll(async () => {
@@ -82,7 +86,7 @@ describe('Replacing issued exam certificates', () => {
 
   it('lists the exam’s certificates with what they were issued with and how they differ', async () => {
     const page = await list();
-    expect(page.summary).toEqual({ issued: 3, pending: 1, failed: 0, outdated: 3, replacing: 0 });
+    expect(page.summary).toEqual({ issued: 3, pending: 1, failed: 0, outdated: 3, replacing: 0, awaitingName: 0, nameReview: 0 });
     expect(page.items).toHaveLength(4);
     const first = page.items.find((i) => i.member.id === members.first.id)!;
     expect(first).toMatchObject({
@@ -118,7 +122,9 @@ describe('Replacing issued exam certificates', () => {
     expect(two.summary).toEqual(page.summary);
     await admin.get(`/admin/exams/${exam.id}/certificates?cursor=nonsense`).expect(400);
 
-    // A name change makes it outdated too.
+    // A certificate issued before members confirmed their names (no certificate name): a change of
+    // profile name makes it outdated too. (A confirmed name is what's printed, whatever the profile says.)
+    await t.db.update(s.examCertificates).set({ certificateName: null }).where(eq(s.examCertificates.userId, members.third.id));
     await t.db.update(s.memberProfiles).set({ displayName: 'Thandi N. Nkosi' }).where(eq(s.memberProfiles.userId, members.third.id));
     expect((await list('?q=thandi')).items[0]!.differences).toEqual(['title', 'name']);
   });
@@ -222,7 +228,7 @@ describe('Replacing issued exam certificates', () => {
 
     expect((await admin.post(`/admin/exams/${exam.id}/certificates/reissue`, { scope: 'outdated' }).expect(200)).body).toEqual({ queued: 1 });
     const page = await list();
-    expect(page.summary).toEqual({ issued: 3, pending: 1, failed: 0, outdated: 0, replacing: 0 });
+    expect(page.summary).toEqual({ issued: 3, pending: 1, failed: 0, outdated: 0, replacing: 0, awaitingName: 0, nameReview: 0 });
     const item = page.items.find((i) => i.member.id === third.id)!;
     expect(item).toMatchObject({ differences: [], replacedCount: 1, postId: null, issuedWith: { studentName: 'Thandi N. Nkosi', courseTitle: NEW_TITLE } });
     expect(await t.db.select().from(s.postAttachments).where(eq(s.postAttachments.postId, before.third!.postId!))).toEqual(deletedBefore);

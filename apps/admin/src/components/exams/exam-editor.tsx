@@ -39,7 +39,7 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
   // exam has no certificate settings (it doesn't depend on the count below loading).
   const certificateKey = JSON.stringify(exam.certificate);
 
-  // How many certificates the exam has (and how many are outdated) isn't part of the exam: ask for
+  // How many certificates the exam has (and how many are outdated or have a name to review) isn't part of the exam: ask for
   // the first one alone, again whenever the certificate settings change.
   const loadCertificates = useCallback(() => {
     api<AdminExamCertificatesPage>(`/admin/exams/${exam.id}/certificates`, { query: { limit: 1 } }).then(
@@ -131,7 +131,13 @@ export function ExamEditor({ initial }: { initial: AdminExamDetail }) {
           { value: "settings", label: t("Settings") },
           { value: "invite", label: t("Invite") },
           { value: "results", label: `${t("Results")} · ${exam.stats.attempts}` },
-          { value: "certificates", label: certificates ? `${t("Certificates")} · ${certificates.issued}` : t("Certificates") },
+          {
+            value: "certificates",
+            // Names members asked for wait for an admin: say so on the tab, so they're noticed from any tab.
+            label: certificates
+              ? `${t("Certificates")} · ${certificates.issued}${certificates.nameReview > 0 ? ` · ${t("{count} to review", { count: certificates.nameReview })}` : ""}`
+              : t("Certificates"),
+          },
         ]}
       />
 

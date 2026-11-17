@@ -25,6 +25,7 @@ export function ReasonDialog({
   reasonPlaceholder = "Explain the decision for the audit log and any appeal reviewer",
   reasonField = "required",
   minReasonLength = MIN_REASON_LENGTH,
+  maxReasonLength = 500,
   reasonHint = "Recorded in the audit log with your name and the time.",
   requiredMessage = "A reason is required. It is recorded in the audit log.",
   children,
@@ -40,6 +41,7 @@ export function ReasonDialog({
   /** "optional" accepts an empty reason; "none" makes this a plain confirmation (onConfirm gets ""). */
   reasonField?: "required" | "optional" | "none";
   minReasonLength?: number;
+  maxReasonLength?: number;
   reasonHint?: string;
   requiredMessage?: string;
   /** Extra fields (selects etc.) rendered above the reason. Read them from the FormData. */
@@ -133,7 +135,7 @@ export function ReasonDialog({
               rows={3}
               required={reasonField === "required"}
               minLength={minReasonLength}
-              maxLength={500}
+              maxLength={maxReasonLength}
               placeholder={reasonPlaceholder}
               aria-invalid={error ? true : undefined}
               aria-describedby={error ? `${id}-error` : `${id}-hint`}

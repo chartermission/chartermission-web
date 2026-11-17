@@ -70,14 +70,23 @@ describe('Exams by invitation link, and Charter Center certificates for those wh
 
   const invite = (m: Member, slug = exam.slug) => m.post(`/exams/${slug}/access`);
 
-  async function passExam(m: Member, right = 2): Promise<ExamAttemptView> {
+  /**
+   * Takes the exam. A member who passes an exam that awards a certificate is asked to confirm their
+   * name first; with `confirm` (the default) they confirm their profile name, so the certificate is
+   * sent, and the returned view's certificate is as it is after that.
+   */
+  async function passExam(m: Member, right = 2, confirm = true): Promise<ExamAttemptView> {
     const attempt = (await m.post(`/exams/${exam.id}/attempts`).expect(201)).body as ExamAttemptView;
     for (const [i, q] of attempt.questions.entries()) {
       const correct = exam.questions.find((k) => k.id === q.id)!.correctOptionId;
       const optionId = i < right ? correct : q.options.find((o) => o.id !== correct)!.id;
       await m.put(`/exam-attempts/${attempt.id}/answers`, { questionId: q.id, optionId }).expect(200);
     }
-    return (await m.post(`/exam-attempts/${attempt.id}/submit`).expect(200)).body as ExamAttemptView;
+    const view = (await m.post(`/exam-attempts/${attempt.id}/submit`).expect(200)).body as ExamAttemptView;
+    if (!confirm || view.certificate?.nameCheck?.status !== 'awaiting') return view;
+    expect(view.certificate.status).toBe('pending');
+    const certificate = (await m.post(`/exams/${exam.id}/certificate/name`, { name: view.certificate.nameCheck.profileName }).expect(200)).body as ExamCertificateView;
+    return { ...view, certificate };
   }
 
   it('shows the exam on the public invitation page (published exams only)', async () => {
@@ -157,10 +166,17 @@ describe('Exams by invitation link, and Charter Center certificates for those wh
     expect(failed.result?.passed).toBe(false);
     expect(failed).toMatchObject({ awardsCertificate: true, certificate: null });
 
-    // Passing: Charter Center's certificate (mock) is fetched, stored and shared at once (queues run inline in tests).
-    const passed = await passExam(m, 2);
-    expect(passed.result?.passed).toBe(true);
-    expect(passed.certificate).toMatchObject({ status: 'issued', certificateId: expect.stringMatching(/^CC-\d{4}-\d{6}$/) });
+    // Passing: the member is asked to confirm their name; nothing is sent to Charter Center yet.
+    const sentBefore = sent.length;
+    const waiting = await passExam(m, 2, false);
+    expect(waiting.result?.passed).toBe(true);
+    expect(waiting.certificate).toMatchObject({ status: 'pending', name: null, nameCheck: { status: 'awaiting', profileName: 'Amina Yusuf', suggestedName: 'Amina Yusuf', replacing: false } });
+    expect(sent.length).toBe(sentBefore);
+
+    // Confirmed: Charter Center's certificate (mock) is fetched, stored and shared at once (queues run inline in tests).
+    const confirmed = (await m.post(`/exams/${exam.id}/certificate/name`, { name: 'Amina Yusuf' }).expect(200)).body as ExamCertificateView;
+    const passed = { ...waiting, certificate: confirmed };
+    expect(passed.certificate).toMatchObject({ status: 'issued', certificateId: expect.stringMatching(/^CC-\d{4}-\d{6}$/), name: 'Amina Yusuf', nameCheck: null });
     expect(passed.certificate!.imageUrl).toMatch(/\/media\//);
     expect(sent.at(-1)).toEqual({
       student_name: 'Amina Yusuf',
