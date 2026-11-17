@@ -268,6 +268,24 @@ export async function seedMembers(db: Db): Promise<Record<string, string>> {
           .onConflictDoNothing();
       }
     }
+    // Only for members with none yet, so seeding again neither duplicates them nor undoes a member's edits.
+    if (m.certifications?.length) {
+      const [has] = await db.select({ id: s.profileCertifications.id }).from(s.profileCertifications).where(eq(s.profileCertifications.userId, id)).limit(1);
+      if (!has) {
+        await db.insert(s.profileCertifications).values(
+          m.certifications.map((c, position) => ({
+            userId: id,
+            name: c.name,
+            issuer: c.issuer,
+            issueDate: c.issueDate ?? null,
+            expiryDate: c.expiryDate ?? null,
+            credentialId: c.credentialId ?? null,
+            credentialUrl: c.credentialUrl ?? null,
+            position,
+          })),
+        );
+      }
+    }
     await db
       .insert(s.consentRecords)
       .values((['terms', 'privacy', 'guidelines'] as const).map((p) => ({ userId: id, policyType: p, policyVersion: versions[p] })))

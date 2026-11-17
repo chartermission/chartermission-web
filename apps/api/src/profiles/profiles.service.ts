@@ -1,22 +1,41 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import {
   PROFILE_COMPLETENESS_WEIGHTS,
+  type CertificationItem,
   type ChapterRef,
   type ExperienceItem,
   type HandleAvailability,
   type MemberProfile,
+  type OwnExamCertification,
   type OwnProfile,
   type PreviewAs,
   type PrivacySettingsInput,
   type ProfileCompleteness,
+  type ProfileCertification,
   type ProfileCompletenessField,
   type ProfileField,
   type Relationship,
   type UpdateProfileInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, connections, files, follows, handleHistory, memberProfiles, posts, profileExperiences, users } from '../db/schema.js';
+import {
+  chapters,
+  connections,
+  examCertificates,
+  exams,
+  files,
+  follows,
+  handleHistory,
+  memberProfiles,
+  pages,
+  postAttachments,
+  posts,
+  profileCertifications,
+  profileExperiences,
+  users,
+} from '../db/schema.js';
+import { authorActiveSql } from '../posts/visibility.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { BadgesService } from '../core/badges.service.js';
 import { MembersService, mediaUrl, posterUrl, toneFor } from '../core/members.service.js';
@@ -194,10 +213,11 @@ export class ProfilesService {
   private async build(row: ProfileRow, relation: ViewerRelation, relationship: Relationship): Promise<MemberProfile> {
     const vis = effectiveVisibility(row.fieldVisibility);
     const show = (f: ProfileField) => canSeeField(relation, vis[f]);
-    const [ref, tax, experience, chapterList, counts, countryName, badgeMap] = await Promise.all([
+    const [ref, tax, experience, certifications, chapterList, counts, countryName, badgeMap] = await Promise.all([
       this.members.ref(row.userId),
       this.taxonomy.forUsers([row.userId]).then((m) => m.get(row.userId)!),
       show('experience') ? this.experience(row.userId) : Promise.resolve([] as ExperienceItem[]),
+      show('certifications') ? this.shownCertifications(row.userId, relation === 'anonymous') : Promise.resolve([] as ProfileCertification[]),
       relation === 'anonymous' ? Promise.resolve([] as ChapterRef[]) : this.followedChapters(row.userId),
       this.counts(row.userId),
       show('location') ? this.taxonomy.countryName(row.countryCode) : Promise.resolve(null),
@@ -232,6 +252,7 @@ export class ProfilesService {
     if (show('interests')) out.interests = tax.interests;
     if (show('languages')) out.languages = tax.languages;
     if (show('experience')) out.experience = experience;
+    if (show('certifications')) out.certifications = certifications;
     return out;
   }
 
@@ -265,6 +286,105 @@ export class ProfilesService {
       endDate: r.endDate,
       description: r.description,
     }));
+  }
+
+  /** The certifications the member added, in their order. */
+  private async ownCertifications(userId: string): Promise<CertificationItem[]> {
+    const rows = await this.db
+      .select()
+      .from(profileCertifications)
+      .where(eq(profileCertifications.userId, userId))
+      .orderBy(asc(profileCertifications.position), asc(profileCertifications.createdAt));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      issuer: r.issuer,
+      issueDate: r.issueDate,
+      expiryDate: r.expiryDate,
+      credentialId: r.credentialId,
+      credentialUrl: r.credentialUrl,
+    }));
+  }
+
+  /**
+   * The member's issued Charter Mission exam certificates, newest first (one query). shownOnly: those
+   * they show on their profile. forGuest: the viewer isn't signed in, so the image is only given when
+   * they may load it (GET /media lets visitors load a file that is public or attached to a public
+   * post anyone may view: keep in step with MediaService.guestMayLoad); signed-in members may load
+   * any clean file.
+   */
+  private async examCertifications(userId: string, opts: { shownOnly: boolean; forGuest: boolean }): Promise<OwnExamCertification[]> {
+    const guestMayLoadImage = sql<boolean>`(
+      exists (select 1 from ${files} gf where gf.id = ${examCertificates.imageFileId} and gf.is_public)
+      or exists (
+        select 1 from ${postAttachments} gpa
+        join ${posts} gp on gp.id = gpa.post_id
+        where gpa.file_id = ${examCertificates.imageFileId}
+          and gp.visibility = 'public' and gp.status = 'published' and gp.moderation_state = 'visible'
+          and gp.deleted_at is null
+          and (gp.page_id is not null or ${authorActiveSql(sql`gp.author_id`)})
+          and (gp.page_id is null or exists (select 1 from ${pages} glp where glp.id = gp.page_id and glp.status = 'active'))
+      )
+    )`;
+    const rows = await this.db
+      .select({
+        id: examCertificates.id,
+        request: examCertificates.request,
+        externalId: examCertificates.externalId,
+        imageFileId: examCertificates.imageFileId,
+        postId: examCertificates.postId,
+        issuedAt: examCertificates.issuedAt,
+        shown: examCertificates.shownOnProfile,
+        examTitle: exams.title,
+        examCertificate: exams.certificate,
+        postAlive: sql<boolean>`(${posts.id} is not null and ${posts.deletedAt} is null)`,
+        imageLoadable: opts.forGuest ? guestMayLoadImage : sql<boolean>`true`,
+      })
+      .from(examCertificates)
+      .innerJoin(exams, eq(exams.id, examCertificates.examId))
+      .leftJoin(posts, eq(posts.id, examCertificates.postId))
+      .where(
+        and(
+          eq(examCertificates.userId, userId),
+          eq(examCertificates.status, 'issued'),
+          opts.shownOnly ? eq(examCertificates.shownOnProfile, true) : undefined,
+        ),
+      )
+      .orderBy(sql`${examCertificates.issuedAt} desc nulls last`, desc(examCertificates.createdAt));
+    return rows.map((r) => {
+      const courseTitle = typeof r.request?.course_title === 'string' ? r.request.course_title.trim() : '';
+      return {
+        id: r.id,
+        name: courseTitle || r.examCertificate?.title || r.examTitle,
+        issuer: CHARTER_CENTER,
+        issueDate: r.issuedAt ? r.issuedAt.toISOString().slice(0, 7) : null,
+        expiryDate: null,
+        credentialId: r.externalId,
+        credentialUrl: r.postId && r.postAlive ? `/posts/${r.postId}` : null,
+        verified: true,
+        imageUrl: r.imageFileId && r.imageLoadable ? mediaUrl(r.imageFileId) : null,
+        shown: r.shown,
+      };
+    });
+  }
+
+  /** MemberProfile.certifications: shown Charter Mission certificates first, then the member's own. */
+  private async shownCertifications(userId: string, forGuest: boolean): Promise<ProfileCertification[]> {
+    const [verified, own] = await Promise.all([this.examCertifications(userId, { shownOnly: true, forGuest }), this.ownCertifications(userId)]);
+    return [
+      ...verified.map(({ shown: _shown, ...c }) => c),
+      ...own.map((c) => ({
+        id: c.id!,
+        name: c.name,
+        issuer: c.issuer,
+        issueDate: c.issueDate ?? null,
+        expiryDate: c.expiryDate ?? null,
+        credentialId: c.credentialId ?? null,
+        credentialUrl: c.credentialUrl ?? null,
+        verified: false,
+        imageUrl: null,
+      })),
+    ];
   }
 
   async followedChapters(userId: string): Promise<ChapterRef[]> {
@@ -310,9 +430,11 @@ export class ProfilesService {
   /** GET /me/profile */
   async own(userId: string): Promise<OwnProfile> {
     const row = await this.rowFor(userId);
-    const [tax, experience, media] = await Promise.all([
+    const [tax, experience, certifications, examCertifications, media] = await Promise.all([
       this.taxonomy.forUsers([userId]).then((m) => m.get(userId)!),
       this.experience(userId),
+      this.ownCertifications(userId),
+      this.examCertifications(userId, { shownOnly: false, forGuest: false }),
       this.profileMedia(row),
     ]);
     return {
@@ -335,6 +457,8 @@ export class ProfilesService {
       interests: tax.interests,
       languages: tax.languages,
       experience,
+      certifications,
+      examCertifications,
       profileVisibility: row.profileVisibility as OwnProfile['profileVisibility'],
       fieldVisibility: effectiveVisibility(row.fieldVisibility),
       handleChangeAvailableAt: handleChangeAvailableAt(row.handleChangedAt)?.toISOString() ?? null,
@@ -428,6 +552,43 @@ export class ProfilesService {
               })),
             );
           }
+        }
+        if (input.certifications !== undefined) {
+          await tx.delete(profileCertifications).where(eq(profileCertifications.userId, userId));
+          if (input.certifications.length > 0) {
+            await tx.insert(profileCertifications).values(
+              input.certifications.map((c, i) => ({
+                userId,
+                name: c.name.trim(),
+                issuer: c.issuer.trim(),
+                issueDate: c.issueDate || null,
+                expiryDate: c.expiryDate || null,
+                credentialId: c.credentialId?.trim() || null,
+                credentialUrl: c.credentialUrl?.trim() || null,
+                position: i,
+              })),
+            );
+          }
+        }
+        if (input.hiddenExamCertificateIds !== undefined) {
+          // Only the member's own certificates, and only rows that change (ids that aren't theirs are ignored).
+          const hidden = [...new Set(input.hiddenExamCertificateIds.map((id) => id.toLowerCase()))];
+          if (hidden.length > 0) {
+            await tx
+              .update(examCertificates)
+              .set({ shownOnProfile: false })
+              .where(and(eq(examCertificates.userId, userId), inArray(examCertificates.id, hidden), eq(examCertificates.shownOnProfile, true)));
+          }
+          await tx
+            .update(examCertificates)
+            .set({ shownOnProfile: true })
+            .where(
+              and(
+                eq(examCertificates.userId, userId),
+                eq(examCertificates.shownOnProfile, false),
+                hidden.length > 0 ? notInArray(examCertificates.id, hidden) : undefined,
+              ),
+            );
         }
         for (const fileId of [input.avatarFileId, input.coverFileId, input.introVideoFileId, input.resumeFileId]) {
           if (!fileId) continue;
@@ -532,6 +693,9 @@ export class ProfilesService {
 }
 
 const TAKEN = 'That username is taken';
+
+/** Who issues the certificates members earn through Charter Mission exams. */
+const CHARTER_CENTER = 'Charter Center';
 
 /** When the member may change their username again, or null if they can now. */
 function handleChangeAvailableAt(changedAt: Date | null): Date | null {

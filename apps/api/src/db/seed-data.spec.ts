@@ -1,3 +1,4 @@
+import { CertificationItem, PROFILE_CERTIFICATIONS_MAX } from '@chartermission/contracts';
 import { INTERESTS, LANGUAGES, MEMBERS, SECTORS, SKILLS, taxonomySlug } from './seed-data.js';
 
 /*
@@ -56,6 +57,15 @@ describe('profile catalogues', () => {
       expect(m.sectors!.length, m.key).toBeLessThanOrEqual(3);
       expect(m.languages!.length, m.key).toBeGreaterThanOrEqual(2);
       expect(m.languages!.length, m.key).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('demo certifications are valid profile certifications', () => {
+    const withCerts = MEMBERS.filter((m) => m.certifications?.length);
+    expect(withCerts.length).toBeGreaterThanOrEqual(3);
+    for (const m of withCerts) {
+      expect(m.certifications!.length, m.key).toBeLessThanOrEqual(PROFILE_CERTIFICATIONS_MAX);
+      for (const c of m.certifications!) expect(CertificationItem.safeParse(c).success, `${m.key}: ${c.name}`).toBe(true);
     }
   });
 });

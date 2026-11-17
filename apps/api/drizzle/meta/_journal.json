@@ -197,6 +197,13 @@
       "when": 1794932668813,
       "tag": "0027_exam_certificate_names",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794945971431,
+      "tag": "0028_profile_certifications",
+      "breakpoints": true
     }
   ]
 }

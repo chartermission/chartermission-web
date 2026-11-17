@@ -19,6 +19,8 @@ export const ProfileField = z.enum([
   "interests",
   "languages",
   "experience",
+  /** Licenses & certifications: the member's own and the Charter Mission exam certificates they show. */
+  "certifications",
   /** The intro video and the résumé at the top of the profile. */
   "introVideo",
   "resume",
@@ -43,6 +45,7 @@ export const DEFAULT_FIELD_VISIBILITY: Record<ProfileField, FieldVisibility> = {
   interests: "members",
   languages: "members",
   experience: "members",
+  certifications: "members",
   introVideo: "members",
   // A résumé carries contact details: connections only until the member chooses otherwise.
   resume: "connections",
@@ -100,6 +103,62 @@ export const ExperienceItem = z.object({
 });
 export type ExperienceItem = z.infer<typeof ExperienceItem>;
 
+const yearMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM");
+
+/**
+ * A license or certification the member adds themselves (like LinkedIn's "Licenses & certifications").
+ * Dates are months (YYYY-MM). No expiry date means it doesn't expire.
+ */
+export const CertificationItem = z
+  .object({
+    id: z.string().uuid().optional(),
+    name: z.string().trim().min(2, "Enter the name of the license or certification").max(150),
+    /** The issuing organisation, e.g. "Project Management Institute". */
+    issuer: z.string().trim().min(2, "Enter the issuing organisation").max(120),
+    issueDate: yearMonth.nullable().optional(),
+    expiryDate: yearMonth.nullable().optional(),
+    credentialId: z.string().trim().max(100).nullable().optional(),
+    /** Where to check the credential (https or http). */
+    credentialUrl: z
+      .string()
+      .trim()
+      .url("Enter a full link, starting with https://")
+      .max(500)
+      .refine((v) => /^https?:\/\//i.test(v), "Enter a full link, starting with https://")
+      .nullable()
+      .optional(),
+  })
+  .refine((v) => !v.issueDate || !v.expiryDate || v.expiryDate >= v.issueDate, {
+    message: "The expiry date can’t be before the issue date",
+    path: ["expiryDate"],
+  });
+export type CertificationItem = z.infer<typeof CertificationItem>;
+export const PROFILE_CERTIFICATIONS_MAX = 30;
+
+/**
+ * A certification as shown on a profile: one the member added (verified false), or a certificate they
+ * earned through a Charter Mission exam (verified true, issued by Charter Center), which they can hide.
+ */
+export const ProfileCertification = z.object({
+  /** profile certification id, or the exam certificate id when verified. */
+  id: z.string().uuid(),
+  name: z.string(),
+  issuer: z.string(),
+  issueDate: z.string().nullable(),
+  expiryDate: z.string().nullable(),
+  credentialId: z.string().nullable(),
+  /** The member's link, or for a verified certificate its public post (where the certificate can be seen). */
+  credentialUrl: z.string().nullable(),
+  verified: z.boolean(),
+  /** Verified only: the certificate image, for a thumbnail. */
+  imageUrl: z.string().nullable(),
+});
+export type ProfileCertification = z.infer<typeof ProfileCertification>;
+
+/** In the profile editor: a Charter Mission exam certificate, and whether it's shown on the profile. */
+export const OwnExamCertification = ProfileCertification.extend({ shown: z.boolean() });
+export type OwnExamCertification = z.infer<typeof OwnExamCertification>;
+
 export const ConnectionState = z.enum(["none", "pending_outgoing", "pending_incoming", "connected"]);
 export type ConnectionState = z.infer<typeof ConnectionState>;
 
@@ -142,6 +201,8 @@ export const MemberProfile = MemberRef.extend({
   interests: z.array(TaxonomyItem).optional(),
   languages: z.array(TaxonomyItem).optional(),
   experience: z.array(ExperienceItem).optional(),
+  /** Licenses & certifications: Charter Mission certificates (verified) first, then the member's own in their order. */
+  certifications: z.array(ProfileCertification).optional(),
   chapters: z.array(ChapterRef),
   /** Badges awarded by admins (active badges only). */
   badges: z.array(ProfileBadge),
@@ -219,6 +280,10 @@ export const OwnProfile = z.object({
   interests: z.array(TaxonomyItem),
   languages: z.array(TaxonomyItem),
   experience: z.array(ExperienceItem),
+  /** The ones the member added, in their order. */
+  certifications: z.array(CertificationItem),
+  /** Certificates earned through Charter Mission exams (issued ones), each shown on the profile unless hidden. */
+  examCertifications: z.array(OwnExamCertification),
   profileVisibility: ProfileVisibility,
   fieldVisibility: FieldVisibilityMap,
   /** Usernames can be changed once every 30 days: when the next change is allowed, or null if now. */
@@ -254,6 +319,10 @@ export const UpdateProfileInput = z
     interestIds: z.array(z.string()).max(20),
     languageIds: z.array(z.string()).max(10),
     experience: z.array(ExperienceItem).max(20),
+    /** Replaces the member's own certifications (order kept). */
+    certifications: z.array(CertificationItem).max(PROFILE_CERTIFICATIONS_MAX),
+    /** Charter Mission exam certificates (ids from examCertifications) to hide from the profile; the rest are shown. */
+    hiddenExamCertificateIds: z.array(z.string().uuid()).max(100),
     avatarFileId: z.string().uuid().nullable(),
     /** A clean profile_cover upload of the member's own, or null to remove it. */
     coverFileId: z.string().uuid().nullable(),

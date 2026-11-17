@@ -3,16 +3,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense, cache, type ReactNode } from "react";
-import { PreviewAs, socialNetworkOf, type MemberProfile, type MemberRef, type Page, type PostView } from "@chartermission/contracts";
+import { PreviewAs, socialNetworkOf, type MemberProfile, type MemberRef, type Page, type PostView, type ProfileCertification } from "@chartermission/contracts";
 import { Chip, Icon, Panel, ProfileBadgeList, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { getClientViewer } from "@/components/social/data";
-import { absoluteDate } from "@/components/social/format";
+import { absoluteDate, monthLabel } from "@/components/social/format";
 import { MemberAvatar } from "@/components/social/post-parts";
 import { PostStream } from "@/components/social/post-stream";
 import { SectionRail } from "@/components/social/section-nav";
 import { EmptyState, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { T } from "@/i18n/client";
+import { NoTranslate } from "@/i18n/auto";
+import type { Translate } from "@/i18n/translate";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { ProfileActions } from "./profile-actions";
 import { ProfileHighlightsLoader } from "@/components/stories/stories-loader";
@@ -20,6 +22,8 @@ import { asServiceList } from "@/components/services/format";
 import { ServicesSection } from "@/components/services/services-section";
 import { ProfileCompletionCard } from "@/components/people/profile-completion";
 import { ProfileTagList } from "@/components/people/profile-tag-list";
+import { CertificationTile, VerifiedChip } from "@/components/people/certification-parts";
+import { ExpandableList } from "@/components/people/expandable-list";
 import { getT, getIntlTag } from "@/i18n/server";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/[handle]">): Promise<Metadata> {
@@ -72,9 +76,68 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function monthLabel(intl: string, value: string) {
-  const [year, month] = value.split("-").map(Number);
-  return new Date(Date.UTC(year!, (month ?? 1) - 1, 1)).toLocaleDateString(intl, { month: "short", year: "numeric", timeZone: "UTC" });
+/** How many licenses & certifications show before "Show all". */
+const CERTIFICATIONS_SHOWN = 3;
+
+/**
+ * One license or certification, LinkedIn-style: picture or icon, name, issuer, dates, credential ID
+ * and a "Show credential" link. Verified ones (Charter Mission exams) link to their public post.
+ */
+function CertificationRow({ cert, intl, t, thisMonth }: { cert: ProfileCertification; intl: string; t: Translate; thisMonth: string }) {
+  const dates = [
+    cert.issueDate && t("Issued {date}", { date: monthLabel(intl, cert.issueDate) }),
+    cert.expiryDate &&
+      (cert.expiryDate.slice(0, 7) < thisMonth
+        ? t("Expired {date}", { date: monthLabel(intl, cert.expiryDate) })
+        : t("Expires {date}", { date: monthLabel(intl, cert.expiryDate) })),
+  ].filter(Boolean);
+  const url = cert.credentialUrl?.trim() || null;
+  // Verified: the certificate's public post (same tab). The member's own: their link, in a new tab.
+  const internal = url && cert.verified && url.startsWith("/") && !url.startsWith("//") ? url : null;
+  const external = url && !internal && /^https?:\/\//i.test(url) ? url : null;
+  const showClasses = buttonClasses({ variant: "secondary", size: "small", className: "mt-2 self-start rounded-full" });
+  return (
+    <li className="flex items-start gap-3">
+      <CertificationTile imageUrl={cert.verified ? cert.imageUrl : null} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <NoTranslate>
+            <span dir="auto" className="bidi-auto min-w-0 break-words text-md font-semibold text-ink">
+              {cert.name}
+            </span>
+          </NoTranslate>
+          {cert.verified && <VerifiedChip />}
+        </span>
+        <NoTranslate>
+          <span dir="auto" className="bidi-auto text-sm text-body">
+            {cert.issuer}
+          </span>
+        </NoTranslate>
+        {dates.length > 0 && <span className="text-xs text-secondary">{dates.join(" · ")}</span>}
+        {cert.credentialId && (
+          <span className="break-all text-xs text-secondary">
+            Credential ID{" "}
+            <NoTranslate>
+              <bdi>{cert.credentialId}</bdi>
+            </NoTranslate>
+          </span>
+        )}
+        {internal && (
+          <Link href={internal} className={showClasses}>
+            Show credential
+            <Icon name="arrow-up-right" size={14} className="rtl:-scale-x-100" />
+          </Link>
+        )}
+        {external && (
+          <a href={external} target="_blank" rel="noopener noreferrer nofollow" className={showClasses}>
+            Show credential
+            <Icon name="external" size={14} className="rtl:-scale-x-100" />
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
+        )}
+      </span>
+    </li>
+  );
 }
 
 async function ProfileMain(props: Props) {
@@ -121,6 +184,9 @@ async function ProfileMain(props: Props) {
     .filter((link) => /^https?:\/\//i.test(link.url))
     .map((link) => ({ url: link.url, name: link.label.trim() || socialNetworkOf(link.url)?.label || link.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]! }));
   const hasTags = !!(member.skills?.length || member.sectors?.length || member.interests?.length || member.languages?.length);
+  const certifications = member.certifications ?? [];
+  // For "Expired" vs "Expires": months compare as text (YYYY-MM).
+  const thisMonth = new Date().toISOString().slice(0, 7);
 
   return (
     <>
@@ -298,6 +364,20 @@ async function ProfileMain(props: Props) {
               </li>
             ))}
           </ul>
+        </Section>
+      )}
+
+      {certifications.length > 0 && (
+        <Section title="Licenses & certifications">
+          <ExpandableList
+            limit={CERTIFICATIONS_SHOWN}
+            showAllLabel={t("Show all {count} licenses & certifications", { count: certifications.length })}
+            className="flex flex-col gap-4"
+          >
+            {certifications.map((cert) => (
+              <CertificationRow key={`${cert.verified ? "exam" : "own"}-${cert.id}`} cert={cert} intl={intl} t={t} thisMonth={thisMonth} />
+            ))}
+          </ExpandableList>
         </Section>
       )}
 

@@ -23,6 +23,7 @@ const shownFields: { key: ProfileField; label: string }[] = [
   { key: "interests", label: "Interests" },
   { key: "languages", label: "Languages" },
   { key: "experience", label: "Experience" },
+  { key: "certifications", label: "Licenses & certifications" },
   { key: "introVideo", label: "Intro video" },
   { key: "resume", label: "Résumé" },
 ];
@@ -41,6 +42,8 @@ function valueOf(profile: MemberProfile, key: ProfileField): string | string[] |
       return profile.links ? profile.links.map((link) => link.label || link.url) : null;
     case "experience":
       return profile.experience ? profile.experience.map((item) => `${item.title} · ${item.organisation}`) : null;
+    case "certifications":
+      return profile.certifications ? profile.certifications.map((item) => `${item.name} · ${item.issuer}`) : null;
     case "skills":
     case "sectors":
     case "interests":

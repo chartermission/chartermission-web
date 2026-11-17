@@ -284,6 +284,27 @@ export const profileExperiences = pgTable(
   (t) => [index('profile_experiences_user_idx').on(t.userId)],
 );
 
+/** Licenses & certifications a member adds to their profile (contracts CertificationItem). Months as YYYY-MM. */
+export const profileCertifications = pgTable(
+  'profile_certifications',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    issuer: text('issuer').notNull(),
+    issueDate: text('issue_date'),
+    expiryDate: text('expiry_date'),
+    credentialId: text('credential_id'),
+    credentialUrl: text('credential_url'),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('profile_certifications_user_idx').on(t.userId)],
+);
+
 const profileJoin = (name: string, refTable: typeof sectors) =>
   pgTable(
     name,
@@ -1612,6 +1633,8 @@ export const examCertificates = pgTable(
     nameRequestedAt: ts('name_requested_at'),
     nameRemindedAt: ts('name_reminded_at'),
     nameConfirmedAt: ts('name_confirmed_at'),
+    /** Shown in the member's "Licenses & certifications" once issued; the member can hide it. */
+    shownOnProfile: boolean('shown_on_profile').notNull().default(true),
     issuedAt: ts('issued_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

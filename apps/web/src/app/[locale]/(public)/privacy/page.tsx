@@ -20,7 +20,7 @@ export default function PrivacyPage() {
           body: (
             <ul>
               <li>Account details: name, email, password (stored only as an Argon2id hash) and country.</li>
-              <li>Profile details you choose to add, such as headline, skills, experience and links.</li>
+              <li>Profile details you choose to add, such as headline, skills, experience, licenses and certifications, and links.</li>
               <li>What you do on the platform: posts, comments, connections, follows and reports.</li>
             </ul>
           ),

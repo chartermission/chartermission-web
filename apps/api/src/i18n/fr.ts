@@ -1203,4 +1203,7 @@ export const fr: Record<string, string> = {
   "Enter your name": "Saisissez votre nom",
   "Enter your name as it should appear on your certificate": "Saisissez votre nom tel qu’il doit figurer sur votre certificat",
   "Use letters only, with spaces, hyphens, apostrophes or full stops": "Utilisez uniquement des lettres, avec des espaces, traits d’union, apostrophes ou points",
+  "Enter the name of the license or certification": "Saisissez le nom de la licence ou de la certification",
+  "Enter the issuing organisation": "Saisissez l’organisme émetteur",
+  "The expiry date can’t be before the issue date": "La date d’expiration ne peut pas précéder la date de délivrance",
 };

@@ -1203,4 +1203,7 @@ export const ar: Record<string, string> = {
   "Enter your name": "أدخل اسمك",
   "Enter your name as it should appear on your certificate": "أدخل اسمك كما يجب أن يظهر على شهادتك",
   "Use letters only, with spaces, hyphens, apostrophes or full stops": "استخدم الحروف فقط، مع المسافات أو الشرطات أو الفواصل العليا أو النقاط",
+  "Enter the name of the license or certification": "أدخل اسم الترخيص أو الشهادة",
+  "Enter the issuing organisation": "أدخل الجهة المُصدِرة",
+  "The expiry date can’t be before the issue date": "لا يمكن أن يسبق تاريخ انتهاء الصلاحية تاريخ الإصدار",
 };

@@ -23,6 +23,12 @@ export function absoluteDate(intl: string, iso: string): string {
 }
 
 /** "3 Nov 2026, 14:05" */
+/** A month ("2024-03", or a longer ISO date) as "Mar 2024" in the page's language. */
+export function monthLabel(intl: string, value: string): string {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(Date.UTC(year!, (month ?? 1) - 1, 1)).toLocaleDateString(intl, { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
 export function absoluteDateTime(intl: string, iso: string): string {
   return new Date(iso).toLocaleString(intl, {
     day: "numeric",

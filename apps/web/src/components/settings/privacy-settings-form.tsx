@@ -37,6 +37,7 @@ const fieldLabels: Record<ProfileField, string> = {
   interests: "Interests",
   languages: "Languages",
   experience: "Experience",
+  certifications: "Licenses & certifications",
   introVideo: "Intro video",
   resume: "Résumé",
   network: "Connections and followers",
@@ -80,6 +81,11 @@ function fieldValue(t: Translate, field: ProfileField, profile: OwnProfile, emai
       return profile.links.length ? t("{count} links", { count: profile.links.length }) : "";
     case "experience":
       return profile.experience.length ? t("{count} roles", { count: profile.experience.length }) : "";
+    case "certifications": {
+      // The member's own plus the Charter Mission certificates they show.
+      const count = (profile.certifications ?? []).length + (profile.examCertifications ?? []).filter((item) => item.shown).length;
+      return count ? t("{count} licenses & certifications", { count }) : "";
+    }
     case "network":
       return "The lists of your connections, your followers and who you follow";
     case "introVideo":

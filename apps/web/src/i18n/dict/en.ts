@@ -74,4 +74,6 @@ export const en: Dict = {
   "All {count} milestones done": { one: "{count} milestone done", other: "All {count} milestones done" },
   "{count} new posts at the top of the feed": { one: "{count} new post at the top of the feed", other: "{count} new posts at the top of the feed" },
   "{count} matches": { one: "{count} match", other: "{count} matches" },
+  "Show all {count} licenses & certifications": { one: "Show {count} license or certification", other: "Show all {count} licenses & certifications" },
+  "{count} licenses & certifications": { one: "{count} license or certification", other: "{count} licenses & certifications" },
 };

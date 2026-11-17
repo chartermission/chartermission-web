@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
+  CertificationItem,
+  PROFILE_CERTIFICATIONS_MAX,
   PROFILE_LINKS_MAX,
   SOCIAL_NETWORKS,
   UpdateProfileInput,
@@ -19,11 +21,15 @@ import { AvatarUploader } from "@/components/account/avatar-uploader";
 import { CoverUploader } from "@/components/account/cover-uploader";
 import { CountrySelect } from "@/components/account/country-select";
 import { RestrictedPrompt } from "@/components/account/verify-prompt";
-import { Field, describedBy, inputClasses } from "@/components/auth/fields";
+import { Checkbox, Field, describedBy, inputClasses } from "@/components/auth/fields";
 import { ChipPicker } from "@/components/onboarding/chip-picker";
+import { CertificationTile, VerifiedChip } from "@/components/people/certification-parts";
+import { monthLabel } from "@/components/social/format";
+import { NoTranslate } from "@/i18n/auto";
+import { Switch } from "./controls";
 import { SaveBar } from "./save-bar";
 import { SettingsCard } from "./settings-card";
-import { T, useLocale, useT } from "@/i18n/client";
+import { T, useIntlTag, useLocale, useT } from "@/i18n/client";
 
 type Draft = {
   name: string;
@@ -39,7 +45,68 @@ type Draft = {
   interestIds: string[];
   languageIds: string[];
   experience: ExperienceItem[];
+  certifications: CertificationDraft[];
+  /** Charter Mission exam certificates hidden from the profile. */
+  hiddenExamIds: string[];
 };
+
+/** A license or certification being edited: text fields as typed, plus the "doesn't expire" box. */
+type CertificationDraft = {
+  /** Stable React key, also for rows not saved yet (not sent). */
+  key: string;
+  id?: string;
+  name: string;
+  issuer: string;
+  issueDate: string;
+  expiryDate: string;
+  /** Checked: no expiry date is sent (the typed one is kept in case it's unticked again). */
+  noExpiry: boolean;
+  credentialId: string;
+  credentialUrl: string;
+};
+
+let certificationKeys = 0;
+const newCertificationKey = () => `new-certification-${++certificationKeys}`;
+
+function certificationDraft(item: CertificationItem): CertificationDraft {
+  return {
+    key: item.id ?? newCertificationKey(),
+    id: item.id,
+    name: item.name,
+    issuer: item.issuer,
+    issueDate: item.issueDate ?? "",
+    expiryDate: item.expiryDate ?? "",
+    // A saved one with no expiry date doesn't expire.
+    noExpiry: !item.expiryDate,
+    credentialId: item.credentialId ?? "",
+    credentialUrl: item.credentialUrl ?? "",
+  };
+}
+
+/** As sent in PATCH /me/profile (and compared for unsaved changes). */
+function certificationItem(item: CertificationDraft): CertificationItem {
+  return {
+    ...(item.id ? { id: item.id } : {}),
+    name: item.name.trim(),
+    issuer: item.issuer.trim(),
+    issueDate: item.issueDate || null,
+    expiryDate: item.noExpiry ? null : item.expiryDate || null,
+    credentialId: item.credentialId.trim() || null,
+    credentialUrl: item.credentialUrl.trim() || null,
+  };
+}
+
+/** Field errors for each certification (CertificationItem), keyed like the API's: certifications.0.name. */
+function certificationErrors(items: CertificationDraft[], only?: number): Record<string, string> {
+  const found: Record<string, string> = {};
+  items.forEach((item, index) => {
+    if (only !== undefined && index !== only) return;
+    const parsed = CertificationItem.safeParse(certificationItem(item));
+    if (parsed.success) return;
+    for (const issue of parsed.error.issues) found[`certifications.${index}.${issue.path.join(".")}`] ??= issue.message;
+  });
+  return found;
+}
 
 const missingLabels: Record<string, string> = {
   avatar: "a photo",
@@ -77,6 +144,9 @@ function draftFrom(profile: OwnProfile): Draft {
       endDate: item.endDate ?? null,
       description: item.description ?? null,
     })),
+    // Read defensively: older API builds don't send these yet.
+    certifications: (profile.certifications ?? []).map(certificationDraft),
+    hiddenExamIds: (profile.examCertifications ?? []).filter((item) => !item.shown).map((item) => item.id),
   };
 }
 
@@ -105,6 +175,9 @@ function changes(draft: Draft, saved: Draft): UpdateProfileInput {
       description: item.description?.trim() || null,
     }));
   }
+  const certifications = draft.certifications.map(certificationItem);
+  if (!same(certifications, saved.certifications.map(certificationItem))) out.certifications = certifications;
+  if (!same([...draft.hiddenExamIds].sort(), [...saved.hiddenExamIds].sort())) out.hiddenExamCertificateIds = draft.hiddenExamIds;
   return out;
 }
 
@@ -129,6 +202,7 @@ export function ProfileForm({
   tone: AvatarTone;
 }) {
   const t = useT();
+  const intl = useIntlTag();
   const { locale } = useLocale();
   const id = useId();
   const router = useRouter();
@@ -163,9 +237,11 @@ export function ProfileForm({
     event.preventDefault();
     if (!dirty || saving) return;
     const parsed = UpdateProfileInput.safeParse(pending);
-    if (!parsed.success) {
-      const found: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
+    // Each certification is checked on its own too, so its messages sit under the right field.
+    const certificationIssues = pending.certifications ? certificationErrors(draft.certifications) : {};
+    if (!parsed.success || Object.keys(certificationIssues).length > 0) {
+      const found: Record<string, string> = { ...certificationIssues };
+      for (const issue of parsed.success ? [] : parsed.error.issues) {
         const key = issue.path.join(".");
         found[key] ??=
           /url|website/i.test(key) && issue.code === "invalid_format"
@@ -543,6 +619,252 @@ export function ProfileForm({
             <Icon name="plus" size={14} />
             Add role
           </Button>
+        )}
+      </Section>
+
+      <Section
+        id="certifications"
+        title="Licenses & certifications"
+        description="Professional licenses, certifications and courses you’ve completed. Fields marked * are required."
+      >
+        {draft.certifications.length === 0 && <p className="text-sm text-secondary">No licenses or certifications added yet.</p>}
+        {draft.certifications.map((item, index) => {
+          const list = draft.certifications;
+          const set = (patch: Partial<CertificationDraft>) =>
+            update({ certifications: list.map((c, i) => (i === index ? { ...c, ...patch } : c)) });
+          const move = (to: number) => {
+            const next = [...list];
+            const [moved] = next.splice(index, 1);
+            next.splice(to, 0, moved!);
+            update({ certifications: next });
+          };
+          const key = (field: string) => `certifications.${index}.${field}`;
+          const fieldId = (field: string) => `${id}-${key(field)}`;
+          const errorProps = (field: string) => ({
+            "aria-invalid": err(key(field)) ? true : undefined,
+            "aria-describedby": describedBy(err(key(field)) && `${fieldId(field)}-error`),
+          });
+          const title = item.name.trim()
+            ? `${item.name.trim()}${item.issuer.trim() ? ` · ${item.issuer.trim()}` : ""}`
+            : t("License or certification {number}", { number: index + 1 });
+          return (
+            <fieldset
+              key={item.key}
+              className="flex min-w-0 flex-col gap-3 rounded-lg border border-line p-4"
+              onBlur={(e) => {
+                // Leaving a certification checks it, so mistakes show before saving.
+                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                const prefix = `certifications.${index}.`;
+                const found = certificationErrors(draft.certifications, index);
+                setErrors((prev) => ({ ...Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))), ...found }));
+              }}
+            >
+              <legend className="max-w-full px-1 text-sm font-medium text-ink">
+                {item.name.trim() ? (
+                  <NoTranslate>
+                    <span dir="auto" className="bidi-auto break-words">
+                      {title}
+                    </span>
+                  </NoTranslate>
+                ) : (
+                  title
+                )}
+              </legend>
+              <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+                <Field
+                  id={fieldId("name")}
+                  label={
+                    <>
+                      Name<span aria-hidden="true" className="ms-0.5 text-error">*</span>
+                    </>
+                  }
+                  error={err(key("name"))}
+                >
+                  <input
+                    id={fieldId("name")}
+                    value={item.name}
+                    maxLength={150}
+                    aria-required
+                    placeholder="e.g. Project Management Professional (PMP)"
+                    onChange={(e) => set({ name: e.target.value })}
+                    {...errorProps("name")}
+                    className={inputClasses(!!err(key("name")))}
+                  />
+                </Field>
+                <Field
+                  id={fieldId("issuer")}
+                  label={
+                    <>
+                      Issuing organisation<span aria-hidden="true" className="ms-0.5 text-error">*</span>
+                    </>
+                  }
+                  error={err(key("issuer"))}
+                >
+                  <input
+                    id={fieldId("issuer")}
+                    value={item.issuer}
+                    maxLength={120}
+                    aria-required
+                    autoComplete="organization"
+                    placeholder="e.g. Project Management Institute"
+                    onChange={(e) => set({ issuer: e.target.value })}
+                    {...errorProps("issuer")}
+                    className={inputClasses(!!err(key("issuer")))}
+                  />
+                </Field>
+                <Field id={fieldId("issueDate")} label="Issue date" error={err(key("issueDate"))}>
+                  <input
+                    id={fieldId("issueDate")}
+                    type="month"
+                    value={item.issueDate}
+                    onChange={(e) => set({ issueDate: e.target.value })}
+                    {...errorProps("issueDate")}
+                    className={inputClasses(!!err(key("issueDate")))}
+                  />
+                </Field>
+                <div className="flex flex-col gap-2">
+                  <Field id={fieldId("expiryDate")} label="Expiry date" error={err(key("expiryDate"))}>
+                    <input
+                      id={fieldId("expiryDate")}
+                      type="month"
+                      value={item.noExpiry ? "" : item.expiryDate}
+                      disabled={item.noExpiry}
+                      onChange={(e) => set({ expiryDate: e.target.value })}
+                      {...errorProps("expiryDate")}
+                      className={inputClasses(!!err(key("expiryDate")), "disabled:cursor-not-allowed disabled:bg-muted disabled:text-disabled")}
+                    />
+                  </Field>
+                  <Checkbox name={`${key("noExpiry")}`} checked={item.noExpiry} onChange={(e) => set({ noExpiry: e.target.checked })}>
+                    <span className="text-body">This credential doesn’t expire</span>
+                  </Checkbox>
+                </div>
+                <Field id={fieldId("credentialId")} label="Credential ID" error={err(key("credentialId"))}>
+                  <input
+                    id={fieldId("credentialId")}
+                    value={item.credentialId}
+                    maxLength={100}
+                    dir="auto"
+                    onChange={(e) => set({ credentialId: e.target.value })}
+                    {...errorProps("credentialId")}
+                    className={inputClasses(!!err(key("credentialId")))}
+                  />
+                </Field>
+                <Field id={fieldId("credentialUrl")} label="Credential URL" error={err(key("credentialUrl"))}>
+                  <input
+                    id={fieldId("credentialUrl")}
+                    type="url"
+                    inputMode="url"
+                    dir="ltr"
+                    value={item.credentialUrl}
+                    maxLength={500}
+                    placeholder="https://"
+                    onChange={(e) => set({ credentialUrl: e.target.value })}
+                    {...errorProps("credentialUrl")}
+                    className={inputClasses(!!err(key("credentialUrl")))}
+                  />
+                </Field>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="small" disabled={index === 0} onClick={() => move(index - 1)}>
+                    <Icon name="chevron-down" size={14} className="rotate-180" />
+                    Move up
+                  </Button>
+                  <Button variant="ghost" size="small" disabled={index === list.length - 1} onClick={() => move(index + 1)}>
+                    <Icon name="chevron-down" size={14} />
+                    Move down
+                  </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="small"
+                  className="text-error!"
+                  onClick={() => update({ certifications: list.filter((_, i) => i !== index) })}
+                >
+                  Remove certification
+                </Button>
+              </div>
+            </fieldset>
+          );
+        })}
+        {draft.certifications.length < PROFILE_CERTIFICATIONS_MAX ? (
+          <Button
+            variant="secondary"
+            size="small"
+            className="self-start"
+            onClick={() =>
+              update({
+                certifications: [
+                  ...draft.certifications,
+                  { key: newCertificationKey(), name: "", issuer: "", issueDate: "", expiryDate: "", noExpiry: false, credentialId: "", credentialUrl: "" },
+                ],
+              })
+            }
+          >
+            <Icon name="plus" size={14} />
+            Add licenses and certifications
+          </Button>
+        ) : (
+          <div className="flex flex-col items-start gap-1.5">
+            <Button variant="secondary" size="small" disabled aria-describedby={`${id}-certifications-max`}>
+              <Icon name="plus" size={14} />
+              Add licenses and certifications
+            </Button>
+            <p id={`${id}-certifications-max`} className="text-xs text-secondary">
+              {t("You can add up to {max} licenses and certifications.", { max: PROFILE_CERTIFICATIONS_MAX })}
+            </p>
+          </div>
+        )}
+
+        {(profile.examCertifications ?? []).length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-line pt-4">
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-md font-semibold text-ink">From Charter Mission</h3>
+              <p className="text-xs text-secondary">Certificates you earned through Charter Mission exams. Choose which ones show on your profile.</p>
+            </div>
+            <ul className="flex flex-col divide-y divide-line">
+              {(profile.examCertifications ?? []).map((cert) => {
+                const shown = !draft.hiddenExamIds.includes(cert.id);
+                const switchId = `${id}-exam-${cert.id}`;
+                return (
+                  <li key={cert.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0 max-sm:flex-wrap">
+                    <CertificationTile imageUrl={cert.imageUrl} />
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <NoTranslate>
+                          <span id={`${switchId}-name`} dir="auto" className="bidi-auto min-w-0 break-words text-sm font-semibold text-ink">
+                            {cert.name}
+                          </span>
+                        </NoTranslate>
+                        <VerifiedChip />
+                      </span>
+                      <NoTranslate>
+                        <span dir="auto" className="bidi-auto text-sm text-body">
+                          {cert.issuer}
+                        </span>
+                      </NoTranslate>
+                      {cert.issueDate && <span className="text-xs text-secondary">{t("Issued {date}", { date: monthLabel(intl, cert.issueDate) })}</span>}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2 max-sm:ms-14">
+                      <label htmlFor={switchId} className="cursor-pointer text-sm text-body">
+                        Show on my profile
+                      </label>
+                      <Switch
+                        id={switchId}
+                        checked={shown}
+                        describedBy={`${switchId}-name`}
+                        onChange={(next) =>
+                          update({
+                            hiddenExamIds: next ? draft.hiddenExamIds.filter((hidden) => hidden !== cert.id) : [...draft.hiddenExamIds, cert.id],
+                          })
+                        }
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </Section>
 
