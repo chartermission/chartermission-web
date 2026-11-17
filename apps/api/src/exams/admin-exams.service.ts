@@ -96,6 +96,7 @@ export class AdminExamsService {
       certificate: exam.certificate
         ? {
             ...exam.certificate,
+            hours: exam.certificate.hours ?? null,
             signatureUrl: signature[0]?.scanStatus === 'clean' ? signatureUrl(exam.certificate.signatureFileId, signature[0].mime) : null,
           }
         : null,

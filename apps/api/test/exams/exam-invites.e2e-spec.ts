@@ -167,6 +167,7 @@ describe('Exams by invitation link, and Charter Center certificates for those wh
       course_title: 'PMP Exam Prep',
       start_from: '2026-01-01',
       start_end: '2026-01-15',
+      exam_hours: null,
       instructor_name: 'Eng. Abdalla Yousif',
       instructor_signature_url: exam.certificate!.signatureUrl,
     });

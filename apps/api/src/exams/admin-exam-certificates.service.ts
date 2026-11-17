@@ -11,6 +11,7 @@ import type {
   ReissueExamCertificatesResult,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
+import type { CertificateRequest } from './charter-center-exams.client.js';
 import { examCertificates, exams, memberProfiles, posts, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
@@ -25,7 +26,7 @@ import { ExamCertificatesService } from './exam-certificates.service.js';
 /** Replacements asked for together are spread out by this much each (a few a second). */
 const REISSUE_SPACING_MS = 350;
 
-const DIFFERENCES: ExamCertificateDifference[] = ['title', 'issuer', 'dates', 'signature', 'name'];
+const DIFFERENCES: ExamCertificateDifference[] = ['title', 'issuer', 'dates', 'hours', 'signature', 'name'];
 
 /** The newest-first sort key of a certificate: when it was issued, else when it was asked for. */
 const sortAt = sql`coalesce(${examCertificates.issuedAt}, ${examCertificates.createdAt})`;
@@ -49,6 +50,7 @@ function differenceSql(settings: ExamCertificateSettings): Record<ExamCertificat
     title: sql<boolean>`((${r}->>'course_title') is distinct from ${settings.title}::text)`,
     issuer: sql<boolean>`((${r}->>'instructor_name') is distinct from ${settings.issuerName}::text)`,
     dates: sql<boolean>`((${r}->>'start_from') is distinct from ${settings.startDate}::text or (${r}->>'start_end') is distinct from ${settings.endDate}::text)`,
+    hours: sql<boolean>`((${r}->>'exam_hours')::numeric is distinct from ${settings.hours ?? null}::numeric)`,
     signature: sql<boolean>`(strpos(coalesce(${r}->>'instructor_signature_url', ''), ${settings.signatureFileId}::text) = 0)`,
     name: sql<boolean>`((${r}->>'student_name') is distinct from ${currentName})`,
   };
@@ -226,6 +228,7 @@ export class AdminExamCertificatesService {
         title: d?.title ?? no,
         issuer: d?.issuer ?? no,
         dates: d?.dates ?? no,
+        hours: d?.hours ?? no,
         signature: d?.signature ?? no,
         name_: d?.name ?? no,
       })
@@ -237,8 +240,8 @@ export class AdminExamCertificatesService {
       .orderBy(desc(sortAt), desc(examCertificates.id))
       .limit(limit);
     return rows.map((r) => {
-      const req = r.c.request;
-      const flags: Record<ExamCertificateDifference, boolean> = { title: r.title, issuer: r.issuer, dates: r.dates, signature: r.signature, name: r.name_ };
+      const req = r.c.request as Partial<CertificateRequest> | null;
+      const flags: Record<ExamCertificateDifference, boolean> = { title: r.title, issuer: r.issuer, dates: r.dates, hours: r.hours, signature: r.signature, name: r.name_ };
       const differences = r.c.status === 'issued' && req && d ? DIFFERENCES.filter((k) => flags[k]) : [];
       return {
         t: r.t,
@@ -254,6 +257,7 @@ export class AdminExamCertificatesService {
                 issuerName: req.instructor_name ?? '',
                 startDate: req.start_from ?? '',
                 endDate: req.start_end ?? '',
+                hours: typeof req.exam_hours === 'number' ? req.exam_hours : null,
               }
             : null,
           differences,

@@ -2,6 +2,7 @@ import type { Dict } from "../translate";
 
 // English singular forms for sentences that carry {count}.
 export const en: Dict = {
+  "{count} hours": { one: "{count} hour", other: "{count} hours" },
   "{count} addresses": { one: "{count} address", other: "{count} addresses" },
   "{count} invitations sent": { one: "{count} invitation sent", other: "{count} invitations sent" },
   "{count} skipped (invited in the last 10 minutes)": { one: "{count} skipped (invited in the last 10 minutes)", other: "{count} skipped (invited in the last 10 minutes)" },

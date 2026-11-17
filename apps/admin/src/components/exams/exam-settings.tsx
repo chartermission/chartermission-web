@@ -113,6 +113,8 @@ type Draft = {
   certSignaturePreview: string | null;
   certStart: string;
   certEnd: string;
+  /** Study hours on the certificate, as typed ("" for none). */
+  certHours: string;
 };
 
 const draftOf = (e: AdminExamDetail): Draft => ({
@@ -137,10 +139,11 @@ const draftOf = (e: AdminExamDetail): Draft => ({
   certSignaturePreview: e.certificate?.signatureUrl ?? null,
   certStart: e.certificate?.startDate ?? "",
   certEnd: e.certificate?.endDate ?? "",
+  certHours: e.certificate?.hours == null ? "" : String(e.certificate.hours),
 });
 
 /** What goes on a certificate, to tell whether a save changed it. */
-const certificateText = (c: AdminExamDetail["certificate"]) => (c ? [c.title, c.issuerName, c.signatureFileId, c.startDate, c.endDate].join("\u0000") : "");
+const certificateText = (c: AdminExamDetail["certificate"]) => (c ? [c.title, c.issuerName, c.signatureFileId, c.startDate, c.endDate, c.hours ?? ""].join("\u0000") : "");
 
 /** The Settings tab (PATCH /admin/exams/:id): what the exam is called and its rules. Who can take it: whoever opens its invitation link. */
 export function ExamSettings({
@@ -183,6 +186,10 @@ export function ExamSettings({
     if (passPercent === null) errors.passPercent = t("Enter a whole number from 1 to 100");
     const maxAttempts = d.maxAttempts.trim() === "" ? null : whole(d.maxAttempts, 1, 50);
     if (d.maxAttempts.trim() !== "" && maxAttempts === null) errors.maxAttempts = t("Enter a number from 1 to 50, or leave it empty for no limit");
+    const hoursRaw = d.certHours.trim().replace(",", ".");
+    const hoursNum = Number(hoursRaw);
+    const certHours =
+      hoursRaw !== "" && Number.isFinite(hoursNum) && hoursNum > 0 && hoursNum <= 1000 && Math.abs(hoursNum * 10 - Math.round(hoursNum * 10)) < 1e-9 ? hoursNum : null;
     if (d.title.trim().length < 3) errors.title = t("Give the exam a title");
     if (d.awardCertificate) {
       if (d.certTitle.trim().length < 2) errors["certificate.title"] = t("Write the title for the certificate");
@@ -191,6 +198,7 @@ export function ExamSettings({
       if (!d.certStart) errors["certificate.startDate"] = t("Choose the start date");
       if (!d.certEnd) errors["certificate.endDate"] = t("Choose the end date");
       else if (d.certStart && d.certEnd < d.certStart) errors["certificate.endDate"] = t("The end date can’t be before the start date");
+      if (d.certHours.trim() !== "" && certHours === null) errors["certificate.hours"] = t("Enter the hours as a number up to 1,000, with at most one decimal place");
     }
     setFields(errors);
     setError(null);
@@ -212,7 +220,14 @@ export function ExamSettings({
       credit: d.credit.trim() || null,
       shareCertificates: d.shareCertificates,
       certificate: d.awardCertificate
-        ? { title: d.certTitle.trim(), issuerName: d.certIssuer.trim(), signatureFileId: d.certSignatureId, startDate: d.certStart, endDate: d.certEnd }
+        ? {
+            title: d.certTitle.trim(),
+            issuerName: d.certIssuer.trim(),
+            signatureFileId: d.certSignatureId,
+            startDate: d.certStart,
+            endDate: d.certEnd,
+            hours: certHours,
+          }
         : null,
     };
     setBusy(true);
@@ -421,6 +436,19 @@ export function ExamSettings({
                 min={d.certStart || undefined}
                 error={fields["certificate.endDate"]}
                 onChange={(e) => set("certEnd", e.target.value)}
+              />
+              <TextField
+                label="Hours"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={1000}
+                step={0.5}
+                value={d.certHours}
+                placeholder="35"
+                hint="Study hours printed on the certificate. Leave empty for none."
+                error={fields["certificate.hours"]}
+                onChange={(e) => set("certHours", e.target.value)}
               />
             </div>
             <SignatureField

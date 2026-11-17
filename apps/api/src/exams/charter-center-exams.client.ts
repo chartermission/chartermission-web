@@ -7,7 +7,7 @@ import { CharterCenterError, type FetchFn } from '../learning/charter-center.cli
  * The one Charter Center call exams need (spec for Charter Center: docs/CHARTER-CENTER-EXAMS-API.md).
  *
  *   POST {CHARTER_CENTER_API_URL}/certificate
- *        { "student_name", "course_title", "start_from", "start_end", "instructor_name", "instructor_signature_url" }
+ *        { "student_name", "course_title", "start_from", "start_end", "exam_hours", "instructor_name", "instructor_signature_url" }
  *
  * The member's name comes from their profile; the rest from the exam's certificate settings. Sent with
  * Authorization: Bearer {CHARTER_CENTER_API_KEY} when a key is set.
@@ -31,6 +31,8 @@ export interface CertificateRequest {
   start_from: string;
   /** YYYY-MM-DD */
   start_end: string;
+  /** Study hours on the certificate; null when the exam has none set (absent in requests sent before hours existed). */
+  exam_hours?: number | null;
   instructor_name: string;
   instructor_signature_url: string;
 }
@@ -289,7 +291,7 @@ async function mockCertificateImage(d: CertificateRequest & { id: string }): Pro
     <line x1="420" y1="538" x2="1180" y2="538" stroke="#c8962e" stroke-width="2"/>
     <text x="800" y="615" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#5b6475">has successfully completed</text>
     <text x="800" y="695" text-anchor="middle" font-family="sans-serif" font-size="46" font-weight="700" fill="#0b6b3a">${esc(course)}</text>
-    <text x="800" y="760" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#5b6475">${esc(fmt(d.start_from))} – ${esc(fmt(d.start_end))}</text>
+    <text x="800" y="760" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#5b6475">${esc(fmt(d.start_from))} – ${esc(fmt(d.start_end))}${typeof d.exam_hours === 'number' ? ` · ${esc(String(d.exam_hours))} ${d.exam_hours === 1 ? 'hour' : 'hours'}` : ''}</text>
     <text x="320" y="955" text-anchor="middle" font-family="serif" font-size="34" font-style="italic" fill="#1d2433">${esc(d.instructor_name)}</text>
     <line x1="160" y1="975" x2="480" y2="975" stroke="#5b6475" stroke-width="1.5"/>
     <text x="320" y="1012" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#5b6475">Instructor</text>

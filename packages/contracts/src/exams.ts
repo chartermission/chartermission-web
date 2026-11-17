@@ -115,6 +115,14 @@ export const ExamCertificateSettings = z
     /** The period on the certificate (start_from, start_end), as YYYY-MM-DD. */
     startDate: isoDate("Choose the start date"),
     endDate: isoDate("Choose the end date"),
+    /** Study hours printed on the certificate (sent as exam_hours), e.g. 35. Up to one decimal place. */
+    hours: z
+      .number({ message: "Enter the number of hours" })
+      .positive("Enter more than 0 hours")
+      .max(1000, "At most 1,000 hours")
+      .refine((v) => Math.abs(v * 10 - Math.round(v * 10)) < 1e-9, "Use at most one decimal place, like 1.5")
+      .nullable()
+      .optional(),
   })
   .refine((v) => v.endDate >= v.startDate, { message: "The end date can’t be before the start date", path: ["endDate"] });
 export type ExamCertificateSettings = z.infer<typeof ExamCertificateSettings>;
@@ -128,6 +136,7 @@ export const ExamCertificateSettingsView = z.object({
   signatureUrl: z.string().nullable(),
   startDate: z.string(),
   endDate: z.string(),
+  hours: z.number().nullable(),
 });
 export type ExamCertificateSettingsView = z.infer<typeof ExamCertificateSettingsView>;
 
@@ -661,7 +670,7 @@ export type UpdateExamsSettingsInput = z.infer<typeof UpdateExamsSettingsInput>;
  */
 
 /** Ways an issued certificate differs from what would be issued now. */
-export const ExamCertificateDifference = z.enum(["title", "issuer", "dates", "signature", "name"]);
+export const ExamCertificateDifference = z.enum(["title", "issuer", "dates", "hours", "signature", "name"]);
 export type ExamCertificateDifference = z.infer<typeof ExamCertificateDifference>;
 
 /** What a certificate was issued with: what Charter Center was sent. */
@@ -671,6 +680,8 @@ export const ExamCertificateIssuedWith = z.object({
   issuerName: z.string(),
   startDate: z.string(),
   endDate: z.string(),
+  /** Null when no hours were sent. */
+  hours: z.number().nullable(),
 });
 export type ExamCertificateIssuedWith = z.infer<typeof ExamCertificateIssuedWith>;
 

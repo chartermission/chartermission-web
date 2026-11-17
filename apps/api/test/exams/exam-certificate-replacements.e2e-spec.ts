@@ -257,6 +257,30 @@ describe('Replacing issued exam certificates', () => {
     expect(post.celebration?.headline).toBe(NEW_TITLE);
   });
 
+  it('sends the study hours as exam_hours; adding or changing them makes certificates outdated', async () => {
+    await admin.patch(`/admin/exams/${exam.id}`, { certificate: { ...CERTIFICATE(NEW_TITLE), hours: 1.25 } }).expect(422);
+    await admin.patch(`/admin/exams/${exam.id}`, { certificate: { ...CERTIFICATE(NEW_TITLE), hours: 0 } }).expect(422);
+    const saved = (await admin.patch(`/admin/exams/${exam.id}`, { certificate: { ...CERTIFICATE(NEW_TITLE), hours: 35 } }).expect(200)).body as AdminExamDetail;
+    expect(saved.certificate?.hours).toBe(35);
+
+    const row = (await list()).items.find((i) => i.member.id === members.first.id)!;
+    expect(row.issuedWith?.hours).toBeNull();
+    expect(row.differences).toEqual(['hours']);
+
+    await admin.post(`/admin/exam-certificates/${row.id}/reissue`).expect(200);
+    await t.app.get(ExamCertificatesService).sweep();
+    const [cert] = await t.db.select().from(s.examCertificates).where(eq(s.examCertificates.id, row.id));
+    expect(cert!.request).toMatchObject({ course_title: NEW_TITLE, exam_hours: 35 });
+    const after = (await list()).items.find((i) => i.member.id === members.first.id)!;
+    expect(after.issuedWith?.hours).toBe(35);
+    expect(after.differences).toEqual([]);
+
+    // Taking the hours off: sent as null, and certificates issued with hours are outdated again.
+    const cleared = (await admin.patch(`/admin/exams/${exam.id}`, { certificate: { ...CERTIFICATE(NEW_TITLE), hours: null } }).expect(200)).body as AdminExamDetail;
+    expect(cleared.certificate?.hours).toBeNull();
+    expect((await list()).items.find((i) => i.member.id === members.first.id)!.differences).toEqual(['hours']);
+  });
+
   it('needs certificate settings, and is for admins with exam.manage only', async () => {
     const plain = await createMember(t, { name: 'Not Staff' });
     await plain.get(`/admin/exams/${exam.id}/certificates`).expect(403);

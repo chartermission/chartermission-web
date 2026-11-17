@@ -1585,7 +1585,7 @@ export const examCertificates = pgTable(
     status: text('status').notNull().default('pending'),
     externalId: text('external_id'),
     /** Exactly what was sent to Charter Center, fixed when the member passed (retries resend it). */
-    request: jsonb('request').$type<Record<string, string> | null>(),
+    request: jsonb('request').$type<Record<string, string | number | null> | null>(),
     imageFileId: uuid('image_file_id').references(() => files.id, { onDelete: 'set null' }),
     pdfFileId: uuid('pdf_file_id').references(() => files.id, { onDelete: 'set null' }),
     postId: uuid('post_id').references((): AnyPgColumn => posts.id, { onDelete: 'set null' }),

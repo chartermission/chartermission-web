@@ -54,7 +54,7 @@ export interface ReplacedCertificate {
   externalId: string | null;
   imageFileId: string | null;
   pdfFileId: string | null;
-  request: Record<string, string> | null;
+  request: Record<string, string | number | null> | null;
   issuedAt: string | null;
   replacedAt: string;
 }
@@ -70,6 +70,7 @@ export function requestDifferences(request: CertificateRequest, settings: ExamCe
   if (request.course_title !== settings.title) out.push('title');
   if (request.instructor_name !== settings.issuerName) out.push('issuer');
   if (request.start_from !== settings.startDate || request.start_end !== settings.endDate) out.push('dates');
+  if ((request.exam_hours ?? null) !== (settings.hours ?? null)) out.push('hours');
   if (!(request.instructor_signature_url ?? '').includes(settings.signatureFileId)) out.push('signature');
   if (studentName != null && request.student_name !== studentName) out.push('name');
   return out;
@@ -188,6 +189,7 @@ export class ExamCertificatesService implements OnModuleInit {
       course_title: settings.title,
       start_from: settings.startDate,
       start_end: settings.endDate,
+      exam_hours: settings.hours ?? null,
       instructor_name: settings.issuerName,
       instructor_signature_url: signatureUrl(settings.signatureFileId, signature?.mime ?? null),
     };
@@ -538,7 +540,7 @@ export class ExamCertificatesService implements OnModuleInit {
         .where(and(inArray(files.id, swaps.map((x) => x.fileId)), isNull(files.attachedAt)));
     }
 
-    const oldTitle = old.request?.course_title ?? '';
+    const oldTitle = String(old.request?.course_title ?? '');
     const newTitle = request.course_title;
     const retitle = (text: string) => (oldTitle && oldTitle !== newTitle && text.includes(oldTitle) ? text.split(oldTitle).join(newTitle) : text);
     const patch: Partial<typeof posts.$inferInsert> = {};

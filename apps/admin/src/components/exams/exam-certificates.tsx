@@ -35,6 +35,7 @@ const DIFFERENCE_LABEL: Record<ExamCertificateDifference, string> = {
   title: "Title",
   issuer: "Issuer",
   dates: "Dates",
+  hours: "Hours",
   signature: "Signature",
   name: "Name",
 };
@@ -69,6 +70,7 @@ function IssuedWith({ issuedWith, differences }: { issuedWith: ExamCertificateIs
       <bdi className="font-medium text-ink">{issuedWith.courseTitle}</bdi>
       <span className="text-xs text-secondary">
         <bdi>{issuedWith.studentName}</bdi> · {t("Signed by {name}", { name: issuedWith.issuerName })} · {day(issuedWith.startDate)} – {day(issuedWith.endDate)}
+        {issuedWith.hours !== null && <> · {t("{count} hours", { count: issuedWith.hours })}</>}
       </span>
       {differences.length > 0 && (
         <span className="mt-1 flex flex-wrap items-center gap-1" title={t("Differs from the current settings")}>
@@ -165,6 +167,8 @@ function CurrentSettings({ exam, onOpenSettings }: { exam: AdminExamDetail; onOp
           <span className="text-secondary">
             {" · "}
             {t("Signed by {name}", { name: c.issuerName })} · {day(c.startDate)} – {day(c.endDate)}
+            {" · "}
+            {c.hours != null ? t("{count} hours", { count: c.hours }) : t("No hours set")}
           </span>
         </span>
         {edit}
