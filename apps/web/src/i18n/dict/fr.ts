@@ -4323,4 +4323,9 @@ export const fr: Dict = {
   "You won’t get announcement emails from Charter Mission anymore. Important notices about your account still reach you.": "Vous ne recevrez plus d’e-mails d’annonces de Charter Mission. Les avis importants concernant votre compte vous parviennent toujours.",
   "This unsubscribe link isn’t valid": "Ce lien de désabonnement n’est pas valide",
   "You can turn announcement emails off in your notification settings.": "Vous pouvez désactiver les e-mails d’annonces dans vos paramètres de notification.",
+  "Scroll left": "Faire défiler vers la gauche",
+  "Scroll right": "Faire défiler vers la droite",
+  "Say hello to new members in {place}": "Saluez les nouveaux membres de {place}",
+  "Say hello to new members on Charter Mission": "Saluez les nouveaux membres de Charter Mission",
+  "{count} people joined in the last {days} days. A follow is a warm welcome.": { one: "{count} personne a rejoint la communauté ces {days} derniers jours. Un abonnement est un accueil chaleureux.", other: "{count} personnes ont rejoint la communauté ces {days} derniers jours. Un abonnement est un accueil chaleureux." },
 };

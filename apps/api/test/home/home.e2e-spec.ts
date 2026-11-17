@@ -346,7 +346,7 @@ describe('Home: welcome strip and community moments', () => {
         expect(nm.total).toBe(2);
       });
 
-      it('shows up to 6 newest first with the full total, skipping blocked and unfinished members', async () => {
+      it('shows up to 12 newest first with the full total and connection state, skipping blocked and unfinished members', async () => {
         const viewer = await createMember(t);
         await joinedDaysAgo(t, viewer.id, 100);
         const joined: Member[] = [];
@@ -358,10 +358,14 @@ describe('Home: welcome strip and community moments', () => {
         await block(t, joined[7]!.id, viewer.id);
         await setProfile(t, joined[6]!.id, { onboardingCompletedAt: null });
         await t.db.insert(s.follows).values({ followerId: viewer.id, targetType: 'member', targetId: joined[5]!.id });
+        const [request] = await t.db.insert(s.connections).values({ requesterId: viewer.id, addresseeId: joined[4]!.id }).returning();
         const nm = await moment(viewer, 'new_members');
         expect(nm.total).toBe(6);
         expect(nm.members.map((m: { id: string }) => m.id)).toEqual([5, 4, 3, 2, 1, 0].map((i) => joined[i]!.id));
         expect(nm.members[0].isFollowing).toBe(true);
+        // The Connect button's state: none, or the viewer's pending request.
+        expect(nm.members[0]).toMatchObject({ connection: 'none', connectionId: null, canConnect: true });
+        expect(nm.members[1]).toMatchObject({ connection: 'pending_outgoing', connectionId: request!.id });
       });
 
       it('is left out when nobody joined recently', async () => {

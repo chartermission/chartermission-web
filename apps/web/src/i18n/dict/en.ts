@@ -2,6 +2,7 @@ import type { Dict } from "../translate";
 
 // English singular forms for sentences that carry {count}.
 export const en: Dict = {
+  "{count} people joined in the last {days} days. A follow is a warm welcome.": { one: "{count} person joined in the last {days} days. A follow is a warm welcome.", other: "{count} people joined in the last {days} days. A follow is a warm welcome." },
   "new posts since your last visit": { one: "new post since your last visit", other: "new posts since your last visit" },
   "new posts today": { one: "new post today", other: "new posts today" },
   "new posts": { one: "new post", other: "new posts" },

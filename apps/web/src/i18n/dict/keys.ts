@@ -4321,4 +4321,9 @@ export const KEYS: readonly string[] = [
   "You won’t get announcement emails from Charter Mission anymore. Important notices about your account still reach you.",
   "This unsubscribe link isn’t valid",
   "You can turn announcement emails off in your notification settings.",
+  "Scroll left",
+  "Scroll right",
+  "Say hello to new members in {place}",
+  "Say hello to new members on Charter Mission",
+  "{count} people joined in the last {days} days. A follow is a warm welcome.",
 ];

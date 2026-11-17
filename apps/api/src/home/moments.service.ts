@@ -17,11 +17,12 @@ import type { AuthUser } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
 import { listablePostsSql } from '../posts/visibility.js';
 import { fieldVisibleToMemberSql } from '../profiles/visibility.js';
+import { RelationshipService } from '../profiles/relationship.service.js';
 import { cardCandidateSql, followsChapterSql, HomeQueries } from './home-queries.js';
 import { promptFor } from './prompts.js';
 import { DAY_MS, excerpt, startOfUtcDay, utcDay, utcDayNumber } from './text.js';
 
-const NEW_MEMBERS_SHOWN = 6;
+const NEW_MEMBERS_SHOWN = 12;
 const PROMPT_RESPONDERS = 3;
 const BIO_MAX = 220;
 const EXCERPT_MAX = 160;
@@ -58,6 +59,7 @@ export class MomentsService {
     @InjectDb() private readonly db: Db,
     private readonly members: MembersService,
     private readonly queries: HomeQueries,
+    private readonly relationships: RelationshipService,
   ) {}
 
   async moments(viewer: AuthUser): Promise<MomentsResponse> {
@@ -224,14 +226,21 @@ export class MomentsService {
     found ??= await find(undefined);
     if (!found.total) return null;
 
-    const cards = await this.queries.momentMembers(
-      viewer.id,
-      found.rows.map((r) => r.userId),
-    );
+    const ids = found.rows.map((r) => r.userId);
+    const [cards, relations] = await Promise.all([this.queries.momentMembers(viewer.id, ids), this.relationships.many(viewer.id, ids)]);
     const members = found.rows
       .map((r) => {
         const card = cards.get(r.userId);
-        return card ? { ...card, joinedAt: r.joinedAt.toISOString() } : null;
+        const rel = relations.get(r.userId);
+        return card
+          ? {
+              ...card,
+              joinedAt: r.joinedAt.toISOString(),
+              connection: rel?.connection ?? 'none',
+              connectionId: rel?.connectionId ?? null,
+              canConnect: rel?.canConnect ?? true,
+            }
+          : null;
       })
       .filter((m) => !!m);
     return { kind: 'new_members', id: `new_members:${utcDay(now)}`, scope, members, total: found.total };

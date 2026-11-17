@@ -4323,4 +4323,9 @@ export const ar: Dict = {
   "You won’t get announcement emails from Charter Mission anymore. Important notices about your account still reach you.": "لن تتلقى بعد الآن رسائل الإعلانات من Charter Mission عبر البريد الإلكتروني. تظل الإشعارات المهمة المتعلقة بحسابك تصلك.",
   "This unsubscribe link isn’t valid": "رابط إلغاء الاشتراك هذا غير صالح",
   "You can turn announcement emails off in your notification settings.": "يمكنك إيقاف رسائل الإعلانات عبر البريد الإلكتروني من إعدادات الإشعارات.",
+  "Scroll left": "التمرير إلى اليسار",
+  "Scroll right": "التمرير إلى اليمين",
+  "Say hello to new members in {place}": "رحّب بالأعضاء الجدد في {place}",
+  "Say hello to new members on Charter Mission": "رحّب بالأعضاء الجدد في Charter Mission",
+  "{count} people joined in the last {days} days. A follow is a warm welcome.": { zero: "لم ينضم أحد خلال آخر {days} يومًا.", one: "انضم شخص واحد خلال آخر {days} يومًا. المتابعة ترحيب جميل.", two: "انضم شخصان خلال آخر {days} يومًا. المتابعة ترحيب جميل.", few: "انضم {count} أشخاص خلال آخر {days} يومًا. المتابعة ترحيب جميل.", many: "انضم {count} شخصًا خلال آخر {days} يومًا. المتابعة ترحيب جميل.", other: "انضم {count} شخص خلال آخر {days} يومًا. المتابعة ترحيب جميل." },
 };

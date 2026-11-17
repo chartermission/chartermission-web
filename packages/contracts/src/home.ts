@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ChapterRef, MemberRef } from "./common.js";
+import { ConnectionState } from "./profile.js";
 import { PostView } from "./social.js";
 
 /*
@@ -86,7 +87,16 @@ export const NewMembersMoment = z.object({
     z.object({ type: z.literal("country"), countryCode: z.string(), countryName: z.string() }),
     z.object({ type: z.literal("global") }),
   ]),
-  members: z.array(MomentMember.extend({ joinedAt: z.string() })),
+  members: z.array(
+    MomentMember.extend({
+      joinedAt: z.string(),
+      /** The viewer's connection with them, for the Connect button (Pending, Accept, Message…). */
+      connection: ConnectionState.optional(),
+      connectionId: z.string().uuid().nullable().optional(),
+      /** False for official accounts (follow-only). */
+      canConnect: z.boolean().optional(),
+    }),
+  ),
   /** All new members in scope (may be more than shown). */
   total: z.number().int(),
 });
