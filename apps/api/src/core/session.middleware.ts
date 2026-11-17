@@ -2,6 +2,7 @@ import { Injectable, type NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Response } from 'express';
 import type { AppRequest } from './auth-context.js';
 import { COOKIE_NAMES, SessionService, audienceOf } from './session.service.js';
+import { OAuthService } from '../oauth/oauth.service.js';
 import {
   isApiLocale,
   localeFromHeaders,
@@ -11,13 +12,28 @@ import {
 
 const MEDIA_PATH = /^\/api\/v1\/media\/[^/?]+(\/poster)?(\?|$)/;
 
-/** Attaches req.auth when a valid session cookie is present. Never rejects; guards decide. */
+/**
+ * Attaches req.auth when a valid session cookie is present, or for Claude a valid OAuth access
+ * token (Authorization: Bearer cmat_…). Never rejects; guards decide.
+ */
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {
-  constructor(private readonly sessions: SessionService) {}
+  constructor(
+    private readonly sessions: SessionService,
+    private readonly oauth: OAuthService,
+  ) {}
 
   async use(req: AppRequest, _res: Response, next: NextFunction) {
     try {
+      const bearer = OAuthService.bearerToken(req.headers.authorization);
+      if (bearer) {
+        // The token alone decides who this is: cookies on the same request are ignored.
+        req.oauthBearer = true;
+        const ctx = await this.oauth.resolveBearer(bearer);
+        if (ctx) req.auth = ctx;
+        withLocale(requestLanguage(req), next);
+        return;
+      }
       const cookies = req.cookies as Record<string, string> | undefined;
       let audience = audienceOf(req);
       let token = cookies?.[COOKIE_NAMES[audience]];

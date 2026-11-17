@@ -190,7 +190,7 @@ export type AdminBadgeUpdateInput = z.infer<typeof AdminBadgeUpdateInput>;
 /** GET /admin/members (members.manage) */
 export const AdminMembersQuery = z.object({
   q: z.string().trim().max(100).optional(),
-  filter: z.enum(["all", "verified", "unverified", "featured", "badge"]).default("all"),
+  filter: z.enum(["all", "verified", "unverified", "featured", "badge", "claude"]).default("all"),
   /** Badge slug, with filter=badge. */
   badge: z.string().max(60).optional(),
   cursor: z.string().max(200).optional(),
@@ -215,6 +215,10 @@ export type AdminMemberRow = {
   official: boolean;
   /** Suggested first to new members during sign-up. */
   featured: boolean;
+  /** May connect Claude (MCP) to their account: given by an admin, or staff. */
+  mcpAccess: boolean;
+  /** Claude connections currently active on the account. */
+  mcpConnections: number;
   badges: ProfileBadge[];
   /** Platform-wide roles the member holds (moderator, platform_admin, super_admin, event_host). */
   roles: AdminAssignableRole[];
@@ -228,7 +232,7 @@ export type AdminMemberRow = {
  * shows them: every account except deleted ones, so suspended, deactivated and closing accounts,
  * official accounts and team members are included. verified + unverified = all.
  */
-export type AdminMemberCounts = { all: number; verified: number; unverified: number; featured: number };
+export type AdminMemberCounts = { all: number; verified: number; unverified: number; featured: number; claude: number };
 
 /**
  * GET /admin/members. On the first page only (no cursor), otherwise null: `total` is how many

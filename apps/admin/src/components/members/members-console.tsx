@@ -13,6 +13,7 @@ import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
 import { WEB_URL } from "@/lib/navigation";
 import { useIntlTag, useT } from "@/i18n/client";
+import { ClaudeAccessDialog } from "./claude-access";
 
 type Filter = Exclude<AdminMembersQuery["filter"], "badge"> | `badge:${string}`;
 
@@ -56,6 +57,7 @@ export function MembersConsole({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [badgeFor, setBadgeFor] = useState<AdminMemberRow | null>(null);
   const [officialFor, setOfficialFor] = useState<AdminMemberRow | null>(null);
+  const [claudeFor, setClaudeFor] = useState<AdminMemberRow | null>(null);
   const first = useRef(true);
 
   const queryFor = (cursor?: string | null) => ({
@@ -166,6 +168,7 @@ export function MembersConsole({
               { value: "verified", label: t("Verified"), count: counts?.verified },
               { value: "unverified", label: t("Not verified"), count: counts?.unverified },
               { value: "featured", label: t("Suggested on sign-up"), count: counts?.featured },
+              { value: "claude", label: t("Claude access"), count: counts?.claude },
             ] as const
           ).map((item) => ({ value: item.value, label: item.count === undefined ? item.label : `${item.label} · ${numbers.format(item.count)}` }))}
         />
@@ -191,6 +194,13 @@ export function MembersConsole({
         <p className="rounded-lg bg-info-light px-3 py-2 text-sm text-body">
           These members are suggested first in the “People to follow” step when someone signs up (as long as their profile is discoverable), oldest
           pick first. The rest of the suggestions come from shared country, sector and interests.
+        </p>
+      )}
+
+      {filter === "claude" && (
+        <p className="rounded-lg bg-info-light px-3 py-2 text-sm text-body">
+          These members can connect Claude to their own account: those given Claude access here, and the team, who always have it. Open “Claude” on a
+          member to see what Claude did for them or to turn access off.
         </p>
       )}
 
@@ -240,7 +250,7 @@ export function MembersConsole({
                             {row.countryCode && ` · ${row.countryCode}`}
                             {row.status !== "active" && ` · ${row.status}`}
                           </span>
-                          {(row.featured || row.staff || row.official || row.roles.length > 0) && (
+                          {(row.featured || row.staff || row.official || row.mcpAccess || row.roles.length > 0) && (
                             <span className="mt-1 flex flex-wrap gap-1">
                               {ROLE_INFO.filter((r) => row.roles.includes(r.role)).map((r) => (
                                 <Chip key={r.role} tone={r.console ? "success" : "neutral"}>
@@ -250,6 +260,11 @@ export function MembersConsole({
                               {row.featured && <Chip tone="info">Suggested on sign-up</Chip>}
                               {row.official && <Chip tone="warning">Official account · follow only</Chip>}
                               {row.staff && !row.official && <Chip tone="neutral">Team member</Chip>}
+                              {row.mcpAccess && (
+                                <Chip tone="info">
+                                  {row.mcpConnections > 0 ? t("Claude · {count} connected", { count: row.mcpConnections }) : "Claude"}
+                                </Chip>
+                              )}
                             </span>
                           )}
                         </div>
@@ -286,6 +301,9 @@ export function MembersConsole({
                             Message
                           </Button>
                         )}
+                        <Button variant="ghost" size="small" disabled={busy} onClick={() => setClaudeFor(row)}>
+                          Claude
+                        </Button>
                         {access.canManageRoles && row.id !== access.viewerId && (
                           <Button variant="ghost" size="small" disabled={busy} onClick={() => setAccessFor(row)}>
                             Access
@@ -349,6 +367,20 @@ export function MembersConsole({
             toast(t("Two-step verification was reset for {name}. They have been signed out everywhere.", { name: row.name }));
           }}
           onClose={() => setAccessFor(null)}
+        />
+      )}
+      {claudeFor && (
+        <ClaudeAccessDialog
+          member={claudeFor}
+          onChanged={(row) => {
+            replace(row);
+            toast(
+              row.mcpAccess
+                ? t("{name} can now connect Claude to their account.", { name: row.name })
+                : t("Claude access turned off for {name}. Their connections were disconnected.", { name: row.name }),
+            );
+          }}
+          onClose={() => setClaudeFor(null)}
         />
       )}
       {badgeFor && (

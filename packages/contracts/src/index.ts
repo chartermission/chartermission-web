@@ -27,3 +27,4 @@ export * from "./invites.js";
 export * from "./initiatives.js";
 export * from "./services.js";
 export * from "./announcements.js";
+export * from "./mcp.js";

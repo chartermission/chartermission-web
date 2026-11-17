@@ -33,6 +33,7 @@ import { PreviewModule } from './preview/preview.module.js';
 import { PushModule } from './push/push.module.js';
 import { InvitesModule } from './invites/invites.module.js';
 import { ServicesModule } from './services/services.module.js';
+import { OAuthModule } from './oauth/oauth.module.js';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { ServicesModule } from './services/services.module.js';
     PushModule,
     InvitesModule,
     ServicesModule,
+    OAuthModule,
   ],
   controllers: [AppController],
   providers: [

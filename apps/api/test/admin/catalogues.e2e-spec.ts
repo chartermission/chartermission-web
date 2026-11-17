@@ -275,14 +275,15 @@ describe('Admin catalogues: chapters, topics, badges and members', () => {
 
     // Expected from the database: every account with a profile except deleted ones.
     const [expected] = (
-      await t.db.execute<{ all: number; verified: number; featured: number }>(sql`
+      await t.db.execute<{ all: number; verified: number; featured: number; claude: number }>(sql`
         select count(*)::int as all,
                count(*) filter (where u.verified_at is not null)::int as verified,
-               count(*) filter (where exists (select 1 from featured_members fm where fm.user_id = u.id))::int as featured
+               count(*) filter (where exists (select 1 from featured_members fm where fm.user_id = u.id))::int as featured,
+               count(*) filter (where u.is_staff or exists (select 1 from mcp_access_grants g where g.user_id = u.id))::int as claude
         from users u join member_profiles p on p.user_id = u.id where u.status <> 'deleted'`)
     ).rows;
     const first = (await admin.get('/admin/members?limit=2').expect(200)).body;
-    expect(first.counts).toEqual({ all: expected!.all, verified: expected!.verified, unverified: expected!.all - expected!.verified, featured: expected!.featured });
+    expect(first.counts).toEqual({ all: expected!.all, verified: expected!.verified, unverified: expected!.all - expected!.verified, featured: expected!.featured, claude: expected!.claude });
     expect(first.total).toBe(expected!.all);
     expect(first.items).toHaveLength(2);
     expect(first.nextCursor).toBeTruthy();

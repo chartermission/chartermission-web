@@ -77,4 +77,5 @@ export const en: Dict = {
   "{count} matches": { one: "{count} match", other: "{count} matches" },
   "Show all {count} licenses & certifications": { one: "Show {count} license or certification", other: "Show all {count} licenses & certifications" },
   "{count} licenses & certifications": { one: "{count} license or certification", other: "{count} licenses & certifications" },
+  "{count} actions in the last 7 days": { one: "{count} action in the last 7 days", other: "{count} actions in the last 7 days" },
 };

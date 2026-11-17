@@ -122,6 +122,8 @@ export class CsrfGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<AppRequest>();
     if (!UNSAFE.has(req.method)) return true;
+    // OAuth bearer requests (Claude) never use cookies, so there is nothing to forge cross-site.
+    if (req.auth?.via || req.oauthBearer) return true;
     const skip = this.reflector.getAllAndOverride<boolean | undefined>(SKIP_CSRF_KEY, [
       context.getHandler(),
       context.getClass(),

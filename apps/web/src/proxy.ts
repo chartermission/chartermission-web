@@ -22,6 +22,8 @@ const MEMBER_AREAS = [
   "/pages",
   "/analytics",
   "/messages",
+  // Claude's consent screen: the full /connect?… address (the OAuth request) comes back after sign-in.
+  "/connect",
 ];
 
 /** Bots that fetch a page to draw a link preview (they are never signed in). */

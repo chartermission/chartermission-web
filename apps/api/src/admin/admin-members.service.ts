@@ -25,12 +25,16 @@ import type {
   AdminMembersPage,
   AdminMembersQuery,
   BadgeTone,
+  McpActivityQuery,
+  McpActivityView,
   Ok,
+  Page,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import {
   badges,
   featuredMembers,
+  mcpAccessGrants,
   memberBadges,
   memberProfiles,
   mfaDevices,
@@ -54,6 +58,9 @@ import {
   likePrefix,
   uuidOr404,
 } from '../moderation/util.js';
+import { mcpAccessSql, mcpConnectionsSql } from '../oauth/mcp-access.js';
+import { OAuthService } from '../oauth/oauth.service.js';
+import { McpActivityService } from '../oauth/mcp-activity.service.js';
 
 type BadgeRow = typeof badges.$inferSelect;
 
@@ -61,6 +68,8 @@ type BadgeRow = typeof badges.$inferSelect;
 const LISTED = ne(users.status, 'deleted');
 /** Suggested to new members at sign-up. */
 const FEATURED = sql`exists (select 1 from ${featuredMembers} fm where fm.user_id = ${users.id})`;
+/** Claude access: given by an admin, or staff (who have it without a grant). */
+const CLAUDE_ACCESS = sql`(${users.isStaff} or exists (select 1 from ${mcpAccessGrants} mag where mag.user_id = ${users.id}))`;
 
 const slugify = (v: string) =>
   v
@@ -80,6 +89,8 @@ export class AdminMembersService {
     private readonly mail: MailService,
     private readonly sessions: SessionService,
     private readonly limits: RateLimitService,
+    private readonly oauth: OAuthService,
+    private readonly mcpActivity: McpActivityService,
   ) {}
 
   /* ------------------------------ Two-step verification ------------------------------ */
@@ -388,6 +399,8 @@ export class AdminMembersService {
     if (q.filter === 'verified') conds.push(isNotNull(users.verifiedAt));
     if (q.filter === 'unverified') conds.push(isNull(users.verifiedAt));
     if (q.filter === 'featured') conds.push(FEATURED);
+    // Claude access: given by an admin, or staff (who have it without a grant).
+    if (q.filter === 'claude') conds.push(CLAUDE_ACCESS);
     if (q.filter === 'badge') {
       if (!q.badge) throw Errors.validation({ badge: 'Choose a badge' });
       conds.push(
@@ -427,13 +440,14 @@ export class AdminMembersService {
         all: sql<number>`count(*)::int`,
         verified: sql<number>`count(*) filter (where ${users.verifiedAt} is not null)::int`,
         featured: sql<number>`count(*) filter (where ${FEATURED})::int`,
+        claude: sql<number>`count(*) filter (where ${CLAUDE_ACCESS})::int`,
       })
       .from(users)
       .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
       .where(LISTED);
     const all = row?.all ?? 0;
     const verified = row?.verified ?? 0;
-    return { all, verified, unverified: all - verified, featured: row?.featured ?? 0 };
+    return { all, verified, unverified: all - verified, featured: row?.featured ?? 0, claude: row?.claude ?? 0 };
   }
 
   private async countWhere(where: SQL): Promise<number> {
@@ -544,6 +558,64 @@ export class AdminMembersService {
     return this.row(before.id);
   }
 
+  /**
+   * PUT /admin/members/{id}/mcp-access. Turning it off disconnects every Claude connection on the
+   * account. Staff keep access without a grant, so for them it only removes the grant row.
+   */
+  async setMcpAccess(
+    ctx: AuthContext,
+    rawId: string,
+    enabled: boolean,
+    ip?: string,
+  ): Promise<AdminMemberRow> {
+    const before = await this.row(rawId);
+    if (enabled) {
+      if (before.status === 'deleted' || before.status === 'deletion_pending')
+        throw Errors.conflict('This account is closed or being deleted');
+      const inserted = await this.db
+        .insert(mcpAccessGrants)
+        .values({ userId: before.id, grantedBy: ctx.user.id })
+        .onConflictDoNothing()
+        .returning({ userId: mcpAccessGrants.userId });
+      if (inserted.length)
+        await this.audit.record({
+          actorId: ctx.user.id,
+          action: 'member.mcp_access_granted',
+          targetType: 'user',
+          targetId: before.id,
+          ip,
+        });
+      return this.row(before.id);
+    }
+    const { removed, disconnected } = await this.db.transaction(async (tx) => {
+      const rows = await tx
+        .delete(mcpAccessGrants)
+        .where(eq(mcpAccessGrants.userId, before.id))
+        .returning({ userId: mcpAccessGrants.userId });
+      const n = before.staff ? 0 : await this.oauth.revokeAllForUser(before.id, tx);
+      return { removed: rows.length > 0, disconnected: n };
+    });
+    if (removed || disconnected)
+      await this.audit.record({
+        actorId: ctx.user.id,
+        action: 'member.mcp_access_revoked',
+        targetType: 'user',
+        targetId: before.id,
+        after: { disconnected },
+        ip,
+      });
+    return this.row(before.id);
+  }
+
+  /** GET /admin/members/{id}/mcp-activity */
+  async mcpActivityPage(
+    rawId: string,
+    q: McpActivityQuery,
+  ): Promise<Page<McpActivityView>> {
+    const member = await this.row(rawId);
+    return this.mcpActivity.list(member.id, q);
+  }
+
   /** POST /admin/members/{id}/badges */
   async award(
     ctx: AuthContext,
@@ -635,6 +707,8 @@ export class AdminMembersService {
         avatarFileId: memberProfiles.avatarFileId,
         countryCode: memberProfiles.countryCode,
         featured: sql<boolean>`exists (select 1 from ${featuredMembers} fm where fm.user_id = ${users.id})`,
+        mcpAccess: mcpAccessSql(),
+        mcpConnections: mcpConnectionsSql(),
         roles: sql<
           string[]
         >`coalesce((select array_agg(distinct r.key) from ${userRoles} ur join ${roles} r on r.id = ur.role_id where ur.user_id = ${users.id} and ur.revoked_at is null and ur.scope_type is null and r.key in ('event_host','moderator','platform_admin','super_admin')), '{}')`,
@@ -678,6 +752,8 @@ export class AdminMembersService {
         staff: r.isStaff,
         official: r.isOfficial,
         featured: r.featured,
+        mcpAccess: r.mcpAccess,
+        mcpConnections: r.mcpConnections,
         badges: byUser.get(r.id) ?? [],
         roles: (r.roles ?? []) as AdminAssignableRole[],
         twoStep: !!r.mfaEnabledAt,

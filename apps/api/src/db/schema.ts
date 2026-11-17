@@ -2872,3 +2872,107 @@ export const bookingRemindersSent = pgTable(
   },
   (t) => [primaryKey({ columns: [t.bookingId, t.userId, t.offsetMinutes] })],
 );
+
+/* ======================= Claude (MCP) access over OAuth (migration 0029) ======================= */
+
+/**
+ * Members an admin has given Claude access. Staff have it without a row (hasMcpAccess in
+ * src/oauth/mcp-access.ts is the one rule).
+ */
+export const mcpAccessGrants = pgTable('mcp_access_grants', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Public OAuth clients registered dynamically (RFC 7591) by Claude. No secrets: PKCE only. */
+export const oauthClients = pgTable('oauth_clients', {
+  id: id(),
+  /** The public client id handed to the client ("cmc_…"). */
+  clientId: text('client_id').notNull().unique(),
+  clientName: text('client_name').notNull(),
+  /** Matched exactly against the redirect_uri of every authorize and token request. */
+  redirectUris: text('redirect_uris').array().notNull(),
+  createdAt: createdAt(),
+  lastUsedAt: ts('last_used_at'),
+});
+
+/** Authorization codes: single use, short-lived, stored as a SHA-256 only. */
+export const oauthCodes = pgTable(
+  'oauth_codes',
+  {
+    id: id(),
+    codeHash: text('code_hash').notNull().unique(),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    redirectUri: text('redirect_uri').notNull(),
+    /** PKCE S256 challenge: base64url(sha256(code_verifier)). */
+    codeChallenge: text('code_challenge').notNull(),
+    scope: text('scope').notNull(),
+    resource: text('resource'),
+    expiresAt: ts('expires_at').notNull(),
+    usedAt: ts('used_at'),
+    /** The connection the code was exchanged for, so replaying the code can revoke it (RFC 6749 4.1.2). */
+    grantId: uuid('grant_id').references((): AnyPgColumn => oauthGrants.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('oauth_codes_user_idx').on(t.userId), index('oauth_codes_client_idx').on(t.clientId)],
+);
+
+/**
+ * One row per Claude connection. Refreshing rotates both tokens on the same row; only hashes are
+ * stored. The refresh token it replaced is kept (hashed) so a replay of it revokes the connection.
+ */
+export const oauthGrants = pgTable(
+  'oauth_grants',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull(),
+    accessHash: text('access_hash').notNull().unique(),
+    accessExpiresAt: ts('access_expires_at').notNull(),
+    refreshHash: text('refresh_hash').notNull().unique(),
+    refreshExpiresAt: ts('refresh_expires_at').notNull(),
+    previousRefreshHash: text('previous_refresh_hash').unique(),
+    /** When the refresh token last rotated: a retry with the replaced token shortly after is honoured. */
+    rotatedAt: ts('rotated_at'),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('oauth_grants_user_idx').on(t.userId), index('oauth_grants_client_idx').on(t.clientId)],
+);
+
+/** What Claude did for a member: the hourly / daily limits count these, and members and admins read them. */
+export const mcpActions = pgTable(
+  'mcp_actions',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    grantId: uuid('grant_id').references(() => oauthGrants.id, { onDelete: 'set null' }),
+    clientName: text('client_name').notNull(),
+    action: text('action').notNull(),
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('mcp_actions_user_action_idx').on(t.userId, t.action, t.createdAt),
+    index('mcp_actions_user_created_idx').on(t.userId, t.createdAt),
+    index('mcp_actions_grant_idx').on(t.grantId, t.createdAt),
+  ],
+);

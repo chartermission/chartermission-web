@@ -8,17 +8,21 @@ import {
   AdminChapterUpdateInput,
   AdminMembersQuery,
   AdminSetFeaturedInput,
+  AdminSetMcpAccessInput,
   AdminSetOfficialInput,
   AdminSetRoleInput,
   AdminSetVerifiedInput,
   AdminTopicCreateInput,
   AdminTopicsQuery,
   AdminTopicUpdateInput,
+  McpActivityQuery,
   type AdminBadge,
   type AdminChapterRow,
   type AdminMemberRow,
   type AdminMembersPage,
+  type Page,
   type AdminTopicRow,
+  type McpActivityView,
   type Ok,
 } from '@chartermission/contracts';
 import { Access, Auth } from '../core/guards.js';
@@ -185,6 +189,25 @@ export class AdminMembersController {
     @Req() req: AppRequest,
   ): Promise<AdminMemberRow> {
     return this.members.setFeatured(ctx, id, input.featured, clientIp(req));
+  }
+
+  /** Claude (MCP) access. Turning it off disconnects Claude from the account. */
+  @Put(':id/mcp-access')
+  @Access('admin', 'members.manage')
+  mcpAccess(
+    @Auth() ctx: AuthContext,
+    @Param('id') id: string,
+    @ZBody(AdminSetMcpAccessInput) input: AdminSetMcpAccessInput,
+    @Req() req: AppRequest,
+  ): Promise<AdminMemberRow> {
+    return this.members.setMcpAccess(ctx, id, input.enabled, clientIp(req));
+  }
+
+  /** What Claude did for this member, newest first. */
+  @Get(':id/mcp-activity')
+  @Access('admin', 'members.manage')
+  mcpActivity(@Param('id') id: string, @ZQuery(McpActivityQuery) q: McpActivityQuery): Promise<Page<McpActivityView>> {
+    return this.members.mcpActivityPage(id, q);
   }
 
   @Post(':id/badges')

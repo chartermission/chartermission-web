@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { and, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { roles, rolePermissions, sessions, userRoles, users, memberProfiles } from '../db/schema.js';
+import { roles, rolePermissions, sessions, userRoles, users, memberProfiles, oauthGrants } from '../db/schema.js';
 import { env, isProd } from '../config/env.js';
 import { hashIp, randomToken, sha256 } from '../common/crypto.js';
 import type { AuthContext, AuthUser } from './auth-context.js';
@@ -175,8 +175,16 @@ export class SessionService {
     await this.db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, sessionId));
   }
 
-  /** Revoke every session for a user, optionally keeping one (password change keeps the current one). */
+  /**
+   * Revoke every session for a user, optionally keeping one (password change keeps the current one).
+   * Every Claude (OAuth) connection goes too, whatever is kept: a password change, reset, deletion
+   * request or suspension must also cut off tokens issued before it.
+   */
   async revokeAll(userId: string, exceptSessionId?: string) {
+    await this.db
+      .update(oauthGrants)
+      .set({ revokedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(oauthGrants.userId, userId), isNull(oauthGrants.revokedAt)));
     await this.db
       .update(sessions)
       .set({ revokedAt: new Date() })

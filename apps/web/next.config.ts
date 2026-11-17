@@ -10,7 +10,14 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@chartermission/ui", "@chartermission/contracts"],
   // The service worker must never be served from a cache, or members would keep an old one.
   headers() {
+    // Claude's consent screen must never be framed, or another site could trick a click on Allow.
+    const noFraming = [
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+    ];
     return Promise.resolve([
+      { source: "/connect", headers: noFraming },
+      { source: "/:locale(en|fr|ar)/connect", headers: noFraming },
       {
         source: "/sw.js",
         headers: [

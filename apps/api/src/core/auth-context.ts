@@ -28,12 +28,26 @@ export interface AuthSession {
   createdAt: Date;
 }
 
+/** How a request authenticated when it isn't a cookie session: Claude with an OAuth access token. */
+export interface AuthVia {
+  kind: 'oauth';
+  grantId: string;
+  clientName: string;
+}
+
 export interface AuthContext {
   user: AuthUser;
   session: AuthSession;
+  /** Set for OAuth bearer requests (Claude); absent for cookie sessions. */
+  via?: AuthVia;
 }
 
-export type AppRequest = Request & { auth?: AuthContext; requestId?: string };
+export type AppRequest = Request & {
+  auth?: AuthContext;
+  requestId?: string;
+  /** An OAuth access token was sent (valid or not); cookies are ignored for this request. */
+  oauthBearer?: boolean;
+};
 
 export function clientIp(req: Request): string | undefined {
   return req.ip ?? req.socket.remoteAddress ?? undefined;

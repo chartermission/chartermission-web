@@ -102,6 +102,11 @@ const Env = z.object({
   LIBRETRANSLATE_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
   ANTHROPIC_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
   TRANSLATE_MODEL: z.string().default('claude-haiku-4-5'),
+  /**
+   * Claude (MCP) access: comma-separated exact https redirect URIs an OAuth client may register.
+   * http://localhost:* and http://127.0.0.1:* (any port and path) are always allowed (Claude Code and Desktop).
+   */
+  OAUTH_REDIRECT_URIS: z.string().default('https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback'),
 });
 
 export type Env = z.infer<typeof Env>;

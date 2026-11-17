@@ -23,6 +23,7 @@ cookies stay first-party. The API therefore needs no public domain.
 |---|---|
 | `chartermission.com`, `www` | web |
 | `admin` | admin |
+| `mcp` | mcp (Claude connector, see CLAUDE-MCP.md) |
 | `coolify` | Coolify dashboard |
 
 ## 2. Databases (Coolify → + New → Database)
@@ -138,6 +139,11 @@ members should only follow), either add `--official` to the command, or use Memb
 Team members who are signed in on chartermission.com open the console from their account menu without the password
 (single sign-on). It needs `WEB_URL` and `ADMIN_URL` on the api, and `NEXT_PUBLIC_WEB_URL` on admin, to be the public
 addresses, as above. No shared cookie domain is needed.
+
+## 7b. Claude connector (mcp)
+
+A fourth application serves Claude at `https://mcp.chartermission.com`. Its settings, environment and checks are in
+[CLAUDE-MCP.md](./CLAUDE-MCP.md#deploying-coolify).
 
 ## 8. Checks after the first deploy
 

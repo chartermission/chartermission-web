@@ -14,7 +14,7 @@ export const RESERVED_HANDLES = new Set([
   'ambassadors', 'analytics', 'appeals', 'articles', 'bookmarks', 'chapters', 'drafts', 'events', 'exams', 'feed', 'initiatives',
   'learning', 'members', 'network', 'nominate', 'notifications', 'onboarding', 'opportunities', 'pages', 'posts', 'search',
   'settings', 'stories', 'topics', 'check-email', 'forgot-password', 'guidelines', 'policies', 'privacy', 'reset-password',
-  'sign-in', 'signin', 'signup', 'terms', 'verify-email', 'brand', 'api', 'sso', 'unsubscribe',
+  'sign-in', 'signin', 'signup', 'terms', 'verify-email', 'brand', 'api', 'sso', 'unsubscribe', 'connect',
   // Likely future pages and technical paths
   'about', 'account', 'accounts', 'app', 'apps', 'assets', 'auth', 'billing', 'blog', 'careers', 'cdn', 'chat', 'community',
   'contact', 'courses', 'dashboard', 'discover', 'docs', 'donate', 'download', 'email', 'explore', 'faq', 'favicon', 'files',

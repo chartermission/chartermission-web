@@ -148,6 +148,8 @@ export function auditSummary(
     'connection.removed': `Removed the connection with ${target}`,
     'member.block': `Blocked ${target}`,
     'member.unblock': `Unblocked ${target}`,
+    'member.mcp_access_granted': `Gave ${target} Claude access`,
+    'member.mcp_access_revoked': `Took Claude access from ${target}`,
     // Content and uploads
     'post.announce': `Published an announcement (${target})`,
     'post.delete': `Deleted ${target}`,

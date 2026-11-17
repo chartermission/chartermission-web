@@ -1,6 +1,7 @@
 import {
   POLICY_REF_LABELS,
   REPORT_REASON_LABELS,
+  type McpAction,
   type ModerationActionKind,
   type PolicyRef,
   type ReportPriority,
@@ -96,3 +97,34 @@ export const REASON_OPTIONS = (Object.keys(REPORT_REASON_LABELS) as ReportReason
   value,
   label: REPORT_REASON_LABELS[value],
 }));
+
+/** What Claude did on a member's behalf (GET /admin/members/{id}/mcp-activity), as one line. */
+export const MCP_ACTION_LABELS: Record<McpAction, string> = {
+  "post.create": "Published a post",
+  "post.edit": "Edited a post",
+  "post.delete": "Deleted a post",
+  "draft.save": "Saved a draft",
+  "post.schedule": "Scheduled a post",
+  "draft.publish": "Published a draft",
+  "comment.create": "Wrote a comment",
+  "comment.edit": "Edited a comment",
+  "comment.delete": "Deleted a comment",
+  "reaction.set": "Reacted",
+  "reaction.remove": "Removed a reaction",
+  "connection.request": "Sent a connection request",
+  "connection.accept": "Accepted a connection request",
+  follow: "Followed",
+  unfollow: "Unfollowed",
+};
+
+/** The kind of thing Claude acted on, for the activity line ("Followed · Topic"). */
+export const MCP_TARGET_LABELS: Record<string, string> = {
+  post: "Post",
+  comment: "Comment",
+  member: "Member",
+  connection: "Connection",
+  hashtag: "Topic",
+  chapter: "Chapter",
+  page: "Page",
+  draft: "Draft",
+};

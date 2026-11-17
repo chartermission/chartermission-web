@@ -46,4 +46,6 @@ export const en: Dict = {
   "Send to {count} members": { one: "Send to {count} member", other: "Send to {count} members" },
   "{count} get the email, including {optedOut} who turned announcement emails off.": { one: "{count} gets the email, including {optedOut} who turned announcement emails off.", other: "{count} get the email, including {optedOut} who turned announcement emails off." },
   "{count} get the email · {optedOut} turned announcement emails off": { one: "{count} gets the email · {optedOut} turned announcement emails off", other: "{count} get the email · {optedOut} turned announcement emails off" },
+  "On · {count} active connections": { one: "On · {count} active connection", other: "On · {count} active connections" },
+  "{count} active connections will stop working at once, and they can’t connect again until access is turned back on.": { one: "{count} active connection will stop working at once, and they can’t connect again until access is turned back on.", other: "{count} active connections will stop working at once, and they can’t connect again until access is turned back on." },
 };
