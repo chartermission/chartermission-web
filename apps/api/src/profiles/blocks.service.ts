@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import type { BlockView, MuteInput, MuteView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { blocks, connections, follows, mutes } from '../db/schema.js';
+import { blocks, connections, conversations, follows, mutes } from '../db/schema.js';
 import { MembersService } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { Errors } from '../common/errors.js';
@@ -32,6 +32,19 @@ export class BlocksService {
    */
   async block(userId: string, target: string, ip?: string): Promise<void> {
     const targetId = await this.memberId(userId, target);
+    // The account Charter Mission writes to a member from (their official conversation) can't be blocked by them.
+    const [official] = await this.db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.kind, 'official'),
+          eq(conversations.createdBy, targetId),
+          or(eq(conversations.memberA, userId), eq(conversations.memberB, userId)),
+        ),
+      )
+      .limit(1);
+    if (official) throw Errors.forbidden('You can’t block Charter Mission. Mute or archive the conversation instead.');
     const pair = or(
       and(eq(connections.requesterId, userId), eq(connections.addresseeId, targetId)),
       and(eq(connections.requesterId, targetId), eq(connections.addresseeId, userId)),

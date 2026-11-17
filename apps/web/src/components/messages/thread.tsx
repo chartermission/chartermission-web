@@ -30,6 +30,7 @@ import { useNow } from "@/components/events/use-viewer-zone";
 import { Composer } from "./composer";
 import { GroupInfoDialog } from "./group-dialogs";
 import { LinkPreviewCard, MeetingCard, MessageAttachments, ShareCard, VoicePlayer } from "./message-parts";
+import { MessageText } from "./message-text";
 import { announceMessagesChanged } from "./messages-events";
 import { dropOutbox, newClientId, onOutboxChange, outboxFor, putOutbox, type OutboxItem } from "./outbox";
 import { liveSupported, subscribeMessages } from "./stream";
@@ -344,6 +345,8 @@ export function Thread({
 
   const group = conversation.kind === "group";
   const broadcast = conversation.kind === "broadcast";
+  /** The member's conversation with Charter Mission: a direct chat with the official account, answered by the team. */
+  const official = conversation.kind === "official";
   const time = (iso: string) => new Date(iso).toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" });
   const day = (iso: string) => new Date(iso).toLocaleDateString(tag, { weekday: "long", day: "numeric", month: "long" });
   const lastMine = [...items].reverse().find((m) => m.senderId === viewerId && !m.deleted && m.kind !== "system");
@@ -358,7 +361,9 @@ export function Thread({
       ? t("{count} members", { count: conversation.memberCount })
       : broadcast
         ? t("Chapter announcements")
-        : (conversation.member?.headline ?? "");
+        : official
+          ? conversation.member?.headline || t("Official account")
+          : (conversation.member?.headline ?? "");
 
   const menu: MenuItem[] = [
     { label: conversation.pinned ? t("Unpin") : t("Pin to top"), icon: "pin", onSelect: () => void organise({ pinned: !conversation.pinned }) },
@@ -376,7 +381,7 @@ export function Thread({
     ...(broadcast && !conversation.canManage && conversation.joined
       ? [{ label: t("Turn off announcements"), icon: "bell-off" as const, danger: true, onSelect: () => setConfirm("announcements-off") }]
       : []),
-    ...(conversation.member ? [{ label: t("Block {name}", { name: conversation.member.name }), icon: "ban" as const, danger: true, onSelect: () => setConfirm("block") }] : []),
+    ...(conversation.member && !official ? [{ label: t("Block {name}", { name: conversation.member.name }), icon: "ban" as const, danger: true, onSelect: () => setConfirm("block") }] : []),
   ];
 
   const pendingBubbles = outbox.filter((o) => !items.some((m) => m.clientId === o.clientId));
@@ -389,7 +394,15 @@ export function Thread({
         </Link>
         <ConversationAvatar conversation={conversation} size={40} />
         <div className="flex min-w-0 flex-1 flex-col">
-          {conversation.member ? (
+          {conversation.member && official ? (
+            <span className="flex min-w-0 items-center gap-1">
+              <Link href={memberHref(conversation.member.handle)} className="truncate text-md font-medium text-ink hover:underline">
+                {conversation.member.name}
+              </Link>
+              {conversation.member.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label={t("Verified")} />}
+              <span className="shrink-0 rounded-full bg-primary-tint px-1.5 py-px text-[11px] font-semibold text-primary">{t("Official")}</span>
+            </span>
+          ) : conversation.member ? (
             <Link href={memberHref(conversation.member.handle)} className="truncate text-md font-medium text-ink hover:underline">
               {conversation.member.name}
             </Link>
@@ -408,7 +421,13 @@ export function Thread({
         <Menu label={t("Conversation options")} items={menu} />
       </header>
 
-      {conversation.request === "incoming" && conversation.member && (
+      {official && (
+        <p role="note" className="flex items-start gap-2 border-b border-line bg-primary-tint-2 px-4 py-2 text-xs text-ink">
+          <Icon name="megaphone" size={14} className="mt-0.5 shrink-0 text-primary" />
+          {t("Messages from the Charter Mission team. Replies are read by our team.")}
+        </p>
+      )}
+      {!official && conversation.request === "incoming" && conversation.member && (
         <div className="flex flex-col gap-2 border-b border-line bg-primary-tint-2 px-4 py-3">
           <p className="text-sm text-ink">
             {t("{name} wants to message you. You aren’t connected yet.", { name: conversation.member.name })}
@@ -426,12 +445,12 @@ export function Thread({
           </div>
         </div>
       )}
-      {conversation.request === "outgoing" && (
+      {!official && conversation.request === "outgoing" && (
         <p role="note" className="border-b border-line bg-muted/60 px-4 py-2 text-xs text-secondary">
           {t("Message request sent. {name} will see it under Requests and can accept it.", { name: conversation.member?.name ?? "" })}
         </p>
       )}
-      {conversation.firstContact && conversation.request !== "outgoing" && (
+      {!official && conversation.firstContact && conversation.request !== "outgoing" && (
         <p role="note" className="flex items-start gap-2 border-b border-line bg-[#FFF8E6] px-4 py-2 text-xs text-ink">
           <Icon name="shield" size={14} className="mt-0.5 shrink-0 text-[#9A6700]" />
           {t("You aren’t connected with this member. Never share passwords, codes or bank details, and be careful with requests for money.")}
@@ -448,9 +467,11 @@ export function Thread({
           <p className="m-auto max-w-[320px] text-center text-sm text-secondary">
             {broadcast
               ? t("Announcements from the chapter team will appear here.")
-              : group
-                ? t("This is the start of {name}. Say hello.", { name: conversation.title })
-                : t("This is the start of your conversation with {name}. Say hello.", { name: conversation.title })}
+              : official
+                ? t("Messages from the Charter Mission team will appear here.")
+                : group
+                  ? t("This is the start of {name}. Say hello.", { name: conversation.title })
+                  : t("This is the start of your conversation with {name}. Say hello.", { name: conversation.title })}
           </p>
         )}
         {items.map((message, index) => {
@@ -539,7 +560,9 @@ export function Thread({
                         ) : (
                           message.body && (
                             <p dir="auto" className="whitespace-pre-wrap break-words">
-                              <NoTranslate>{message.body}</NoTranslate>
+                              <NoTranslate>
+                                <MessageText text={message.body} mine={mine} />
+                              </NoTranslate>
                             </p>
                           )
                         )}
@@ -659,6 +682,7 @@ export function Thread({
       {conversation.canSend ? (
         <Composer
           conversationId={conversation.id}
+          meetings={!official}
           replyTo={replyTo}
           editing={editing}
           onCancelReply={() => setReplyTo(null)}

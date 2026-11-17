@@ -263,6 +263,44 @@ describe('Admin catalogues: chapters, topics, badges and members', () => {
     expect(actions).toEqual(expect.arrayContaining(['member.verified', 'member.featured', 'member.unfeatured', 'member.unverified', 'member.badge_awarded']));
   });
 
+  it('counts members on the first page: in total, per filter, and matching the filter and search', async () => {
+    const [kept, verifiedOne, suspended, gone] = await Promise.all([
+      createMember(t, { name: 'Countable Kept' }),
+      createMember(t, { name: 'Countable Verified' }),
+      createMember(t, { name: 'Countable Suspended', status: 'suspended' }),
+      createMember(t, { name: 'Countable Deleted' }),
+    ]);
+    await admin.put(`/admin/members/${verifiedOne.id}/verified`, { verified: true }).expect(200);
+    await t.db.update(s.users).set({ status: 'deleted' }).where(eq(s.users.id, gone.id));
+
+    // Expected from the database: every account with a profile except deleted ones.
+    const [expected] = (
+      await t.db.execute<{ all: number; verified: number; featured: number }>(sql`
+        select count(*)::int as all,
+               count(*) filter (where u.verified_at is not null)::int as verified,
+               count(*) filter (where exists (select 1 from featured_members fm where fm.user_id = u.id))::int as featured
+        from users u join member_profiles p on p.user_id = u.id where u.status <> 'deleted'`)
+    ).rows;
+    const first = (await admin.get('/admin/members?limit=2').expect(200)).body;
+    expect(first.counts).toEqual({ all: expected!.all, verified: expected!.verified, unverified: expected!.all - expected!.verified, featured: expected!.featured });
+    expect(first.total).toBe(expected!.all);
+    expect(first.items).toHaveLength(2);
+    expect(first.nextCursor).toBeTruthy();
+
+    // Later pages don't count again.
+    const second = (await admin.get(`/admin/members?limit=2&cursor=${first.nextCursor}`).expect(200)).body;
+    expect(second).toMatchObject({ total: null, counts: null });
+
+    // total follows the filter and search; counts don't follow the search.
+    const searched = (await admin.get('/admin/members?q=countable').expect(200)).body;
+    expect(searched.total).toBe(3);
+    expect(searched.items.map((m: { id: string }) => m.id).sort()).toEqual([kept.id, verifiedOne.id, suspended.id].sort());
+    expect(searched.counts).toEqual(first.counts);
+    expect((await admin.get('/admin/members?q=countable&filter=verified').expect(200)).body.total).toBe(1);
+    expect((await admin.get('/admin/members?q=countable&filter=unverified').expect(200)).body.total).toBe(2);
+    expect((await admin.get('/admin/members?filter=verified').expect(200)).body.total).toBe(expected!.verified);
+  });
+
   it('the admin console can load media without the audience header (img tags can’t send it)', async () => {
     const { mkdir, writeFile } = await import('node:fs/promises');
     const { join, dirname } = await import('node:path');

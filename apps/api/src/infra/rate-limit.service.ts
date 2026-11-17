@@ -24,12 +24,12 @@ export class RateLimitService {
   }
 
   /** Check without consuming (e.g. login failures are only counted on failure). */
-  async assertBelow(key: string, limit: number): Promise<void> {
+  async assertBelow(key: string, limit: number, reason?: string): Promise<void> {
     const k = `rl:${key}`;
     const count = Number((await this.redis.get(k)) ?? 0);
     if (count >= limit) {
       const ttl = await this.redis.ttl(k);
-      throw Errors.rateLimited(ttl > 0 ? ttl : 60);
+      throw Errors.rateLimited(ttl > 0 ? ttl : 60, reason);
     }
   }
 

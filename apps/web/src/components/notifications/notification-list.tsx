@@ -36,6 +36,8 @@ const byType: Partial<Record<NotificationType, { icon: { name: IconName; classNa
   page_enquiry: { icon: { name: "message", className: "bg-accent-light text-accent" }, href: (item) => item.href },
   // Confirm the name on a certificate (or a name that wasn't approved): opens the exam at #certificate.
   exam_certificate_name: { icon: { name: "alert", className: "bg-warning-light text-warning" }, href: (item) => item.href },
+  // A message from Charter Mission: opens its link, or the official conversation in Messages.
+  announcement: { icon: { name: "megaphone", className: "bg-primary-tint text-primary" }, href: (item) => item.href },
 };
 
 /** Booking notifications open Bookings (or the booking itself when the API links to it). */
@@ -69,6 +71,8 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
   const special = byType[item.type];
   const icon = special?.icon ?? iconFor[item.icon];
   const href = special ? special.href(item) : item.href;
+  // Announcements may link to another site: open it in a new tab.
+  const external = /^https?:\/\//i.test(href);
   const text = item.segments.map((s) => s.text).join("");
   return (
     <li className={cn("relative flex items-start gap-3 px-5 py-4 max-sm:px-4", !item.read && "bg-primary-tint-2")}>
@@ -84,6 +88,7 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <Link
           href={href}
+          {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
           onClick={() => onOpen(item)}
           className="text-sm text-body after:absolute after:inset-0 hover:text-ink focus-visible:outline-none"
           aria-label={item.read ? text : t("Unread: {text}", { text })}

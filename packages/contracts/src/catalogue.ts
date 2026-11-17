@@ -221,6 +221,24 @@ export type AdminMemberRow = {
   joinedAt: string;
 };
 
+/**
+ * How many member accounts each tab of the Members page lists. Accounts are counted as the list
+ * shows them: every account except deleted ones, so suspended, deactivated and closing accounts,
+ * official accounts and team members are included. verified + unverified = all.
+ */
+export type AdminMemberCounts = { all: number; verified: number; unverified: number; featured: number };
+
+/**
+ * GET /admin/members. On the first page only (no cursor), otherwise null: `total` is how many
+ * members match the current filter and search; `counts` is per filter, ignoring the search.
+ */
+export type AdminMembersPage = {
+  items: AdminMemberRow[];
+  nextCursor: string | null;
+  total: number | null;
+  counts: AdminMemberCounts | null;
+};
+
 /** Roles an admin can give or take away from a member's row in the console (roles.manage). */
 export const AdminAssignableRole = z.enum(["event_host", "moderator", "platform_admin", "super_admin"]);
 export type AdminAssignableRole = z.infer<typeof AdminAssignableRole>;

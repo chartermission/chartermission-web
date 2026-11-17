@@ -23,6 +23,7 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  */
 export function Composer({
   conversationId,
+  meetings = true,
   replyTo,
   editing,
   onCancelReply,
@@ -32,6 +33,8 @@ export function Composer({
   onSent,
 }: {
   conversationId: string;
+  /** Offer "Propose a meeting" (not in the conversation with Charter Mission). */
+  meetings?: boolean;
   replyTo: MessageView | null;
   editing: MessageView | null;
   onCancelReply: () => void;
@@ -261,7 +264,7 @@ export function Composer({
               items={[
                 { label: t("Photo"), icon: "image", onSelect: () => photoInput.current?.click(), disabled: pending.length >= MESSAGE_MAX_ATTACHMENTS },
                 { label: t("Document"), icon: "file", onSelect: () => fileInput.current?.click(), disabled: pending.length >= MESSAGE_MAX_ATTACHMENTS },
-                { label: t("Propose a meeting"), icon: "calendar", onSelect: () => setMeeting(true) },
+                ...(meetings ? [{ label: t("Propose a meeting"), icon: "calendar" as const, onSelect: () => setMeeting(true) }] : []),
               ]}
             />
           )}

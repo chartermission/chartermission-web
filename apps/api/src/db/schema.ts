@@ -1438,6 +1438,24 @@ export const learningAccessOverrides = pgTable('learning_access_overrides', {
 
 /* ======================= Exams (migration 0018) ======================= */
 
+/**
+ * Instructors who sign Charter Center certificates, reused across exams (migration 0029). An exam's
+ * certificate settings point at one (certificate.instructorId); their name is sent as instructor_name
+ * and their signature image as instructor_signature_url. Archived ones can't be picked for new settings.
+ */
+export const examInstructors = pgTable('exam_instructors', {
+  id: id(),
+  name: text('name').notNull(),
+  /** A clean upload with purpose "certificate_signature". */
+  signatureFileId: uuid('signature_file_id')
+    .notNull()
+    .references(() => files.id),
+  archivedAt: ts('archived_at'),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 /** One answer of a question. The id is short and stable, so answers survive re-ordering and edits. */
 export type ExamOptionRow = { id: string; text: string; textAlt: string | null };
 
@@ -1909,6 +1927,73 @@ export const chapterPins = pgTable(
 /* ============================== Messages ============================== */
 
 /**
+ * Bulk messages from Charter Mission to members, written and sent from the admin (contracts
+ * announcements.ts, migration 0029). Delivered in batches by a queue job: an email (respecting the
+ * "announcements" email preference unless important), a message in the member's official conversation,
+ * and/or an in-app notification.
+ */
+export const announcements = pgTable(
+  'announcements',
+  {
+    id: id(),
+    subject: text('subject').notNull(),
+    body: text('body').notNull(),
+    linkUrl: text('link_url'),
+    linkLabel: text('link_label'),
+    /** { email, message, notification } */
+    channels: jsonb('channels').$type<{ email: boolean; message: boolean; notification: boolean }>().notNull(),
+    /** contracts AnnouncementAudience */
+    audience: jsonb('audience').$type<Record<string, unknown>>().notNull().default({}),
+    /** A service notice: emailed even to members who turned announcement emails off. */
+    important: boolean('important').notNull().default(false),
+    status: text('status').notNull().default('draft'),
+    recipientCount: integer('recipient_count').notNull().default(0),
+    emailedCount: integer('emailed_count').notNull().default(0),
+    messagedCount: integer('messaged_count').notNull().default(0),
+    notifiedCount: integer('notified_count').notNull().default(0),
+    /** Members not emailed because they turned announcement emails off. */
+    optedOutCount: integer('opted_out_count').notNull().default(0),
+    failedCount: integer('failed_count').notNull().default(0),
+    lastError: text('last_error'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    sentBy: uuid('sent_by').references(() => users.id, { onDelete: 'set null' }),
+    queuedAt: ts('queued_at'),
+    finishedAt: ts('finished_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('announcements_status_ck', sql`${t.status} in ('draft','sending','sent','failed','cancelled')`),
+    index('announcements_created_idx').on(t.createdAt),
+  ],
+);
+
+/** Who a bulk message went to (the audience is resolved once, when it's sent), and what reached them. */
+export const announcementRecipients = pgTable(
+  'announcement_recipients',
+  {
+    announcementId: uuid('announcement_id')
+      .notNull()
+      .references(() => announcements.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    emailedAt: ts('emailed_at'),
+    messagedAt: ts('messaged_at'),
+    notifiedAt: ts('notified_at'),
+    /** Why no email went: opted_out (announcement emails off) or failed. */
+    emailSkipped: text('email_skipped'),
+    /** Delivery finished for this member (all chosen channels tried). */
+    doneAt: ts('done_at'),
+    error: text('error'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.announcementId, t.userId] }),
+    index('announcement_recipients_pending_idx').on(t.announcementId).where(sql`${t.doneAt} is null`),
+  ],
+);
+
+/**
  * A private conversation between two members. There is one per pair: member_a is always the
  * smaller id, so the pair can be found whichever of the two opens it.
  */
@@ -1950,7 +2035,9 @@ export const conversations = pgTable(
     index('conversations_a_idx').on(t.memberA, t.lastMessageAt),
     index('conversations_b_idx').on(t.memberB, t.lastMessageAt),
     check('conversations_order_ck', sql`${t.memberA} is null or ${t.memberA} < ${t.memberB}`),
-    check('conversations_kind_ck', sql`${t.kind} in ('direct','group','broadcast')`),
+    /* official: a member's conversation with Charter Mission (the official sender account, member_a/member_b
+       in id order like direct). Bulk messages land in it; the team answers replies from the admin inbox. */
+    check('conversations_kind_ck', sql`${t.kind} in ('direct','group','broadcast','official')`),
     check('conversations_status_ck', sql`${t.status} in ('active','request','declined')`),
     check('conversations_direct_ck', sql`${t.kind} <> 'direct' or (${t.memberA} is not null and ${t.memberB} is not null)`),
   ],
@@ -2016,6 +2103,10 @@ export const messages = pgTable(
     deletedAt: ts('deleted_at'),
     /** Hidden or removed by a moderator after a report; the text is withheld from both members. */
     moderationState: text('moderation_state').notNull().default('visible'),
+    /** Official conversations: the staff member who wrote it as Charter Mission (shown only in the admin). */
+    sentByStaffId: uuid('sent_by_staff_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Sent as part of a bulk message from the admin. */
+    announcementId: uuid('announcement_id').references((): AnyPgColumn => announcements.id, { onDelete: 'set null' }),
   },
   (t) => [
     index('messages_conversation_idx').on(t.conversationId, t.createdAt),

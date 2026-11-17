@@ -56,7 +56,8 @@ describe('Members confirm the name on their Charter Center certificate', () => {
     await admin
       .post(`/admin/exams/${exam.id}/questions`, { prompt: 'Only question?', options: ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((text) => ({ text })), correctIndex: 0 })
       .expect(201);
-    const certificate = { title: 'Project Management Professional', issuerName: 'Eng. Abdalla Yousif', signatureFileId, startDate: '2026-01-01', endDate: '2026-01-15' };
+    const instructorId = (await admin.post('/admin/exam-instructors', { name: 'Eng. Abdalla Yousif', signatureFileId }).expect(201)).body.id;
+    const certificate = { title: 'Project Management Professional', instructorId, startDate: '2026-01-01', endDate: '2026-01-15' };
     exam = (await admin.patch(`/admin/exams/${exam.id}`, { status: 'published', certificate }).expect(200)).body as AdminExamDetail;
 
     members.amina = await createMember(t, { name: 'Amina Yusuf', email: 'amina.names@example.test' });

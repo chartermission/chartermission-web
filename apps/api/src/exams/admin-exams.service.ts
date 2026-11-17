@@ -24,7 +24,7 @@ import {
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { examAccess, examAttempts, examCertificates, examInvites, examQuestions, examSections, exams, files, memberProfiles, pages, users } from '../db/schema.js';
+import { examAccess, examAttempts, examCertificates, examInstructors, examInvites, examQuestions, examSections, exams, memberProfiles, pages, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
@@ -37,7 +37,8 @@ import { likeContains } from '../learning/courses.service.js';
 import { isUuid } from '../media/uuid-param.js';
 import { ensureSections, importExam, insertExam, insertQuestions, questionColumns } from './exam-store.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
-import { ExamCertificatesService, signatureUrl } from './exam-certificates.service.js';
+import { ExamCertificatesService } from './exam-certificates.service.js';
+import { certificateSettingsView, resolveCertificate, storedCertificate } from './exam-instructors.js';
 import { CHARTER_CENTER_EXAMS_CLIENT, type CharterCenterExamsClient } from './charter-center-exams.client.js';
 import { attemptSummary, examBase, questionCounts, reviewOf, sectionsOf, type ExamQuestionRow, type ExamRow } from './exam-views.js';
 
@@ -76,13 +77,11 @@ export class AdminExamsService {
   /** GET /admin/exams/:id */
   async detail(id: string, db: Db | Tx = this.db): Promise<AdminExamDetail> {
     const exam = await this.find(id, db);
-    const [sections, questions, stats, signature] = await Promise.all([
+    const [sections, questions, stats, signer] = await Promise.all([
       sectionsOf(db, exam.id),
       db.select().from(examQuestions).where(eq(examQuestions.examId, exam.id)).orderBy(asc(examQuestions.position), asc(examQuestions.createdAt)),
       this.stats([exam.id]),
-      exam.certificate
-        ? db.select({ mime: files.mime, scanStatus: files.scanStatus }).from(files).where(eq(files.id, exam.certificate.signatureFileId)).limit(1)
-        : Promise.resolve([]),
+      resolveCertificate(db, exam.certificate),
     ]);
     return {
       ...this.summary(exam, questions.length, stats.get(exam.id) ?? NO_STATS),
@@ -93,13 +92,7 @@ export class AdminExamsService {
       review: reviewOf(exam),
       credit: exam.credit,
       shareCertificates: exam.shareCertificates,
-      certificate: exam.certificate
-        ? {
-            ...exam.certificate,
-            hours: exam.certificate.hours ?? null,
-            signatureUrl: signature[0]?.scanStatus === 'clean' ? signatureUrl(exam.certificate.signatureFileId, signature[0].mime) : null,
-          }
-        : null,
+      certificate: certificateSettingsView(exam.certificate, signer),
       sections: sections.views,
       questions: questions.map(questionView),
     };
@@ -107,16 +100,18 @@ export class AdminExamsService {
 
   /** POST /admin/exams — a new draft. */
   async create(ctx: AuthContext, input: ExamSettingsInput, ip?: string): Promise<AdminExamDetail> {
-    if (input.certificate) await this.useSignature(input.certificate.signatureFileId);
-    const exam = await insertExam(this.db, input, ctx.user.id);
+    const exam = await this.db.transaction(async (tx) => {
+      if (input.certificate) await this.assertInstructor(input.certificate.instructorId, null, tx);
+      return insertExam(tx, input, ctx.user.id);
+    });
     await this.audit.record({ actorId: ctx.user.id, action: 'exam.created', targetType: 'exam', targetId: exam.id, after: { title: exam.title, slug: exam.slug }, ip });
     return this.detail(exam.id);
   }
 
   /** POST /admin/exams/import — a draft with its sections and questions, all or nothing. */
   async import(ctx: AuthContext, input: ExamImportInput, ip?: string): Promise<AdminExamDetail> {
-    if (input.certificate) await this.useSignature(input.certificate.signatureFileId);
     const id = await this.db.transaction(async (tx) => {
+      if (input.certificate) await this.assertInstructor(input.certificate.instructorId, null, tx);
       const exam = await importExam(tx, input, ctx.user.id);
       await this.audit.record(
         { actorId: ctx.user.id, action: 'exam.imported', targetType: 'exam', targetId: exam.id, after: { title: exam.title, slug: exam.slug, questions: input.questions.length }, ip },
@@ -129,10 +124,10 @@ export class AdminExamsService {
 
   /** PATCH /admin/exams/:id — settings and status. Publishing needs at least one question. */
   async update(ctx: AuthContext, id: string, input: UpdateExamInput, ip?: string): Promise<AdminExamDetail> {
-    if (input.certificate) await this.useSignature(input.certificate.signatureFileId);
     const examId = await this.db.transaction(async (tx) => {
       const [before] = await tx.select().from(exams).where(eq(exams.id, this.uuid(id))).for('update').limit(1);
       if (!before) throw Errors.notFound('Exam');
+      if (input.certificate) await this.assertInstructor(input.certificate.instructorId, storedCertificate(before.certificate)?.instructorId ?? null, tx);
       const { status, ...settings } = input;
       const patch: Partial<typeof exams.$inferInsert> = {};
       for (const [key, value] of Object.entries(settings) as [keyof typeof settings, unknown][]) {
@@ -488,14 +483,20 @@ export class AdminExamsService {
   }
 
   /**
-   * A certificate signature uploaded in the console (purpose certificate_signature, checked clean).
-   * Marked attached so it is kept; it is served publicly from GET /exam-signatures/{id}.
+   * The instructor chosen to sign an exam's certificates: one that exists and isn't archived. An
+   * archived one may stay on the exam that already has it (current), but isn't picked anew.
    */
-  private async useSignature(fileId: string) {
-    const [file] = await this.db.select().from(files).where(eq(files.id, fileId.toLowerCase())).limit(1);
-    if (!file || file.purpose !== 'certificate_signature') throw Errors.validation({ 'certificate.signatureFileId': 'Upload the issuer’s signature again' });
-    if (file.scanStatus !== 'clean') throw Errors.validation({ 'certificate.signatureFileId': 'The signature is still being checked. Try again in a moment.' });
-    if (!file.attachedAt) await this.db.update(files).set({ attachedAt: new Date() }).where(eq(files.id, file.id));
+  private async assertInstructor(instructorId: string, current: string | null, db: Db | Tx = this.db): Promise<void> {
+    // A share lock, so the instructor can't be deleted while this exam is being saved with it.
+    const [row] = await db
+      .select({ id: examInstructors.id, archivedAt: examInstructors.archivedAt })
+      .from(examInstructors)
+      .where(eq(examInstructors.id, instructorId.toLowerCase()))
+      .for('share')
+      .limit(1);
+    if (!row) throw Errors.notFound('That instructor');
+    if (row.archivedAt && row.id !== current?.toLowerCase())
+      throw Errors.validation({ 'certificate.instructorId': 'This instructor is archived. Choose another, or restore them under Instructors.' });
   }
 
   private summary(row: ExamRow, questionCount: number, stats: AdminExamStats): AdminExamSummary {

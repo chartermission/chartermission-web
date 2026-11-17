@@ -90,6 +90,9 @@ export const NotificationType = z.enum([
    * when a name they asked for was declined (with the reason). Icon alert.
    */
   "exam_certificate_name",
+  /* From Charter Mission */
+  /** A bulk message from Charter Mission (segments: the subject in bold); href is its link or the official conversation. Icon megaphone if available, else alert. */
+  "announcement",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -107,6 +110,11 @@ export const NotificationCategory = z.enum([
   /** Applications to your listings and decisions on them; join requests for initiatives and answers to yours. */
   "opportunities",
   "digest",
+  /**
+   * Messages from Charter Mission sent to many members from the admin. Members can turn the email off
+   * (also with the one-click unsubscribe link in every such email); important service notices still arrive.
+   */
+  "announcements",
 ]);
 export type NotificationCategory = z.infer<typeof NotificationCategory>;
 

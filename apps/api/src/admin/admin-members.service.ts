@@ -20,11 +20,12 @@ import type {
   AdminBadge,
   AdminBadgeInput,
   AdminBadgeUpdateInput,
+  AdminMemberCounts,
   AdminMemberRow,
+  AdminMembersPage,
   AdminMembersQuery,
   BadgeTone,
   Ok,
-  Page,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import {
@@ -52,6 +53,11 @@ import {
 } from '../moderation/util.js';
 
 type BadgeRow = typeof badges.$inferSelect;
+
+/** Accounts the Members page lists and counts: every account except deleted ones. */
+const LISTED = ne(users.status, 'deleted');
+/** Suggested to new members at sign-up. */
+const FEATURED = sql`exists (select 1 from ${featuredMembers} fm where fm.user_id = ${users.id})`;
 
 const slugify = (v: string) =>
   v
@@ -297,14 +303,17 @@ export class AdminMembersService {
 
   /* ---------------------------------- Members ---------------------------------- */
 
-  /** GET /admin/members: search by name, handle or email. */
-  async list(q: AdminMembersQuery): Promise<Page<AdminMemberRow>> {
+  /**
+   * GET /admin/members: search by name, handle or email. The first page (no cursor) also carries
+   * `total` (matching the filter and search) and `counts` (per filter, ignoring the search).
+   */
+  async list(q: AdminMembersQuery): Promise<AdminMembersPage> {
     const offset = q.cursor
       ? Number(Buffer.from(q.cursor, 'base64url').toString())
       : 0;
     if (!Number.isInteger(offset) || offset < 0 || offset > 100_000)
       throw Errors.badRequest('Invalid cursor');
-    const conds: SQL[] = [ne(users.status, 'deleted')];
+    const conds: SQL[] = [LISTED];
     if (q.q) {
       const term = `%${likePrefix(q.q.replace(/^@/, '')).slice(0, -1)}%`;
       conds.push(
@@ -317,24 +326,27 @@ export class AdminMembersService {
     }
     if (q.filter === 'verified') conds.push(isNotNull(users.verifiedAt));
     if (q.filter === 'unverified') conds.push(isNull(users.verifiedAt));
-    if (q.filter === 'featured')
-      conds.push(
-        sql`exists (select 1 from ${featuredMembers} fm where fm.user_id = ${users.id})`,
-      );
+    if (q.filter === 'featured') conds.push(FEATURED);
     if (q.filter === 'badge') {
       if (!q.badge) throw Errors.validation({ badge: 'Choose a badge' });
       conds.push(
         sql`exists (select 1 from ${memberBadges} mb join ${badges} b on b.id = mb.badge_id where mb.user_id = ${users.id} and b.slug = ${q.badge})`,
       );
     }
-    const rows = await this.db
-      .select({ id: users.id })
-      .from(users)
-      .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
-      .where(and(...conds))
-      .orderBy(desc(users.createdAt), asc(users.id))
-      .limit(q.limit + 1)
-      .offset(offset);
+    const first = !q.cursor;
+    const [rows, counts, matching] = await Promise.all([
+      this.db
+        .select({ id: users.id })
+        .from(users)
+        .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
+        .where(and(...conds))
+        .orderBy(desc(users.createdAt), asc(users.id))
+        .limit(q.limit + 1)
+        .offset(offset),
+      first ? this.counts() : null,
+      // "All" without a search is counts.all: no second count.
+      first && (q.q || q.filter !== 'all') ? this.countWhere(and(...conds)!) : null,
+    ]);
     const ids = rows.slice(0, q.limit).map((r) => r.id);
     return {
       items: await this.rows(ids),
@@ -342,7 +354,34 @@ export class AdminMembersService {
         rows.length > q.limit
           ? Buffer.from(String(offset + q.limit)).toString('base64url')
           : null,
+      total: first ? (matching ?? counts!.all) : null,
+      counts,
     };
+  }
+
+  /** Members per filter of the Members page (the search left aside). */
+  private async counts(): Promise<AdminMemberCounts> {
+    const [row] = await this.db
+      .select({
+        all: sql<number>`count(*)::int`,
+        verified: sql<number>`count(*) filter (where ${users.verifiedAt} is not null)::int`,
+        featured: sql<number>`count(*) filter (where ${FEATURED})::int`,
+      })
+      .from(users)
+      .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
+      .where(LISTED);
+    const all = row?.all ?? 0;
+    const verified = row?.verified ?? 0;
+    return { all, verified, unverified: all - verified, featured: row?.featured ?? 0 };
+  }
+
+  private async countWhere(where: SQL): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(users)
+      .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
+      .where(where);
+    return row?.n ?? 0;
   }
 
   async row(rawId: string): Promise<AdminMemberRow> {

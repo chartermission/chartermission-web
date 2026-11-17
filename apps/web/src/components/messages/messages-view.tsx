@@ -140,7 +140,7 @@ export function MessagesView({
     if (!last) return c.request === "incoming" ? t("Wants to message you") : "";
     if (last.deleted) return t("Message deleted");
     if (last.removed) return t("Message removed");
-    const who = last.mine ? `${t("You")}: ` : c.kind !== "direct" && last.kind !== "system" ? `${last.senderName}: ` : "";
+    const who = last.mine ? `${t("You")}: ` : (c.kind === "group" || c.kind === "broadcast") && last.kind !== "system" ? `${last.senderName}: ` : "";
     const body =
       last.body ||
       (last.kind === "voice" ? t("Voice message") : last.kind === "meeting" ? t("Meeting invitation") : last.kind === "share" ? t("Shared a link") : t("Attachment"));
@@ -277,6 +277,9 @@ export function MessagesView({
                         <span className={cn("flex min-w-0 items-center gap-1 text-sm text-ink", unread ? "font-semibold" : "font-medium")}>
                           <span className="truncate">{c.title}</span>
                           {c.kind === "group" && <Icon name="users" size={13} className="shrink-0 text-secondary" aria-label={t("Group")} />}
+                          {c.kind === "official" && (
+                            <span className="shrink-0 rounded-full bg-primary-tint px-1.5 text-[10px] leading-4 font-semibold text-primary">{t("Official")}</span>
+                          )}
                         </span>
                         {c.lastMessage && <span className="shrink-0 text-xs text-secondary">{short(c.lastMessage.createdAt)}</span>}
                       </span>

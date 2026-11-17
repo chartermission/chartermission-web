@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import type { AdminExamSummary, ExamsAdminSettings } from "@chartermission/contracts";
+import { buttonClasses } from "@chartermission/ui";
 import { CharterCenterPanel } from "@/components/exams/charter-center-panel";
 import { ExamsConsole } from "@/components/exams/exams-console";
 import { PageHeader } from "@/components/shell/page-header";
@@ -38,7 +40,15 @@ async function Exams() {
 export default function ExamsPage() {
   return (
     <>
-      <PageHeader title="Exams" description="Multiple-choice exams members take on Charter Mission. Build one here, try it as a draft, then publish it." />
+      <PageHeader
+        title="Exams"
+        description="Multiple-choice exams members take on Charter Mission. Build one here, try it as a draft, then publish it."
+        actions={
+          <Link href="/exams/instructors" className={buttonClasses({ variant: "secondary", size: "small" })}>
+            Instructors
+          </Link>
+        }
+      />
       <Suspense fallback={<SkeletonTable label="Loading exams" rows={4} />}>
         <Exams />
       </Suspense>

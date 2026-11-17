@@ -90,14 +90,81 @@ const optionalText = (max: number) =>
     .nullish()
     .transform((v) => (v ? v : null));
 
-/* ---------------- Certificate settings ---------------- */
-
 const isoDate = (message: string) =>
   z
     .string()
     .trim()
     .regex(/^\d{4}-\d{2}-\d{2}$/, message)
     .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v), message);
+
+/* ---------------- Instructors ---------------- */
+
+/*
+ * Instructors sign Charter Center certificates. Each has a name (instructor_name) and a signature
+ * image (instructor_signature_url), and is reused across exams. Editing one changes the
+ * certificates issued from then on for every exam that uses it; certificates already issued are
+ * then outdated ('issuer' / 'signature' differences) and can be replaced from each exam.
+ *
+ * Admin API (/api/v1, exam.manage):
+ *  GET    /admin/exam-instructors              ExamInstructorList — active first, by name. Archived ones
+ *                                              only with ?includeArchived=true.
+ *  POST   /admin/exam-instructors              ExamInstructorInput → 201 ExamInstructor
+ *  PATCH  /admin/exam-instructors/:id          UpdateExamInstructorInput → ExamInstructorSaved
+ *  POST   /admin/exam-instructors/:id/archive  ExamInstructor. Hidden from the picker; exams using it keep it.
+ *  POST   /admin/exam-instructors/:id/restore  ExamInstructor
+ *  DELETE /admin/exam-instructors/:id          Ok. CONFLICT while any exam uses it (archive it instead).
+ */
+
+/** An instructor as the admin console shows them. */
+export const ExamInstructor = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  signatureFileId: z.string().uuid(),
+  /** Public address of the signature image: the one Charter Center is sent. Null while the upload isn't usable. */
+  signatureUrl: z.string().nullable(),
+  archived: z.boolean(),
+  /** Exams whose certificate settings name this instructor (any status). */
+  examCount: z.number().int(),
+  createdAt: z.string(),
+});
+export type ExamInstructor = z.infer<typeof ExamInstructor>;
+
+/** The instructor named in an exam's certificate settings. */
+export const ExamInstructorLite = ExamInstructor.pick({ id: true, name: true, signatureUrl: true, archived: true });
+export type ExamInstructorLite = z.infer<typeof ExamInstructorLite>;
+
+/** GET /admin/exam-instructors */
+export type ExamInstructorList = { items: ExamInstructor[] };
+
+export const ExamInstructorsQuery = z.object({
+  includeArchived: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
+});
+export type ExamInstructorsQuery = z.infer<typeof ExamInstructorsQuery>;
+
+const instructorShape = {
+  /** Printed under the signature (instructor_name), e.g. "Eng. Abdalla Yousif". */
+  name: z.string().trim().min(2, "Write the instructor’s name").max(120, "At most 120 characters"),
+  /** Uploaded with purpose "certificate_signature" (sent as instructor_signature_url). */
+  signatureFileId: z.string({ message: "Upload the instructor’s signature" }).uuid("Upload the instructor’s signature").toLowerCase(),
+};
+
+/** POST /admin/exam-instructors */
+export const ExamInstructorInput = z.object(instructorShape);
+export type ExamInstructorInput = z.infer<typeof ExamInstructorInput>;
+
+/** PATCH /admin/exam-instructors/:id — the name and/or the signature. */
+export const UpdateExamInstructorInput = z
+  .object({ name: instructorShape.name.optional(), signatureFileId: instructorShape.signatureFileId.optional() })
+  .refine((v) => v.name !== undefined || v.signatureFileId !== undefined, "Nothing to change");
+export type UpdateExamInstructorInput = z.infer<typeof UpdateExamInstructorInput>;
+
+/** PATCH /admin/exam-instructors/:id — affectedExams: exams whose new certificates change (0 when nothing changed). */
+export type ExamInstructorSaved = ExamInstructor & { affectedExams: number };
+
+/* ---------------- Certificate settings ---------------- */
 
 /**
  * What Charter Center prints on the certificate of an exam. When a member passes, it is sent to
@@ -108,10 +175,8 @@ export const ExamCertificateSettings = z
   .object({
     /** The title on the certificate (course_title), e.g. "PMP Exam Prep". */
     title: z.string().trim().min(2, "Write the title for the certificate").max(200, "At most 200 characters"),
-    /** Who signs it (instructor_name), e.g. "Eng. Abdalla Yousif". */
-    issuerName: z.string().trim().min(2, "Write the issuer’s name").max(120, "At most 120 characters"),
-    /** The signature image, uploaded with purpose "certificate_signature" (sent as instructor_signature_url). */
-    signatureFileId: z.string({ message: "Upload the issuer’s signature" }).uuid("Upload the issuer’s signature"),
+    /** Who signs it: their name (instructor_name) and signature (instructor_signature_url), as they are when each certificate is sent. */
+    instructorId: z.string({ message: "Choose the instructor who signs the certificate" }).uuid("Choose the instructor who signs the certificate").toLowerCase(),
     /** The period on the certificate (start_from, start_end), as YYYY-MM-DD. */
     startDate: isoDate("Choose the start date"),
     endDate: isoDate("Choose the end date"),
@@ -130,8 +195,12 @@ export type ExamCertificateSettings = z.infer<typeof ExamCertificateSettings>;
 /** The certificate settings as the admin console shows them. */
 export const ExamCertificateSettingsView = z.object({
   title: z.string(),
+  /** Null only for settings saved before instructors existed (they name the signer directly). */
+  instructorId: z.string().uuid().nullable(),
+  instructor: ExamInstructorLite.nullable(),
+  /** Who signs new certificates and their signature: the instructor's current ones (null: nobody can sign). */
   issuerName: z.string(),
-  signatureFileId: z.string().uuid(),
+  signatureFileId: z.string().uuid().nullable(),
   /** Public address of the signature image: the one Charter Center is sent. */
   signatureUrl: z.string().nullable(),
   startDate: z.string(),

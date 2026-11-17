@@ -25,7 +25,11 @@ export const VOICE_NOTE_MAX_SECONDS = 300;
 /** The quick reactions under a message; any single emoji is accepted. */
 export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
 
-export const ConversationKind = z.enum(["direct", "group", "broadcast"]);
+/**
+ * official: the member's conversation with Charter Mission. Bulk messages from the admin land in it, and
+ * the member can reply; the Charter Mission team answers from the admin inbox. Never a message request.
+ */
+export const ConversationKind = z.enum(["direct", "group", "broadcast", "official"]);
 export type ConversationKind = z.infer<typeof ConversationKind>;
 export const ConversationStatus = z.enum(["active", "request", "declined"]);
 export type ConversationStatus = z.infer<typeof ConversationStatus>;

@@ -16,6 +16,7 @@ import {
   TrendingRules,
   ChapterPostsSettings,
   MediaSettings,
+  NetworkSettings,
   type AdminActionView,
   type AdminAppealRow,
   type AdminHiddenRow,
@@ -209,7 +210,7 @@ export class AdminAuditController {
   }
 }
 
-/** Platform settings editable in the console: video length limits (Media settings) and the chapter posting rule. */
+/** Platform settings editable in the console: video length limits (Media settings), networking limits (Network settings) and the chapter posting rule. */
 @Controller('admin/settings')
 export class AdminSettingsController {
   constructor(
@@ -221,6 +222,30 @@ export class AdminSettingsController {
   @Access('admin', 'settings.manage')
   media(): Promise<MediaSettings> {
     return this.settings.get('media_limits');
+  }
+
+  @Get('network')
+  @Access('admin', 'settings.manage')
+  network(): Promise<NetworkSettings> {
+    return this.settings.get('network');
+  }
+
+  /** Applies from now on: requests already sent in the last 24 hours count towards a new limit. */
+  @Put('network')
+  @Access('admin', 'settings.manage')
+  async updateNetwork(@Auth() ctx: AuthContext, @ZBody(NetworkSettings) input: NetworkSettings, @Req() req: AppRequest): Promise<NetworkSettings> {
+    const before = await this.settings.get('network');
+    await this.settings.set('network', input, ctx.user.id);
+    await this.audit.record({
+      actorId: ctx.user.id,
+      action: 'settings.network.updated',
+      targetType: 'setting',
+      targetId: 'network',
+      before,
+      after: input,
+      ip: clientIp(req),
+    });
+    return this.settings.get('network');
   }
 
   @Get('chapter-posts')

@@ -26,6 +26,7 @@ export const DEFAULT_PREFERENCES: Record<
   events: { in_app: true, email: true, push: true },
   opportunities: { in_app: true, email: true, push: true },
   digest: { in_app: false, email: false, push: false },
+  announcements: { in_app: true, email: true, push: true },
 };
 
 export const CATEGORY_OF: Record<
@@ -80,6 +81,7 @@ export const CATEGORY_OF: Record<
   booking_reminder: 'always',
   page_enquiry: 'always',
   exam_certificate_name: 'always',
+  announcement: 'announcements',
 };
 
 export interface NotifyInput {
@@ -96,6 +98,8 @@ export interface NotifyInput {
   dedupeKey: string;
   /** Batch window in minutes; reactions batch per object. Default 15 (spec proposed). */
   windowMinutes?: number;
+  /** In-app even when the member turned the category off (important service notices from Charter Mission). */
+  forceInApp?: boolean;
   /** Optional email copy for categories where the member allows email. */
   email?: {
     subject: string;
@@ -158,6 +162,7 @@ export class NotifyService {
     const category = CATEGORY_OF[input.type];
     const inApp =
       category === 'always' ||
+      !!input.forceInApp ||
       (await this.enabled(input.userId, category, 'in_app'));
     if (inApp)
       await this.upsert(input, category === 'always' ? 'moderation' : category);

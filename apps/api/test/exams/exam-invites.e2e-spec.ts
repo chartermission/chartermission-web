@@ -33,6 +33,7 @@ describe('Exams by invitation link, and Charter Center certificates for those wh
   let exam: AdminExamDetail;
   let pageId: string;
   let signatureFileId: string;
+  let instructorId: string;
   /** What the (mock) Charter Center was sent. */
   const sent: CertificateRequest[] = [];
 
@@ -50,23 +51,34 @@ describe('Exams by invitation link, and Charter Center certificates for those wh
     const original = mock.certificate.bind(mock);
     mock.certificate = (r) => (sent.push(r), original(r));
 
-    // The issuer's signature, uploaded in the console.
+    // The instructor who signs, with their signature uploaded in the console.
     const signature = await sharp({ create: { width: 300, height: 100, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
     signatureFileId = await uploadBytes(t, admin, { purpose: 'certificate_signature' as 'post_image', fileName: 'signature.png', mime: 'image/png', data: signature });
     await admin.post(`/uploads/${signatureFileId}/complete`).expect(200);
+    instructorId = (await admin.post('/admin/exam-instructors', { name: 'Eng. Abdalla Yousif', signatureFileId }).expect(201)).body.id;
 
     exam = (await admin.post('/admin/exams', { title: 'CAPM Mock Exam', passPercent: 50 }).expect(201)).body as AdminExamDetail;
     expect(exam).toMatchObject({ awardsCertificate: false, certificate: null });
     for (const [i, p] of ['First', 'Second'].entries()) await admin.post(`/admin/exams/${exam.id}/questions`, question(`${p} question?`, i)).expect(201);
     exam = (await admin.patch(`/admin/exams/${exam.id}`, { status: 'published', certificate: CERTIFICATE() }).expect(200)).body as AdminExamDetail;
-    expect(exam).toMatchObject({ shareCertificates: true, awardsCertificate: true, certificate: { ...CERTIFICATE(), signatureUrl: expect.stringMatching(new RegExp(`/exam-signatures/${signatureFileId}\\.png$`)) } });
+    expect(exam).toMatchObject({
+      shareCertificates: true,
+      awardsCertificate: true,
+      certificate: {
+        ...CERTIFICATE(),
+        instructor: { id: instructorId, name: 'Eng. Abdalla Yousif', archived: false },
+        issuerName: 'Eng. Abdalla Yousif',
+        signatureFileId,
+        signatureUrl: expect.stringMatching(new RegExp(`/exam-signatures/${signatureFileId}\\.png$`)),
+      },
+    });
     expect(exam).not.toHaveProperty('charterCenterCourseId');
   });
   afterAll(async () => {
     await t.close();
   });
 
-  const CERTIFICATE = () => ({ title: 'PMP Exam Prep', issuerName: 'Eng. Abdalla Yousif', signatureFileId, startDate: '2026-01-01', endDate: '2026-01-15' });
+  const CERTIFICATE = () => ({ title: 'PMP Exam Prep', instructorId, startDate: '2026-01-01', endDate: '2026-01-15' });
 
   const invite = (m: Member, slug = exam.slug) => m.post(`/exams/${slug}/access`);
 
@@ -142,10 +154,11 @@ describe('Exams by invitation link, and Charter Center certificates for those wh
     const bad = (certificate: object) => admin.patch(`/admin/exams/${exam.id}`, { certificate }).expect(422);
     expect(JSON.stringify((await bad({ ...CERTIFICATE(), endDate: '2025-12-31' })).body)).toContain('end date');
     await bad({ ...CERTIFICATE(), startDate: '2026-02-30' });
-    await bad({ ...CERTIFICATE(), issuerName: '' });
+    expect(JSON.stringify((await bad({ ...CERTIFICATE(), instructorId: '' })).body)).toContain('Choose the instructor');
     const notASignature = await uploadBytes(t, admin, { purpose: 'post_image', fileName: 'x.png', mime: 'image/png', data: await sharp({ create: { width: 10, height: 10, channels: 3, background: '#fff' } }).png().toBuffer() });
     await admin.post(`/uploads/${notASignature}/complete`).expect(200);
-    expect(JSON.stringify((await bad({ ...CERTIFICATE(), signatureFileId: notASignature })).body)).toContain('signature');
+    const refused = await admin.post('/admin/exam-instructors', { name: 'Someone Else', signatureFileId: notASignature }).expect(422);
+    expect(refused.body.error.fields).toEqual({ signatureFileId: 'Upload the instructor’s signature again' });
 
     const res = await t.http().get(new URL(exam.certificate!.signatureUrl!).pathname).expect(200);
     expect(res.headers['content-type']).toBe('image/png');

@@ -10,14 +10,17 @@ import { isActiveUntil } from '../core/policy.js';
 import { EventsService } from '../infra/events.service.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
+import { SettingsService } from '../infra/settings.service.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import { ProfilesService } from './profiles.service.js';
 import { isUniqueViolation } from './pg-error.js';
 
-/** Spec 4.6 (proposed): 30-day cool-off after a decline; 50 outgoing requests per day. */
+/**
+ * Spec 4.6 (proposed): 30-day cool-off after a decline. Outgoing requests per 24 hours are capped
+ * only when a Platform Admin sets a limit (settings key "network"; no limit by default).
+ */
 export const DECLINE_COOL_OFF_DAYS = 30;
-export const DAILY_REQUEST_CAP = 50;
 
 const HIDDEN_STATUSES = ['deactivated', 'deletion_pending', 'deleted'];
 
@@ -37,6 +40,7 @@ export class ConnectionsService {
     private readonly events: EventsService,
     private readonly analytics: AnalyticsService,
     private readonly limits: RateLimitService,
+    private readonly settings: SettingsService,
   ) {}
 
   /** POST /connections */
@@ -54,8 +58,16 @@ export class ConnectionsService {
     if (me.isOfficial) throw Errors.forbidden('Official Charter Mission accounts can’t send connection requests. Members follow this account instead.');
     if (target.connectionRequestsFrom === 'nobody') throw Errors.forbidden('This member isn’t accepting connection requests');
 
+    // Counted always, so a limit set later applies to the requests already sent today.
     const dailyKey = `connections:day:${me.id}`;
-    await this.limits.assertBelow(dailyKey, DAILY_REQUEST_CAP);
+    const { dailyConnectionRequestLimit: cap } = await this.settings.get('network');
+    if (cap !== null) {
+      await this.limits.assertBelow(
+        dailyKey,
+        cap,
+        cap === 1 ? 'You can send 1 connection request a day.' : `You can send up to ${cap} connection requests a day.`,
+      );
+    }
 
     const [open] = await this.db
       .select({ requesterId: connections.requesterId, status: connections.status })

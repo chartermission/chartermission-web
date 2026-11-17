@@ -6,14 +6,14 @@ import { promisify } from 'node:util';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { and, eq, ilike, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import sharp from 'sharp';
-import type { ExamCertificateDifference, ExamCertificateSettings, ExamCertificateView } from '@chartermission/contracts';
+import type { ExamCertificateDifference, ExamCertificateView } from '@chartermission/contracts';
 import { NotifyService } from '../core/notify.service.js';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
 import { examCertificates, exams, files, memberProfiles, pages, postAttachments, posts, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
-import { env, isProd } from '../config/env.js';
+import { isProd } from '../config/env.js';
 import { SessionService } from '../core/session.service.js';
 import { mediaUrl } from '../core/members.service.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
@@ -25,6 +25,9 @@ import { MediaService } from '../media/media.service.js';
 import { PostsService } from '../posts/posts.service.js';
 import { isUuid } from '../media/uuid-param.js';
 import { CHARTER_CENTER_EXAMS_CLIENT, jpegToPdf, type CertificateRequest, type CharterCenterExamsClient } from './charter-center-exams.client.js';
+import { resolveCertificate, signatureUrl, type CertificateTerms, type ResolvedExamCertificate } from './exam-instructors.js';
+
+export { signatureUrl };
 
 export type CertificateRow = typeof examCertificates.$inferSelect;
 
@@ -85,12 +88,13 @@ export interface ReplacedCertificate {
 
 /**
  * How a request sent to Charter Center differs from what would be sent now: the exam's certificate
- * settings, and (when given) the name that would be printed now (the name the member confirmed for
- * the certificate, else their current profile name). The signature is compared by its file, so
- * a change of the API's public address doesn't make every certificate look outdated.
+ * settings with its instructor's current name and signature (resolveCertificate), and (when given)
+ * the name that would be printed now (the name the member confirmed for the certificate, else their
+ * current profile name). The signature is compared by its file, so a change of the API's public
+ * address doesn't make every certificate look outdated, while a new signature for the instructor does.
  * Keep in step with the SQL in AdminExamCertificatesService.
  */
-export function requestDifferences(request: CertificateRequest, settings: ExamCertificateSettings, studentName?: string | null): ExamCertificateDifference[] {
+export function requestDifferences(request: CertificateRequest, settings: CertificateTerms, studentName?: string | null): ExamCertificateDifference[] {
   const out: ExamCertificateDifference[] = [];
   if (request.course_title !== settings.title) out.push('title');
   if (request.instructor_name !== settings.issuerName) out.push('issuer');
@@ -99,15 +103,6 @@ export function requestDifferences(request: CertificateRequest, settings: ExamCe
   if (!(request.instructor_signature_url ?? '').includes(settings.signatureFileId)) out.push('signature');
   if (studentName != null && request.student_name !== studentName) out.push('name');
   return out;
-}
-
-/**
- * Public address of an exam's certificate signature (GET /exam-signatures/{fileId}.{ext}): the
- * instructor_signature_url Charter Center is sent. Absolute, and served without signing in.
- */
-export function signatureUrl(fileId: string, mime: string | null): string {
-  const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : 'png';
-  return `${env().API_PUBLIC_URL.replace(/\/$/, '')}/exam-signatures/${fileId}.${ext}`;
 }
 
 const run = promisify(execFile);
@@ -320,27 +315,34 @@ export class ExamCertificatesService implements OnModuleInit {
     return normalName(p?.name);
   }
 
+  /** The exam's certificate settings with its instructor's current name and signature (null: none, or nobody to sign). */
+  resolve(certificate: unknown): Promise<ResolvedExamCertificate | null> {
+    return resolveCertificate(this.db, certificate);
+  }
+
   /**
    * What Charter Center is sent: the name the member confirmed for the certificate (else their name
-   * as on their profile), and the exam's certificate settings.
+   * as on their profile), and the exam's certificate settings with the instructor's name and
+   * signature as they are now. Null when there are no settings or nobody to sign them.
    */
-  async buildRequest(settings: ExamCertificateSettings, userId: string, certificateName?: string | null): Promise<CertificateRequest | null> {
+  async buildRequest(certificate: unknown, userId: string, certificateName?: string | null): Promise<CertificateRequest | null> {
+    const settings = await this.resolve(certificate);
+    if (!settings) return null;
     const [member] = await this.db
       .select({ name: memberProfiles.displayName, email: users.email })
       .from(users)
       .leftJoin(memberProfiles, eq(memberProfiles.userId, users.id))
       .where(eq(users.id, userId))
       .limit(1);
-    const [signature] = await this.db.select({ mime: files.mime }).from(files).where(eq(files.id, settings.signatureFileId)).limit(1);
     if (!member) return null;
     return {
       student_name: certificateName || member.name?.trim() || member.email.split('@')[0]!,
       course_title: settings.title,
       start_from: settings.startDate,
       start_end: settings.endDate,
-      exam_hours: settings.hours ?? null,
+      exam_hours: settings.hours,
       instructor_name: settings.issuerName,
-      instructor_signature_url: signatureUrl(settings.signatureFileId, signature?.mime ?? null),
+      instructor_signature_url: signatureUrl(settings.signatureFileId, settings.signatureMime),
     };
   }
 
@@ -356,6 +358,12 @@ export class ExamCertificatesService implements OnModuleInit {
     const data = await this.media.storage.read(file.storageKey);
     if (!data) throw Errors.notFound('File');
     return { data, mime: file.mime };
+  }
+
+  /** The request differs from what the exam's certificate settings and instructor would send now. */
+  private async outdated(request: CertificateRequest, certificate: unknown): Promise<boolean> {
+    const settings = await this.resolve(certificate);
+    return !!settings && requestDifferences(request, settings).length > 0;
   }
 
   /** The member's certificate for an exam, or null. */
@@ -493,9 +501,9 @@ export class ExamCertificatesService implements OnModuleInit {
         return;
       }
       await this.db.update(examCertificates).set({ request: { ...request } }).where(eq(examCertificates.id, row.id));
-    } else if (request && !row.imageFileId && !row.pdfFileId && exam.certificate && requestDifferences(request, exam.certificate).length) {
-      // Not issued yet, and the exam's certificate settings were changed since the member passed:
-      // send the current ones, so it isn't issued with settings already corrected.
+    } else if (request && !row.imageFileId && !row.pdfFileId && exam.certificate && (await this.outdated(request, exam.certificate))) {
+      // Not issued yet, and the exam's certificate settings (or its instructor) were changed since
+      // the member passed: send the current ones, so it isn't issued with settings already corrected.
       const fresh = await this.buildRequest(exam.certificate, row.userId, row.certificateName);
       if (fresh) {
         request = fresh;

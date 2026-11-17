@@ -906,6 +906,20 @@ export const MediaSettings = z.object({
 });
 export type MediaSettings = z.infer<typeof MediaSettings>;
 
+/**
+ * Networking limits, set by Platform Admins (GET/PUT /admin/settings/network).
+ * dailyConnectionRequestLimit: connection requests a member can send in 24 hours; null = no limit (the default).
+ */
+export const NetworkSettings = z.object({
+  dailyConnectionRequestLimit: z
+    .number({ message: "Enter a whole number" })
+    .int("Enter a whole number")
+    .min(1, "At least 1")
+    .max(10_000, "At most 10,000")
+    .nullable(),
+});
+export type NetworkSettings = z.infer<typeof NetworkSettings>;
+
 /** "1:05", "10:00", "1:02:03". */
 export function formatDuration(totalSeconds: number): string {
   const t = Math.max(0, Math.round(totalSeconds));

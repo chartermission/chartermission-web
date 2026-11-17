@@ -29,6 +29,8 @@ export const PERM = {
   chaptersAdmin: "chapters.admin",
   /** Verified tick, badges and featured sign-up suggestions. Platform Admin and above. */
   membersManage: "members.manage",
+  /** Messages from Charter Mission: bulk messages and the Charter Mission inbox. Platform Admin and above. */
+  membersMessage: "members.message",
   /** Badge catalogue. Platform Admin and above. */
   badgesManage: "badges.manage",
   rolesManage: "roles.manage",
@@ -74,6 +76,7 @@ export type NavKey =
   | "courses"
   | "exams"
   | "members"
+  | "messages"
   | "verification"
   | "referrals"
   | "badges"
@@ -83,6 +86,7 @@ export type NavKey =
   | "ambassador-team"
   | "learning-access"
   | "media"
+  | "network"
   | "audit";
 
 export type ConsoleNavItem = {
@@ -106,6 +110,7 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "courses", href: "/courses", label: "Courses", icon: "book", permission: PERM.courseCurate },
   { key: "exams", href: "/exams", label: "Exams", icon: "clipboard", permission: PERM.examManage },
   { key: "members", href: "/members", label: "Members", icon: "user", permission: PERM.membersManage },
+  { key: "messages", href: "/messages", label: "Messages", icon: "mail", permission: PERM.membersMessage },
   { key: "verification", href: "/verification", label: "Verification", icon: "verified", permission: PERM.membersManage },
   { key: "referrals", href: "/referrals", label: "Referrals", icon: "user-plus", permission: PERM.membersManage },
   { key: "badges", href: "/badges", label: "Badges", icon: "verified", permission: PERM.badgesManage },
@@ -115,6 +120,7 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "ambassador-team", href: "/ambassadors/team", label: "Ambassador team", icon: "users", permission: PERM.ambassadorManagers },
   { key: "learning-access", href: "/settings/learning", label: "E-learning access", icon: "target", permission: PERM.courseCurate },
   { key: "media", href: "/settings/media", label: "Media settings", icon: "video", permission: PERM.settingsManage },
+  { key: "network", href: "/settings/network", label: "Network settings", icon: "users", permission: PERM.settingsManage },
   { key: "audit", href: "/audit", label: "Audit log", icon: "clock", permission: PERM.auditView },
 ];
 

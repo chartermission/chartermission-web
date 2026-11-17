@@ -20,7 +20,13 @@ export function renderEmail(opts: {
   footer?: string;
   /** Page language (lang attribute); Arabic is laid out right to left. */
   lang?: string;
+  /** Plain text written by a person: links become clickable and single line breaks are kept. */
+  autolink?: boolean;
+  /** Links under the footer text (e.g. unsubscribe, notification settings). */
+  footerLinks?: { label: string; url: string }[];
 }) {
+  const footerLinks = opts.footerLinks ?? [];
+  const paragraph = (p: string) => (opts.autolink ? linkify(p) : esc(p));
   const dir = opts.lang === 'ar' ? 'rtl' : 'ltr';
   const align = dir === 'rtl' ? 'right' : 'left';
   const text = [
@@ -30,6 +36,7 @@ export function renderEmail(opts: {
     ...(opts.button ? [`${opts.button.label}: ${opts.button.url}`, ''] : []),
     opts.footer ??
       'Charter Mission — where Africa and its diaspora build together.',
+    ...footerLinks.map((l) => `${l.label}: ${l.url}`),
   ].join('\n');
   const html = `<!doctype html><html lang="${esc(opts.lang ?? 'en')}" dir="${dir}"><body dir="${dir}" style="text-align:${align};margin:0;background:#F8F9FC;font-family:Inter,Segoe UI,Arial,sans-serif;color:#1A202C">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
@@ -37,12 +44,26 @@ export function renderEmail(opts: {
 <tr><td style="padding:24px 32px;border-bottom:1px solid #E2E8F0"><img src="${esc(webUrl('/brand/charter-mission-mark.png'))}" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;border-radius:8px;margin-${dir === 'rtl' ? 'left' : 'right'}:10px"><span style="font-size:18px;font-weight:700;color:#046D35;vertical-align:middle">Charter</span> <span style="font-size:18px;font-weight:700;color:#ED0918;vertical-align:middle">Mission</span></td></tr>
 <tr><td style="padding:32px">
 <h1 style="font-size:22px;line-height:30px;margin:0 0 16px">${esc(opts.heading)}</h1>
-${opts.paragraphs.map((p) => `<p style="font-size:15px;line-height:22px;margin:0 0 16px;color:#475569">${esc(p)}</p>`).join('')}
+${opts.paragraphs.map((p) => `<p style="font-size:15px;line-height:22px;margin:0 0 16px;color:#475569">${paragraph(p)}</p>`).join('')}
 ${opts.button ? `<p style="margin:24px 0"><a href="${esc(opts.button.url)}" style="display:inline-block;background:#046D35;color:#FFFFFF;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px">${esc(opts.button.label)}</a></p><p style="font-size:12px;color:#718096;word-break:break-all">${esc(opts.button.url)}</p>` : ''}
 </td></tr>
-<tr><td style="padding:16px 32px;border-top:1px solid #E2E8F0;font-size:12px;color:#718096">${esc(opts.footer ?? 'Charter Mission — where Africa and its diaspora build together.')}</td></tr>
+<tr><td style="padding:16px 32px;border-top:1px solid #E2E8F0;font-size:12px;color:#718096">${esc(opts.footer ?? 'Charter Mission — where Africa and its diaspora build together.')}${footerLinks.length ? `<br>${footerLinks.map((l) => `<a href="${esc(l.url)}" style="color:#046D35">${esc(l.label)}</a>`).join(' · ')}` : ''}</td></tr>
 </table></td></tr></table></body></html>`;
   return { text, html };
+}
+
+/** Escapes the text, makes http(s) links clickable (trailing punctuation stays outside) and keeps line breaks. */
+export function linkify(text: string): string {
+  return text
+    .split(/(https?:\/\/[^\s<>"]+)/gi)
+    .map((part, i) => {
+      if (i % 2 === 0) return esc(part);
+      const trail = /[.,!?;:)\]}'’”]+$/.exec(part)?.[0] ?? '';
+      const url = trail ? part.slice(0, -trail.length) : part;
+      return `<a href="${esc(url)}" style="color:#046D35">${esc(url)}</a>${esc(trail)}`;
+    })
+    .join('')
+    .replace(/\r?\n/g, '<br>');
 }
 
 export const webUrl = (path: string) =>

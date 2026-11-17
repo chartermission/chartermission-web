@@ -40,7 +40,7 @@ const POLL_MS = 15_000;
 
 const DIFFERENCE_LABEL: Record<ExamCertificateDifference, string> = {
   title: "Title",
-  issuer: "Issuer",
+  issuer: "Instructor",
   dates: "Dates",
   hours: "Hours",
   signature: "Signature",

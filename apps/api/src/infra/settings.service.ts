@@ -9,6 +9,7 @@ import {
   type ChapterPostsSettings,
   type LearningAccessRules,
   type MediaSettings,
+  type NetworkSettings,
   type PagesSettings,
   type PolicyVersions,
   type TrendingRules,
@@ -34,6 +35,10 @@ export const SETTING_DEFAULTS = {
   chapter_posts: CHAPTER_POSTS_DEFAULTS as ChapterPostsSettings,
   /** The page Charter Center certificate posts name and appear on; null finds a page named Charter Center (admin console, Exams). */
   exam_certificates: { pageId: null as string | null },
+  /** Connection requests a member can send in 24 hours; null = no limit (admin console, Network settings). */
+  network: { dailyConnectionRequestLimit: null } as NetworkSettings,
+  /** The official account bulk messages and Charter Mission inbox replies come from (admin console, Messages settings). */
+  messaging: { senderId: null as string | null },
 };
 
 type SettingKey = keyof typeof SETTING_DEFAULTS;

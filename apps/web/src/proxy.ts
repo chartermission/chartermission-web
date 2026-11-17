@@ -30,7 +30,7 @@ const PREVIEW_BOT = /WhatsApp|facebookexternalhit|facebookcatalog|Facebot|meta-e
 const PREVIEW_PATH = /^\/(?:[a-z0-9][a-z0-9-]{1,59}|(?:chapters|events|pages|opportunities|posts|articles|initiatives)\/[^/]+)\/?$/i;
 
 /** Public pages keep their own previews. */
-const PUBLIC_PAGES = new Set(["check-email", "forgot-password", "guidelines", "policies", "privacy", "reset-password", "sign-in", "signin", "signup", "terms", "verify-email"]);
+const PUBLIC_PAGES = new Set(["check-email", "forgot-password", "guidelines", "policies", "privacy", "reset-password", "sign-in", "signin", "signup", "terms", "unsubscribe", "verify-email"]);
 
 /** Exam invitation links: open to everyone (people without an account start here). */
 const EXAM_JOIN = /^\/exams\/([a-z0-9][a-z0-9-]{0,99})\/join\/?$/i;

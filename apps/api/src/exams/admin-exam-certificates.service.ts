@@ -8,13 +8,12 @@ import type {
   AskCertificateNamesResult,
   DeclineCertificateNameInput,
   ExamCertificateDifference,
-  ExamCertificateSettings,
   ReissueExamCertificatesInput,
   ReissueExamCertificatesResult,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { CertificateRequest } from './charter-center-exams.client.js';
-import { examCertificates, exams, memberProfiles, posts, users } from '../db/schema.js';
+import { examCertificates, examInstructors, exams, memberProfiles, posts, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
@@ -24,6 +23,7 @@ import { QueueService } from '../infra/queue.service.js';
 import { likeContains } from '../learning/courses.service.js';
 import { isUuid } from '../media/uuid-param.js';
 import { ExamCertificatesService, replacingSql as replacing, type CertificateRow } from './exam-certificates.service.js';
+import { instructorOfExam, storedCertificate, type CertificateTerms } from './exam-instructors.js';
 
 /** Replacements asked for together are spread out by this much each (a few a second). */
 const REISSUE_SPACING_MS = 350;
@@ -45,11 +45,11 @@ const pendingSql = sql`(${examCertificates.status} = 'pending' and ${examCertifi
 
 /**
  * How each certificate differs from what would be sent to Charter Center now (the exam's current
- * certificate settings and the member's current name), as SQL over exam_certificates.request.
- * Same rules as requestDifferences() in exam-certificates.service.ts. Only meaningful for issued
- * certificates with a request; see `outdated`.
+ * certificate settings with its instructor's current name and signature, and the member's current
+ * name), as SQL over exam_certificates.request. Same rules as requestDifferences() in
+ * exam-certificates.service.ts. Only meaningful for issued certificates with a request; see `outdated`.
  */
-function differenceSql(settings: ExamCertificateSettings): Record<ExamCertificateDifference, SQL<boolean>> {
+function differenceSql(settings: CertificateTerms): Record<ExamCertificateDifference, SQL<boolean>> {
   const r = examCertificates.request;
   return {
     title: sql<boolean>`((${r}->>'course_title') is distinct from ${settings.title}::text)`,
@@ -62,7 +62,7 @@ function differenceSql(settings: ExamCertificateSettings): Record<ExamCertificat
 }
 
 /** Issued certificates that differ from what would be issued now (needs users and member_profiles joined). */
-function outdatedSql(settings: ExamCertificateSettings | null): SQL {
+function outdatedSql(settings: CertificateTerms | null): SQL {
   if (!settings) return sql`false`;
   const d = differenceSql(settings);
   return sql`(${examCertificates.status} = 'issued' and ${examCertificates.request} is not null and (${sql.join(
@@ -71,7 +71,8 @@ function outdatedSql(settings: ExamCertificateSettings | null): SQL {
   )}))`;
 }
 
-type ExamForCertificates = { id: string; certificate: ExamCertificateSettings | null };
+/** certificate: the exam's settings with the signer resolved (null: no settings, or nobody to sign them). */
+type ExamForCertificates = { id: string; certificate: CertificateTerms | null };
 
 /**
  * Admin console: an exam's issued certificates, and replacing them when the certificate settings
@@ -300,9 +301,27 @@ export class AdminExamCertificatesService {
 
   private async exam(id: string): Promise<ExamForCertificates> {
     if (!isUuid(id)) throw Errors.notFound('Exam');
-    const [row] = await this.db.select({ id: exams.id, certificate: exams.certificate }).from(exams).where(eq(exams.id, id.toLowerCase())).limit(1);
+    // The signer is the instructor's current name and signature (settings saved before instructors: the old keys).
+    const [row] = await this.db
+      .select({
+        id: exams.id,
+        certificate: exams.certificate,
+        issuerName: sql<string | null>`coalesce(${examInstructors.name}, ${exams.certificate}->>'issuerName')`,
+        signatureFileId: sql<string | null>`coalesce(${examInstructors.signatureFileId}::text, ${exams.certificate}->>'signatureFileId')`,
+      })
+      .from(exams)
+      .leftJoin(examInstructors, instructorOfExam)
+      .where(eq(exams.id, id.toLowerCase()))
+      .limit(1);
     if (!row) throw Errors.notFound('Exam');
-    return row;
+    const stored = storedCertificate(row.certificate);
+    return {
+      id: row.id,
+      certificate:
+        stored && row.issuerName && row.signatureFileId
+          ? { title: stored.title, startDate: stored.startDate, endDate: stored.endDate, hours: stored.hours ?? null, issuerName: row.issuerName, signatureFileId: row.signatureFileId }
+          : null,
+    };
   }
 
   private async rows(exam: ExamForCertificates, where: SQL, limit: number): Promise<{ t: string; item: AdminExamCertificate }[]> {

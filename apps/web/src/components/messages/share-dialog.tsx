@@ -161,7 +161,7 @@ function SendInMessageDialog({ target, initialNote = "", title, onClose }: { tar
                     )}
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate text-sm font-medium text-ink">{name}</span>
-                      <span className="truncate text-xs text-secondary">{r.type === "conversation" ? (r.kind === "group" ? t("Group") : t("Recent chat")) : t("Connection")}</span>
+                      <span className="truncate text-xs text-secondary">{r.type === "conversation" ? (r.kind === "group" ? t("Group") : r.kind === "official" ? t("Official account") : t("Recent chat")) : t("Connection")}</span>
                     </span>
                     <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border", selected ? "border-primary bg-primary text-inverse" : "border-line")}>
                       {selected && <Icon name="check" size={12} />}

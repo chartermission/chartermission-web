@@ -122,7 +122,7 @@ export class MessagesService implements OnModuleInit {
       .select({ c: conversations })
       .from(conversations)
       .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, conversations.id), eq(conversationMembers.userId, user.id)))
-      .where(and(isNull(conversationMembers.leftAt), isNotNull(conversations.lastMessageAt), boxCondition))
+      .where(and(isNull(conversationMembers.leftAt), isNotNull(conversations.lastMessageAt), notTeamSide(user.id), boxCondition))
       .orderBy(sql`${conversationMembers.pinnedAt} desc nulls last`, desc(conversations.lastMessageAt))
       .limit(300);
     await this.promoteConnectedRequests(
@@ -142,7 +142,7 @@ export class MessagesService implements OnModuleInit {
       .select({ c: conversations, m: conversationMembers })
       .from(conversations)
       .innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, conversations.id), eq(conversationMembers.userId, user.id)))
-      .where(and(isNull(conversationMembers.leftAt), isNotNull(conversations.lastMessageAt), ne(conversations.status, 'declined')))
+      .where(and(isNull(conversationMembers.leftAt), isNotNull(conversations.lastMessageAt), ne(conversations.status, 'declined'), notTeamSide(user.id)))
       .limit(1000);
     const now = Date.now();
     const counts = await this.views.unreadCounts(
@@ -283,7 +283,7 @@ export class MessagesService implements OnModuleInit {
     // A member who joined a group later sees it from when they joined; one who left, up to then.
     const window = and(
       eq(messages.conversationId, row.id),
-      member && row.kind !== 'direct' ? sql`${messages.createdAt} >= ${member.joinedAt.toISOString()}::timestamptz - interval '1 second'` : undefined,
+      member && row.kind !== 'direct' && row.kind !== 'official' ? sql`${messages.createdAt} >= ${member.joinedAt.toISOString()}::timestamptz - interval '1 second'` : undefined,
       member?.leftAt ? lte(messages.createdAt, member.leftAt) : undefined,
     );
     if (q.after) {
@@ -365,6 +365,7 @@ export class MessagesService implements OnModuleInit {
     const [current] = await this.views.conversations(user.id, [row], (chapterId) => this.isChapterTeam(user, chapterId));
     if (!current) throw Errors.notFound('That conversation');
     if (!current.canSend) throw Errors.forbidden(current.cantSendReason ?? 'You can’t send messages in this conversation');
+    if (row.kind === 'official' && input.meeting) throw Errors.forbidden('You can’t propose a meeting to Charter Mission');
 
 
     // Attachments must be the sender's own clean uploads of the right kind.
@@ -428,7 +429,7 @@ export class MessagesService implements OnModuleInit {
     });
 
     const [view] = await this.views.messages(null, [message]);
-    await this.deliver(user, row, current.title, message, view!);
+    await this.deliver(user.id, row, current.title, message, view!);
     if (link && !parseableEmbed(link)) await this.queue.add('events', 'message-link-preview', { conversationId: row.id, userId: user.id, messageId: message.id });
     return (await this.views.messages(user.id, [message]))[0]!;
   }
@@ -595,6 +596,7 @@ export class MessagesService implements OnModuleInit {
         and(
           isNull(conversationMembers.leftAt),
           ne(conversations.status, 'declined'),
+          notTeamSide(user.id),
           isNull(messages.deletedAt),
           eq(messages.moderationState, 'visible'),
           ne(messages.kind, 'system'),
@@ -779,7 +781,7 @@ export class MessagesService implements OnModuleInit {
   /** DELETE /messages/groups/{id}/members/{memberId} — an admin removes someone, or a member leaves (memberId = their own). */
   async removeMember(user: AuthUser, conversationId: string, memberId: string): Promise<void> {
     const { conversation, member } = await this.access(user, conversationId);
-    if (conversation.kind === 'direct') throw Errors.conflict('You can’t leave a private conversation; archive or block instead');
+    if (conversation.kind === 'direct' || conversation.kind === 'official') throw Errors.conflict('You can’t leave a private conversation; archive or block instead');
     const self = memberId === user.id;
     if (conversation.kind === 'broadcast') {
       if (!self) throw Errors.forbidden('Members turn announcements off themselves');
@@ -908,22 +910,34 @@ export class MessagesService implements OnModuleInit {
 
   /* ======================= Delivery ======================= */
 
-  /** Live event to everyone in it; for the others (not muted): a notification, a push when away, and a delayed email if it stays unread. */
-  private async deliver(sender: AuthUser, row: ConversationRow, title: string, message: MessageRow, view: MessageView) {
-    const people = await this.db
+  /**
+   * Live event to everyone in it; for the others (not muted): a notification, a push when away, and a delayed email if it stays unread.
+   * Official conversations: only the member is told (the Charter Mission side reads them in the admin inbox). `quiet` turns parts
+   * off for bulk messages that already come with their own notification or email.
+   */
+  private async deliver(
+    senderId: string,
+    row: ConversationRow,
+    title: string,
+    message: MessageRow,
+    view: MessageView,
+    quiet: { notification?: boolean; email?: boolean } = {},
+  ) {
+    const all = await this.db
       .select()
       .from(conversationMembers)
       .where(and(eq(conversationMembers.conversationId, row.id), isNull(conversationMembers.leftAt)));
+    const people = row.kind === 'official' ? all.filter((p) => p.userId !== row.createdBy) : all;
     await this.realtime.publish(
       people.map((p) => p.userId),
       { type: 'message', conversationId: row.id, message: view } satisfies MessageStreamEvent,
     );
     if (message.kind === 'system') return;
-    const senderName = (await this.members.ref(sender.id))?.name ?? 'A member';
+    const senderName = (await this.members.ref(senderId))?.name ?? 'A member';
     const now = Date.now();
     const text = summary(message, view.attachments.length) || 'New message';
-    const recipients = people.filter((p) => p.userId !== sender.id && !(p.mutedUntil && p.mutedUntil.getTime() > now));
-    const isRequest = row.status === 'request' && row.requestedBy === sender.id;
+    const recipients = people.filter((p) => p.userId !== senderId && !(p.mutedUntil && p.mutedUntil.getTime() > now));
+    const isRequest = row.status === 'request' && row.requestedBy === senderId;
     for (const p of recipients) {
       const segments =
         row.kind === 'broadcast'
@@ -933,37 +947,125 @@ export class MessagesService implements OnModuleInit {
             : isRequest
               ? [{ text: ' sent you a message request', strong: false }]
               : [{ text: ' sent you a message', strong: false }];
-      await this.notify
-        .notify({
-          userId: p.userId,
-          type: 'message_received',
-          actorId: sender.id,
-          objectType: 'conversation',
-          objectId: row.id,
-          segments,
-          href: `/messages/${row.id}`,
-          icon: 'avatar',
-          dedupeKey: `message:${row.id}:${p.userId}:${new Date().toISOString().slice(0, 10)}`,
-        })
-        .catch(() => undefined);
-      if (!(await this.realtime.isOnline(p.userId))) {
-        await this.push
-          .send(p.userId, {
-            title: row.kind === 'direct' ? (isRequest ? `${senderName} · message request` : senderName) : `${senderName} · ${title}`,
-            body: text,
+      if (!quiet.notification) {
+        await this.notify
+          .notify({
+            userId: p.userId,
+            type: 'message_received',
+            actorId: senderId,
+            objectType: 'conversation',
+            objectId: row.id,
+            segments,
             href: `/messages/${row.id}`,
-            tag: `conversation-${row.id}`,
+            icon: 'avatar',
+            dedupeKey: `message:${row.id}:${p.userId}:${new Date().toISOString().slice(0, 10)}`,
           })
           .catch(() => undefined);
+        if (!(await this.realtime.isOnline(p.userId))) {
+          await this.push
+            .send(p.userId, {
+              title: row.kind === 'direct' || row.kind === 'official' ? (isRequest ? `${senderName} · message request` : senderName) : `${senderName} · ${title}`,
+              body: text,
+              href: `/messages/${row.id}`,
+              tag: `conversation-${row.id}`,
+            })
+            .catch(() => undefined);
+        }
       }
       // Announcements stay in the app; direct and group messages get an email if still unread later.
-      if (row.kind !== 'broadcast') {
+      if (row.kind !== 'broadcast' && !quiet.email) {
         const bucket = Math.floor(now / UNREAD_EMAIL_DELAY_MS);
         await this.queue
           .add('events', 'message-unread-email', { conversationId: row.id, userId: p.userId }, { delayMs: UNREAD_EMAIL_DELAY_MS, jobId: `msg-unread-${row.id}-${p.userId}-${bucket}` })
           .catch(() => undefined);
       }
     }
+  }
+
+  /* ======================= Official conversations (Charter Mission) ======================= */
+
+  /**
+   * The member's conversation with the Charter Mission sender account (kind "official"), created on first use. A direct
+   * chat the two already had (from before the account was made official) becomes it.
+   */
+  async officialConversation(senderId: string, memberId: string): Promise<ConversationRow> {
+    if (senderId === memberId) throw Errors.badRequest('Charter Mission can’t message its own account');
+    const [a, b] = memberId < senderId ? [memberId, senderId] : [senderId, memberId];
+    const pair = and(eq(conversations.memberA, a), eq(conversations.memberB, b));
+    let [row] = await this.db.select().from(conversations).where(pair).limit(1);
+    if (row?.kind === 'official' && row.createdBy === senderId) return row;
+    await this.db.transaction(async (tx) => {
+      if (row) {
+        await tx.update(conversations).set({ kind: 'official', status: 'active', requestedBy: null, createdBy: senderId }).where(eq(conversations.id, row.id));
+      } else {
+        await tx.insert(conversations).values({ kind: 'official', memberA: a, memberB: b, status: 'active', createdBy: senderId }).onConflictDoNothing();
+      }
+      const [current] = await tx.select({ id: conversations.id }).from(conversations).where(pair).limit(1);
+      await tx
+        .insert(conversationMembers)
+        .values([
+          { conversationId: current!.id, userId: senderId },
+          { conversationId: current!.id, userId: memberId },
+        ])
+        .onConflictDoUpdate({ target: [conversationMembers.conversationId, conversationMembers.userId], set: { leftAt: null } });
+    });
+    [row] = await this.db.select().from(conversations).where(pair).limit(1);
+    return row!;
+  }
+
+  /**
+   * A message from Charter Mission in an official conversation: from the sender account (its read state is the team's, so
+   * writing marks the thread read for the team), with the staff member who wrote it (null for bulk messages) kept for the
+   * admin. The member is told like for any message, minus the parts `quiet` turns off.
+   */
+  async sendOfficial(
+    row: ConversationRow,
+    input: { body: string; staffId: string | null; announcementId?: string | null; quiet?: { notification?: boolean; email?: boolean } },
+  ): Promise<MessageRow> {
+    if (row.kind !== 'official' || !row.createdBy) throw Errors.notFound('That conversation');
+    const senderId = row.createdBy;
+    const link = firstHttpsUrl(input.body);
+    const now = new Date();
+    const message = await this.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(messages)
+        .values({
+          conversationId: row.id,
+          senderId,
+          kind: 'text',
+          body: input.body,
+          linkPreview: link ? embedPreview(link) : null,
+          sentByStaffId: input.staffId,
+          announcementId: input.announcementId ?? null,
+          createdAt: now,
+        })
+        .returning();
+      await tx.update(conversations).set({ lastMessageAt: now }).where(eq(conversations.id, row.id));
+      await tx
+        .update(conversationMembers)
+        .set({ readAt: now, markedUnread: false })
+        .where(and(eq(conversationMembers.conversationId, row.id), eq(conversationMembers.userId, senderId)));
+      await tx
+        .update(conversationMembers)
+        .set({ archivedAt: null })
+        .where(
+          and(
+            eq(conversationMembers.conversationId, row.id),
+            ne(conversationMembers.userId, senderId),
+            isNotNull(conversationMembers.archivedAt),
+            sql`(${conversationMembers.mutedUntil} is null or ${conversationMembers.mutedUntil} < now())`,
+          ),
+        );
+      return created!;
+    });
+    const [view] = await this.views.messages(null, [message]);
+    const title = (await this.members.ref(senderId))?.name ?? 'Charter Mission';
+    await this.deliver(senderId, row, title, message, view!, input.quiet);
+    // Bulk messages skip the link fetch (one per recipient would hit the same site thousands of times).
+    if (link && !input.announcementId && !parseableEmbed(link)) {
+      await this.queue.add('events', 'message-link-preview', { conversationId: row.id, userId: senderId, messageId: message.id }).catch(() => undefined);
+    }
+    return message;
   }
 
   /** The delayed email: only if the member still hasn't read, isn't muted, and wants message emails. */
@@ -1052,6 +1154,8 @@ export class MessagesService implements OnModuleInit {
       .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, user.id)))
       .limit(1);
     if (!member) throw Errors.notFound('That conversation');
+    // The Charter Mission side of an official conversation is answered from the admin inbox, never the member app.
+    if (conversation.kind === 'official' && conversation.createdBy === user.id) throw Errors.notFound('That conversation');
     // Declined requests disappear for the member who declined them.
     if (conversation.status === 'declined' && conversation.requestedBy !== user.id) throw Errors.notFound('That conversation');
     return { conversation, member };
@@ -1165,6 +1269,11 @@ export class MessagesService implements OnModuleInit {
       .limit(1);
     return !!row;
   }
+}
+
+/** Hides official conversations from the Charter Mission account itself (its side is the admin inbox). */
+function notTeamSide(userId: string) {
+  return sql`not (${conversations.kind} = 'official' and coalesce(${conversations.createdBy} = ${userId}, false))`;
 }
 
 /** A video link already has its player; other links are fetched for a title and picture. */

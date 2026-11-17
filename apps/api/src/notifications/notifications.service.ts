@@ -10,13 +10,16 @@ import {
   type NotificationsQuery,
   type Page,
   type UnreadCount,
+  type UnsubscribeResult,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { notificationPreferences, notifications } from '../db/schema.js';
+import { notificationPreferences, notifications, users } from '../db/schema.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import { MembersService } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { DEFAULT_PREFERENCES } from '../core/notify.service.js';
+import { AppError } from '../common/errors.js';
+import { verifyUnsubscribeToken } from './unsubscribe-token.js';
 
 type Segment = NotificationView['segments'][number];
 type StoredData = { segments?: Segment[]; href?: string; icon?: NotificationView['icon'] };
@@ -131,5 +134,21 @@ export class NotificationsService {
         });
     }
     return this.preferences(userId);
+  }
+
+  /** The one-click link in bulk emails: turns the member's announcement emails off (Settings → Notifications turns them back on). */
+  async unsubscribe(token: string): Promise<UnsubscribeResult> {
+    const payload = verifyUnsubscribeToken(token);
+    if (!payload) throw new AppError(400, 'INVALID_TOKEN', 'This unsubscribe link isn’t valid. You can turn emails off in Settings → Notifications.');
+    const [user] = await this.db.select({ id: users.id }).from(users).where(eq(users.id, payload.u)).limit(1);
+    if (!user) throw new AppError(400, 'INVALID_TOKEN', 'This unsubscribe link isn’t valid. You can turn emails off in Settings → Notifications.');
+    await this.db
+      .insert(notificationPreferences)
+      .values({ userId: user.id, category: payload.c, channel: 'email', enabled: false })
+      .onConflictDoUpdate({
+        target: [notificationPreferences.userId, notificationPreferences.category, notificationPreferences.channel],
+        set: { enabled: false },
+      });
+    return { category: 'announcements', done: true };
   }
 }

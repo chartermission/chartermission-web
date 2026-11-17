@@ -2,22 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import type { AdminAssignableRole, AdminBadge, AdminMemberRow, AdminMembersQuery, Page } from "@chartermission/contracts";
+import type { AdminAssignableRole, AdminBadge, AdminMemberCounts, AdminMemberRow, AdminMembersPage, AdminMembersQuery } from "@chartermission/contracts";
 import { Avatar, Button, Chip, Icon, ProfileBadgeChip, SegmentedControl, cn } from "@chartermission/ui";
 import { FormModal, selectClasses } from "@/components/ambassadors/modal";
 import { inputClasses } from "@/components/form-field";
 import { EmptyState } from "@/components/states";
 import { ReasonDialog } from "@/components/reason-dialog";
+import { MessageMemberDialog } from "@/components/messages/message-member-dialog";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
 import { WEB_URL } from "@/lib/navigation";
-import { useT } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 
 type Filter = Exclude<AdminMembersQuery["filter"], "badge"> | `badge:${string}`;
 
 /** Members (GET /admin/members): search, then verify, feature in sign-up suggestions or award badges. */
 /** Who may change roles in the console, and whether that includes Super Admin. */
-export type AccessRights = { viewerId: string; canManageRoles: boolean; canAssignSuperAdmin: boolean };
+export type AccessRights = { viewerId: string; canManageRoles: boolean; canAssignSuperAdmin: boolean; canMessage?: boolean };
 
 const ROLE_INFO: { role: AdminAssignableRole; name: string; description: string; console: boolean }[] = [
   { role: "moderator", name: "Moderator", description: "Works the report queue: hides and removes content, warns, restricts and suspends members.", console: true },
@@ -26,19 +27,28 @@ const ROLE_INFO: { role: AdminAssignableRole; name: string; description: string;
   { role: "event_host", name: "Event Host", description: "Publishes events without review (no console access).", console: false },
 ];
 
+/** "12,345 members", for the page header: every account except deleted ones. */
+export function MembersTotal({ count }: { count: number }) {
+  const t = useT();
+  return <p className="text-h2 text-ink tabular-nums">{t("{count} members", { count })}</p>;
+}
+
 export function MembersConsole({
   initial,
   badges,
   canManageBadges,
   access,
 }: {
-  initial: Page<AdminMemberRow>;
+  initial: AdminMembersPage;
   badges: AdminBadge[];
   canManageBadges: boolean;
   access: AccessRights;
 }) {
   const t = useT();
+  const numbers = new Intl.NumberFormat(useIntlTag());
   const [page, setPage] = useState(initial);
+  /** Per filter, from the last first page (later pages don't count again). */
+  const [counts, setCounts] = useState<AdminMemberCounts | null>(initial.counts);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(false);
@@ -65,7 +75,9 @@ export function MembersConsole({
       setLoading(true);
       setError(null);
       try {
-        setPage(await api<Page<AdminMemberRow>>("/admin/members", { query: queryFor(), signal: controller.signal }));
+        const next = await api<AdminMembersPage>("/admin/members", { query: queryFor(), signal: controller.signal });
+        setPage(next);
+        if (next.counts) setCounts(next.counts);
       } catch (e) {
         if (!controller.signal.aborted) setError(errorMessage(e));
       } finally {
@@ -83,8 +95,9 @@ export function MembersConsole({
   async function more() {
     setLoading(true);
     try {
-      const next = await api<Page<AdminMemberRow>>("/admin/members", { query: queryFor(page.nextCursor) });
-      setPage((p) => ({ items: [...p.items, ...next.items], nextCursor: next.nextCursor }));
+      const next = await api<AdminMembersPage>("/admin/members", { query: queryFor(page.nextCursor) });
+      // The total and counts came with the first page.
+      setPage((p) => ({ ...p, items: [...p.items, ...next.items], nextCursor: next.nextCursor }));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -97,7 +110,13 @@ export function MembersConsole({
   async function set(row: AdminMemberRow, what: "verified" | "featured" | "official", value: boolean) {
     setBusyId(row.id);
     try {
-      replace(await api<AdminMemberRow>(`/admin/members/${row.id}/${what}`, { method: "PUT", body: { [what]: value } }));
+      const updated = await api<AdminMemberRow>(`/admin/members/${row.id}/${what}`, { method: "PUT", body: { [what]: value } });
+      replace(updated);
+      // Keep the tab counts in step (making an account official also verifies it).
+      const verifiedBy = Number(updated.verified) - Number(row.verified);
+      const featuredBy = Number(updated.featured) - Number(row.featured);
+      if (verifiedBy || featuredBy)
+        setCounts((c) => (c ? { ...c, verified: c.verified + verifiedBy, unverified: c.unverified - verifiedBy, featured: c.featured + featuredBy } : c));
       toast(
         what === "official"
           ? value
@@ -120,6 +139,7 @@ export function MembersConsole({
 
   const activeBadges = badges.filter((b) => b.status === "active");
   const [accessFor, setAccessFor] = useState<AdminMemberRow | null>(null);
+  const [messageFor, setMessageFor] = useState<AdminMemberRow | null>(null);
 
   return (
     <section className="flex flex-col gap-4">
@@ -140,12 +160,14 @@ export function MembersConsole({
           size="small"
           value={filter.startsWith("badge:") ? "all" : (filter as Exclude<Filter, `badge:${string}`>)}
           onChange={setFilter}
-          items={[
-            { value: "all", label: "All" },
-            { value: "verified", label: "Verified" },
-            { value: "unverified", label: "Not verified" },
-            { value: "featured", label: "Suggested on sign-up" },
-          ]}
+          items={(
+            [
+              { value: "all", label: t("All"), count: counts?.all },
+              { value: "verified", label: t("Verified"), count: counts?.verified },
+              { value: "unverified", label: t("Not verified"), count: counts?.unverified },
+              { value: "featured", label: t("Suggested on sign-up"), count: counts?.featured },
+            ] as const
+          ).map((item) => ({ value: item.value, label: item.count === undefined ? item.label : `${item.label} · ${numbers.format(item.count)}` }))}
         />
         <span className="relative w-[200px]">
           <select
@@ -169,6 +191,12 @@ export function MembersConsole({
         <p className="rounded-lg bg-info-light px-3 py-2 text-sm text-body">
           These members are suggested first in the “People to follow” step when someone signs up (as long as their profile is discoverable), oldest
           pick first. The rest of the suggestions come from shared country, sector and interests.
+        </p>
+      )}
+
+      {!error && page.total !== null && page.items.length > 0 && (
+        <p role="status" className="text-sm text-secondary tabular-nums">
+          {t("Showing {from}–{to} of {total}", { from: 1, to: page.items.length, total: page.total })}
         </p>
       )}
 
@@ -253,6 +281,11 @@ export function MembersConsole({
                         <Button variant="ghost" size="small" disabled={busy} onClick={() => setBadgeFor(row)}>
                           Badges
                         </Button>
+                        {access.canMessage && !row.official && row.id !== access.viewerId && (
+                          <Button variant="ghost" size="small" disabled={busy} onClick={() => setMessageFor(row)}>
+                            Message
+                          </Button>
+                        )}
                         {access.canManageRoles && row.id !== access.viewerId && (
                           <Button variant="ghost" size="small" disabled={busy} onClick={() => setAccessFor(row)}>
                             Access
@@ -299,6 +332,7 @@ export function MembersConsole({
           onClose={() => setOfficialFor(null)}
         />
       )}
+      {messageFor && <MessageMemberDialog member={messageFor} onClose={() => setMessageFor(null)} />}
       {accessFor && (
         <MemberAccess
           member={accessFor}

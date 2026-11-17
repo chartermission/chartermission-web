@@ -120,8 +120,10 @@ export class MessageViews {
       const current = others.filter((m) => !m.leftAt);
       const chapter = r.chapterId ? chapterBy.get(r.chapterId) : undefined;
       const chapterRef = chapter ? { slug: chapter.slug, name: chapter.name, countryCode: chapter.countryCode, imageUrl: mediaUrl(chapter.imageFileId) } : null;
-      const member = r.kind === 'direct' ? (refs.get(others[0]?.userId ?? '') ?? null) : null;
-      if (r.kind === 'direct' && !member) continue;
+      // Official conversations read like a direct chat with the Charter Mission account.
+      const oneToOne = r.kind === 'direct' || r.kind === 'official';
+      const member = oneToOne ? (refs.get(others[0]?.userId ?? '') ?? null) : null;
+      if (oneToOne && !member) continue;
       const m = lastBy.get(r.id);
       const now = Date.now();
       const muted = !!mine?.mutedUntil && mine.mutedUntil.getTime() > now;
@@ -136,6 +138,8 @@ export class MessageViews {
         else if (!active.has(otherId)) cantSendReason = 'This account is no longer active.';
         else if (r.status === 'declined') cantSendReason = r.requestedBy === viewerId ? `${member!.name} didn’t accept your message request.` : 'You declined this message request.';
         else if (request === 'outgoing' && viewerMessages.has(r.id)) cantSendReason = `You can send more once ${member!.name} accepts your message request.`;
+      } else if (r.kind === 'official') {
+        if (!active.has(others[0]!.userId)) cantSendReason = 'This account is no longer active.';
       } else if (r.kind === 'group') {
         if (!mine || mine.leftAt) cantSendReason = 'You’re no longer in this group.';
       } else if (!isManager) {
@@ -143,7 +147,7 @@ export class MessageViews {
       }
 
       const title =
-        r.kind === 'direct' ? member!.name : r.kind === 'group' ? (r.title ?? 'Group') : `${chapter?.name ?? 'Chapter'} announcements`;
+        oneToOne ? member!.name : r.kind === 'group' ? (r.title ?? 'Group') : `${chapter?.name ?? 'Chapter'} announcements`;
       out.push({
         id: r.id,
         kind: r.kind as ConversationView['kind'],
@@ -169,7 +173,7 @@ export class MessageViews {
         canSend: !cantSendReason,
         cantSendReason,
         canManage: isManager,
-        seenAt: r.kind === 'direct' ? (others[0]?.readAt?.toISOString() ?? null) : null,
+        seenAt: oneToOne ? (others[0]?.readAt?.toISOString() ?? null) : null,
         readBy: r.kind === 'group' ? current.filter((o) => o.readAt).map((o) => ({ memberId: o.userId, readAt: o.readAt!.toISOString() })) : [],
         muted,
         mutedUntil: muted ? mine!.mutedUntil!.toISOString() : null,

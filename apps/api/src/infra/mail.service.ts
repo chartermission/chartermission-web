@@ -34,8 +34,16 @@ export interface ComposedEmail {
   subject: string;
   heading: string;
   paragraphs: string[];
-  button?: { label: string; url: string };
+  /** translate: false keeps a label someone wrote (e.g. an announcement's link label) as it is. */
+  button?: { label: string; url: string; translate?: boolean };
   footer?: string;
+  /** Links shown under the footer (their labels are translated like the footer). */
+  footerLinks?: { label: string; url: string }[];
+  /**
+   * Subject, heading and paragraphs written by a person (announcements): sent exactly as written, links in
+   * the paragraphs made clickable. The chrome around them (footer, footer links) is still translated.
+   */
+  verbatim?: boolean;
   transactional?: boolean;
   unsubscribeUrl?: string;
   /** Language to use; otherwise the recipient's saved language, else the current request's, else English. */
@@ -87,12 +95,18 @@ export class MailService implements OnModuleInit {
   async compose(mail: ComposedEmail): Promise<void> {
     const locale = await this.localeFor(mail);
     const tr = (text: string) => translateText(locale, text);
+    const own = (text: string) => (mail.verbatim ? text : tr(text));
     const { text, html } = renderEmail({
-      heading: tr(mail.heading),
-      paragraphs: mail.paragraphs.map(tr),
+      heading: own(mail.heading),
+      paragraphs: mail.paragraphs.map(own),
       button: mail.button
-        ? { label: tr(mail.button.label), url: mail.button.url }
+        ? {
+            label: mail.button.translate === false ? mail.button.label : tr(mail.button.label),
+            url: mail.button.url,
+          }
         : undefined,
+      autolink: mail.verbatim,
+      footerLinks: mail.footerLinks?.map((l) => ({ label: tr(l.label), url: l.url })),
       footer: tr(
         mail.footer ??
           'Charter Mission — where Africa and its diaspora build together.',
@@ -103,7 +117,7 @@ export class MailService implements OnModuleInit {
       to: mail.to,
       userId: mail.userId,
       template: mail.template,
-      subject: tr(mail.subject),
+      subject: own(mail.subject),
       text,
       html,
       transactional: mail.transactional,

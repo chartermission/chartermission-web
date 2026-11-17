@@ -28,6 +28,7 @@ import { OpportunitiesModule } from './opportunities/opportunities.module.js';
 import { PagesModule } from './pages/pages.module.js';
 import { PeopleModule } from './people/people.module.js';
 import { MessagesModule } from './messages/messages.module.js';
+import { AnnouncementsModule } from './announcements/announcements.module.js';
 import { PreviewModule } from './preview/preview.module.js';
 import { PushModule } from './push/push.module.js';
 import { InvitesModule } from './invites/invites.module.js';
@@ -59,6 +60,7 @@ import { ServicesModule } from './services/services.module.js';
     PagesModule,
     PeopleModule,
     MessagesModule,
+    AnnouncementsModule,
     PreviewModule,
     PushModule,
     InvitesModule,

@@ -30,11 +30,12 @@ describe('Replacing issued exam certificates', () => {
   let admin: Member;
   let exam: AdminExamDetail;
   let signatureFileId: string;
+  let instructorId: string;
   let mock: MockCharterCenterExamsClient;
   const members: Record<'first' | 'second' | 'third' | 'pending', Member> = {} as never;
   const before: Record<string, ExamCertificateView> = {};
 
-  const CERTIFICATE = (title = OLD_TITLE) => ({ title, issuerName: 'Eng. Abdalla Yousif', signatureFileId, startDate: '2026-01-01', endDate: '2026-01-15' });
+  const CERTIFICATE = (title = OLD_TITLE) => ({ title, instructorId, startDate: '2026-01-01', endDate: '2026-01-15' });
   const path = (url: string) => new URL(url, 'http://x').pathname.replace(/^\/api\/v1/, '');
   const list = async (query = '') => (await admin.get(`/admin/exams/${exam.id}/certificates${query}`).expect(200)).body as AdminExamCertificatesPage;
   const certOf = async (m: Member) => (await t.db.select().from(s.examCertificates).where(eq(s.examCertificates.userId, m.id)))[0]!;
@@ -63,6 +64,7 @@ describe('Replacing issued exam certificates', () => {
     const signature = await sharp({ create: { width: 300, height: 100, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
     signatureFileId = await uploadBytes(t, admin, { purpose: 'certificate_signature' as 'post_image', fileName: 'signature.png', mime: 'image/png', data: signature });
     await admin.post(`/uploads/${signatureFileId}/complete`).expect(200);
+    instructorId = (await admin.post('/admin/exam-instructors', { name: 'Eng. Abdalla Yousif', signatureFileId }).expect(201)).body.id;
 
     // The exam is named like its (misspelt) course, so the certificate posts' text has the old title.
     exam = (await admin.post('/admin/exams', { title: OLD_TITLE, passPercent: 50 }).expect(201)).body as AdminExamDetail;

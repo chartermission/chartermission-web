@@ -17,9 +17,9 @@ import {
   type AdminBadge,
   type AdminChapterRow,
   type AdminMemberRow,
+  type AdminMembersPage,
   type AdminTopicRow,
   type Ok,
-  type Page,
 } from '@chartermission/contracts';
 import { Access, Auth } from '../core/guards.js';
 import { clientIp, type AppRequest, type AuthContext } from '../core/auth-context.js';
@@ -144,7 +144,7 @@ export class AdminMembersController {
 
   @Get()
   @Access('admin', 'members.manage')
-  list(@ZQuery(AdminMembersQuery) q: AdminMembersQuery): Promise<Page<AdminMemberRow>> {
+  list(@ZQuery(AdminMembersQuery) q: AdminMembersQuery): Promise<AdminMembersPage> {
     return this.members.list(q);
   }
 

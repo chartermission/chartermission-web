@@ -74,6 +74,16 @@ const groups: {
     ],
   },
   {
+    title: "From Charter Mission",
+    rows: [
+      {
+        category: "announcements",
+        label: "Announcements from Charter Mission",
+        description: "News and updates the Charter Mission team sends to members. Important notices about your account still reach you.",
+      },
+    ],
+  },
+  {
     title: "Email digest",
     rows: [
       {
@@ -113,7 +123,7 @@ export function NotificationPreferencesForm({ initial }: { initial: Notification
   const dirty = useMemo(() => JSON.stringify(matrix) !== JSON.stringify(saved), [matrix, saved]);
 
   function set(category: NotificationCategory, channel: Channel, enabled: boolean) {
-    setMatrix((current) => ({ ...current, [category]: { ...current[category], [channel]: enabled } }));
+    setMatrix((current) => ({ ...current, [category]: { ...((current[category] as Matrix[NotificationCategory] | undefined) ?? { in_app: false, email: false }), [channel]: enabled } }));
     setJustSaved(false);
     setError(null);
   }

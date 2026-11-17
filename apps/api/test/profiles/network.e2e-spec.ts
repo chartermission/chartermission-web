@@ -84,15 +84,16 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
     await a.post('/connections', { memberId: c.id }).expect(201);
   });
 
-  it('respects connectionRequestsFrom, restrictions and the 50/day cap', async () => {
+  it('respects connectionRequestsFrom and restrictions; no daily cap by default', async () => {
     const a = await createMember(t, { name: 'Cap Sender' });
     const closed = await createMember(t, { name: 'Closed Member' });
     await closed.put('/me/privacy', { connectionRequestsFrom: 'nobody' }).expect(200);
     expect((await a.post('/connections', { memberId: closed.id }).expect(403)).body.error.code).toBe('FORBIDDEN');
 
+    // No limit unless an admin sets one: a member who already sent 500 today can still send more.
     const target = await createMember(t, { name: 'Cap Target' });
-    await setLimitCounter(`connections:day:${a.id}`, 50);
-    expect((await a.post('/connections', { memberId: target.id }).expect(429)).body.error.code).toBe('RATE_LIMITED');
+    await setLimitCounter(`connections:day:${a.id}`, 500);
+    await a.post('/connections', { memberId: target.id }).expect(201);
 
     const restricted = await createMember(t, { name: 'Restricted Member' });
     await t.db
@@ -103,6 +104,34 @@ describe('Networking: connections, follows, mutes, suggestions (spec 4.6, CM-DSH
 
     await a.post('/connections', { memberId: '00000000-0000-4000-8000-000000000000' }).expect(404);
     await a.post('/connections/not-a-uuid/accept').expect(404);
+  });
+
+  it('applies the daily connection-request limit Platform Admins set (none by default)', async () => {
+    const admin = await createMember(t, { roles: ['platform_admin'], admin: true });
+    const mod = await createMember(t, { roles: ['moderator'], admin: true });
+    expect((await admin.get('/admin/settings/network').expect(200)).body).toEqual({ dailyConnectionRequestLimit: null });
+    await mod.get('/admin/settings/network').expect(403);
+    await mod.put('/admin/settings/network', { dailyConnectionRequestLimit: 2 }).expect(403);
+    for (const bad of [0, 10_001, 1.5, '3']) await admin.put('/admin/settings/network', { dailyConnectionRequestLimit: bad }).expect(422);
+    await admin.put('/admin/settings/network', {}).expect(422);
+
+    const sender = await createMember(t, { name: 'Limited Sender' });
+    const targets = await Promise.all([1, 2, 3, 4].map((i) => createMember(t, { name: `Limit Target ${i}` })));
+    // Requests sent before the limit is set count towards it.
+    await sender.post('/connections', { memberId: targets[0]!.id }).expect(201);
+
+    expect((await admin.put('/admin/settings/network', { dailyConnectionRequestLimit: 2 }).expect(200)).body).toEqual({ dailyConnectionRequestLimit: 2 });
+    await sender.post('/connections', { memberId: targets[1]!.id }).expect(201);
+    const refused = await sender.post('/connections', { memberId: targets[2]!.id }).expect(429);
+    expect(refused.body.error).toMatchObject({ code: 'RATE_LIMITED', message: 'You can send up to 2 connection requests a day.' });
+    expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
+
+    await admin.put('/admin/settings/network', { dailyConnectionRequestLimit: null }).expect(200);
+    await sender.post('/connections', { memberId: targets[2]!.id }).expect(201);
+    await sender.post('/connections', { memberId: targets[3]!.id }).expect(201);
+
+    const audit = await t.db.select().from(s.auditLog).where(eq(s.auditLog.action, 'settings.network.updated')).orderBy(s.auditLog.id);
+    expect(audit.map((a) => (a.after as { dailyConnectionRequestLimit: number | null }).dailyConnectionRequestLimit)).toEqual([2, null]);
   });
 
   it('follows members, hashtags and chapters; member follows notify', async () => {
