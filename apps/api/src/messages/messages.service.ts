@@ -224,6 +224,21 @@ export class MessagesService implements OnModuleInit {
     return { conversationId: row!.id, message };
   }
 
+  /**
+   * A reply to a story: a message in the direct chat with the story's author that carries the story as
+   * a card. The usual rules apply: connections chat straight away, anyone else sends one message as a
+   * request, and official accounts don't take private messages. `request` says it went as a request.
+   */
+  async replyToStory(
+    user: AuthUser,
+    story: { id: string; authorId: string },
+    input: { body: string; clientId?: string },
+  ): Promise<{ conversationId: string; request: boolean; message: MessageView }> {
+    const conversation = await this.start(user, { memberId: story.authorId });
+    const message = await this.send(user, conversation.id, { body: input.body, clientId: input.clientId }, { storyId: story.id });
+    return { conversationId: conversation.id, request: conversation.request === 'outgoing', message };
+  }
+
   /** GET /messages/conversations/{id} */
   async view(user: AuthUser, conversationId: string): Promise<ConversationView> {
     const { conversation } = await this.access(user, conversationId);
@@ -342,8 +357,8 @@ export class MessagesService implements OnModuleInit {
     };
   }
 
-  /** POST /messages/conversations/{id}/messages */
-  async send(user: AuthUser, conversationId: string, raw: SendMessageInput): Promise<MessageView> {
+  /** POST /messages/conversations/{id}/messages. `internal.storyId`: the story this message replies to (see replyToStory). */
+  async send(user: AuthUser, conversationId: string, raw: SendMessageInput, internal: { storyId?: string } = {}): Promise<MessageView> {
     const input = SendMessageSchema.parse(raw);
     assertNotRestricted(user);
     const { conversation: row } = await this.access(user, conversationId);
@@ -381,7 +396,8 @@ export class MessagesService implements OnModuleInit {
       if (!card.available) throw Errors.notFound('That item');
     }
 
-    const kind = input.voiceNoteId ? 'voice' : input.meeting ? 'meeting' : input.share ? 'share' : 'text';
+    const share = internal.storyId ? { type: 'story', key: internal.storyId } : input.share;
+    const kind = input.voiceNoteId ? 'voice' : input.meeting ? 'meeting' : share ? 'share' : 'text';
     const meeting = input.meeting ? meetingFrom(input.meeting) : null;
     const body = input.meeting ? input.meeting.title : (input.body ?? '');
     const link = kind === 'text' || kind === 'share' ? firstHttpsUrl(body) : null;
@@ -396,8 +412,8 @@ export class MessagesService implements OnModuleInit {
           body,
           clientId: input.clientId ?? null,
           replyToId: input.replyToId ?? null,
-          shareType: input.share?.type ?? null,
-          shareId: input.share?.key ?? null,
+          shareType: share?.type ?? null,
+          shareId: share?.key ?? null,
           meeting,
           linkPreview: link ? embedPreview(link) : null,
           createdAt: now,

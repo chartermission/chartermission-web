@@ -1252,4 +1252,7 @@ export const ar: Record<string, string> = {
   "That member was not found": "هذا العضو غير موجود",
   "Write something before saving": "اكتب شيئًا قبل الحفظ",
   "The new order must list each of this post’s images once": "يجب أن يتضمن الترتيب الجديد كل صورة في هذا المنشور مرة واحدة",
+  "You can’t react to your own story": "لا يمكنك التفاعل مع قصتك",
+  "You can’t reply to your own story": "لا يمكنك الرد على قصتك",
+  "Write a reply first": "اكتب ردًا أولًا",
 };

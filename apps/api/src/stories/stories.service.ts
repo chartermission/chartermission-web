@@ -10,6 +10,9 @@ import {
   type CreateStoryInput,
   type HighlightView,
   type MemberRef,
+  type StoryReactionInput,
+  type StoryReplyInput,
+  type StoryReplyResult,
   type StoryTray,
   type StoryTrayItem,
   type StoryView,
@@ -34,6 +37,7 @@ import {
   stories,
   storyHighlightItems,
   storyHighlights,
+  storyReactions,
   storyViews,
   userRoles,
   users,
@@ -42,10 +46,12 @@ import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { can } from '../core/policy.js';
 import { MembersService, mediaUrl, posterUrl } from '../core/members.service.js';
+import { NotifyService } from '../core/notify.service.js';
 import { RelationsService } from '../core/relations.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 import { QueueService } from '../infra/queue.service.js';
 import { MediaService } from '../media/media.service.js';
+import { MessagesService } from '../messages/messages.service.js';
 import { assertNotRestricted } from '../posts/posts.service.js';
 import { authorActiveSql, authorIsActive, isModerator, notBlockedSql } from '../posts/visibility.js';
 import { isUuid } from '../moderation/util.js';
@@ -62,6 +68,7 @@ const PURGE_EVERY_MS = 60 * 60_000;
 const DELETED_GRACE_MS = 24 * 3600_000;
 const MODERATED_KEEP_DAYS = 180;
 const TRAY_MAX_AUTHORS = 60;
+const REACTIONS_PER_HOUR = 300;
 const DAY_MS = 24 * 3600_000;
 
 /**
@@ -69,6 +76,9 @@ const DAY_MS = 24 * 3600_000;
  * profile). The strip shows the viewer's connections, the members they follow and the Ambassadors of
  * chapters they follow. Expired stories stay in the author's archive for 30 days, or for as long as a
  * highlight keeps them; an hourly job purges the rest with their media.
+ *
+ * Anyone who can open someone else's story can leave an emoji on it (the author sees it beside their
+ * name in "Viewed by") or reply to it; a reply is a private message to the author with the story attached.
  */
 @Injectable()
 export class StoriesService implements OnModuleInit {
@@ -81,6 +91,8 @@ export class StoriesService implements OnModuleInit {
     private readonly limits: RateLimitService,
     private readonly queue: QueueService,
     private readonly media: MediaService,
+    private readonly notify: NotifyService,
+    private readonly messages: MessagesService,
   ) {}
 
   onModuleInit() {
@@ -196,7 +208,10 @@ export class StoriesService implements OnModuleInit {
 
   /** POST /stories/:id/view — counted once per viewer; the author's own views don't count. */
   async markViewed(viewer: AuthUser, id: string): Promise<void> {
-    const story = await this.viewable(viewer, id);
+    await this.recordView(viewer, await this.viewable(viewer, id));
+  }
+
+  private async recordView(viewer: AuthUser, story: StoryRow): Promise<void> {
     if (story.authorId === viewer.id) return;
     const inserted = await this.db
       .insert(storyViews)
@@ -211,20 +226,82 @@ export class StoriesService implements OnModuleInit {
     }
   }
 
-  /** GET /stories/:id/viewers — author only. */
+  /** GET /stories/:id/viewers — author only; those who left a reaction come first. */
   async viewers(viewer: AuthUser, id: string): Promise<StoryViewer[]> {
     const story = await this.own(viewer, id);
     const rows = await this.db
-      .select()
+      .select({ viewerId: storyViews.viewerId, viewedAt: storyViews.viewedAt, emoji: storyReactions.emoji })
       .from(storyViews)
+      .leftJoin(storyReactions, and(eq(storyReactions.storyId, storyViews.storyId), eq(storyReactions.userId, storyViews.viewerId)))
       .where(eq(storyViews.storyId, story.id))
-      .orderBy(desc(storyViews.viewedAt))
+      .orderBy(sql`${storyReactions.emoji} is null`, desc(storyViews.viewedAt))
       .limit(500);
     const blocked = await this.relations.blockedSet(viewer.id);
     const refs = await this.members.refs(rows.map((r) => r.viewerId));
     return rows
       .filter((r) => !blocked.has(r.viewerId) && refs.has(r.viewerId))
-      .map((r) => ({ member: refs.get(r.viewerId)!, viewedAt: r.viewedAt.toISOString() }));
+      .map((r) => ({ member: refs.get(r.viewerId)!, viewedAt: r.viewedAt.toISOString(), reaction: r.emoji ?? null }));
+  }
+
+  /* ----------------------------- Reactions and replies ----------------------------- */
+
+  /** PUT /stories/:id/reaction — one per member; a new emoji replaces the old. The author hears about the first one. */
+  async react(viewer: AuthUser, id: string, input: StoryReactionInput): Promise<StoryView> {
+    assertNotRestricted(viewer);
+    if (!can(viewer, 'reaction.create')) throw Errors.forbidden();
+    const story = await this.answerable(viewer, id, 'You can’t react to your own story');
+    await this.limits.consume(`story-reactions:${viewer.id}`, REACTIONS_PER_HOUR, 3600);
+    // Reacting to a story is also having seen it.
+    await this.recordView(viewer, story);
+    const [existing] = await this.db
+      .select({ emoji: storyReactions.emoji })
+      .from(storyReactions)
+      .where(and(eq(storyReactions.storyId, story.id), eq(storyReactions.userId, viewer.id)))
+      .limit(1);
+    await this.db
+      .insert(storyReactions)
+      .values({ storyId: story.id, userId: viewer.id, emoji: input.emoji })
+      .onConflictDoUpdate({ target: [storyReactions.storyId, storyReactions.userId], set: { emoji: input.emoji, updatedAt: new Date() } });
+    if (!existing) {
+      await this.notify.notify({
+        userId: story.authorId,
+        type: 'reaction',
+        actorId: viewer.id,
+        objectType: 'story',
+        objectId: story.id,
+        segments: [{ text: ' reacted to your story', strong: false }],
+        href: `/stories/${story.id}`,
+        icon: 'avatar',
+        dedupeKey: `reaction:story:${story.id}`,
+        windowMinutes: 60,
+      });
+    }
+    return (await this.views([story], viewer))[0]!;
+  }
+
+  /** DELETE /stories/:id/reaction */
+  async unreact(viewer: AuthUser, id: string): Promise<StoryView> {
+    const story = await this.viewable(viewer, id);
+    await this.db.delete(storyReactions).where(and(eq(storyReactions.storyId, story.id), eq(storyReactions.userId, viewer.id)));
+    return (await this.views([story], viewer))[0]!;
+  }
+
+  /** POST /stories/:id/reply — a private message to the author with the story attached (MessagesService.replyToStory). */
+  async reply(viewer: AuthUser, id: string, input: StoryReplyInput): Promise<StoryReplyResult> {
+    assertNotRestricted(viewer);
+    const story = await this.answerable(viewer, id, 'You can’t reply to your own story');
+    await this.recordView(viewer, story);
+    const { conversationId, request } = await this.messages.replyToStory(viewer, story, input);
+    return { conversationId, request };
+  }
+
+  /** Someone else's story that members can see: what a reaction or a reply needs. */
+  private async answerable(viewer: AuthUser, id: string, ownMessage: string): Promise<StoryRow> {
+    const story = await this.viewable(viewer, id);
+    if (story.authorId === viewer.id) throw Errors.badRequest(ownMessage);
+    // Moderators can open hidden stories, but nobody answers one.
+    if (story.moderationState !== 'visible') throw Errors.notFound('That story');
+    return story;
   }
 
   /** DELETE /stories/:id — the author; also drops it from highlights (empty highlights go too). */
@@ -473,7 +550,7 @@ export class StoriesService implements OnModuleInit {
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
     const ownIds = rows.filter((r) => r.authorId === viewer.id).map((r) => r.id);
-    const [refs, fileRows, seenRows, highlightRows] = await Promise.all([
+    const [refs, fileRows, seenRows, highlightRows, myReactions, reactionCounts] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
       this.db.select().from(files).where(inArray(files.id, rows.map((r) => r.fileId))),
       this.db.select({ id: storyViews.storyId }).from(storyViews).where(and(eq(storyViews.viewerId, viewer.id), inArray(storyViews.storyId, ids))),
@@ -483,7 +560,20 @@ export class StoriesService implements OnModuleInit {
             .from(storyHighlightItems)
             .where(inArray(storyHighlightItems.storyId, ownIds))
         : Promise.resolve([] as { storyId: string; highlightId: string }[]),
+      this.db
+        .select({ id: storyReactions.storyId, emoji: storyReactions.emoji })
+        .from(storyReactions)
+        .where(and(eq(storyReactions.userId, viewer.id), inArray(storyReactions.storyId, ids))),
+      ownIds.length
+        ? this.db
+            .select({ id: storyReactions.storyId, n: sql<number>`count(*)::int` })
+            .from(storyReactions)
+            .where(inArray(storyReactions.storyId, ownIds))
+            .groupBy(storyReactions.storyId)
+        : Promise.resolve([] as { id: string; n: number }[]),
     ]);
+    const reactionOf = new Map(myReactions.map((r) => [r.id, r.emoji]));
+    const reactionsOn = new Map(reactionCounts.map((r) => [r.id, r.n]));
     const fileById = new Map(fileRows.map((f) => [f.id, f]));
     const seen = new Set(seenRows.map((s) => s.id));
     const mod = isModerator(viewer);
@@ -495,6 +585,7 @@ export class StoriesService implements OnModuleInit {
       if (!author || !file) continue;
       const own = r.authorId === viewer.id;
       const video = file.purpose === 'story_video';
+      const canReact = !own && r.moderationState === 'visible';
       out.push({
         id: r.id,
         author: author as MemberRef,
@@ -510,8 +601,18 @@ export class StoriesService implements OnModuleInit {
         createdAt: r.createdAt.toISOString(),
         expiresAt: r.expiresAt.toISOString(),
         expired: r.expiresAt.getTime() <= now,
-        viewer: { seen: own || seen.has(r.id), own, canDelete: own, canReport: !own },
+        viewer: {
+          seen: own || seen.has(r.id),
+          own,
+          canDelete: own,
+          canReport: !own,
+          reaction: reactionOf.get(r.id) ?? null,
+          canReact,
+          // Official accounts don't take private messages, and don't send them.
+          canReply: canReact && !author.official && !viewer.isOfficial,
+        },
         viewCount: own ? r.viewCount : null,
+        reactionCount: own ? (reactionsOn.get(r.id) ?? 0) : null,
         highlightIds: own ? highlightRows.filter((h) => h.storyId === r.id).map((h) => h.highlightId) : null,
         ...((own || mod) && r.moderationState !== 'visible' ? { moderationState: r.moderationState as StoryView['moderationState'] } : {}),
       });

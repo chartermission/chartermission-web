@@ -1252,4 +1252,7 @@ export const fr: Record<string, string> = {
   "That member was not found": "Ce membre est introuvable",
   "Write something before saving": "Écrivez quelque chose avant d’enregistrer",
   "The new order must list each of this post’s images once": "Le nouvel ordre doit reprendre chaque image de cette publication une seule fois",
+  "You can’t react to your own story": "Vous ne pouvez pas réagir à votre propre story",
+  "You can’t reply to your own story": "Vous ne pouvez pas répondre à votre propre story",
+  "Write a reply first": "Écrivez d’abord une réponse",
 };

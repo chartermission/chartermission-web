@@ -41,6 +41,12 @@ export const ShareType = z.enum(["post", "article", "event", "opportunity", "mem
 export type ShareType = z.infer<typeof ShareType>;
 export const ShareTarget = z.object({ type: ShareType, key: z.string().trim().min(1).max(200) });
 export type ShareTarget = z.infer<typeof ShareTarget>;
+/**
+ * Every card a message can carry. A story is only ever attached by replying to it (POST /stories/:id/reply):
+ * members can't send someone else's story on, so it isn't a ShareType.
+ */
+export const MessageShareType = z.enum([...ShareType.options, "story"]);
+export type MessageShareType = z.infer<typeof MessageShareType>;
 
 export const MessageAttachment = z.object({
   id: z.string().uuid(),
@@ -55,9 +61,9 @@ export const MessageAttachment = z.object({
 });
 export type MessageAttachment = z.infer<typeof MessageAttachment>;
 
-/** A shared post, event, profile… as a card. `available` is false once it is gone or hidden. */
+/** A shared post, event, profile… or the story a reply answers, as a card. `available` is false once it is gone, hidden or (a story) expired. */
 export const MessageShare = z.object({
-  type: ShareType,
+  type: MessageShareType,
   path: z.string(),
   title: z.string(),
   description: z.string().nullable(),

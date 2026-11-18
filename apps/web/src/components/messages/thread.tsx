@@ -555,6 +555,7 @@ export function Thread({
                       <>
                         {message.attachments.some((a) => a.kind !== "voice") && <MessageAttachments attachments={message.attachments.filter((a) => a.kind !== "voice")} mine={mine} />}
                         {message.kind === "voice" && message.attachments[0] && <VoicePlayer attachment={message.attachments[0]} mine={mine} />}
+                        {message.share?.type === "story" && <ShareCard share={message.share} mine={mine} />}
                         {message.kind === "meeting" && message.meeting ? (
                           <MeetingCard message={message} mine={mine} respond={(r) => void respondToMeeting(message, r)} />
                         ) : (
@@ -572,7 +573,7 @@ export function Thread({
                             <NoTranslate>{translations[message.id]}</NoTranslate>
                           </p>
                         )}
-                        {message.share && <ShareCard share={message.share} mine={mine && !bare} />}
+                        {message.share && message.share.type !== "story" && <ShareCard share={message.share} mine={mine && !bare} />}
                         {message.linkPreview && !message.share && <LinkPreviewCard preview={message.linkPreview} />}
                       </>
                     )}

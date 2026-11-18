@@ -12,7 +12,12 @@ import { ModerationState } from "./social.js";
  *  GET    /stories/archive                 StoryView[]: the viewer's stories from the last 30 days (for highlights).
  *  GET    /stories/:id                     StoryView (live stories for their audience; highlighted ones for members).
  *  POST   /stories/:id/view                204. Counted once per viewer.
- *  GET    /stories/:id/viewers             StoryViewer[] (author only).
+ *  GET    /stories/:id/viewers             StoryViewer[] (author only), each with the reaction they left.
+ *  PUT    /stories/:id/reaction            StoryReactionInput → StoryView. One reaction per member; a new one replaces the old.
+ *  DELETE /stories/:id/reaction            StoryView.
+ *  POST   /stories/:id/reply               StoryReplyInput → StoryReplyResult. The reply is a message in the direct chat
+ *                                          with the author, with the story as a card (a message request when they
+ *                                          aren't connected). Official accounts don't take replies.
  *  DELETE /stories/:id                     204 (author). Also removes it from highlights.
  *  GET    /highlights?member=<handle|id>   HighlightView[] for a profile.
  *  POST   /highlights                      CreateHighlightInput → HighlightView.
@@ -35,6 +40,9 @@ export const HIGHLIGHTS_MAX = 20;
 export const HIGHLIGHT_STORIES_MAX = 50;
 /** Stories a member can post in 24 hours. */
 export const STORIES_PER_DAY = 30;
+/** The quick reactions under a story; any single emoji is accepted. */
+export const STORY_QUICK_REACTIONS = ["❤️", "👏", "🔥", "😂", "😮", "🙏"] as const;
+export const STORY_REPLY_MAX_CHARS = 1000;
 
 export const CreateStoryInput = z.object({
   fileId: z.string().uuid(),
@@ -72,9 +80,16 @@ export const StoryView = z.object({
     own: z.boolean(),
     canDelete: z.boolean(),
     canReport: z.boolean(),
+    /** The emoji the viewer left on it, if any. */
+    reaction: z.string().nullable(),
+    /** Someone else's story that members can see: the viewer can react to it. */
+    canReact: z.boolean(),
+    /** As canReact, and neither side is an official account (those don't take private messages). */
+    canReply: z.boolean(),
   }),
-  /** Author only: how many people viewed it, and the highlights it is in. */
+  /** Author only: how many people viewed it and reacted to it, and the highlights it is in. */
   viewCount: z.number().int().nullable(),
+  reactionCount: z.number().int().nullable(),
   highlightIds: z.array(z.string().uuid()).nullable(),
   /** Present for the author or moderators when the story is hidden or removed. */
   moderationState: ModerationState.optional(),
@@ -97,8 +112,31 @@ export const StoryTray = z.object({
 });
 export type StoryTray = z.infer<typeof StoryTray>;
 
-export const StoryViewer = z.object({ member: MemberRef, viewedAt: z.string() });
+export const StoryViewer = z.object({ member: MemberRef, viewedAt: z.string(), /** The emoji they left, if any. */ reaction: z.string().nullable() });
 export type StoryViewer = z.infer<typeof StoryViewer>;
+
+/** PUT /stories/:id/reaction */
+export const StoryReactionInput = z.object({
+  emoji: z
+    .string()
+    .trim()
+    .min(1)
+    .max(16)
+    .refine((v) => /\p{Extended_Pictographic}/u.test(v), "Pick an emoji"),
+});
+export type StoryReactionInput = z.infer<typeof StoryReactionInput>;
+
+/** POST /stories/:id/reply */
+export const StoryReplyInput = z.object({
+  body: z.string().trim().min(1, "Write a reply first").max(STORY_REPLY_MAX_CHARS, `Keep it under ${STORY_REPLY_MAX_CHARS} characters`),
+  /** Random id from the sending app; sending again with the same id returns the first copy. */
+  clientId: z.string().uuid().optional(),
+});
+export type StoryReplyInput = z.infer<typeof StoryReplyInput>;
+
+/** Where the reply went. `request`: the author isn't a connection, so it waits as a message request. */
+export const StoryReplyResult = z.object({ conversationId: z.string().uuid(), request: z.boolean() });
+export type StoryReplyResult = z.infer<typeof StoryReplyResult>;
 
 const HighlightTitle = z
   .string()

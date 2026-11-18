@@ -12,6 +12,7 @@ import { relativeTime } from "@/components/social/format";
 import { memberHref } from "@/components/social/links";
 import { toast } from "@/components/social/toast";
 import { HighlightPicker } from "./highlight-picker";
+import { StoryAnswer } from "./story-answer";
 import { T, useT, useIntlTag } from "@/i18n/client";
 import { ProfileLink } from "@/components/social/post-parts";
 
@@ -21,7 +22,8 @@ type Sub = "viewers" | "highlight" | "delete" | "report" | null;
 
 /**
  * Full-screen story viewer: progress bars, photo (6 s) or video, caption, tap or arrow keys to move,
- * Space to pause. Authors see who viewed, add to a highlight or delete; others can report.
+ * Space to pause. Authors see who viewed and reacted, add to a highlight or delete; others can react,
+ * reply (a private message to the author) or report.
  * Used for the feed strip (groups of members) and for profile highlights (one group).
  */
 export function StoryViewer({
@@ -57,6 +59,8 @@ export function StoryViewer({
   const [muted, setMuted] = useState(false);
   const [sub, setSub] = useState<Sub>(null);
   const [viewers, setViewers] = useState<StoryViewerRow[] | null>(null);
+  /** A reply is being written or sent: the story waits. */
+  const [answering, setAnswering] = useState(false);
   const viewed = useRef(new Set<string>());
   /**
    * Progress of the current story (0–1). It changes every frame, so it lives in a ref and is painted
@@ -74,7 +78,7 @@ export function StoryViewer({
 
   const group = list[g];
   const story = group?.stories[i];
-  const holding = paused || sub !== null;
+  const holding = paused || sub !== null || answering;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -171,6 +175,8 @@ export function StoryViewer({
 
   function onKeyDown(event: KeyboardEvent<HTMLDialogElement>) {
     if (sub) return;
+    // Typing a reply: the arrow keys move the caret, not the story.
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
     if (event.key === "ArrowRight") {
       event.preventDefault();
       next();
@@ -201,6 +207,12 @@ export function StoryViewer({
       setI(0);
     }
     setList(updated);
+  }
+
+  function setReaction(storyId: string, reaction: string | null) {
+    setList((current) =>
+      current.map((grp) => ({ ...grp, stories: grp.stories.map((s) => (s.id === storyId ? { ...s, viewer: { ...s.viewer, reaction } } : s)) })),
+    );
   }
 
   async function openViewers() {
@@ -318,6 +330,12 @@ export function StoryViewer({
                     <button type="button" onClick={openViewers} className="flex items-center gap-1.5 rounded-full bg-inverse/15 px-3 py-1.5 text-xs font-medium hover:bg-inverse/25">
                       <Icon name="eye" size={14} />
                       {story.viewCount} {story.viewCount === 1 ? "view" : "views"}
+                      {!!story.reactionCount && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          {story.reactionCount} {story.reactionCount === 1 ? "reaction" : "reactions"}
+                        </>
+                      )}
                     </button>
                   )}
                   {story.viewer.own && !highlightActions && (
@@ -343,13 +361,22 @@ export function StoryViewer({
                   )}
                 </div>
               )}
+              {(story.viewer.canReact || story.viewer.canReply) && (
+                <StoryAnswer
+                  key={story.id}
+                  story={story}
+                  authorName={group.author.name}
+                  onHold={setAnswering}
+                  onReaction={(reaction) => setReaction(story.id, reaction)}
+                />
+              )}
             </div>
           </div>
         </div>
       )}
 
       {sub === "viewers" && story && (
-        <Dialog title="Viewed by" description="Members who opened this story" onClose={() => setSub(null)} width={420}>
+        <Dialog title="Viewed by" description="Members who opened this story, with the reaction they left" onClose={() => setSub(null)} width={420}>
           {viewers === null ? (
             <p className="text-sm text-secondary">Loading…</p>
           ) : viewers.length === 0 ? (
@@ -364,6 +391,11 @@ export function StoryViewer({
                   <Link href={memberHref(v.member.handle)} className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:underline">
                     {v.member.name}
                   </Link>
+                  {v.reaction && (
+                    <span className="shrink-0 text-lg leading-none" role="img" aria-label={t("Reacted with {emoji}", { emoji: v.reaction })}>
+                      {v.reaction}
+                    </span>
+                  )}
                   <time dateTime={v.viewedAt} className="shrink-0 text-xs text-secondary" suppressHydrationWarning>
                     {relativeTime(intl, t, v.viewedAt)}
                   </time>

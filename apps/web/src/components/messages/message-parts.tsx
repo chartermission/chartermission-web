@@ -176,6 +176,36 @@ export function VoicePlayer({ attachment, mine }: { attachment: MessageAttachmen
 /** A shared post, event, profile… as a card linking to it. */
 export function ShareCard({ share, mine }: { share: MessageShare; mine: boolean }) {
   const t = useT();
+  // A reply to a story: which story it answers, small and upright, above the reply itself.
+  if (share.type === "story") {
+    const label = mine ? t("You replied to their story") : t("Replied to your story");
+    if (!share.available) {
+      return (
+        <p className={cn("rounded-xl px-3 py-2 text-xs italic", mine ? "bg-white/15 text-inverse/85" : "bg-card text-secondary")}>
+          {label} · {t("no longer available")}
+        </p>
+      );
+    }
+    return (
+      <Link
+        href={share.path}
+        className={cn("flex w-[240px] max-w-full items-center gap-3 overflow-hidden rounded-xl border p-2", mine ? "border-white/25 bg-white/10 hover:bg-white/20" : "border-line bg-card hover:bg-primary-tint-2")}
+      >
+        {share.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- permission-checked media URL
+          <img src={share.imageUrl} alt="" loading="lazy" className="h-20 w-[45px] shrink-0 rounded-md bg-muted object-cover" />
+        )}
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className={cn("text-[11px] font-semibold tracking-wide uppercase", mine ? "text-inverse/75" : "text-primary-light")}>{label}</span>
+          {share.description && (
+            <span dir="auto" className={cn("line-clamp-2 text-xs", mine ? "text-inverse/80" : "text-secondary")}>
+              {share.description}
+            </span>
+          )}
+        </span>
+      </Link>
+    );
+  }
   if (!share.available) {
     return (
       <p className={cn("rounded-xl px-3 py-2 text-sm italic", mine ? "bg-white/15 text-inverse/85" : "bg-card text-secondary")}>
@@ -209,6 +239,7 @@ const SHARE_LABELS: Record<MessageShare["type"], string> = {
   member: "Profile",
   page: "Page",
   chapter: "Chapter",
+  story: "Story",
 };
 
 /** A meeting invitation: when, how long, the call link, and accept / decline / cancel / add to calendar. */

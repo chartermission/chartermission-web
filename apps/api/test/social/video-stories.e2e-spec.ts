@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
-import { parseVideoEmbed, type HighlightView, type StoryTray, type StoryView } from '@chartermission/contracts';
+import { parseVideoEmbed, type HighlightView, type MessagesPage, type StoryReplyResult, type StoryTray, type StoryView, type StoryViewer } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { canRemux, ffmpegPaths, probeVideo, remuxVideo, transcodeVideo } from '../../src/media/video.js';
 import { SettingsService } from '../../src/infra/settings.service.js';
@@ -218,6 +218,81 @@ describe('Video posts, media settings and stories', () => {
     await t.db.update(s.stories).set({ expiresAt: old, createdAt: old }).where(eq(s.stories.id, story.id));
     expect(await t.app.get(StoriesService).purge()).toBeGreaterThanOrEqual(1);
     expect(await t.db.select().from(s.stories).where(eq(s.stories.id, story.id))).toHaveLength(0);
+  });
+
+  it('lets viewers react to a story and reply to it in a private message', async () => {
+    const author = await createMember(t, { name: 'Amara Okafor' });
+    const connection = await createMember(t, { name: 'Lina Connection' });
+    const follower = await createMember(t, { name: 'Kofi Follower' });
+    const stranger = await createMember(t, { name: 'Sam Stranger' });
+    await follow(t, follower.id, 'member', author.id);
+    await t.db.insert(s.connections).values({ requesterId: connection.id, addresseeId: author.id, status: 'accepted', respondedAt: new Date() });
+    const story = await storyFrom(author, 'Day one in Kigali');
+    expect(story).toMatchObject({ reactionCount: 0, viewer: { reaction: null, canReact: false, canReply: false } });
+    const reaction = `/stories/${story.id}/reaction`;
+    const reply = `/stories/${story.id}/reply`;
+
+    // Reactions: for the story's audience, not its author; one each, replaced by the next.
+    await stranger.put(reaction, { emoji: '❤️' }).expect(404);
+    await author.put(reaction, { emoji: '❤️' }).expect(400);
+    await connection.put(reaction, { emoji: 'love' }).expect(422);
+    expect((await connection.get(`/stories/${story.id}`).expect(200)).body).toMatchObject({
+      reactionCount: null,
+      viewer: { reaction: null, seen: false, canReact: true, canReply: true },
+    });
+    expect(((await connection.put(reaction, { emoji: '❤️' }).expect(200)).body as StoryView).viewer).toMatchObject({ reaction: '❤️', seen: true });
+    expect(((await connection.put(reaction, { emoji: '🔥' }).expect(200)).body as StoryView).viewer.reaction).toBe('🔥');
+    await follower.put(reaction, { emoji: '👏' }).expect(200);
+    expect((await author.get(`/stories/${story.id}`).expect(200)).body).toMatchObject({ viewCount: 2, reactionCount: 2 });
+    const viewers = (await author.get(`/stories/${story.id}/viewers`).expect(200)).body as StoryViewer[];
+    expect(Object.fromEntries(viewers.map((v) => [v.member.id, v.reaction]))).toEqual({ [connection.id]: '🔥', [follower.id]: '👏' });
+    // The author hears about it once: reactions on one story share a notification, and a changed emoji adds none.
+    const notes = await t.db
+      .select()
+      .from(s.notifications)
+      .where(and(eq(s.notifications.userId, author.id), eq(s.notifications.objectType, 'story'), eq(s.notifications.objectId, story.id)));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ type: 'reaction', actorCount: 2 });
+    expect(JSON.stringify(notes[0]!.data)).toContain(`/stories/${story.id}`);
+    expect(((await follower.delete(reaction).expect(200)).body as StoryView).viewer.reaction).toBeNull();
+    expect((await author.get(`/stories/${story.id}`).expect(200)).body).toMatchObject({ viewCount: 2, reactionCount: 1 });
+
+    // Replies: a message to the author with the story attached.
+    await author.post(reply, { body: 'Talking to myself' }).expect(400);
+    await stranger.post(reply, { body: 'Hello' }).expect(404);
+    await connection.post(reply, { body: '   ' }).expect(422);
+    const sent = (await connection.post(reply, { body: 'Kigali looks great!' }).expect(201)).body as StoryReplyResult;
+    expect(sent.request).toBe(false);
+    const thread = async () => ((await author.get(`/messages/conversations/${sent.conversationId}/messages`).expect(200)).body as MessagesPage).items.at(-1)!;
+    expect(await thread()).toMatchObject({
+      senderId: connection.id,
+      kind: 'share',
+      body: 'Kigali looks great!',
+      share: { type: 'story', path: `/stories/${story.id}`, title: 'Amara Okafor’s story', description: 'Day one in Kigali', available: true },
+    });
+    expect((await thread()).share!.imageUrl).toMatch(/\/media\//);
+    // Nobody can send someone's story on as a card.
+    await connection.post(`/messages/conversations/${sent.conversationId}/messages`, { body: 'Look', share: { type: 'story', key: story.id } }).expect(422);
+
+    // Not connected: the reply is a message request, and one is all they get until it's accepted.
+    const asked = (await follower.post(reply, { body: 'Where is this?' }).expect(201)).body as StoryReplyResult;
+    expect(asked.request).toBe(true);
+    expect((await author.get('/messages/conversations?box=requests').expect(200)).body.map((c: { id: string }) => c.id)).toContain(asked.conversationId);
+    await follower.post(reply, { body: 'Hello?' }).expect(403);
+
+    // Once the story has gone, the reply stays and its card says so.
+    await t.db.update(s.stories).set({ expiresAt: new Date(Date.now() - 60_000) }).where(eq(s.stories.id, story.id));
+    expect(await thread()).toMatchObject({ body: 'Kigali looks great!', share: { type: 'story', available: false, imageUrl: null } });
+    await connection.put(reaction, { emoji: '❤️' }).expect(404);
+
+    // Official accounts take reactions but not private messages.
+    const official = await createMember(t, { name: 'Charter Mission' });
+    await t.db.update(s.users).set({ isOfficial: true }).where(eq(s.users.id, official.id));
+    await follow(t, follower.id, 'member', official.id);
+    const news = await storyFrom(official);
+    expect((await follower.get(`/stories/${news.id}`).expect(200)).body.viewer).toMatchObject({ canReact: true, canReply: false });
+    await follower.put(`/stories/${news.id}/reaction`, { emoji: '🙏' }).expect(200);
+    await follower.post(`/stories/${news.id}/reply`, { body: 'Thank you' }).expect(403);
   });
 
   it('lets members report stories and authors delete them (and their empty highlights)', async () => {

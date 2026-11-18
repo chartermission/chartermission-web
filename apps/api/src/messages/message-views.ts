@@ -9,12 +9,25 @@ import type {
   MessageKind,
   MessageShare,
   MessageView,
+  MessageShareType,
   ReactionSummary,
-  ShareType,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, connections, conversationMembers, conversations, files, messageAttachments, messageReactions, messages, users } from '../db/schema.js';
-import { MembersService, mediaUrl } from '../core/members.service.js';
+import {
+  chapters,
+  connections,
+  conversationMembers,
+  conversations,
+  files,
+  messageAttachments,
+  messageReactions,
+  messages,
+  stories,
+  storyHighlightItems,
+  users,
+} from '../db/schema.js';
+import { MembersService, mediaUrl, posterUrl } from '../core/members.service.js';
+import { isUuid } from '../moderation/util.js';
 import { RelationsService } from '../core/relations.service.js';
 import { env } from '../config/env.js';
 import { PreviewService } from '../preview/preview.service.js';
@@ -29,8 +42,10 @@ export const visible = (m: Pick<MessageRow, 'deletedAt' | 'moderationState'>) =>
 const apiBase = () => new URL(env().API_PUBLIC_URL).pathname.replace(/\/$/, '');
 
 /** The page path for a shared item. */
-export function sharePath(type: ShareType, key: string): string {
+export function sharePath(type: MessageShareType, key: string): string {
   switch (type) {
+    case 'story':
+      return `/stories/${key}`;
     case 'post':
       return `/posts/${key}`;
     case 'article':
@@ -299,13 +314,14 @@ export class MessageViews {
       if (!m.shareType || !m.shareId || !visible(m)) continue;
       const key = `${m.shareType}:${m.shareId}`;
       if (out.has(key)) continue;
-      out.set(key, await this.share(m.shareType as ShareType, m.shareId));
+      out.set(key, await this.share(m.shareType as MessageShareType, m.shareId));
     }
     return out;
   }
 
-  async share(type: ShareType, key: string): Promise<MessageShare> {
+  async share(type: MessageShareType, key: string): Promise<MessageShare> {
     const path = sharePath(type, key);
+    if (type === 'story') return this.storyShare(key, path);
     const info = await this.previews.forPath(path).catch(() => null);
     if (!info) return { type, path, title: 'No longer available', description: null, imageUrl: null, available: false };
     return {
@@ -314,6 +330,36 @@ export class MessageViews {
       title: info.title.replace(/ · Charter Mission$/, ''),
       description: info.description || null,
       imageUrl: info.image ? (/^https?:\/\//.test(info.image) ? info.image : `${apiBase()}${info.image}`) : null,
+      available: true,
+    };
+  }
+
+  /**
+   * The story a reply answers: its picture (a video's still frame) and caption, for as long as members
+   * can still open it (live, or kept in a highlight). After that the reply stays and the card says it's gone.
+   */
+  private async storyShare(id: string, path: string): Promise<MessageShare> {
+    const gone: MessageShare = { type: 'story', path, title: 'No longer available', description: null, imageUrl: null, available: false };
+    if (!isUuid(id)) return gone;
+    const [row] = await this.db
+      .select({ story: stories, file: files })
+      .from(stories)
+      .innerJoin(files, eq(files.id, stories.fileId))
+      .where(eq(stories.id, id))
+      .limit(1);
+    if (!row || row.story.deletedAt || row.story.moderationState !== 'visible') return gone;
+    if (row.story.expiresAt <= new Date()) {
+      const [kept] = await this.db.select({ id: storyHighlightItems.storyId }).from(storyHighlightItems).where(eq(storyHighlightItems.storyId, id)).limit(1);
+      if (!kept) return gone;
+    }
+    const author = (await this.members.refs([row.story.authorId])).get(row.story.authorId);
+    if (!author) return gone;
+    return {
+      type: 'story',
+      path,
+      title: `${author.name}’s story`,
+      description: row.story.caption,
+      imageUrl: row.file.purpose === 'story_video' ? posterUrl(row.file) : mediaUrl(row.file.id),
       available: true,
     };
   }

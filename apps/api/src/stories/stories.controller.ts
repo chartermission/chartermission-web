@@ -1,11 +1,14 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import {
   AddToHighlightInput,
   CreateHighlightInput,
   CreateStoryInput,
   HighlightsQuery,
+  StoryReactionInput,
+  StoryReplyInput,
   UpdateHighlightInput,
   type HighlightView,
+  type StoryReplyResult,
   type StoryTray,
   type StoryView,
   type StoryViewer,
@@ -56,6 +59,24 @@ export class StoriesController {
   @Access('member')
   viewers(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<StoryViewer[]> {
     return this.stories.viewers(ctx.user, id);
+  }
+
+  @Put('stories/:id/reaction')
+  @Access('verified')
+  react(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(StoryReactionInput) input: StoryReactionInput): Promise<StoryView> {
+    return this.stories.react(ctx.user, id, input);
+  }
+
+  @Delete('stories/:id/reaction')
+  @Access('member')
+  unreact(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<StoryView> {
+    return this.stories.unreact(ctx.user, id);
+  }
+
+  @Post('stories/:id/reply')
+  @Access('verified')
+  reply(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(StoryReplyInput) input: StoryReplyInput): Promise<StoryReplyResult> {
+    return this.stories.reply(ctx.user, id, input);
   }
 
   @Delete('stories/:id')

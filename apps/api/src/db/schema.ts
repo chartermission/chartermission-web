@@ -1878,6 +1878,23 @@ export const storyViews = pgTable(
   (t) => [primaryKey({ columns: [t.storyId, t.viewerId] }), index('story_views_viewer_idx').on(t.viewerId)],
 );
 
+/** The emoji a member left on a story: one per member, replaced when they pick another. */
+export const storyReactions = pgTable(
+  'story_reactions',
+  {
+    storyId: uuid('story_id')
+      .notNull()
+      .references(() => stories.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.storyId, t.userId] }), index('story_reactions_user_idx').on(t.userId)],
+);
+
 /** Named collections of stories on a member's profile. */
 export const storyHighlights = pgTable(
   'story_highlights',
