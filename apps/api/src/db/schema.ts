@@ -570,6 +570,8 @@ export const posts = pgTable(
     /** The reviewer's note to the author (why it was declined, held or removed). */
     chapterReviewNote: text('chapter_review_note'),
     pinnedAt: ts('pinned_at'),
+    /** How the post's images are shown: collage | carousel | grid (contracts MediaLayout). */
+    mediaLayout: text('media_layout').notNull().default('collage'),
     editedAt: ts('edited_at'),
     deletedAt: ts('deleted_at'),
     reactionCount: integer('reaction_count').notNull().default(0),
@@ -597,6 +599,7 @@ export const posts = pgTable(
     check('posts_status_ck', sql`${t.status} in ('pending_media','published','in_review','declined')`),
     check('posts_chapter_review_ck', sql`${t.chapterReview} is null or ${t.chapterReview} in ('pending','approved','declined')`),
     check('posts_mod_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
+    check('posts_media_layout_ck', sql`${t.mediaLayout} in ('collage','carousel','grid')`),
   ],
 );
 

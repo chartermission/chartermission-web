@@ -148,7 +148,7 @@ export const ar: Record<string, string> = {
   "At most 50": "50 كحد أقصى",
   "At most 60 minutes": "60 دقيقة كحد أقصى",
   "At most 600 minutes": "600 دقيقة كحد أقصى",
-  "Attach up to 4 images, 1 video or 1 document": "أرفق حتى 4 صور أو فيديو واحد أو مستند واحد",
+  "Attach up to {POSTMAXIMAGES} images, 1 video or 1 document": "أرفق حتى {POSTMAXIMAGES} صور أو فيديو واحد أو مستند واحد",
   "Attachment not found": "المرفق غير موجود",
   "Attempt": "المحاولة",
   "Audit log": "سجل التدقيق",
@@ -1250,4 +1250,6 @@ export const ar: Record<string, string> = {
   "That message was not found": "هذه الرسالة غير موجودة",
   "That conversation was not found": "هذه المحادثة غير موجودة",
   "That member was not found": "هذا العضو غير موجود",
+  "Write something before saving": "اكتب شيئًا قبل الحفظ",
+  "The new order must list each of this post’s images once": "يجب أن يتضمن الترتيب الجديد كل صورة في هذا المنشور مرة واحدة",
 };

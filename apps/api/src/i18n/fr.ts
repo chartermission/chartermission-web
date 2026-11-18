@@ -148,7 +148,7 @@ export const fr: Record<string, string> = {
   "At most 50": "50 au maximum",
   "At most 60 minutes": "60 minutes au maximum",
   "At most 600 minutes": "600 minutes au maximum",
-  "Attach up to 4 images, 1 video or 1 document": "Joignez jusqu’à 4 images, 1 vidéo ou 1 document",
+  "Attach up to {POSTMAXIMAGES} images, 1 video or 1 document": "Joignez jusqu’à {POSTMAXIMAGES} images, 1 vidéo ou 1 document",
   "Attachment not found": "Pièce jointe introuvable",
   "Attempt": "Cette tentative",
   "Audit log": "Journal d’audit",
@@ -1250,4 +1250,6 @@ export const fr: Record<string, string> = {
   "That message was not found": "Ce message est introuvable",
   "That conversation was not found": "Cette conversation est introuvable",
   "That member was not found": "Ce membre est introuvable",
+  "Write something before saving": "Écrivez quelque chose avant d’enregistrer",
+  "The new order must list each of this post’s images once": "Le nouvel ordre doit reprendre chaque image de cette publication une seule fois",
 };

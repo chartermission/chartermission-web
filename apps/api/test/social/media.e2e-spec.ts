@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
+import { POST_MAX_IMAGES } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { EICAR } from '../../src/media/scanner.js';
 import { createPost, uploadBytes } from './social-helpers.js';
@@ -169,11 +170,11 @@ describe('Uploads and media', () => {
     expect(view.body.attachments).toEqual([]);
   });
 
-  it('enforces attachment rules: own files only, up to 4 images or 1 document', async () => {
+  it('enforces attachment rules: own files only, up to POST_MAX_IMAGES images or 1 document', async () => {
     const a = await createMember(t);
     const b = await createMember(t);
     const mine: string[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < POST_MAX_IMAGES + 1; i++) {
       const id = await uploadBytes(t, a, { purpose: 'post_image', fileName: `p${i}.png`, mime: 'image/png', data: await png() });
       await a.post(`/uploads/${id}/complete`).expect(200);
       mine.push(id);
@@ -183,8 +184,52 @@ describe('Uploads and media', () => {
     const pdf = await uploadBytes(t, a, { purpose: 'post_document', fileName: 'd.pdf', mime: 'application/pdf', data: Buffer.from('%PDF-1.4\n%%EOF\n') });
     await a.post(`/uploads/${pdf}/complete`).expect(200);
     await a.post('/posts', { body: 'Mixed', attachmentIds: [mine[0], pdf] }).expect(422);
-    const ok = await createPost(a, 'Four photos', { attachmentIds: mine.slice(0, 4) });
+    const ok = await createPost(a, 'As many photos as a post takes', { attachmentIds: mine.slice(0, POST_MAX_IMAGES) });
     expect(ok.status).toBe('published');
-    expect(ok.attachments).toHaveLength(4);
+    expect(ok.attachments.map((f: { id: string }) => f.id)).toEqual(mine.slice(0, POST_MAX_IMAGES));
+    // A collage unless the author picks another layout.
+    expect(ok.mediaLayout).toBe('collage');
+  });
+
+  it('keeps images in the order they were sent, with the chosen layout, and lets the author change both', async () => {
+    const a = await createMember(t);
+    const b = await createMember(t);
+    const ids: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const id = await uploadBytes(t, a, { purpose: 'post_image', fileName: `c${i}.png`, mime: 'image/png', data: await png() });
+      await a.post(`/uploads/${id}/complete`).expect(200);
+      ids.push(id);
+    }
+    // Sent in an order that is neither upload order nor id order.
+    const sent = [ids[3]!, ids[0]!, ids[5]!, ids[1]!, ids[4]!, ids[2]!];
+    const post = await createPost(a, '', { attachmentIds: sent, mediaLayout: 'carousel' });
+    expect(post.mediaLayout).toBe('carousel');
+    expect(post.attachments.map((f: { id: string }) => f.id)).toEqual(sent);
+    const seen = await b.get(`/posts/${post.id}`).expect(200);
+    expect(seen.body.mediaLayout).toBe('carousel');
+    expect(seen.body.attachments.map((f: { id: string }) => f.id)).toEqual(sent);
+
+    await a.post('/posts', { body: 'Bad layout', attachmentIds: [], mediaLayout: 'spiral' }).expect(422);
+
+    // A photo post has no words to keep: the layout and the order can change on their own.
+    const reordered = [...sent].reverse();
+    const edited = await a.patch(`/posts/${post.id}`, { body: '', mediaLayout: 'grid', imageOrder: reordered }).expect(200);
+    expect(edited.body.mediaLayout).toBe('grid');
+    expect(edited.body.attachments.map((f: { id: string }) => f.id)).toEqual(reordered);
+    // The layout stays when an edit doesn't mention it.
+    const kept = await a.patch(`/posts/${post.id}`, { body: 'Launch day' }).expect(200);
+    expect(kept.body.mediaLayout).toBe('grid');
+    expect(kept.body.attachments.map((f: { id: string }) => f.id)).toEqual(reordered);
+
+    // The new order must be exactly the post's images.
+    await a.patch(`/posts/${post.id}`, { body: 'x', imageOrder: reordered.slice(1) }).expect(422);
+    await a.patch(`/posts/${post.id}`, { body: 'x', imageOrder: [...reordered.slice(1), reordered[1]] }).expect(422);
+    const stray = await uploadBytes(t, a, { purpose: 'post_image', fileName: 'stray.png', mime: 'image/png', data: await png() });
+    await a.patch(`/posts/${post.id}`, { body: 'x', imageOrder: [...reordered.slice(1), stray] }).expect(422);
+    await b.patch(`/posts/${post.id}`, { body: 'x', mediaLayout: 'collage' }).expect(403);
+
+    // A post with nothing but words still needs them.
+    const words = await createPost(a, 'Only words');
+    await a.patch(`/posts/${words.id}`, { body: '' }).expect(422);
   });
 });

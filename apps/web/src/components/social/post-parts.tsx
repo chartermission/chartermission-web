@@ -174,7 +174,7 @@ export function RepostEmbed({ original: initial }: { original: PostView | null }
       {/* Media, polls and links sit above the card's link so they can be opened, played and used. */}
       {original.attachments.length > 0 && !original.article && (
         <div className="relative z-10 flex flex-col gap-2">
-          <PostAttachments attachments={original.attachments} />
+          <PostAttachments attachments={original.attachments} layout={original.mediaLayout} />
         </div>
       )}
       {original.poll && !original.article && (

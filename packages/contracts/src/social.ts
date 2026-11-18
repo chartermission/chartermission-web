@@ -23,6 +23,18 @@ export type ReactionKind = z.infer<typeof ReactionKind>;
 export const PostKind = z.enum(["standard", "announcement"]);
 export type PostKind = z.infer<typeof PostKind>;
 
+/** Most images one post can carry (a video or a PDF still goes on its own). */
+export const POST_MAX_IMAGES = 10;
+
+/**
+ * How a post's images are shown, chosen by the author (one image always fills the post's width):
+ *  - collage: one large photo with smaller ones beside or under it; extra photos sit behind a "+N" tile;
+ *  - carousel: one photo at a time, swiped or stepped through in the author's order;
+ *  - grid: even square tiles; extra photos sit behind a "+N" tile.
+ */
+export const MediaLayout = z.enum(["collage", "carousel", "grid"]);
+export type MediaLayout = z.infer<typeof MediaLayout>;
+
 /**
  * What a post is. "kind" says who it comes from (an announcement is a platform-team
  * post); "type" says what shape it has:
@@ -313,6 +325,8 @@ export type PostView = {
   hashtags: string[];
   mentions: MemberRef[];
   attachments: AttachmentView[];
+  /** Layout of the images in `attachments` (they come in the author's order). */
+  mediaLayout: MediaLayout;
   poll: PollView | null;
   linkPreview: LinkPreview | null;
   /** One level only: a repost of a repost shows the original. Null when the original was removed. */
@@ -380,6 +394,7 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     hashtags: z.array(z.string()),
     mentions: z.array(MemberRef),
     attachments: z.array(AttachmentView),
+    mediaLayout: MediaLayout,
     poll: PollView.nullable(),
     linkPreview: LinkPreview.nullable(),
     repostOf: PostView.nullable(),
@@ -418,7 +433,10 @@ export type PollInput = z.infer<typeof PollInput>;
 export const PostComposition = z.object({
   type: PostType.default("standard"),
   body: z.string().trim().max(ARTICLE_MAX_CHARS),
-  attachmentIds: z.array(z.string().uuid()).max(4).default([]),
+  /** In the order the author wants them shown. */
+  attachmentIds: z.array(z.string().uuid()).max(POST_MAX_IMAGES).default([]),
+  /** How the images are laid out; a collage when left out. */
+  mediaLayout: MediaLayout.optional(),
   /** Alt text per attachment id (images). */
   altTexts: z.record(z.string().uuid(), z.string().trim().max(ALT_TEXT_MAX_CHARS)).optional(),
   poll: PollInput.optional(),
@@ -483,7 +501,7 @@ export function compositionIssues(v: PostComposition): Issue[] {
   return issues;
 }
 
-/** POST /posts — up to 4 images or 1 document (CM-FED-01); type rules in compositionIssues. */
+/** POST /posts — up to POST_MAX_IMAGES images, 1 video or 1 document (CM-FED-01); type rules in compositionIssues. */
 export const CreatePostInput = PostComposition.superRefine((v, ctx) => {
   for (const issue of compositionIssues(v)) ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
 });
@@ -491,8 +509,13 @@ export type CreatePostInput = z.infer<typeof CreatePostInput>;
 
 /** PATCH /posts/{id} — author edit, marked "edited" (CM-FED-06). Type-specific details can be edited too. */
 export const UpdatePostInput = z.object({
-  body: z.string().trim().min(1).max(ARTICLE_MAX_CHARS),
+  /** May be empty only when the post has media, a repost or a shared event to stand on. */
+  body: z.string().trim().max(ARTICLE_MAX_CHARS),
   altTexts: z.record(z.string().uuid(), z.string().trim().max(ALT_TEXT_MAX_CHARS)).optional(),
+  /** Change how the post's images are laid out. */
+  mediaLayout: MediaLayout.optional(),
+  /** The post's images in a new order: exactly the image ids it already has, each once. */
+  imageOrder: z.array(z.string().uuid()).max(POST_MAX_IMAGES).optional(),
   celebration: CelebrationDetails.optional(),
   request: RequestDetails.optional(),
   article: ArticleDetails.optional(),

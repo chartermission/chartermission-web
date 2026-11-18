@@ -561,6 +561,7 @@ export function PostCard({
             // Photos run edge to edge across the card (its padding is p-5, px-4 on small screens).
             <PostAttachments
               attachments={post.attachments}
+              layout={post.mediaLayout}
               bleedClassName="-mx-5 max-sm:-mx-4"
             />
           )}

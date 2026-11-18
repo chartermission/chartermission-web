@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ALT_TEXT_MAX_CHARS, type DraftView, type UploadPurpose } from "@chartermission/contracts";
+import { ALT_TEXT_MAX_CHARS, POST_MAX_IMAGES, type AttachmentView, type DraftView, type MediaLayout, type UploadPurpose } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
 import { UploadCancelled, chooseVideoPart, uploadFile } from "@/lib/upload";
 import { getMediaLimits } from "@/lib/media-limits";
@@ -10,8 +10,9 @@ import { errorMessage } from "@/components/social/errors";
 import { formatBytes } from "@/components/social/format";
 import { T, useT } from "@/i18n/client";
 import type { Translate } from "@/i18n/translate";
+import { MediaLayoutPicker, MediaLayoutPreview } from "./media-layout";
 
-export const MAX_IMAGES = 4;
+export const MAX_IMAGES = POST_MAX_IMAGES;
 
 export type Attachment = {
   key: string;
@@ -25,13 +26,18 @@ export type Attachment = {
   error: string | null;
   /** Image description for screen readers (alt text). */
   alt: string;
+  /** Images picked in this session: their size in pixels once read, for the layout preview. */
+  width: number | null;
+  height: number | null;
 };
 
 let counter = 0;
 
 /**
- * Up to 4 images or 1 PDF (CM-FED-01). Each file goes through lib/upload.ts:
- * signed upload with progress, then the server-side validation and malware scan.
+ * Up to MAX_IMAGES images, 1 video or 1 PDF (CM-FED-01). Each file goes through lib/upload.ts:
+ * signed upload with progress, then the server-side validation and malware scan. The list keeps
+ * the order files were added in, whichever upload finishes first, and the author can reorder it:
+ * that order is the order the post shows them in.
  */
 export function useAttachments(initial?: { files: DraftView["attachments"]; altTexts?: Record<string, string> }) {
   const t = useT();
@@ -47,6 +53,8 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
       fileId: file.id,
       error: null,
       alt: initial?.altTexts?.[file.id] ?? "",
+      width: null,
+      height: null,
     })),
   );
   const [notice, setNotice] = useState<string | null>(null);
@@ -75,13 +83,17 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
       accepted = files.slice(0, 1);
     } else if (kind === "document") {
       if (imageCount > 0 || hasDoc || hasVideo) {
-        setNotice("A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the current files first.");
+        setNotice(t("A post can have up to {max} images, 1 video or 1 PDF, one kind at a time. Remove the current files first.", { max: MAX_IMAGES }));
         return;
       }
       accepted = files.slice(0, 1);
     } else {
       if (hasDoc || hasVideo) {
-        setNotice((hasDoc ? t("A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the PDF first.") : t("A post can have up to 4 images, 1 video or 1 PDF, one kind at a time. Remove the video first.")));
+        setNotice(
+          hasDoc
+            ? t("A post can have up to {max} images, 1 video or 1 PDF, one kind at a time. Remove the PDF first.", { max: MAX_IMAGES })
+            : t("A post can have up to {max} images, 1 video or 1 PDF, one kind at a time. Remove the video first.", { max: MAX_IMAGES }),
+        );
         return;
       }
       accepted = files.slice(0, Math.max(0, maxImages - imageCount));
@@ -103,9 +115,18 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
         fileId: null,
         error: null,
         alt: "",
+        width: null,
+        height: null,
       };
     });
     setItems((current) => [...current, ...next]);
+    // Read each picture's size so the layout preview can frame it the way the post will.
+    for (const item of next) {
+      if (item.purpose !== "post_image" || !item.previewUrl) continue;
+      const probe = new window.Image();
+      probe.onload = () => patch(item.key, { width: probe.naturalWidth || null, height: probe.naturalHeight || null });
+      probe.src = item.previewUrl;
+    }
 
     next.forEach((item, index) => {
       const file = accepted[index]!;
@@ -128,6 +149,31 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
     patch(key, { alt: alt.slice(0, ALT_TEXT_MAX_CHARS) });
   }
 
+  /** Move a file one place earlier (-1) or later (+1) in the order. */
+  function move(key: string, delta: -1 | 1) {
+    setItems((current) => {
+      const from = current.findIndex((item) => item.key === key);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= current.length) return current;
+      const next = [...current];
+      [next[from], next[to]] = [next[to]!, next[from]!];
+      return next;
+    });
+  }
+
+  /** Put a file where another one is (drag and drop); the files in between shift along. */
+  function moveTo(key: string, targetKey: string) {
+    setItems((current) => {
+      const from = current.findIndex((item) => item.key === key);
+      const to = current.findIndex((item) => item.key === targetKey);
+      if (from < 0 || to < 0 || from === to) return current;
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      return next;
+    });
+  }
+
   function remove(key: string) {
     setItems((current) => {
       const item = current.find((i) => i.key === key);
@@ -146,6 +192,8 @@ export function useAttachments(initial?: { files: DraftView["attachments"]; altT
     notice,
     add,
     remove,
+    move,
+    moveTo,
     setAlt,
     ids: ready.map((item) => item.fileId!),
     /** Ready files with their kind and description, for the post or draft payload. */
@@ -231,6 +279,8 @@ export function AttachmentPicker({
   mode,
   maxImages = MAX_IMAGES,
   variant = "attachments",
+  layout,
+  onLayoutChange,
 }: {
   state: AttachmentsState;
   id: string;
@@ -238,10 +288,43 @@ export function AttachmentPicker({
   maxImages?: number;
   /** "cover": one article cover image. */
   variant?: "attachments" | "cover";
+  /** With both set, two or more images get the layout choice and a preview of the post's photos. */
+  layout?: MediaLayout;
+  onLayoutChange?: (layout: MediaLayout) => void;
 }) {
   const t = useT();
-  const { items, notice, add, remove, setAlt } = state;
-  const images = items.filter((i) => i.purpose === "post_image" && i.status !== "rejected").length;
+  const { items, notice, add, remove, move, moveTo, setAlt } = state;
+  const liveImages = items.filter((i) => i.purpose === "post_image" && i.status !== "rejected");
+  const images = liveImages.length;
+  /** Several images: each shows its place in the order and can be moved. */
+  const ordered = variant !== "cover" && images > 1;
+  /** The arrow buttons by file and direction, to keep focus on a file as it moves. */
+  const arrows = useRef(new Map<string, HTMLButtonElement | null>());
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
+  const previewImages: AttachmentView[] = liveImages
+    .filter((item) => item.previewUrl)
+    .map((item) => ({
+      id: item.key,
+      kind: "image",
+      url: item.previewUrl!,
+      name: item.name,
+      mime: "image/*",
+      sizeBytes: item.size,
+      width: item.width,
+      height: item.height,
+      alt: item.alt.trim() || null,
+    }));
+
+  /** Move with the arrow buttons, keeping keyboard focus on the file that moved. */
+  function shift(key: string, delta: -1 | 1) {
+    move(key, delta);
+    requestAnimationFrame(() => {
+      const same = arrows.current.get(`${key}:${delta < 0 ? "earlier" : "later"}`);
+      const other = arrows.current.get(`${key}:${delta < 0 ? "later" : "earlier"}`);
+      (same && !same.disabled ? same : other)?.focus();
+    });
+  }
   const full =
     mode === "image"
       ? images >= maxImages
@@ -294,7 +377,7 @@ export function AttachmentPicker({
           {cover
             ? "Optional. One JPEG, PNG or WebP image, 5 MB max. Wide images (2:1) look best."
             : mode === "image"
-              ? "Up to 4 images. JPEG, PNG or WebP, 5 MB each."
+              ? `${t("Up to {max} images. JPEG, PNG or WebP, 5 MB each.", { max: maxImages })}${ordered ? ` ${t("They show in the order below: drag a picture or use the arrows to change it.")}` : ""}`
               : mode === "video"
                 ? `${t("One video: MP4, MOV or WebM, {size} GB max.", { size: videoGb })}${maxSeconds ? ` ${t("Posts show up to {duration}: if yours is longer, you choose which part to post.", { duration: formatDuration(maxSeconds) })}` : ""}`
                 : "One PDF, up to 10 MB."}{" "}
@@ -308,9 +391,60 @@ export function AttachmentPicker({
       )}
       {items.length > 0 && (
         <ul className="flex flex-col gap-2" aria-live="polite">
-          {items.map((item) => (
-            <li key={item.key} className="flex items-start gap-3 rounded-lg border border-line bg-card p-2">
-              {item.previewUrl && item.purpose === "post_video" ? (
+          {items.map((item, index) => {
+            const place = ordered && item.purpose === "post_image" && item.status !== "rejected" ? liveImages.indexOf(item) + 1 : 0;
+            return (
+            <li
+              key={item.key}
+              onDragOver={(event) => {
+                if (!dragging || dragging === item.key) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                if (dropOn !== item.key) setDropOn(item.key);
+              }}
+              onDrop={(event) => {
+                if (!dragging) return;
+                event.preventDefault();
+                moveTo(dragging, item.key);
+                setDragging(null);
+                setDropOn(null);
+              }}
+              className={cn(
+                "flex items-start gap-3 rounded-lg border bg-card p-2",
+                dropOn === item.key && dragging !== item.key ? "border-primary-light ring-2 ring-primary-tint" : "border-line",
+                dragging === item.key && "opacity-50",
+              )}
+            >
+              {place > 0 ? (
+                // The picture is the drag handle (the row holds a text field, which must stay selectable).
+                <span
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", item.name);
+                    setDragging(item.key);
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setDropOn(null);
+                  }}
+                  title={t("Drag to reorder")}
+                  className="relative shrink-0 cursor-grab active:cursor-grabbing"
+                >
+                  {item.previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- local object URL or draft media preview
+                    <img src={item.previewUrl} alt="" draggable={false} className="size-12 rounded-md object-cover" />
+                  ) : (
+                    <span className="flex size-12 items-center justify-center rounded-md bg-info-light text-info">
+                      <Icon name="image" size={20} />
+                    </span>
+                  )}
+                  <span className="absolute -start-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold tabular-nums text-inverse ring-2 ring-card">
+                    <span aria-hidden="true">{place}</span>
+                    <span className="sr-only">{t("Photo {place} of {total}", { place, total: images })}</span>
+                  </span>
+                </span>
+              ) : item.previewUrl && item.purpose === "post_video" ? (
                 <video src={item.previewUrl} muted playsInline preload="metadata" aria-hidden="true" className="h-12 w-20 shrink-0 rounded-md bg-ink object-cover" />
               ) : item.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- local object URL or draft media preview
@@ -349,6 +483,34 @@ export function AttachmentPicker({
                 )}
                 {item.purpose === "post_image" && item.status !== "rejected" && <AltTextField item={item} onChange={(alt) => setAlt(item.key, alt)} />}
               </span>
+              {ordered && (
+                <span className="flex shrink-0 flex-col">
+                  <button
+                    ref={(node) => {
+                      arrows.current.set(`${item.key}:earlier`, node);
+                    }}
+                    type="button"
+                    onClick={() => shift(item.key, -1)}
+                    disabled={index === 0}
+                    className="rounded-md p-1 text-secondary hover:bg-muted hover:text-ink disabled:pointer-events-none disabled:opacity-30"
+                    aria-label={t("Move {name} earlier", { name: item.name })}
+                  >
+                    <Icon name="chevron-down" size={16} className="rotate-180" />
+                  </button>
+                  <button
+                    ref={(node) => {
+                      arrows.current.set(`${item.key}:later`, node);
+                    }}
+                    type="button"
+                    onClick={() => shift(item.key, 1)}
+                    disabled={index === items.length - 1}
+                    className="rounded-md p-1 text-secondary hover:bg-muted hover:text-ink disabled:pointer-events-none disabled:opacity-30"
+                    aria-label={t("Move {name} later", { name: item.name })}
+                  >
+                    <Icon name="chevron-down" size={16} />
+                  </button>
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => remove(item.key)}
@@ -358,8 +520,15 @@ export function AttachmentPicker({
                 <Icon name="x" size={16} />
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
+      )}
+      {ordered && layout && onLayoutChange && (
+        <>
+          <MediaLayoutPicker id={`${id}-layout`} value={layout} onChange={onLayoutChange} />
+          <MediaLayoutPreview images={previewImages} layout={layout} />
+        </>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import {
   type CelebrationCategory,
   type DraftPayload,
   type DraftView,
+  type MediaLayout,
   type PostComposition,
   type PostType,
   type RequestCategory,
@@ -37,6 +38,8 @@ export type ComposerFields = {
   announcement: boolean;
   poll: PollDraft | null;
   link: string | null;
+  /** How the post's photos are laid out (used once there are two or more). */
+  mediaLayout: MediaLayout;
   celebration: CelebrationFields;
   request: RequestFields;
   article: ArticleFields;
@@ -65,6 +68,7 @@ export function initialFields(type: PostType = "standard"): ComposerFields {
     announcement: false,
     poll: null,
     link: null,
+    mediaLayout: "collage",
     celebration: emptyCelebration(),
     request: emptyRequest(),
     article: emptyArticle(),
@@ -86,6 +90,7 @@ export function fieldsFromDraft(payload: DraftPayload): ComposerFields {
     announcement: payload.kind === "announcement",
     poll,
     link: payload.linkUrl ?? null,
+    mediaLayout: payload.mediaLayout ?? "collage",
     celebration: {
       category: payload.celebration?.category ?? null,
       headline: payload.celebration?.headline ?? "",
@@ -110,6 +115,11 @@ export const maxBodyFor = (type: PostType) => (type === "article" ? ARTICLE_MAX_
 
 const opt = (value: string) => (value.trim() ? value.trim() : undefined);
 
+/** The layout is sent only when it shows: a post (not an article) with two or more photos. */
+function layoutFor(fields: ComposerFields, files: ReadyFile[]): MediaLayout | undefined {
+  return fields.type !== "article" && files.filter((f) => f.kind === "image").length > 1 ? fields.mediaLayout : undefined;
+}
+
 function altTexts(files: ReadyFile[]): Record<string, string> | undefined {
   const entries = files.filter((f) => f.kind === "image" && f.alt.trim()).map((f) => [f.fileId, f.alt.trim().slice(0, ALT_TEXT_MAX_CHARS)] as const);
   return entries.length ? Object.fromEntries(entries) : undefined;
@@ -127,6 +137,8 @@ export function toComposition(fields: ComposerFields, files: ReadyFile[]): PostC
   };
   const alts = altTexts(files);
   if (alts) input.altTexts = alts;
+  const layout = layoutFor(fields, files);
+  if (layout) input.mediaLayout = layout;
   if (fields.chapterId) input.chapterId = fields.chapterId;
   if (fields.pageId) input.pageId = fields.pageId;
   if (type === "standard") {
@@ -173,6 +185,8 @@ export function toDraftPayload(fields: ComposerFields, files: ReadyFile[]): Draf
   };
   const alts = altTexts(files);
   if (alts) payload.altTexts = alts;
+  const layout = layoutFor(fields, files);
+  if (layout) payload.mediaLayout = layout;
   if (fields.chapterId) payload.chapterId = fields.chapterId;
   if (fields.pageId) payload.pageId = fields.pageId;
   if (type === "standard") {

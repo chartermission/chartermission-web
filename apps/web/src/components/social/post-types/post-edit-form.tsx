@@ -7,13 +7,15 @@ import {
   ArticleDetails,
   CelebrationDetails,
   RequestDetails,
+  type MediaLayout,
   type PostView,
   type UpdatePostInput,
 } from "@chartermission/contracts";
-import { Button, cn } from "@chartermission/ui";
+import { Button, Icon, cn } from "@chartermission/ui";
 import { api, ApiError } from "@/lib/api/client";
 import { ArticleEditor } from "@/components/compose/article-editor";
 import { fieldKey, focusFirstInvalid, maxBodyFor, type CelebrationFields, type FieldErrors, type RequestFields } from "@/components/compose/composition";
+import { MediaLayoutPicker, MediaLayoutPreview } from "@/components/compose/media-layout";
 import { CelebrationForm, FieldError, RequestForm, TextField } from "@/components/compose/type-fields";
 import { ErrorNotice } from "../errors";
 import { toast } from "../toast";
@@ -24,7 +26,8 @@ const sentence = (message: string) => (/[.!?…]$/.test(message) ? message : `${
 
 /**
  * Inline editor for an existing post (PATCH /posts/{id}): the text, the type's details
- * (headline, title, skills…) and image descriptions. Edited posts are marked "Edited".
+ * (headline, title, skills…), image descriptions and, with several photos, their order and
+ * layout. Edited posts are marked "Edited".
  */
 export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSaved: (post: PostView) => void; onCancel: () => void }) {
   const t = useT();
@@ -44,7 +47,12 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
     closesOn: post.request?.closesOn ?? "",
   });
   const [article, setArticle] = useState({ title: post.article?.title ?? "", subtitle: post.article?.subtitle ?? "" });
-  const images = post.attachments.filter((a) => a.kind === "image");
+  const attached = post.attachments.filter((a) => a.kind === "image");
+  const [order, setOrder] = useState(() => attached.map((image) => image.id));
+  const images = order.flatMap((imageId) => attached.find((image) => image.id === imageId) ?? []);
+  const [layout, setLayout] = useState<MediaLayout>(post.mediaLayout ?? "collage");
+  /** Several photos (not an article's cover): they can be reordered and laid out. */
+  const arrangeable = images.length > 1 && !post.article;
   const [alts, setAlts] = useState<Record<string, string>>(() => Object.fromEntries(images.map((image) => [image.id, image.alt ?? ""])));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<unknown>(null);
@@ -57,12 +65,17 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
       problems[key] ??= sentence(message);
     };
     const text = body.trim();
-    if (!text) set("text", "Write something before saving");
+    // A post can stand on its media, a repost or a shared event alone; anything else needs words.
+    if (!text && post.attachments.length === 0 && !post.isRepost && !post.isEventShare) set("text", "Write something before saving");
     else if (text.length > max) set("text", t("Posts can be up to {count} characters", { count: max.toLocaleString("en") }));
     if (post.type === "question" && text && text.length < 10) set("text", "Write your question (at least 10 characters)");
     if (post.type === "article" && text && text.length < ARTICLE_MIN_CHARS) set("text", t("Articles need at least {ARTICLEMINCHARS} characters", { ARTICLEMINCHARS: ARTICLE_MIN_CHARS }));
     const input: UpdatePostInput = { body: text };
     if (images.length) input.altTexts = Object.fromEntries(images.map((image) => [image.id, (alts[image.id] ?? "").trim()]));
+    if (arrangeable) {
+      if (layout !== (post.mediaLayout ?? "collage")) input.mediaLayout = layout;
+      if (order.some((imageId, index) => imageId !== attached[index]?.id)) input.imageOrder = order;
+    }
     if (post.type === "celebration") {
       const parsed = CelebrationDetails.safeParse({ ...celebration, organisation: opt(celebration.organisation) });
       if (parsed.success) input.celebration = parsed.data;
@@ -79,6 +92,21 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
       else for (const issue of parsed.error.issues) set(`article.${issue.path.join(".")}`, issue.message);
     }
     return { input, problems };
+  }
+
+  /** Move a photo one place earlier (-1) or later (+1), keeping keyboard focus on it. */
+  function shift(imageId: string, delta: -1 | 1) {
+    const from = order.indexOf(imageId);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= order.length) return;
+    const next = [...order];
+    [next[from], next[to]] = [next[to]!, next[from]!];
+    setOrder(next);
+    requestAnimationFrame(() => {
+      const same = document.getElementById(`${id}-${imageId}-${delta < 0 ? "earlier" : "later"}`) as HTMLButtonElement | null;
+      const other = document.getElementById(`${id}-${imageId}-${delta < 0 ? "later" : "earlier"}`) as HTMLButtonElement | null;
+      (same && !same.disabled ? same : other)?.focus();
+    });
   }
 
   async function save() {
@@ -149,11 +177,18 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
 
       {images.length > 0 && (
         <fieldset className="flex flex-col gap-2 rounded-lg border border-line p-3">
-          <legend className="px-1 text-label text-body">Image descriptions</legend>
+          <legend className="px-1 text-label text-body">{arrangeable ? "Photos" : "Image descriptions"}</legend>
           {images.map((image, index) => (
             <div key={image.id} className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media */}
-              <img src={image.url} alt="" className="size-11 shrink-0 rounded-md object-cover" />
+              <span className="relative shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element -- permission-checked API media */}
+                <img src={image.url} alt="" className="size-11 rounded-md object-cover" />
+                {arrangeable && (
+                  <span aria-hidden="true" className="absolute -start-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold tabular-nums text-inverse ring-2 ring-card">
+                    {index + 1}
+                  </span>
+                )}
+              </span>
               <label htmlFor={`${id}-alt-${image.id}`} className="sr-only">
                 <T vars={{ count: index + 1 }}>{"Description for image {count}"}</T>
               </label>
@@ -165,8 +200,38 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
                 placeholder="Describe this image for people using screen readers"
                 className="h-9 min-w-0 flex-1 rounded-md border border-line bg-card px-2.5 text-sm text-ink outline-none placeholder:text-disabled focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
               />
+              {arrangeable && (
+                <span className="flex shrink-0">
+                  <button
+                    id={`${id}-${image.id}-earlier`}
+                    type="button"
+                    onClick={() => shift(image.id, -1)}
+                    disabled={index === 0}
+                    className="rounded-md p-1.5 text-secondary hover:bg-muted hover:text-ink disabled:pointer-events-none disabled:opacity-30"
+                    aria-label={t("Move photo {place} earlier", { place: index + 1 })}
+                  >
+                    <Icon name="chevron-down" size={16} className="rotate-180" />
+                  </button>
+                  <button
+                    id={`${id}-${image.id}-later`}
+                    type="button"
+                    onClick={() => shift(image.id, 1)}
+                    disabled={index === images.length - 1}
+                    className="rounded-md p-1.5 text-secondary hover:bg-muted hover:text-ink disabled:pointer-events-none disabled:opacity-30"
+                    aria-label={t("Move photo {place} later", { place: index + 1 })}
+                  >
+                    <Icon name="chevron-down" size={16} />
+                  </button>
+                </span>
+              )}
             </div>
           ))}
+          {arrangeable && (
+            <>
+              <MediaLayoutPicker id={`${id}-layout`} value={layout} onChange={setLayout} />
+              <MediaLayoutPreview images={images} layout={layout} />
+            </>
+          )}
         </fieldset>
       )}
 

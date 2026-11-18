@@ -713,7 +713,15 @@ export function CreatePostDialog({
                 </p>
               )}
 
-              {showFiles && <AttachmentPicker state={attachments} id={`${id}-files`} mode={fileModeNow} />}
+              {showFiles && (
+                <AttachmentPicker
+                  state={attachments}
+                  id={`${id}-files`}
+                  mode={fileModeNow}
+                  layout={fields.mediaLayout}
+                  onLayoutChange={(mediaLayout) => patch({ mediaLayout })}
+                />
+              )}
               {errors.files && (
                 <p role="alert" className="-mt-2 text-xs text-error">
                   {errors.files}

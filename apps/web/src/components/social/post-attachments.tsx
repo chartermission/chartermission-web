@@ -1,21 +1,36 @@
-import type { AttachmentView } from "@chartermission/contracts";
+import type { AttachmentView, MediaLayout } from "@chartermission/contracts";
 import { Icon } from "@chartermission/ui";
+import { ImageCarousel } from "@/components/gallery/image-carousel";
 import { ImageGrid } from "@/components/gallery/image-grid";
 import { UploadedVideo } from "@/components/video/video-player";
 import { formatBytes } from "./format";
 import { T } from "@/i18n/client";
 
 /**
- * Up to 4 images as a gallery that opens a lightbox, or one PDF tile (CM-FED-01). Images use the
+ * A post's images in the layout its author chose (collage, carousel or grid; all open the
+ * lightbox), a video, or one PDF tile (CM-FED-01). Images come in the author's order and use the
  * author's alt text (generic fallback). URLs are permission-checked /media links.
  */
-export function PostAttachments({ attachments, bleedClassName }: { attachments: AttachmentView[]; bleedClassName?: string }) {
+export function PostAttachments({
+  attachments,
+  layout = "collage",
+  bleedClassName,
+}: {
+  attachments: AttachmentView[];
+  /** PostView.mediaLayout; a collage when the API didn't send one. */
+  layout?: MediaLayout;
+  bleedClassName?: string;
+}) {
   const images = attachments.filter((a) => a.kind === "image");
   const documents = attachments.filter((a) => a.kind === "document");
   const videos = attachments.filter((a) => a.kind === "video");
   return (
     <>
-      {images.length > 0 && <ImageGrid images={images} bleedClassName={bleedClassName} />}
+      {images.length > 1 && layout === "carousel" ? (
+        <ImageCarousel images={images} bleedClassName={bleedClassName} />
+      ) : (
+        images.length > 0 && <ImageGrid images={images} layout={layout === "grid" ? "grid" : "collage"} bleedClassName={bleedClassName} />
+      )}
       {videos.map((video) => (
         <UploadedVideo key={video.id} video={video} />
       ))}

@@ -4,6 +4,7 @@ import {
   ARTICLE_MAX_CHARS,
   ARTICLE_MIN_CHARS,
   POST_MAX_CHARS,
+  POST_MAX_IMAGES,
   parseVideoEmbed,
   type CreatePostInput,
   type LinkPreview,
@@ -193,6 +194,7 @@ export class PostsService implements OnModuleInit {
           status,
           chapterReview: review ? 'pending' : null,
           pinnedAt: input.kind === 'announcement' ? now : null,
+          mediaLayout: input.mediaLayout ?? 'collage',
         })
         .returning();
       if (attachments.length) {
@@ -257,6 +259,15 @@ export class PostsService implements OnModuleInit {
     }
     assertNotRestricted(user);
     checkBody(post.type, input.body);
+    const attached = await this.db
+      .select({ fileId: postAttachments.fileId, kind: postAttachments.kind })
+      .from(postAttachments)
+      .where(eq(postAttachments.postId, id));
+    // A post can stand on its media, a repost or a shared event alone; anything else needs words.
+    if (!input.body.length && !attached.length && !post.repostOfId && !post.eventId) {
+      throw Errors.validation({ body: 'Write something before saving' });
+    }
+    const imageOrder = input.imageOrder ? this.checkedImageOrder(input.imageOrder, attached) : null;
     const details = this.editedDetails(post, input);
     const tags = parseHashtags(input.body);
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
@@ -269,8 +280,17 @@ export class PostsService implements OnModuleInit {
           editedAt: new Date(),
           ...(newLink ? { linkUrl: newLink, linkPreview: embedPreview(newLink) } : {}),
           ...(details ? { details } : {}),
+          ...(input.mediaLayout ? { mediaLayout: input.mediaLayout } : {}),
         })
         .where(eq(posts.id, id));
+      if (imageOrder) {
+        for (const [position, fileId] of imageOrder.entries()) {
+          await tx
+            .update(postAttachments)
+            .set({ position })
+            .where(and(eq(postAttachments.postId, id), eq(postAttachments.fileId, fileId)));
+        }
+      }
       for (const [fileId, alt] of Object.entries(input.altTexts ?? {})) {
         await tx
           .update(postAttachments)
@@ -332,6 +352,16 @@ export class PostsService implements OnModuleInit {
     if (input.chapterId) throw Errors.validation({ chapterId: 'Page posts go to the page’s followers, not a chapter' });
     if (input.repostOfId) throw Errors.validation({ repostOfId: 'Reposts are made from your own profile' });
     if (input.type === 'request') throw Errors.validation({ type: 'Requests are posted from your own profile' });
+  }
+
+  /** A new image order names every image the post has, once each (nothing added, nothing dropped). */
+  private checkedImageOrder(order: string[], attached: { fileId: string; kind: string }[]): string[] {
+    const images = attached.filter((a) => a.kind === 'image').map((a) => a.fileId);
+    const unique = new Set(order);
+    if (unique.size !== order.length || order.length !== images.length || images.some((fileId) => !unique.has(fileId))) {
+      throw Errors.validation({ imageOrder: 'The new order must list each of this post’s images once' });
+    }
+    return order;
   }
 
   /** Details sent with an edit must match the post's type. */
@@ -453,7 +483,7 @@ export class PostsService implements OnModuleInit {
     return this.serializer.one(postId, user);
   }
 
-  /** Attachments: the author's own unattached files, pending or clean; up to 4 images or 1 document (CM-FED-01). */
+  /** Attachments: the author's own unattached files, pending or clean, kept in the order sent; up to POST_MAX_IMAGES images, 1 video or 1 document (CM-FED-01). */
   private async validateAttachments(userId: string, ids: string[]): Promise<FileRow[]> {
     const unique = [...new Set(ids)];
     if (!unique.length) return [];
@@ -475,8 +505,8 @@ export class PostsService implements OnModuleInit {
     const docs = files_.filter((f) => f.purpose === 'post_document').length;
     const videos = files_.filter((f) => f.purpose === 'post_video').length;
     const images = files_.length - docs - videos;
-    if (docs + videos > 1 || ((docs > 0 || videos > 0) && images > 0) || images > 4) {
-      throw Errors.validation({ attachmentIds: 'Attach up to 4 images, 1 video or 1 document' });
+    if (docs + videos > 1 || ((docs > 0 || videos > 0) && images > 0) || images > POST_MAX_IMAGES) {
+      throw Errors.validation({ attachmentIds: `Attach up to ${POST_MAX_IMAGES} images, 1 video or 1 document` });
     }
     return files_;
   }

@@ -1,0 +1,2 @@
+ALTER TABLE "posts" ADD COLUMN "media_layout" text DEFAULT 'collage' NOT NULL;--> statement-breakpoint
+ALTER TABLE "posts" ADD CONSTRAINT "posts_media_layout_ck" CHECK ("posts"."media_layout" in ('collage','carousel','grid'));

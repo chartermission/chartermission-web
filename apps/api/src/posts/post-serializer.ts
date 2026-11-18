@@ -171,6 +171,7 @@ export class PostSerializer {
         hashtags: tagMap.get(r.id) ?? [],
         mentions: mentionMap.get(r.id) ?? [],
         attachments,
+        mediaLayout: r.mediaLayout as PostView['mediaLayout'],
         poll: pollMap.get(r.id) ?? null,
         linkPreview: r.linkPreview ?? null,
         repostOf: depth === 0 && r.repostOfId ? (originals.get(r.repostOfId) ?? null) : null,
