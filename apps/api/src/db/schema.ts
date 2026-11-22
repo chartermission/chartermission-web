@@ -107,8 +107,14 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     emailVerifiedAt: ts('email_verified_at'),
     status: text('status').notNull().default('unverified'),
-    /** AES-256-GCM encrypted TOTP secret (spec 8.3). */
+    /**
+     * Legacy: the account's one TOTP secret from before mfa_devices. Migration 0032 copied it into a
+     * device for accounts with two-step verification on, and MfaService.devicesOf picks up any it
+     * missed. Codes are never checked against it; it is cleared when two-step verification is set
+     * up, turned off or reset, and when the device that came from it is removed.
+     */
     mfaSecretEnc: text('mfa_secret_enc'),
+    /** Two-step verification is on: the account has at least one confirmed row in mfa_devices. */
     mfaEnabledAt: ts('mfa_enabled_at'),
     lastLoginAt: ts('last_login_at'),
     suspendedUntil: ts('suspended_until'),
@@ -158,6 +164,32 @@ export const sessions = pgTable(
   (t) => [
     index('sessions_user_idx').on(t.userId),
     check('sessions_audience_ck', sql`${t.audience} in ('member','admin')`),
+  ],
+);
+
+/**
+ * Two-step devices: the authenticator apps on an account, each with its own TOTP secret (AES-256-GCM
+ * encrypted, spec 8.3). A code from any confirmed device is accepted. A device waits unconfirmed
+ * until its owner enters a code from it.
+ */
+export const mfaDevices = pgTable(
+  'mfa_devices',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    secretEnc: text('secret_enc').notNull(),
+    confirmedAt: ts('confirmed_at'),
+    lastUsedAt: ts('last_used_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('mfa_devices_user_idx').on(t.userId),
+    // One row per secret: copying an account's old secret in twice (migration, then MfaService) is a no-op.
+    uniqueIndex('mfa_devices_user_secret_idx').on(t.userId, t.secretEnc),
   ],
 );
 

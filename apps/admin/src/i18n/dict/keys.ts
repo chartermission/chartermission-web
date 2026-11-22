@@ -2001,4 +2001,10 @@ export const KEYS: readonly string[] = [
   "Enter a whole number",
   "At least 1",
   "At most 10,000",
+  "For someone who has lost every device. Resetting removes their authenticator devices, signs them out everywhere and emails them; a team member sets it up again at their next sign-in. Make sure it really is them asking before you reset.",
+  "Reset two-step verification for {name}?",
+  "Yes, reset",
+  "Reset two-step verification",
+  "Not set up on this account, so there is nothing to reset.",
+  "Two-step verification was reset for {name}. They have been signed out everywhere.",
 ];

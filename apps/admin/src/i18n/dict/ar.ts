@@ -2003,4 +2003,10 @@ export const ar: Dict = {
   "Enter a whole number": "أدخل عددًا صحيحًا",
   "At least 1": "1 على الأقل",
   "At most 10,000": "10000 كحد أقصى",
+  "For someone who has lost every device. Resetting removes their authenticator devices, signs them out everywhere and emails them; a team member sets it up again at their next sign-in. Make sure it really is them asking before you reset.": "لمن فقد جميع أجهزته. تؤدي إعادة التعيين إلى إزالة أجهزة المصادقة وتسجيل خروجه من كل مكان وإرسال بريد إلكتروني إليه؛ وعضو الفريق يعيد الإعداد عند تسجيل دخوله التالي. تأكد من أن الطلب صادر عنه فعلًا قبل إعادة التعيين.",
+  "Reset two-step verification for {name}?": "إعادة تعيين التحقق بخطوتين لـ {name}؟",
+  "Yes, reset": "نعم، أعد التعيين",
+  "Reset two-step verification": "إعادة تعيين التحقق بخطوتين",
+  "Not set up on this account, so there is nothing to reset.": "غير مُعدّ على هذا الحساب، فلا يوجد ما يُعاد تعيينه.",
+  "Two-step verification was reset for {name}. They have been signed out everywhere.": "أُعيد تعيين التحقق بخطوتين لـ {name}. تم تسجيل خروجه من كل مكان.",
 };

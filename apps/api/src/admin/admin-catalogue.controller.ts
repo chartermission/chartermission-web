@@ -199,6 +199,13 @@ export class AdminMembersController {
     return this.members.award(ctx, id, input, clientIp(req));
   }
 
+  @Post(':id/two-step/reset')
+  @HttpCode(200)
+  @Access('admin', 'mfa.reset')
+  resetTwoStep(@Auth() ctx: AuthContext, @Param('id') id: string, @Req() req: AppRequest): Promise<AdminMemberRow> {
+    return this.members.resetTwoStep(ctx, id, clientIp(req));
+  }
+
   @Put(':id/roles')
   @Access('admin', 'roles.manage')
   role(@Auth() ctx: AuthContext, @Param('id') id: string, @ZBody(AdminSetRoleInput) input: AdminSetRoleInput, @Req() req: AppRequest): Promise<AdminMemberRow> {

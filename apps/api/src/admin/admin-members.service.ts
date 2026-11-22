@@ -33,18 +33,21 @@ import {
   featuredMembers,
   memberBadges,
   memberProfiles,
+  mfaDevices,
   roles,
   userRoles,
   users,
 } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { mediaUrl } from '../core/members.service.js';
+import { SessionService } from '../core/session.service.js';
 import { AuditService } from '../infra/audit.service.js';
+import { RateLimitService } from '../infra/rate-limit.service.js';
 import { closeStaffConnections } from '../profiles/staff-connections.js';
 import { Errors } from '../common/errors.js';
 import { MailService } from '../infra/mail.service.js';
-import { adminUrl } from '../infra/mail-layout.js';
-import { PRIVILEGED_ROLES, ROLES } from '../core/permissions.js';
+import { adminUrl, webUrl } from '../infra/mail-layout.js';
+import { PRIVILEGED_ROLES, ROLES, mustUseMfa } from '../core/permissions.js';
 import { can } from '../core/policy.js';
 import {
   isUniqueViolation,
@@ -75,7 +78,65 @@ export class AdminMembersService {
     @InjectDb() private readonly db: Db,
     private readonly audit: AuditService,
     private readonly mail: MailService,
+    private readonly sessions: SessionService,
+    private readonly limits: RateLimitService,
   ) {}
+
+  /* ------------------------------ Two-step verification ------------------------------ */
+
+  /**
+   * POST /admin/members/{id}/two-step/reset (Super Admins). For someone who has lost every device:
+   * all their devices are removed, two-step verification is switched off and they are signed out
+   * everywhere. Team members must set it up again at their next sign-in; for anyone else it stays
+   * off until they turn it back on. Nobody resets their own. Audited, and the account owner is emailed.
+   */
+  async resetTwoStep(ctx: AuthContext, rawId: string, ip?: string): Promise<AdminMemberRow> {
+    const before = await this.row(rawId);
+    if (before.id === ctx.user.id) throw Errors.forbidden('You can’t reset your own two-step verification. Ask another Super Admin.');
+    if (before.status === 'deleted' || before.status === 'deletion_pending') throw Errors.conflict('This account is closed or being deleted');
+    const removed = await this.db.transaction(async (tx) => {
+      // The account's row is locked first, as MfaService does for every device change, so a request of
+      // theirs that is mid-flight can't put a device back after this.
+      const [had] = await tx.select({ secret: users.mfaSecretEnc, enabledAt: users.mfaEnabledAt }).from(users).where(eq(users.id, before.id)).for('update');
+      const gone = await tx.delete(mfaDevices).where(eq(mfaDevices.userId, before.id)).returning({ id: mfaDevices.id });
+      if (!gone.length && !had?.secret && !had?.enabledAt) return null;
+      await tx.update(users).set({ mfaSecretEnc: null, mfaEnabledAt: null, updatedAt: new Date() }).where(eq(users.id, before.id));
+      return gone.length;
+    });
+    if (removed === null) throw Errors.conflict('Two-step verification isn’t set up on this account');
+    await this.sessions.revokeAll(before.id);
+    await this.limits.reset(`mfa:fail:${before.id}`);
+    await this.audit.record({
+      actorId: ctx.user.id,
+      action: 'auth.mfa.reset',
+      targetType: 'user',
+      targetId: before.id,
+      before: { twoStep: before.twoStep, devices: removed },
+      after: { twoStep: false, devices: 0 },
+      ip,
+    });
+    const mustSetUp = mustUseMfa({ isStaff: before.staff, roles: before.roles });
+    await this.mail
+      .compose({
+        to: before.email,
+        userId: before.id,
+        template: 'security.mfa_reset',
+        subject: 'Two-step verification was reset on your account',
+        transactional: true,
+        heading: 'Two-step verification was reset',
+        paragraphs: [
+          'A Charter Mission administrator reset two-step verification on your account. Your authenticator devices were removed and you have been signed out everywhere.',
+          mustSetUp
+            ? 'The next time you sign in, you will be asked to set up an authenticator app again.'
+            : 'Two-step verification is now off. You can turn it on again in your security settings.',
+          'If you didn’t ask for this, contact the Charter Mission team straight away and change your password.',
+        ],
+        button: { label: 'Sign in', url: webUrl('/signin') },
+        footer: 'You received this email because of activity on your Charter Mission account.',
+      })
+      .catch(() => undefined);
+    return this.row(before.id);
+  }
 
   /* ------------------------------ Roles ------------------------------ */
 
@@ -566,6 +627,7 @@ export class AdminMembersService {
         verifiedAt: users.verifiedAt,
         isStaff: users.isStaff,
         isOfficial: users.isOfficial,
+        mfaEnabledAt: users.mfaEnabledAt,
         createdAt: users.createdAt,
         handle: memberProfiles.handle,
         name: memberProfiles.displayName,
@@ -618,6 +680,7 @@ export class AdminMembersService {
         featured: r.featured,
         badges: byUser.get(r.id) ?? [],
         roles: (r.roles ?? []) as AdminAssignableRole[],
+        twoStep: !!r.mfaEnabledAt,
         joinedAt: r.createdAt.toISOString(),
       }));
   }

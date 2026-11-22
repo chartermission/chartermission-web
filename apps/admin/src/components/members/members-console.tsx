@@ -18,7 +18,7 @@ type Filter = Exclude<AdminMembersQuery["filter"], "badge"> | `badge:${string}`;
 
 /** Members (GET /admin/members): search, then verify, feature in sign-up suggestions or award badges. */
 /** Who may change roles in the console, and whether that includes Super Admin. */
-export type AccessRights = { viewerId: string; canManageRoles: boolean; canAssignSuperAdmin: boolean; canMessage?: boolean };
+export type AccessRights = { viewerId: string; canManageRoles: boolean; canAssignSuperAdmin: boolean; /** Super Admins: reset another account's two-step verification. */ canResetTwoStep?: boolean; canMessage?: boolean };
 
 const ROLE_INFO: { role: AdminAssignableRole; name: string; description: string; console: boolean }[] = [
   { role: "moderator", name: "Moderator", description: "Works the report queue: hides and removes content, warns, restricts and suspends members.", console: true },
@@ -337,10 +337,16 @@ export function MembersConsole({
         <MemberAccess
           member={accessFor}
           canAssignSuperAdmin={access.canAssignSuperAdmin}
+          canResetTwoStep={!!access.canResetTwoStep}
           onSaved={(row) => {
             replace(row);
             setAccessFor(null);
             toast(t("Access updated for {name}.", { name: row.name }));
+          }}
+          onTwoStepReset={(row) => {
+            replace(row);
+            setAccessFor(null);
+            toast(t("Two-step verification was reset for {name}. They have been signed out everywhere.", { name: row.name }));
           }}
           onClose={() => setAccessFor(null)}
         />
@@ -446,17 +452,35 @@ function AwardBadges({
 function MemberAccess({
   member,
   canAssignSuperAdmin,
+  canResetTwoStep,
   onSaved,
+  onTwoStepReset,
   onClose,
 }: {
   member: AdminMemberRow;
   canAssignSuperAdmin: boolean;
+  canResetTwoStep: boolean;
   onSaved: (row: AdminMemberRow) => void;
+  onTwoStepReset: (row: AdminMemberRow) => void;
   onClose: () => void;
 }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Reset is asked for twice: the button, then "Yes, reset". */
+  const [confirmingReset, setConfirmingReset] = useState(false);
+
+  async function resetTwoStep() {
+    setBusy(true);
+    setError(null);
+    try {
+      onTwoStepReset(await api<AdminMemberRow>(`/admin/members/${member.id}/two-step/reset`, { method: "POST" }));
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+      setConfirmingReset(false);
+    }
+  }
   const held = new Set(member.roles);
   return (
     <FormModal
@@ -500,6 +524,39 @@ function MemberAccess({
           );
         })}
       </fieldset>
+      {canResetTwoStep && (
+        <section className="flex flex-col gap-2 rounded-lg border border-line px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-medium text-ink">Two-step verification</h3>
+            <Chip tone={member.twoStep ? "success" : "neutral"}>{member.twoStep ? "On" : "Off"}</Chip>
+          </div>
+          {member.twoStep ? (
+            <>
+              <p className="text-xs text-secondary">
+                For someone who has lost every device. Resetting removes their authenticator devices, signs them out everywhere and emails them; a team member sets it up again at their next sign-in. Make sure
+                it really is them asking before you reset.
+              </p>
+              {confirmingReset ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-ink">{t("Reset two-step verification for {name}?", { name: member.name })}</span>
+                  <Button variant="accent" size="small" disabled={busy} onClick={() => void resetTwoStep()}>
+                    Yes, reset
+                  </Button>
+                  <Button variant="ghost" size="small" disabled={busy} onClick={() => setConfirmingReset(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="secondary" size="small" disabled={busy} className="self-start" onClick={() => setConfirmingReset(true)}>
+                  Reset two-step verification
+                </Button>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-secondary">Not set up on this account, so there is nothing to reset.</p>
+          )}
+        </section>
+      )}
     </FormModal>
   );
 }

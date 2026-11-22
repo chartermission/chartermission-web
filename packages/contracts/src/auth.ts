@@ -85,6 +85,47 @@ export type MfaSetupResponse = z.infer<typeof MfaSetupResponse>;
 export const MfaCodeInput = z.object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code") });
 export type MfaCodeInput = z.infer<typeof MfaCodeInput>;
 
+/*
+ * Two-step devices. An account with two-step verification on has one or more authenticator apps
+ * ("devices"), each with its own secret; a code from any of them signs in. All of these need a
+ * session that has already passed two-step verification.
+ *
+ *  GET  /auth/mfa/devices               MfaDeviceView[] (the confirmed ones, oldest first).
+ *  POST /auth/mfa/devices               AddMfaDeviceInput → MfaDeviceSetup. Needs a code from a device already
+ *                                       on the account. The new device waits until it is confirmed.
+ *  POST /auth/mfa/devices/:id/confirm   MfaCodeInput (a code from the NEW device) → MfaDeviceView.
+ *  POST /auth/mfa/devices/:id/remove    MfaCodeInput (a code from any device on the account) → MfaDeviceView[].
+ *                                       The last device can't be removed.
+ */
+export const MFA_MAX_DEVICES = 5;
+export const MFA_DEVICE_NAME_MAX = 40;
+/** The name the first device gets: setup at sign-in doesn't ask for one. */
+export const MFA_DEFAULT_DEVICE_NAME = "Authenticator app";
+
+export const MfaDeviceView = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  addedAt: z.string(),
+  /** The last time a code from this device was accepted; null if it never has been since it was added. */
+  lastUsedAt: z.string().nullable(),
+});
+export type MfaDeviceView = z.infer<typeof MfaDeviceView>;
+
+export const AddMfaDeviceInput = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Give the device a name")
+    .max(MFA_DEVICE_NAME_MAX, `Names can be up to ${MFA_DEVICE_NAME_MAX} characters`),
+  /** From a device already on the account. */
+  code: MfaCodeInput.shape.code,
+});
+export type AddMfaDeviceInput = z.infer<typeof AddMfaDeviceInput>;
+
+/** The new device's secret, shown once, and the id to confirm it with. */
+export const MfaDeviceSetup = MfaSetupResponse.extend({ deviceId: z.string().uuid() });
+export type MfaDeviceSetup = z.infer<typeof MfaDeviceSetup>;
+
 export const PolicyVersions = z.object({ terms: z.string(), privacy: z.string(), guidelines: z.string() });
 export type PolicyVersions = z.infer<typeof PolicyVersions>;
 

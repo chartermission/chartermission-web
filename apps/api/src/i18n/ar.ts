@@ -1255,4 +1255,11 @@ export const ar: Record<string, string> = {
   "You can’t react to your own story": "لا يمكنك التفاعل مع قصتك",
   "You can’t reply to your own story": "لا يمكنك الرد على قصتك",
   "Write a reply first": "اكتب ردًا أولًا",
+  "That device": "هذا الجهاز",
+  "Give the device a name": "أعطِ الجهاز اسمًا",
+  "Turn on two-step verification first": "فعّل التحقق بخطوتين أولًا",
+  "That took too long. Start adding the device again.": "انتهت المهلة. ابدأ إضافة الجهاز من جديد.",
+  "This is your only device. Add another one before removing it.": "هذا جهازك الوحيد. أضف جهازًا آخر قبل إزالته.",
+  "You can have up to {MFAMAXDEVICES} devices. Remove one to add another.": "يمكنك إضافة {MFAMAXDEVICES} أجهزة كحد أقصى. أزل جهازًا لإضافة آخر.",
+  "This setup was replaced by a newer one. Scan the new QR code and try again.": "تم استبدال هذا الإعداد بإعداد أحدث. امسح رمز QR الجديد وحاول مجددًا.",
 };

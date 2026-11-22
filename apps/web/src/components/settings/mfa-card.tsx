@@ -7,12 +7,16 @@ import { Button, Chip } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { PasswordConfirmDialog } from "@/components/account/password-confirm-dialog";
 import { Field, FormAlert, describedBy, inputClasses, retryMessage } from "@/components/auth/fields";
+import { MfaDevices } from "./mfa-devices";
 import { SettingsCard } from "./settings-card";
 import { useT } from "@/i18n/client";
 
 type Stage = { kind: "idle" } | { kind: "setup"; data: MfaSetupResponse } | { kind: "done" };
 
-/** Optional TOTP for members (CM-AUTH-09): setup → scan QR → confirm a code; turn off with the password. */
+/**
+ * Optional TOTP for members (CM-AUTH-09): setup → scan QR → confirm a code; turn off with the password.
+ * While it is on, the account's devices are listed underneath (MfaDevices): add a second one or remove one.
+ */
 export function MfaCard({ enabled: initiallyEnabled, required }: { enabled: boolean; required: boolean }) {
   const t = useT();
   const id = useId();
@@ -146,7 +150,7 @@ export function MfaCard({ enabled: initiallyEnabled, required }: { enabled: bool
           <p className="text-sm text-body">
             {required
               ? "Your role requires two-step verification, so it can’t be turned off."
-              : "You’ll be asked for a code when you sign in to the admin console."}
+              : "You’ll be asked for a code from your authenticator app each time you sign in."}
           </p>
           {!required && (
             <Button variant="secondary" size="small" onClick={() => setDisabling(true)}>
@@ -162,6 +166,8 @@ export function MfaCard({ enabled: initiallyEnabled, required }: { enabled: bool
           </Button>
         </div>
       )}
+
+      {enabled && stage.kind !== "setup" && <MfaDevices />}
 
       <PasswordConfirmDialog
         open={disabling}

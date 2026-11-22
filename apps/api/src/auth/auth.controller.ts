@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { desc, eq } from 'drizzle-orm';
 import {
   AcceptPoliciesInput,
+  AddMfaDeviceInput,
   ChangePasswordInput,
   ConfirmPasswordInput,
   DeletionRequestInput,
@@ -18,6 +19,8 @@ import {
   type AccountExport,
   type ConsentRecordView,
   type DevMailbox,
+  type MfaDeviceSetup,
+  type MfaDeviceView,
   type MfaSetupResponse,
   type Ok,
   type OnboardingState,
@@ -146,6 +149,33 @@ export class AuthController {
   async verifyMfa(@Auth() ctx: AuthContext, @ZBody(MfaCodeInput) input: MfaCodeInput, @Req() req: AppRequest): Promise<Ok> {
     await this.mfa.verify(ctx, input.code, clientIp(req));
     return OK;
+  }
+
+  @Get('mfa/devices')
+  @Access('session')
+  mfaDevices(@Auth() ctx: AuthContext): Promise<MfaDeviceView[]> {
+    return this.mfa.listDevices(ctx);
+  }
+
+  @Post('mfa/devices')
+  @HttpCode(200)
+  @Access('session')
+  addMfaDevice(@Auth() ctx: AuthContext, @ZBody(AddMfaDeviceInput) input: AddMfaDeviceInput, @Req() req: AppRequest): Promise<MfaDeviceSetup> {
+    return this.mfa.addDevice(ctx, input, clientIp(req));
+  }
+
+  @Post('mfa/devices/:id/confirm')
+  @HttpCode(200)
+  @Access('session')
+  confirmMfaDevice(@Auth() ctx: AuthContext, @Param('id') id: string, @ZBody(MfaCodeInput) input: MfaCodeInput, @Req() req: AppRequest): Promise<MfaDeviceView> {
+    return this.mfa.confirmDevice(ctx, id, input.code, clientIp(req));
+  }
+
+  @Post('mfa/devices/:id/remove')
+  @HttpCode(200)
+  @Access('session')
+  removeMfaDevice(@Auth() ctx: AuthContext, @Param('id') id: string, @ZBody(MfaCodeInput) input: MfaCodeInput, @Req() req: AppRequest): Promise<MfaDeviceView[]> {
+    return this.mfa.removeDevice(ctx, id, input.code, clientIp(req));
   }
 
   @Post('mfa/disable')

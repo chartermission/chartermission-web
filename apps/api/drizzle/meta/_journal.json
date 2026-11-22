@@ -225,6 +225,13 @@
       "when": 1795013436286,
       "tag": "0031_story_reactions",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795383021392,
+      "tag": "0032_mfa_devices",
+      "breakpoints": true
     }
   ]
 }

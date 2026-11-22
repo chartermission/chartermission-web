@@ -2003,4 +2003,10 @@ export const fr: Dict = {
   "Enter a whole number": "Saisissez un nombre entier",
   "At least 1": "Au moins 1",
   "At most 10,000": "10 000 au maximum",
+  "For someone who has lost every device. Resetting removes their authenticator devices, signs them out everywhere and emails them; a team member sets it up again at their next sign-in. Make sure it really is them asking before you reset.": "Pour une personne qui a perdu tous ses appareils. La réinitialisation retire ses appareils d’authentification, la déconnecte partout et lui envoie un e-mail ; un membre de l’équipe la configure de nouveau à sa prochaine connexion. Assurez-vous que la demande vient bien d’elle avant de réinitialiser.",
+  "Reset two-step verification for {name}?": "Réinitialiser la vérification en deux étapes de {name} ?",
+  "Yes, reset": "Oui, réinitialiser",
+  "Reset two-step verification": "Réinitialiser la vérification en deux étapes",
+  "Not set up on this account, so there is nothing to reset.": "Non configurée sur ce compte : il n’y a rien à réinitialiser.",
+  "Two-step verification was reset for {name}. They have been signed out everywhere.": "La vérification en deux étapes de {name} a été réinitialisée. La personne a été déconnectée partout.",
 };

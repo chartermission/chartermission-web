@@ -36,7 +36,7 @@ async function Members() {
       initial={data[0]}
       badges={data[1]}
       canManageBadges={can(viewer, PERM.badgesManage)}
-      access={{ viewerId: viewer.id, canManageRoles: can(viewer, PERM.rolesManage), canAssignSuperAdmin: can(viewer, PERM.superadminAssign), canMessage: can(viewer, PERM.membersMessage) }}
+      access={{ viewerId: viewer.id, canManageRoles: can(viewer, PERM.rolesManage), canAssignSuperAdmin: can(viewer, PERM.superadminAssign), canResetTwoStep: can(viewer, PERM.mfaReset), canMessage: can(viewer, PERM.membersMessage) }}
     />
   );
 }

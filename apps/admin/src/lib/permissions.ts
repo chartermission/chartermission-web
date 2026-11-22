@@ -35,6 +35,8 @@ export const PERM = {
   badgesManage: "badges.manage",
   rolesManage: "roles.manage",
   superadminAssign: "superadmin.assign",
+  /** Reset another account's two-step verification. Super Admin only. */
+  mfaReset: "mfa.reset",
   /** Pages: create, review the ones members create, verify, suspend, remove. Platform Admin and above. */
   pagesManage: "pages.manage",
 } as const;

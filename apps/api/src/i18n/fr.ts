@@ -1255,4 +1255,11 @@ export const fr: Record<string, string> = {
   "You can’t react to your own story": "Vous ne pouvez pas réagir à votre propre story",
   "You can’t reply to your own story": "Vous ne pouvez pas répondre à votre propre story",
   "Write a reply first": "Écrivez d’abord une réponse",
+  "That device": "Cet appareil",
+  "Give the device a name": "Donnez un nom à l’appareil",
+  "Turn on two-step verification first": "Activez d’abord la vérification en deux étapes",
+  "That took too long. Start adding the device again.": "Le délai est dépassé. Recommencez l’ajout de l’appareil.",
+  "This is your only device. Add another one before removing it.": "C’est votre seul appareil. Ajoutez-en un autre avant de le retirer.",
+  "You can have up to {MFAMAXDEVICES} devices. Remove one to add another.": "Vous pouvez avoir jusqu’à {MFAMAXDEVICES} appareils. Retirez-en un pour en ajouter un autre.",
+  "This setup was replaced by a newer one. Scan the new QR code and try again.": "Cette configuration a été remplacée par une plus récente. Scannez le nouveau code QR et réessayez.",
 };

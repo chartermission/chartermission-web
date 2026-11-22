@@ -24,6 +24,7 @@ export const PERMISSIONS = {
   'roles.manage': 'Assign roles below Super Admin',
   'settings.manage': 'Change platform settings and policy versions',
   'superadmin.assign': 'Assign Platform Admins and Super Admins',
+  'mfa.reset': 'Reset two-step verification on another account (they are signed out and set it up again)',
   'event.create': 'Create, edit and submit events (as yourself, or for chapters you lead)',
   'event.publish': 'Publish events without review',
   'event.review': 'Review, approve, reject and unpublish events',
@@ -113,7 +114,7 @@ export const ROLES: Record<string, { name: string; requiresMfa: boolean; permiss
   super_admin: {
     name: 'Super Admin',
     requiresMfa: true,
-    permissions: [...PLATFORM_ADMIN, 'superadmin.assign'],
+    permissions: [...PLATFORM_ADMIN, 'superadmin.assign', 'mfa.reset'],
   },
 };
 

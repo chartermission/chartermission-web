@@ -218,6 +218,8 @@ export type AdminMemberRow = {
   badges: ProfileBadge[];
   /** Platform-wide roles the member holds (moderator, platform_admin, super_admin, event_host). */
   roles: AdminAssignableRole[];
+  /** Two-step verification is on for the account. */
+  twoStep: boolean;
   joinedAt: string;
 };
 
