@@ -277,7 +277,7 @@ function PostContent({ detail }: { detail: ContentCalendarDetail }) {
           </p>
         </div>
       )}
-      {detail.body ? <p className="whitespace-pre-wrap break-words text-sm text-ink">{detail.body}</p> : <p className="text-sm text-secondary italic">No text</p>}
+      {detail.body ? <p dir="auto" className="whitespace-pre-wrap break-words text-sm text-ink">{detail.body}</p> : <p className="text-sm text-secondary italic">No text</p>}
       {images.length > 0 && (
         <ul aria-label="Images" className="grid grid-cols-2 gap-2">
           {images.map((img) => (

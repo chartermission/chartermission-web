@@ -94,7 +94,7 @@ export function CalendarList({
                       <img src={item.media.thumbnailUrl} alt="" className="size-10 shrink-0 rounded-md border border-line object-cover" />
                     )}
                     <span className="flex min-w-0 flex-col">
-                      <span className="line-clamp-2 text-ink hover:underline">{item.excerpt}</span>
+                      <span dir="auto" className="line-clamp-2 text-start text-ink hover:underline">{item.excerpt}</span>
                       {(item.media.count > 0 || item.chapter) && (
                         <span className="flex items-center gap-1 text-xs text-secondary">
                           {item.media.count > 0 && (

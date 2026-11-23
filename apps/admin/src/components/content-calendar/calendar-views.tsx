@@ -25,7 +25,7 @@ function Entry({ item, onOpen, showTime = true }: { item: ContentCalendarItem; o
       className={cn("flex w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-start text-xs hover:brightness-95", ENTRY_CLASSES[item.state])}
     >
       {showTime && <span className="shrink-0 font-medium tabular-nums">{timeOf(item.at, tag)}</span>}
-      <span className="truncate text-ink">{item.excerpt}</span>
+      <span dir="auto" className="truncate text-ink">{item.excerpt}</span>
       <span className="sr-only">
         {" "}
         · {meta.label} · {item.author.name}
@@ -146,7 +146,7 @@ function WeekCard({ item, onOpen }: { item: ContentCalendarItem; onOpen: (item: 
         <span className="font-semibold tabular-nums">{timeOf(item.at, tag)}</span>
         <span className="truncate">{meta.label}</span>
       </span>
-      <span className="line-clamp-2 text-ink">{item.excerpt}</span>
+      <span dir="auto" className="line-clamp-2 text-ink">{item.excerpt}</span>
       <span className="truncate text-secondary">{item.author.name}</span>
     </button>
   );
