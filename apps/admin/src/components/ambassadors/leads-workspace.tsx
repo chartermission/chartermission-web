@@ -160,13 +160,13 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
                   <th scope="col" className="w-10 py-2.5 ps-4 pe-1 font-semibold">
                     <SelectAllBox state={selection.state(visibleIds)} onToggle={() => selection.toggleAll(visibleIds)} />
                   </th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">Lead</th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">Country</th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">Stage</th>
+                  <th scope="col" className="px-4 py-2.5 text-start font-semibold">Lead</th>
+                  <th scope="col" className="px-4 py-2.5 text-start font-semibold">Country</th>
+                  <th scope="col" className="px-4 py-2.5 text-start font-semibold">Stage</th>
                   <th scope="col" className="px-4 py-2.5 text-end font-semibold">Score</th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">Onboarding</th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">Owner</th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">Updated</th>
+                  <th scope="col" className="px-4 py-2.5 text-start font-semibold">Onboarding</th>
+                  <th scope="col" className="px-4 py-2.5 text-start font-semibold">Owner</th>
+                  <th scope="col" className="px-4 py-2.5 text-start font-semibold">Updated</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
