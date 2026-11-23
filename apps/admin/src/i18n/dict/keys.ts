@@ -2512,4 +2512,5 @@ export const KEYS: readonly string[] = [
   "Loading the content calendar",
   "the content calendar",
   "The content calendar couldn’t be loaded.",
+  "Cancel posts",
 ];

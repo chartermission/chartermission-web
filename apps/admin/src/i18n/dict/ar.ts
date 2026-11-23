@@ -2514,4 +2514,5 @@ export const ar: Dict = {
   "Loading the content calendar": "جارٍ تحميل تقويم المحتوى",
   "the content calendar": "تقويم المحتوى",
   "The content calendar couldn’t be loaded.": "تعذّر تحميل تقويم المحتوى.",
+  "Cancel posts": "إلغاء المنشورات",
 };

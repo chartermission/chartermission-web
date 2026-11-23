@@ -36,7 +36,7 @@ const BULK: { action: BulkAction; label: string; done: string; title: string; de
   { action: "release", label: "Release", done: "{count} posts released.", title: "Release the selected posts?", description: "They will be published at their scheduled times. Each author is told.", note: "optional" },
   { action: "approve", label: "Approve", done: "{count} posts approved.", title: "Approve the selected posts?", description: "Posts go live now; scheduled posts go out at their time. Each author is told.", note: "optional" },
   { action: "decline", label: "Decline", done: "{count} posts declined.", title: "Decline the selected posts?", description: "They won’t be published. Each author is told, with your note.", note: "required" },
-  { action: "cancel", label: "Cancel", done: "{count} scheduled posts cancelled.", title: "Cancel the selected scheduled posts?", description: "They won’t be published and go back to their authors’ drafts. Each author is told, with your note.", note: "required" },
+  { action: "cancel", label: "Cancel posts", done: "{count} scheduled posts cancelled.", title: "Cancel the selected scheduled posts?", description: "They won’t be published and go back to their authors’ drafts. Each author is told, with your note.", note: "required" },
 ];
 
 /**

@@ -2514,4 +2514,5 @@ export const fr: Dict = {
   "Loading the content calendar": "Chargement du calendrier des contenus",
   "the content calendar": "le calendrier des contenus",
   "The content calendar couldn’t be loaded.": "Le calendrier des contenus n’a pas pu être chargé.",
+  "Cancel posts": "Annuler les publications",
 };
