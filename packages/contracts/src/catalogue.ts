@@ -17,6 +17,8 @@ export type AdminChapterStatus = z.infer<typeof AdminChapterStatus>;
 export const AdminChaptersQuery = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(["all", "active", "dormant"]).default("all"),
+  /** The country's region, e.g. "West Africa" or "Diaspora". */
+  region: z.string().trim().max(60).optional(),
 });
 export type AdminChaptersQuery = z.infer<typeof AdminChaptersQuery>;
 
@@ -41,6 +43,7 @@ export type AdminChapterRow = {
   postApproval: "direct" | "review" | null;
   /** Posts waiting for the chapter team's approval. */
   pendingPosts: number;
+  /** Members of the chapter (who joined it), counted as on the chapter page: closed accounts are left out. */
   followers: number;
   posts: number;
   createdAt: string;

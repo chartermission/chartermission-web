@@ -1,13 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { and, asc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
-import type { AdminChapterCreateInput, AdminChapterRow, AdminChaptersQuery, AdminChapterUpdateInput, Ok } from '@chartermission/contracts';
+import type {
+  AdminChapterCreateInput,
+  AdminChapterRow,
+  AdminChaptersBulkInput,
+  AdminChaptersQuery,
+  AdminChapterUpdateInput,
+  BulkResult,
+  Ok,
+} from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, countries, events, files, follows, hashtags, posts, userRoles } from '../db/schema.js';
+import { chapters, countries, events, files, follows, hashtags, posts, userRoles, users } from '../db/schema.js';
 import { chapterDefaults } from '../chapters/chapter-defaults.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { Errors } from '../common/errors.js';
+import { runEach } from '../common/bulk.js';
 import { isUniqueViolation, likePrefix, uuidOr404 } from '../moderation/util.js';
 
 const slugify = (v: string) =>
@@ -23,6 +32,8 @@ const slugify = (v: string) =>
 /** Admin console: chapter catalogue (create, rename, activate/deactivate, pictures, remove). */
 @Injectable()
 export class AdminChaptersService {
+  private readonly log = new Logger(AdminChaptersService.name);
+
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly audit: AuditService,
@@ -32,11 +43,18 @@ export class AdminChaptersService {
   async list(q: AdminChaptersQuery): Promise<AdminChapterRow[]> {
     const conds: SQL[] = [];
     if (q.status !== 'all') conds.push(eq(chapters.status, q.status));
+    if (q.region) conds.push(eq(countries.region, q.region));
     if (q.q) {
       const like = `%${likePrefix(q.q).slice(0, -1)}%`;
       conds.push(or(ilike(chapters.name, like), ilike(chapters.slug, like), ilike(countries.name, like), eq(chapters.countryCode, q.q.toUpperCase()))!);
     }
-    const followers = sql<number>`(select count(*)::int from ${follows} f where f.target_type = 'chapter' and f.target_id = ${chapters.id}::text)`;
+    return this.rows(conds);
+  }
+
+  private async rows(conds: SQL[]): Promise<AdminChapterRow[]> {
+    // Members are the people who joined the chapter (follows), counted as the chapter page counts them.
+    const followers = sql<number>`(select count(*)::int from ${follows} f join ${users} u on u.id = f.follower_id
+      where f.target_type = 'chapter' and f.target_id = ${chapters.id}::text and u.status not in ('deleted', 'deletion_pending', 'deactivated'))`;
     const postCount = sql<number>`(select count(*)::int from ${posts} p where p.chapter_id = ${chapters.id} and p.deleted_at is null)`;
     const rows = await this.db
       .select({
@@ -73,8 +91,7 @@ export class AdminChaptersService {
   }
 
   async row(id: string): Promise<AdminChapterRow> {
-    const all = await this.list({ status: 'all' });
-    const row = all.find((r) => r.id === id);
+    const [row] = await this.rows([eq(chapters.id, id)]);
     if (!row) throw Errors.notFound('That chapter');
     return row;
   }
@@ -107,6 +124,11 @@ export class AdminChaptersService {
 
   /** PATCH /admin/chapters/{id} */
   async update(ctx: AuthContext, rawId: string, input: AdminChapterUpdateInput, ip?: string): Promise<AdminChapterRow> {
+    return this.row(await this.apply(ctx, rawId, input, ip));
+  }
+
+  /** The change behind PATCH /admin/chapters/{id} (also used by bulk): validates, saves and audits; returns the id. */
+  private async apply(ctx: AuthContext, rawId: string, input: AdminChapterUpdateInput, ip?: string): Promise<string> {
     const id = uuidOr404(rawId, 'That chapter');
     const [before] = await this.db.select().from(chapters).where(eq(chapters.id, id)).limit(1);
     if (!before) throw Errors.notFound('That chapter');
@@ -127,7 +149,20 @@ export class AdminChaptersService {
       after: input,
       ip,
     });
-    return this.row(id);
+    return id;
+  }
+
+  /** POST /admin/chapters/bulk: each chapter goes through the single change (same rules, one audit entry each). */
+  async bulk(ctx: AuthContext, input: AdminChaptersBulkInput, ip?: string): Promise<BulkResult> {
+    const change: Record<AdminChaptersBulkInput['action'], (id: string) => Promise<unknown>> = {
+      activate: (id) => this.apply(ctx, id, { status: 'active' }, ip),
+      deactivate: (id) => this.apply(ctx, id, { status: 'dormant' }, ip),
+      posts_direct: (id) => this.apply(ctx, id, { postApproval: 'direct' }, ip),
+      posts_review: (id) => this.apply(ctx, id, { postApproval: 'review' }, ip),
+      posts_platform: (id) => this.apply(ctx, id, { postApproval: null }, ip),
+      delete: (id) => this.remove(ctx, id, ip),
+    };
+    return runEach(input.ids, change[input.action], this.log);
   }
 
   /** The topic behind a chapter's hashtag exists, so it can be followed before anyone has posted with it. */

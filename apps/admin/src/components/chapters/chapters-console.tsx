@@ -1,22 +1,58 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { AdminChapterRow, AdminChapterUpdateInput, ChapterPostApproval, ChapterPostsSettings, Country } from "@chartermission/contracts";
-import { Button, ChapterAvatar, ChapterCover, Chip, Icon, SegmentedControl, cn } from "@chartermission/ui";
+import { useEffect, useMemo, useState } from "react";
+import type { AdminChapterRow, AdminChaptersBulkInput, AdminChapterUpdateInput, ChapterPostApproval, ChapterPostsSettings, Country } from "@chartermission/contracts";
+import { Button, ChapterAvatar, ChapterCover, Chip, FilterSelect, Icon, SegmentedControl, cn } from "@chartermission/ui";
 import { Field, FormModal, SelectBox } from "@/components/ambassadors/modal";
+import { BulkBar } from "@/components/bulk/bulk-bar";
+import { runBulk } from "@/components/bulk/run-bulk";
+import { SelectAllBox, SelectBox as PickBox } from "@/components/bulk/select-box";
+import { useSelection } from "@/components/bulk/use-selection";
 import { TextField, inputClasses } from "@/components/form-field";
 import { ReasonDialog } from "@/components/reason-dialog";
+import { RowMenu } from "@/components/row-menu";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
+import { csvRows, datedFileName, downloadText } from "@/lib/csv";
 import { WEB_URL } from "@/lib/navigation";
 import { BulkPictureUpload } from "./bulk-upload";
 import { PictureField } from "./picture-field";
 import { T, useT } from "@/i18n/client";
 
 type StatusFilter = "all" | "active" | "dormant";
+type BulkAction = AdminChaptersBulkInput["action"];
 
 const numberFormat = new Intl.NumberFormat("en-US");
+
+const BULK_DONE: Record<BulkAction, string> = {
+  activate: "{count} chapters activated.",
+  deactivate: "{count} chapters deactivated.",
+  posts_direct: "Members’ posts now appear straight away in {count} chapters.",
+  posts_review: "Members’ posts now wait for approval in {count} chapters.",
+  posts_platform: "{count} chapters now follow the platform rule.",
+  delete: "{count} chapters removed.",
+};
+
+const POST_RULE: Record<"direct" | "review" | "platform", string> = {
+  direct: "Straight away",
+  review: "Wait for approval",
+  platform: "Platform rule",
+};
+
+/** What a bulk action did to a chapter that changed. */
+const applied = (row: AdminChapterRow, action: BulkAction): AdminChapterRow =>
+  action === "activate"
+    ? { ...row, status: "active" }
+    : action === "deactivate"
+      ? { ...row, status: "dormant" }
+      : action === "posts_direct"
+        ? { ...row, postApproval: "direct" }
+        : action === "posts_review"
+          ? { ...row, postApproval: "review" }
+          : action === "posts_platform"
+            ? { ...row, postApproval: null }
+            : row;
 
 /**
  * Chapter catalogue (GET /admin/chapters). Every change is audited by the API. Removing is only
@@ -44,9 +80,13 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
   }
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [region, setRegion] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const selection = useSelection();
   const [editing, setEditing] = useState<AdminChapterRow | null>(null);
   const [adding, setAdding] = useState(false);
-  const [bulk, setBulk] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState<AdminChapterRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -55,9 +95,50 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
     return rows.filter(
       (r) =>
         (status === "all" || r.status === status) &&
+        (!region || r.region === region) &&
         (!q || r.name.toLowerCase().includes(q) || r.slug.includes(q) || r.countryName.toLowerCase().includes(q) || r.countryCode.toLowerCase() === q),
     );
-  }, [rows, query, status]);
+  }, [rows, query, status, region]);
+
+  const regions = useMemo(
+    () => [...new Set(rows.map((r) => r.region))].sort((a, b) => (a === "Diaspora" ? 1 : b === "Diaspora" ? -1 : a.localeCompare(b))),
+    [rows],
+  );
+  const visibleIds = useMemo(() => visible.map((r) => r.id), [visible]);
+  // A batch action only touches chapters the admin can see: drop picks hidden by a new search or filter.
+  const { retain } = selection;
+  useEffect(() => retain(visibleIds), [retain, visibleIds]);
+
+  async function bulk(action: BulkAction) {
+    setBulkBusy(true);
+    const result = await runBulk("/admin/chapters/bulk", { ids: selection.list, action }, t, BULK_DONE[action]);
+    setBulkBusy(false);
+    setConfirmDelete(false);
+    if (!result) return;
+    const done = new Set(result.done);
+    setRows((list) => (action === "delete" ? list.filter((r) => !done.has(r.id)) : list.map((r) => (done.has(r.id) ? applied(r, action) : r))));
+    selection.remove(result.done);
+  }
+
+  function exportCsv() {
+    downloadText(
+      datedFileName("chapters"),
+      csvRows([
+        ["name", "slug", "country", "region", "status", "hashtag", "members", "posts", "post_rule"],
+        ...visible.map((r) => [
+          r.name,
+          r.slug,
+          r.countryName,
+          r.region,
+          r.status === "active" ? "active" : "inactive",
+          r.hashtag ? `#${r.hashtag}` : "",
+          r.followers,
+          r.posts,
+          r.postApproval === "direct" ? "straight away" : r.postApproval === "review" ? "wait for approval" : "platform rule",
+        ]),
+      ]),
+    );
+  }
 
   const counts = useMemo(
     () => ({ active: rows.filter((r) => r.status === "active").length, dormant: rows.filter((r) => r.status === "dormant").length }),
@@ -107,15 +188,21 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[240px] flex-1">
           <span className="sr-only">Search chapters</span>
-          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 left-3 my-auto h-fit text-secondary" />
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-secondary" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by chapter, country or code"
-            className={inputClasses(false, "pl-9")}
+            className={inputClasses(false, "ps-9")}
           />
         </label>
+        <FilterSelect
+          label="Region"
+          options={[{ value: "", label: t("All regions") }, ...regions.map((r) => ({ value: r, label: r }))]}
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+        />
         <SegmentedControl
           label="Status"
           size="small"
@@ -127,7 +214,11 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
             { value: "dormant", label: t("Inactive ({dormant})", { dormant: counts.dormant }) },
           ]}
         />
-        <Button variant="secondary" size="small" onClick={() => setBulk(true)}>
+        <Button variant="secondary" size="small" onClick={exportCsv} disabled={visible.length === 0}>
+          <Icon name="download" size={16} />
+          Export CSV
+        </Button>
+        <Button variant="secondary" size="small" onClick={() => setUploading(true)}>
           <Icon name="image" size={16} />
           Bulk upload pictures
         </Button>
@@ -143,17 +234,21 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
             Try another search or status.
           </EmptyState>
         ) : (
-          <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[980px] border-collapse text-start text-sm">
             <caption className="sr-only">Chapters</caption>
             <thead className="border-b border-line bg-muted text-label text-secondary uppercase">
               <tr>
-                <th scope="col" className="py-2.5 pr-2.5 pl-4 font-semibold">Chapter</th>
-                <th scope="col" className="py-2.5 pr-2.5 font-semibold">Cover</th>
-                <th scope="col" className="py-2.5 pr-2.5 font-semibold">Country</th>
-                <th scope="col" className="py-2.5 pr-2.5 text-right font-semibold">Members</th>
-                <th scope="col" className="py-2.5 pr-2.5 text-right font-semibold">Posts</th>
-                <th scope="col" className="py-2.5 pr-2.5 font-semibold">Status</th>
-                <th scope="col" className="py-2.5 pr-4 text-right font-semibold">
+                <th scope="col" className="w-10 py-2.5 ps-4 pe-1">
+                  <SelectAllBox state={selection.state(visibleIds)} onToggle={() => selection.toggleAll(visibleIds)} />
+                </th>
+                <th scope="col" className="py-2.5 pe-2.5 text-start font-semibold">Chapter</th>
+                <th scope="col" className="py-2.5 pe-2.5 text-start font-semibold">Cover</th>
+                <th scope="col" className="py-2.5 pe-2.5 text-start font-semibold">Country</th>
+                <th scope="col" className="py-2.5 pe-4 text-end font-semibold">Members</th>
+                <th scope="col" className="py-2.5 pe-4 text-end font-semibold">Posts</th>
+                <th scope="col" className="py-2.5 pe-2.5 text-start font-semibold">Posts rule</th>
+                <th scope="col" className="py-2.5 pe-2.5 text-start font-semibold">Status</th>
+                <th scope="col" className="py-2.5 pe-4 text-end font-semibold">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -161,9 +256,13 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
             <tbody>
               {visible.map((row) => {
                 const active = row.status === "active";
+                const busy = busyId === row.id;
                 return (
-                  <tr key={row.id} className="border-t border-line first:border-t-0">
-                    <td className="py-3 pr-2.5 pl-4">
+                  <tr key={row.id} className={cn("border-t border-line first:border-t-0", selection.has(row.id) && "bg-primary-tint-2")}>
+                    <td className="py-3 ps-4 pe-1">
+                      <PickBox checked={selection.has(row.id)} label={t("Select {name}", { name: row.name })} onChange={(on) => selection.toggle(row.id, on)} />
+                    </td>
+                    <td className="py-3 pe-2.5">
                       <div className="flex items-center gap-3">
                         <ChapterAvatar name={row.name} countryCode={row.countryCode} src={row.imageUrl} size={40} className="rounded-full" />
                         <div className="flex min-w-0 flex-col">
@@ -176,17 +275,17 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 pr-2.5">
+                    <td className="py-3 pe-2.5">
                       <div className="h-8 w-32 overflow-hidden rounded-md border border-line">
                         <ChapterCover name={row.name} countryCode={row.countryCode} src={row.coverUrl} photo={row.photoUrl ? { url: row.photoUrl } : null} />
                       </div>
                     </td>
-                    <td className="py-3 pr-2.5 text-body">
+                    <td className="py-3 pe-2.5 text-body">
                       {row.countryName}
-                      <span className="block text-xs text-secondary">{row.region === "Diaspora" ? "Diaspora" : row.region}</span>
+                      <span className="block text-xs text-secondary">{row.region}</span>
                     </td>
-                    <td className="py-3 pr-2.5 text-right text-body tabular-nums">{numberFormat.format(row.followers)}</td>
-                    <td className="py-3 pr-2.5 text-right text-body tabular-nums">
+                    <td className="py-3 pe-4 text-end text-body tabular-nums">{numberFormat.format(row.followers)}</td>
+                    <td className="py-3 pe-4 text-end text-body tabular-nums">
                       {numberFormat.format(row.posts)}
                       {row.pendingPosts > 0 && (
                         <a
@@ -198,34 +297,28 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
                           <T vars={{ count: numberFormat.format(row.pendingPosts) }}>{"{count} to review"}</T>
                         </a>
                       )}
-                      {row.postApproval && <span className="block text-xs text-secondary">{row.postApproval === "review" ? "Approval on" : "Approval off"}</span>}
                     </td>
-                    <td className="py-3 pr-2.5">
+                    <td className={cn("py-3 pe-2.5 whitespace-nowrap", row.postApproval ? "text-body" : "text-secondary")}>{POST_RULE[row.postApproval ?? "platform"]}</td>
+                    <td className="py-3 pe-2.5">
                       <Chip tone={active ? "success" : "neutral"}>{active ? "Active" : "Inactive"}</Chip>
                     </td>
-                    <td className="py-3 pr-4">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="small" disabled={busyId === row.id} onClick={() => setEditing(row)}>
+                    <td className="py-3 pe-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="small" disabled={busy} onClick={() => setEditing(row)}>
                           Edit
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="small"
-                          disabled={busyId === row.id}
-                          onClick={() =>
-                            void patch(row, { status: active ? "dormant" : "active" }, active ? t("{name} deactivated.", { name: row.name }) : t("{name} activated.", { name: row.name }))
-                          }
-                        >
-                          {active ? "Deactivate" : "Activate"}
-                        </Button>
-                        <button
-                          type="button"
-                          disabled={busyId === row.id}
-                          onClick={() => setRemoving(row)}
-                          className="rounded-md p-1.5 text-secondary hover:bg-error-light hover:text-error disabled:opacity-50"
-                        >
-                          <Icon name="x" size={16} label={t("Remove {name}", { name: row.name })} />
-                        </button>
+                        <RowMenu
+                          label={t("More actions for {name}", { name: row.name })}
+                          items={[
+                            {
+                              label: active ? t("Deactivate") : t("Activate"),
+                              disabled: busy,
+                              onSelect: () =>
+                                void patch(row, { status: active ? "dormant" : "active" }, active ? t("{name} deactivated.", { name: row.name }) : t("{name} activated.", { name: row.name })),
+                            },
+                            { label: t("Remove"), danger: true, disabled: busy, onSelect: () => setRemoving(row) },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -236,6 +329,38 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
         )}
       </div>
 
+      <BulkBar count={selection.count} busy={bulkBusy} onClear={selection.clear}>
+        <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => void bulk("activate")}>
+          Activate
+        </Button>
+        <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => void bulk("deactivate")}>
+          Deactivate
+        </Button>
+        <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => void bulk("posts_direct")}>
+          Posts appear straight away
+        </Button>
+        <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => void bulk("posts_review")}>
+          Posts wait for approval
+        </Button>
+        <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => void bulk("posts_platform")}>
+          Follow platform setting
+        </Button>
+        <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => setConfirmDelete(true)} className="text-error">
+          Remove
+        </Button>
+      </BulkBar>
+
+      {confirmDelete && (
+        <ReasonDialog
+          title={t("Remove {count} chapters?", { count: selection.count })}
+          description="Only chapters nobody has joined or posted in are removed. Chapters in use are kept: deactivate those instead."
+          confirmLabel="Remove chapters"
+          tone="danger"
+          reasonField="none"
+          onClose={() => setConfirmDelete(false)}
+          onConfirm={() => bulk("delete")}
+        />
+      )}
       {editing && (
         <EditChapter
           row={editing}
@@ -258,7 +383,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
           onClose={() => setAdding(false)}
         />
       )}
-      {bulk && <BulkPictureUpload chapters={rows} onUpdated={replace} onClose={() => setBulk(false)} />}
+      {uploading && <BulkPictureUpload chapters={rows} onUpdated={replace} onClose={() => setUploading(false)} />}
       {removing && (
         <ReasonDialog
           title={t("Remove {name}?", { name: removing.name })}

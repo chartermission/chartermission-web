@@ -1,5 +1,8 @@
-import { Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
+  AdminReferralsExportQuery,
+  AdminReferralsQuery,
   InvitePreviewQuery,
   SendInvitesInput,
   type AdminReferrals,
@@ -8,9 +11,9 @@ import {
   type MyReferrals,
   type SendInvitesResult,
 } from '@chartermission/contracts';
-import type { AuthContext } from '../core/auth-context.js';
+import { clientIp, type AppRequest, type AuthContext } from '../core/auth-context.js';
 import { Access, Auth } from '../core/guards.js';
-import { ZBody, ZQuery } from '../common/validation.js';
+import { parseOrThrow, ZBody, ZQuery } from '../common/validation.js';
 import { InvitesService } from './invites.service.js';
 
 @Controller('invites')
@@ -39,14 +42,22 @@ export class InvitesController {
   }
 }
 
-/** GET /admin/referrals: who invited whom. */
+/** GET /admin/referrals: who invited whom, with filters, paging and a CSV export. */
 @Controller('admin/referrals')
 export class AdminReferralsController {
   constructor(private readonly invites: InvitesService) {}
 
   @Get()
   @Access('admin', 'members.manage')
-  report(): Promise<AdminReferrals> {
-    return this.invites.adminReport();
+  report(@ZQuery(AdminReferralsQuery) q: AdminReferralsQuery): Promise<AdminReferrals> {
+    return this.invites.adminReport(q);
+  }
+
+  /** The filtered sign-ups as CSV (streamed). Every export is audited. */
+  @Get('export.csv')
+  @Access('admin', 'members.manage')
+  async export(@Auth() ctx: AuthContext, @Query() query: unknown, @Req() req: AppRequest, @Res() res: Response): Promise<void> {
+    const q = parseOrThrow(AdminReferralsExportQuery, query);
+    await this.invites.exportCsv(ctx, q, res, clientIp(req));
   }
 }

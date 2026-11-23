@@ -75,9 +75,42 @@ export type MyReferrals = {
   people: { member: MemberRef; kind: InviteKind; joinedAt: string }[];
 };
 
-/** GET /admin/referrals — who invited whom. */
+/** One sign-up through an invitation, as the admin console lists it. */
+export type AdminReferralSignup = {
+  /** The referral's id (stable for paging and React keys). */
+  id: string;
+  inviter: MemberRef;
+  invitee: MemberRef;
+  kind: InviteKind;
+  /** The chapter's or event's slug from the link, as it was. */
+  slug: string | null;
+  /** The chapter or event the link was for, when it still exists: its name and its path on the member site. */
+  target: { name: string; path: string } | null;
+  joinedAt: string;
+  /** The new member has confirmed their email. */
+  verified: boolean;
+};
+
+/**
+ * GET /admin/referrals?q=&kind=&inviter=&from=&to=&confirmed=&period=&cursor=&limit= — who invited whom.
+ * `stats` are for all time and ignore the filters; `leaders` count the chosen period; `recent` is one
+ * page of the filtered sign-ups, newest first (continue with nextCursor).
+ */
 export type AdminReferrals = {
+  /** Everyone who joined through an invitation, all time. */
   total: number;
+  stats: {
+    total: number;
+    last7Days: number;
+    last30Days: number;
+    /** Share of them who confirmed their email, 0–100 (null when nobody has joined yet). */
+    confirmedPercent: number | null;
+    byKind: Record<InviteKind, number>;
+  };
+  period: "30d" | "90d" | "all";
   leaders: { inviter: MemberRef; joined: number; verified: number }[];
-  recent: { inviter: MemberRef; invitee: MemberRef; kind: InviteKind; slug: string | null; joinedAt: string; verified: boolean }[];
+  /** The inviter the sign-ups are filtered by, when `inviter` is set. */
+  inviter: MemberRef | null;
+  recent: AdminReferralSignup[];
+  nextCursor: string | null;
 };

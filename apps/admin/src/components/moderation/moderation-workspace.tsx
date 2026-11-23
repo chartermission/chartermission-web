@@ -11,6 +11,10 @@ import type {
   PolicyRef,
 } from "@chartermission/contracts";
 import { Avatar, Button, Chip, cn } from "@chartermission/ui";
+import { BulkBar } from "@/components/bulk/bulk-bar";
+import { runBulk } from "@/components/bulk/run-bulk";
+import { SelectAllBox, SelectBox } from "@/components/bulk/select-box";
+import { useSelection } from "@/components/bulk/use-selection";
 import { FormNotice } from "@/components/form-field";
 import { DialogSelect, ReasonDialog } from "@/components/reason-dialog";
 import { SkeletonBar, SkeletonCard, SkeletonTable } from "@/components/skeletons";
@@ -68,6 +72,9 @@ export function ModerationWorkspace({
   const [pending, setPending] = useState<ModerationActionKind | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmDismiss, setConfirmDismiss] = useState(false);
+  const selection = useSelection();
   const detailRef = useRef<HTMLDivElement>(null);
   const lastDetailId = useRef<string | null>(detail?.id ?? null);
 
@@ -169,6 +176,21 @@ export function ModerationWorkspace({
     refresh(detail.id);
   }
 
+  /** Assign, release or dismiss every picked case; each one is handled (and audited) on its own. */
+  async function bulk(action: "assign" | "unassign" | "dismiss", reason?: string) {
+    setBulkBusy(true);
+    const done = action === "assign" ? "{count} cases assigned to you." : action === "unassign" ? "{count} cases released to the queue." : "{count} cases dismissed. Reporters have been told.";
+    const result = await runBulk("/admin/queue/bulk", { ids: selection.list, action, ...(reason ? { reason } : {}) }, t, done);
+    setBulkBusy(false);
+    setConfirmDismiss(false);
+    if (!result) return;
+    selection.remove(result.done);
+    if (result.done.length) refresh(detail?.id);
+  }
+
+  const openCase = (row: AdminReportRow) => row.status === "open" || row.status === "in_review";
+  const pickable = canAct ? rows.filter(openCase).map((r) => r.id) : [];
+
   const pendingDef = pending && detail ? actionDef(pending, detail.target.type) : null;
   const detailBusy = navigating && optimisticSelected !== detail?.id;
 
@@ -205,18 +227,24 @@ export function ModerationWorkspace({
                 <table className="hidden w-full table-fixed border-collapse text-left md:table">
                   <caption className="sr-only">Reports. Select a row to review it.</caption>
                   <colgroup>
+                    {canAct && <col className="w-[44px]" />}
                     <col />
                     <col className="w-[150px]" />
-                    <col className="w-[72px]" />
+                    <col className="w-[84px]" />
                     <col className="w-[132px]" />
                     <col className="w-[72px]" />
                     <col className="w-[64px]" />
                   </colgroup>
                   <thead className="bg-muted text-label text-secondary uppercase">
                     <tr>
-                      <th scope="col" className="py-3 pr-3 pl-4 font-semibold">Content</th>
+                      {canAct && (
+                        <th scope="col" className="py-3 ps-4 pe-1">
+                          <SelectAllBox state={selection.state(pickable)} onToggle={() => selection.toggleAll(pickable)} disabled={pickable.length === 0} />
+                        </th>
+                      )}
+                      <th scope="col" className={cn("py-3 pe-3 font-semibold", canAct ? "ps-1" : "ps-4")}>Content</th>
                       <th scope="col" className="py-3 pr-3 font-semibold">Reason</th>
-                      <th scope="col" className="py-3 pr-3 font-semibold">Reports</th>
+                      <th scope="col" className="py-3 pe-4 text-end font-semibold">Reports</th>
                       <th scope="col" className="py-3 pr-3 font-semibold">Status</th>
                       <th scope="col" className="py-3 pr-3 font-semibold">
                         Owner
@@ -234,10 +262,20 @@ export function ModerationWorkspace({
                           onClick={() => select(row.id)}
                           className={cn(
                             "cursor-pointer border-t border-line text-sm transition-colors first:border-t-0",
-                            isSelected ? "bg-primary-tint-2" : "hover:bg-surface",
+                            isSelected ? "bg-primary-tint-2" : selection.has(row.id) ? "bg-surface" : "hover:bg-surface",
                           )}
                         >
-                          <td className="py-3 pr-3 pl-4">
+                          {canAct && (
+                            <td className="py-3 ps-4 pe-1" onClick={(event) => event.stopPropagation()}>
+                              <SelectBox
+                                checked={selection.has(row.id)}
+                                disabled={!openCase(row)}
+                                label={t("Select report: {preview}", { preview: row.target.preview })}
+                                onChange={(on) => selection.toggle(row.id, on)}
+                              />
+                            </td>
+                          )}
+                          <td className={cn("py-3 pe-3", canAct ? "ps-1" : "ps-4")}>
                             <button
                               type="button"
                               aria-pressed={isSelected}
@@ -253,7 +291,7 @@ export function ModerationWorkspace({
                             </button>
                           </td>
                           <td className="py-3 pr-3 text-body">{REPORT_REASON_LABELS[row.reason]}</td>
-                          <td className="py-3 pr-3 text-body">{row.reportCount}</td>
+                          <td className="py-3 pe-4 text-end text-body tabular-nums">{row.reportCount}</td>
                           <td className="py-3 pr-3">
                             <Chip tone={chip.tone} className="max-w-full truncate">
                               {chip.label}
@@ -361,6 +399,30 @@ export function ModerationWorkspace({
           ) : null}
         </div>
       </div>
+
+      {canAct && (
+        <BulkBar count={selection.count} busy={bulkBusy} onClear={selection.clear}>
+          <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => void bulk("assign")}>
+            Assign to me
+          </Button>
+          <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => void bulk("unassign")}>
+            Unassign
+          </Button>
+          <Button variant="ghost" size="small" disabled={bulkBusy} onClick={() => setConfirmDismiss(true)}>
+            Dismiss (no action)
+          </Button>
+        </BulkBar>
+      )}
+
+      {confirmDismiss && (
+        <ReasonDialog
+          title={t("Dismiss {count} cases?", { count: selection.count })}
+          description="Nothing happens to the content. Each case is closed with this reason in the audit log, and the people who reported it are told it didn’t break the guidelines."
+          confirmLabel="Dismiss cases"
+          onConfirm={(reason) => bulk("dismiss", reason)}
+          onClose={() => setConfirmDismiss(false)}
+        />
+      )}
 
       <p role="status" aria-live="polite" className="sr-only">
         {navigating ? "Loading" : ""}
