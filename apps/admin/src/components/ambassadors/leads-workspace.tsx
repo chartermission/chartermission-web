@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LEAD_STAGE_LABELS, type AdminLeadDetail, type AdminLeadsPage, type TeamMember } from "@chartermission/contracts";
+import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS, type AdminLeadDetail, type AdminLeadsPage, type AdminLeadSummary, type TeamMember } from "@chartermission/contracts";
 import { Button, Chip, FilterSelect, Icon, cn } from "@chartermission/ui";
+import { BulkBar } from "@/components/bulk/bulk-bar";
+import { runBulk } from "@/components/bulk/run-bulk";
+import { SelectAllBox, SelectBox as PickBox } from "@/components/bulk/select-box";
+import { useSelection } from "@/components/bulk/use-selection";
 import { FormNotice, inputClasses } from "@/components/form-field";
 import { SkeletonBar, SkeletonTable } from "@/components/skeletons";
 import { EmptyState } from "@/components/states";
@@ -12,16 +16,28 @@ import { Age } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage, isApiError } from "@/lib/api/client";
 import { STAGE_TABS, STAGE_TONE, leadsSearch, type LeadsView } from "@/lib/ambassadors";
+import { csvRows, datedFileName, downloadText } from "@/lib/csv";
 import { LeadFields, leadInputFromForm } from "./lead-fields";
-import { FormModal } from "./modal";
+import { Field, FormModal, SelectBox } from "./modal";
 import { useT } from "@/i18n/client";
 
 /** Ambassador leads board: stage tabs with counts, filters, the list and "Add lead". */
 export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: AdminLeadsPage; team: TeamMember[] }) {
+  const t = useT();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [q, setQ] = useState(view.q);
+  const selection = useSelection();
+  const visibleIds = page.items.map((l) => l.id);
+  const visibleKey = visibleIds.join(",");
+
+  // Leads no longer listed (another stage or filter) drop out of the selection.
+  useEffect(() => {
+    selection.retain(visibleIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- visibleKey stands for visibleIds
+  }, [visibleKey, selection.retain]);
 
   function go(next: Partial<LeadsView>) {
     startTransition(() => router.push(`/ambassadors${leadsSearch({ ...view, ...next })}`));
@@ -32,8 +48,30 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
     go({ q: q.trim() });
   }
 
-  const openTotal = STAGE_TABS.filter((t) => ["new", "screening", "review", "interview", "references", "decision", "onboarding"].includes(t.value)).reduce(
-    (n, t) => n + (page.counts[t.value as keyof typeof page.counts] ?? 0),
+  function exportCsv() {
+    const header = ["Name", "Email", "Country", "City", "Organisation", "Job title", "Source", "Stage", "Score", "Onboarding", "Owner", "Has account", "Added", "Updated"];
+    const rows = page.items.map((l) => [
+      l.fullName,
+      l.email,
+      l.country.name,
+      l.city,
+      l.organisation,
+      l.jobTitle,
+      LEAD_SOURCE_LABELS[l.source],
+      LEAD_STAGE_LABELS[l.stage],
+      l.scoreTotal,
+      l.onboarding ? `${l.onboarding.done}/${l.onboarding.total}` : "",
+      l.owner?.name ?? "",
+      l.hasAccount ? "Yes" : "No",
+      l.createdAt.slice(0, 10),
+      l.updatedAt.slice(0, 10),
+    ]);
+    downloadText(datedFileName("ambassador-leads"), csvRows([header, ...rows]));
+    toast(t("{count} leads exported.", { count: rows.length }));
+  }
+
+  const openTotal = STAGE_TABS.filter((tab) => ["new", "screening", "review", "interview", "references", "decision", "onboarding"].includes(tab.value)).reduce(
+    (n, tab) => n + (page.counts[tab.value as keyof typeof page.counts] ?? 0),
     0,
   );
   const countFor = (value: LeadsView["stage"]) =>
@@ -45,8 +83,8 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
         <FormNotice tone="warning">You haven’t been given any countries yet. Ask a Platform Admin to add countries to your manager access.</FormNotice>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label="Pipeline stages" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 pb-1">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <nav aria-label="Pipeline stages" className="flex min-w-0 flex-1 flex-wrap gap-1.5">
           {STAGE_TABS.map((tab) => {
             const active = view.stage === tab.value;
             const count = countFor(tab.value);
@@ -62,15 +100,21 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
                 )}
               >
                 {tab.label}
-                {count !== null && <span className={cn("text-xs", active ? "text-inverse/80" : "text-secondary")}>{count}</span>}
+                {count !== null && <span className={cn("text-xs tabular-nums", active ? "text-inverse/80" : "text-secondary")}>{count}</span>}
               </button>
             );
           })}
         </nav>
-        <Button size="small" onClick={() => setAdding(true)} disabled={page.countries.length === 0}>
-          <Icon name="plus" size={16} />
-          Add lead
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button variant="secondary" size="small" onClick={exportCsv} disabled={page.items.length === 0}>
+            <Icon name="download" size={16} />
+            Export CSV
+          </Button>
+          <Button size="small" onClick={() => setAdding(true)} disabled={page.countries.length === 0}>
+            <Icon name="plus" size={16} />
+            Add lead
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -110,21 +154,27 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="border-b border-line bg-muted/60 text-xs text-secondary">
+            <table className="w-full min-w-[900px] border-collapse text-start text-sm">
+              <thead className="bg-muted text-label text-secondary uppercase">
                 <tr>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Lead</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Country</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Stage</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Score</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Onboarding</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Owner</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Updated</th>
+                  <th scope="col" className="w-10 py-2.5 ps-4 pe-1 font-semibold">
+                    <SelectAllBox state={selection.state(visibleIds)} onToggle={() => selection.toggleAll(visibleIds)} />
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Lead</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Country</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Stage</th>
+                  <th scope="col" className="px-4 py-2.5 text-end font-semibold">Score</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Onboarding</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Owner</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Updated</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {page.items.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-muted/40">
+                  <tr key={lead.id} className={cn("hover:bg-muted/40", selection.has(lead.id) && "bg-primary-tint-2/40")}>
+                    <td className="py-3 ps-4 pe-1 align-top">
+                      <PickBox className="mt-0.5" checked={selection.has(lead.id)} label={t("Select lead {name}", { name: lead.fullName })} onChange={(on) => selection.toggle(lead.id, on)} />
+                    </td>
                     <td className="px-4 py-3">
                       <Link href={`/ambassadors/leads/${lead.id}`} className="font-medium text-ink hover:text-primary hover:underline">
                         {lead.fullName}
@@ -145,7 +195,7 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
                         <Age iso={lead.stageChangedAt} /> in stage
                       </div>
                     </td>
-                    <td className="px-4 py-3 tabular-nums">{lead.scoreTotal === null ? <span className="text-secondary">—</span> : `${lead.scoreTotal}/100`}</td>
+                    <td className="px-4 py-3 text-end tabular-nums">{lead.scoreTotal === null ? <span className="text-secondary">—</span> : `${lead.scoreTotal}/100`}</td>
                     <td className="px-4 py-3">
                       {lead.onboarding ? (
                         <Progress done={lead.onboarding.done} total={lead.onboarding.total} />
@@ -166,8 +216,69 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
       </div>
       {page.truncated && <p className="text-xs text-secondary">Showing the 500 most recently updated leads. Narrow the filters to see the rest.</p>}
 
+      <BulkBar count={selection.count} onClear={selection.clear}>
+        <Button variant="secondary" size="small" onClick={() => setAssigning(true)}>
+          Assign owner…
+        </Button>
+      </BulkBar>
+
       {adding && <NewLeadModal countries={page.countries} team={team} onClose={() => setAdding(false)} />}
+      {assigning && (
+        <AssignModal
+          leads={page.items.filter((l) => selection.has(l.id))}
+          team={team}
+          onClose={() => setAssigning(false)}
+          onDone={(done) => {
+            selection.remove(done);
+            setAssigning(false);
+            startTransition(() => router.refresh());
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Picks a new owner for the selected leads (POST /admin/ambassadors/leads/bulk). */
+function AssignModal({ leads, team, onDone, onClose }: { leads: AdminLeadSummary[]; team: TeamMember[]; onDone: (done: string[]) => void; onClose: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const countries = [...new Map(leads.map((l) => [l.country.code, l.country.name])).entries()];
+  const missing = (m: TeamMember) => (m.allCountries ? [] : countries.filter(([code]) => !m.countryCodes.includes(code)).map(([, name]) => name));
+  // Those who cover every picked lead first, then the rest with what they don't cover.
+  const options = [...team]
+    .sort((a, b) => missing(a).length - missing(b).length || a.name.localeCompare(b.name))
+    .map((m) => {
+      const gaps = missing(m);
+      return { value: m.id, label: gaps.length === 0 ? m.name : t("{name} (doesn’t cover {countries})", { name: m.name, countries: gaps.join(", ") }) };
+    });
+
+  return (
+    <FormModal
+      title={t("Assign {count} leads", { count: leads.length })}
+      description="Leads in a country the new owner doesn’t cover keep their current owner."
+      submitLabel="Assign leads"
+      busy={busy}
+      error={error}
+      onClose={onClose}
+      onSubmit={async (data) => {
+        const ownerId = String(data.get("ownerId") ?? "");
+        if (!ownerId) {
+          setError("Choose who will own these leads.");
+          return;
+        }
+        setBusy(true);
+        setError(null);
+        const result = await runBulk("/admin/ambassadors/leads/bulk", { ids: leads.map((l) => l.id), action: "assign", ownerId }, t, "{count} leads assigned.");
+        setBusy(false);
+        if (result) onDone(result.done);
+      }}
+    >
+      <Field label="Owner for these leads" hint="Only managers who cover a lead’s country can own it.">
+        {(id, describedBy) => <SelectBox id={id} name="ownerId" describedBy={describedBy} defaultValue={options[0]?.value} options={options} />}
+      </Field>
+    </FormModal>
   );
 }
 

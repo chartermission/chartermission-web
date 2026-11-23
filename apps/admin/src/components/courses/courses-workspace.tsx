@@ -5,12 +5,17 @@ import { useRouter } from "next/navigation";
 import {
   COURSE_LEVEL_LABELS,
   LEARNING_FEATURED_LIMIT,
+  type AdminCoursesBulkInput,
   type AdminCourseView,
   type LinkStatus,
   type SyncRunView,
   type UpdateCourseCurationInput,
 } from "@chartermission/contracts";
-import { Chip, FilterSelect, Icon, buttonClasses, cn } from "@chartermission/ui";
+import { Button, Chip, FilterSelect, Icon, buttonClasses, cn } from "@chartermission/ui";
+import { BulkBar } from "@/components/bulk/bulk-bar";
+import { runBulk } from "@/components/bulk/run-bulk";
+import { SelectAllBox, SelectBox } from "@/components/bulk/select-box";
+import { useSelection } from "@/components/bulk/use-selection";
 import { FormNotice, inputClasses } from "@/components/form-field";
 import { ReasonDialog } from "@/components/reason-dialog";
 import { SkeletonBar, SkeletonCard, SkeletonTable } from "@/components/skeletons";
@@ -22,6 +27,20 @@ import { SyncPanel } from "./sync-panel";
 import { T, useT } from "@/i18n/client";
 
 type Patch = Partial<Pick<AdminCourseView, "hidden" | "featured">>;
+type BulkAction = AdminCoursesBulkInput["action"];
+
+const BULK_DONE: Record<BulkAction, string> = {
+  feature: "{count} courses featured.",
+  unfeature: "{count} courses no longer featured.",
+  hide: "{count} courses hidden from members.",
+  show: "{count} courses visible to members again.",
+};
+const BULK_PATCH: Record<BulkAction, Patch> = {
+  feature: { featured: true },
+  unfeature: { featured: false },
+  hide: { hidden: true },
+  show: { hidden: false },
+};
 type Filters = { q: string; link: "" | LinkStatus; visibility: "" | "visible" | "hidden" | "removed"; featured: "" | "yes" | "no"; topic: string };
 
 const NO_FILTERS: Filters = { q: "", link: "", visibility: "", featured: "", topic: "" };
@@ -117,6 +136,9 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
   const [patches, setPatches] = useState<Record<string, Patch>>({});
   const [saving, setSaving] = useState<Set<string>>(() => new Set());
   const [confirmHide, setConfirmHide] = useState<AdminCourseView | null>(null);
+  const [confirmBulkHide, setConfirmBulkHide] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const selection = useSelection();
 
   const rows = courses.map((c) => (patches[c.id] ? { ...c, ...patches[c.id] } : c));
   const topics = [...new Map(rows.flatMap((c) => c.topics).map((t) => [t.slug, t])).values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -131,6 +153,7 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
         a.title.localeCompare(b.title),
     );
   const featuredVisible = rows.filter((c) => c.featured && isVisible(c)).length;
+  const shownIds = shown.map((c) => c.id);
   const filtered = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
   const charterCenterOrigin = (() => {
     try {
@@ -184,6 +207,25 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
   function toggleHidden(course: AdminCourseView) {
     if (course.hidden) void curate(course, { hidden: false }, t("“{title}” is visible to members again.", { title: course.title }));
     else setConfirmHide(course);
+  }
+
+  /** Runs a batch action on the picked courses; the ones changed show the change at once. */
+  async function bulk(action: BulkAction) {
+    setBulkBusy(true);
+    try {
+      const result = await runBulk("/admin/courses/bulk", { ids: selection.list, action }, t, BULK_DONE[action]);
+      if (result) {
+        setPatches((p) => {
+          const next = { ...p };
+          for (const id of result.done) next[id] = { ...next[id], ...BULK_PATCH[action] };
+          return next;
+        });
+        selection.remove(result.done);
+        startRefresh(() => router.refresh());
+      }
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   const actionButton = (className?: string) => buttonClasses({ variant: "secondary", size: "small", className: cn("px-2.5!", className) });
@@ -263,14 +305,14 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
           <label htmlFor={`${ids}-q`} className="sr-only">
             Search courses by title or provider
           </label>
-          <Icon name="search" size={16} className="pointer-events-none absolute left-2.5 text-secondary" />
+          <Icon name="search" size={16} className="pointer-events-none absolute start-2.5 text-secondary" />
           <input
             id={`${ids}-q`}
             type="search"
             value={filters.q}
             onChange={(e) => set("q", e.target.value)}
             placeholder="Search title or provider"
-            className={inputClasses(false, "py-1.5 pr-3 pl-8")}
+            className={inputClasses(false, "py-1.5 pe-3 ps-8")}
           />
         </div>
         <FilterSelect label="Link status" options={LINK_OPTIONS} value={filters.link} onChange={(e) => set("link", e.target.value as Filters["link"])} />
@@ -315,15 +357,18 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] table-fixed border-collapse text-left">
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-start">
               <caption className="sr-only">Courses synced from Charter Center, broken links first</caption>
               <thead className="bg-muted text-label text-secondary uppercase">
                 <tr>
-                  <th scope="col" className="py-3 pr-3 pl-4 font-semibold">Course</th>
-                  <th scope="col" className="hidden w-[180px] py-3 pr-3 font-semibold xl:table-cell">Topics · level</th>
-                  <th scope="col" className="w-[150px] py-3 pr-3 font-semibold">Link</th>
-                  <th scope="col" className="w-[150px] py-3 pr-3 font-semibold">Members see</th>
-                  <th scope="col" className="w-[188px] py-3 pr-4 font-semibold">
+                  <th scope="col" className="w-10 py-3 ps-4 pe-1 font-semibold">
+                    <SelectAllBox state={selection.state(shownIds)} onToggle={() => selection.toggleAll(shownIds)} />
+                  </th>
+                  <th scope="col" className="py-3 ps-2 pe-3 font-semibold">Course</th>
+                  <th scope="col" className="hidden w-[180px] py-3 pe-3 font-semibold xl:table-cell">Topics · level</th>
+                  <th scope="col" className="w-[150px] py-3 pe-3 font-semibold">Link</th>
+                  <th scope="col" className="w-[150px] py-3 pe-3 font-semibold">Members see</th>
+                  <th scope="col" className="w-[188px] py-3 pe-4 font-semibold">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -335,9 +380,17 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
                     <tr
                       key={c.id}
                       aria-busy={busy}
-                      className={cn("border-t border-line align-top text-sm first:border-t-0", c.linkStatus === "broken" && "bg-error-light/40", busy && "opacity-70")}
+                      className={cn(
+                        "border-t border-line align-top text-sm first:border-t-0",
+                        c.linkStatus === "broken" && "bg-error-light/40",
+                        selection.has(c.id) && "bg-primary-tint-2/40",
+                        busy && "opacity-70",
+                      )}
                     >
-                      <td className="py-3 pr-3 pl-4">
+                      <td className="py-3 ps-4 pe-1">
+                        <SelectBox checked={selection.has(c.id)} label={t("Select course {title}", { title: c.title })} onChange={(on) => selection.toggle(c.id, on)} />
+                      </td>
+                      <td className="py-3 ps-2 pe-3">
                         <div className="flex min-w-0 flex-col gap-0.5">
                           <span className="flex min-w-0 items-center gap-1.5">
                             <span dir="auto" className="truncate font-medium text-ink" title={c.title}>
@@ -359,14 +412,14 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
                           </span>
                         </div>
                       </td>
-                      <td className="hidden py-3 pr-3 xl:table-cell">
+                      <td className="hidden py-3 pe-3 xl:table-cell">
                         <span className="block truncate text-body">{c.topics.map((t) => t.name).join(", ") || "—"}</span>
                         <span className="block text-xs text-secondary">{COURSE_LEVEL_LABELS[c.level]}</span>
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className="py-3 pe-3">
                         <LinkBadge course={c} />
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className="py-3 pe-3">
                         <span className="flex flex-col items-start gap-1">
                           {c.removedAt ? (
                             <Chip tone="warning" className="px-2! py-0.5! text-xs!">Removed from source</Chip>
@@ -392,7 +445,7 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
                           )}
                         </span>
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="py-3 pe-4">
                         <div className="flex flex-wrap justify-end gap-1.5">
                           <button
                             type="button"
@@ -424,6 +477,36 @@ export function CoursesWorkspace({ courses, truncated, runs }: { courses: AdminC
           </div>
         )}
       </div>
+
+      <BulkBar count={selection.count} busy={bulkBusy} onClear={selection.clear}>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => void bulk("feature")}>
+          Feature
+        </Button>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => void bulk("unfeature")}>
+          Unfeature
+        </Button>
+        <Button variant="secondary" size="small" className="text-error!" disabled={bulkBusy} onClick={() => setConfirmBulkHide(true)}>
+          Hide
+        </Button>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => void bulk("show")}>
+          Show
+        </Button>
+      </BulkBar>
+
+      {confirmBulkHide && (
+        <ReasonDialog
+          title={t("Hide {count} courses from members?", { count: selection.count })}
+          description="They leave the Learning page, search and learning paths. They stay synced from Charter Center and you can show them again at any time."
+          confirmLabel="Hide courses"
+          tone="danger"
+          reasonField="none"
+          onConfirm={() => {
+            setConfirmBulkHide(false);
+            void bulk("hide");
+          }}
+          onClose={() => setConfirmBulkHide(false)}
+        />
+      )}
 
       {confirmHide && (
         <ReasonDialog

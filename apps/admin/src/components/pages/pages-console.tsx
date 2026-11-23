@@ -5,24 +5,34 @@ import {
   PAGE_CATEGORY_LABELS,
   PageCategory,
   type AdminPageRow,
+  type AdminPagesBulkInput,
   type AdminPageStatusInput,
   type Page,
   type PagesSettings,
   type PageStatus,
 } from "@chartermission/contracts";
-import { Button, Chip, Icon, cn, type ChipTone } from "@chartermission/ui";
+import { Button, Chip, FilterSelect, Icon, cn, type ChipTone } from "@chartermission/ui";
 import { Field, FormModal, SelectBox } from "@/components/ambassadors/modal";
+import { BulkBar } from "@/components/bulk/bulk-bar";
+import { runBulk } from "@/components/bulk/run-bulk";
+import { SelectAllBox, SelectBox as PickBox } from "@/components/bulk/select-box";
+import { useSelection } from "@/components/bulk/use-selection";
 import { TextField, inputClasses } from "@/components/form-field";
 import { ReasonDialog } from "@/components/reason-dialog";
+import { RowMenu } from "@/components/row-menu";
 import { EmptyState } from "@/components/states";
 import { DateTime } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
+import { csvRows, datedFileName, downloadText } from "@/lib/csv";
 import { formatCount } from "@/lib/format";
 import { webHref } from "@/lib/navigation";
 import { T, useT } from "@/i18n/client";
 
 type Filter = "all" | PageStatus;
+type Sort = "newest" | "followers" | "name";
+type Verified = "" | "yes" | "no";
+type BulkAction = AdminPagesBulkInput["action"];
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
@@ -39,6 +49,17 @@ const STATUS: Record<PageStatus, { label: string; tone: ChipTone }> = {
   suspended: { label: "Suspended", tone: "error" },
 };
 
+const CATEGORY_OPTIONS = [{ value: "", label: "Any kind of page" }, ...PageCategory.options.map((value) => ({ value, label: PAGE_CATEGORY_LABELS[value] }))];
+const VERIFIED_OPTIONS = [
+  { value: "", label: "Verified or not" },
+  { value: "yes", label: "Verified" },
+  { value: "no", label: "Not verified" },
+];
+const SORT_OPTIONS: { value: Sort; label: string }[] = [
+  { value: "newest", label: "Newest pages first" },
+  { value: "followers", label: "Most followed first" },
+  { value: "name", label: "Page name A–Z" },
+];
 
 const ACTION_COPY: Record<AdminPageStatusInput["action"], { title: string; description: string; confirm: string; done: string; needsNote: boolean }> = {
   approve: { title: "Approve {name}?", description: "The page goes live, its admins are told, and it can start posting.", confirm: "Approve page", done: "{name} approved and live.", needsNote: false },
@@ -51,6 +72,28 @@ const ACTION_COPY: Record<AdminPageStatusInput["action"], { title: string; descr
   },
   suspend: { title: "Suspend {name}?", description: "The page and its posts are hidden from members straight away. Its admins see your note.", confirm: "Suspend page", done: "{name} suspended.", needsNote: true },
   restore: { title: "Restore {name}?", description: "The page and its posts become visible again.", confirm: "Restore page", done: "{name} restored.", needsNote: false },
+};
+
+/** Batch actions that ask first (the others run straight away). */
+const BULK_CONFIRM: Partial<Record<BulkAction, { title: string; description: string; confirm: string }>> = {
+  suspend: {
+    title: "Suspend {count} pages?",
+    description: "The pages and their posts are hidden from members straight away. Each page’s admins see your note. Only live pages are suspended.",
+    confirm: "Suspend pages",
+  },
+  delete: {
+    title: "Delete {count} pages?",
+    description: "This deletes the pages with their posts and followers. It can’t be undone. To hide pages and keep their content, suspend them instead.",
+    confirm: "Delete pages",
+  },
+};
+
+const BULK_DONE: Record<BulkAction, string> = {
+  verify: "{count} pages verified.",
+  unverify: "Verified tick removed from {count} pages.",
+  suspend: "{count} pages suspended.",
+  restore: "{count} pages restored.",
+  delete: "{count} pages deleted.",
 };
 
 function Logo({ page }: { page: AdminPageRow }) {
@@ -71,15 +114,27 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
   const [pages, setPages] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [filter, setFilter] = useState<Filter>("all");
+  const [category, setCategory] = useState<"" | PageCategory>("");
+  const [verified, setVerified] = useState<Verified>("");
+  const [sort, setSort] = useState<Sort>("newest");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reload, setReload] = useState(0);
   const [settings, setSettings] = useState(initialSettings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [editing, setEditing] = useState<AdminPageRow | "new" | null>(null);
   const [acting, setActing] = useState<{ page: AdminPageRow; action: AdminPageStatusInput["action"] } | null>(null);
   const [removing, setRemoving] = useState<AdminPageRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<BulkAction | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const selection = useSelection();
   const first = useRef(true);
+
+  const query = { status: filter, q: q.trim(), category: category || undefined, verified: verified || undefined, sort };
+  const visibleIds = pages.map((p) => p.id);
+  const filtered = filter !== "all" || !!category || !!verified || !!q.trim();
 
   const upsert = (page: AdminPageRow) => setPages((list) => (list.some((x) => x.id === page.id) ? list.map((x) => (x.id === page.id ? page : x)) : [page, ...list]));
 
@@ -91,10 +146,11 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setLoading(true);
-      api<Page<AdminPageRow>>("/admin/pages", { query: { status: filter, q: q.trim(), limit: 100 }, signal: controller.signal })
+      api<Page<AdminPageRow>>("/admin/pages", { query: { status: filter, q: q.trim(), category: category || undefined, verified: verified || undefined, sort, limit: 100 }, signal: controller.signal })
         .then((page) => {
           setPages(page.items);
           setCursor(page.nextCursor);
+          selection.retain(page.items.map((p) => p.id));
         })
         .catch((e: unknown) => {
           if (!(e instanceof DOMException && e.name === "AbortError")) toast(errorMessage(e), "error");
@@ -105,13 +161,14 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filter, q]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selection.retain is stable; reload re-runs the same query
+  }, [filter, q, category, verified, sort, reload]);
 
   async function more() {
     if (!cursor) return;
     setLoading(true);
     try {
-      const page = await api<Page<AdminPageRow>>("/admin/pages", { query: { status: filter, q: q.trim(), limit: 100, cursor } });
+      const page = await api<Page<AdminPageRow>>("/admin/pages", { query: { ...query, limit: 100, cursor } });
       setPages((list) => [...list, ...page.items.filter((p) => !list.some((x) => x.id === p.id))]);
       setCursor(page.nextCursor);
     } catch (e) {
@@ -136,15 +193,63 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
     }
   }
 
-  async function setVerified(page: AdminPageRow, verified: boolean) {
+  async function setTick(page: AdminPageRow, on: boolean) {
     setBusyId(page.id);
     try {
-      upsert(await api<AdminPageRow>(`/admin/pages/${page.id}`, { method: "PATCH", body: { verified } }));
-      toast(verified ? t("{name} is verified.", { name: page.name }) : t("Verified tick removed from {name}.", { name: page.name }));
+      upsert(await api<AdminPageRow>(`/admin/pages/${page.id}`, { method: "PATCH", body: { verified: on } }));
+      toast(on ? t("{name} is verified.", { name: page.name }) : t("Verified tick removed from {name}.", { name: page.name }));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  /** Runs a batch action on the picked pages, then reloads the list; pages that failed stay picked. */
+  async function bulk(action: BulkAction, note?: string) {
+    setBulkBusy(true);
+    try {
+      const result = await runBulk("/admin/pages/bulk", { ids: selection.list, action, note: note || undefined }, t, BULK_DONE[action]);
+      if (result) {
+        selection.remove(result.done);
+        setReload((n) => n + 1);
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  /** Every page matching the current filters (all pages of results), as a spreadsheet. */
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const all: AdminPageRow[] = [];
+      let next: string | null | undefined;
+      do {
+        const page: Page<AdminPageRow> = await api<Page<AdminPageRow>>("/admin/pages", { query: { ...query, limit: 100, cursor: next ?? undefined } });
+        all.push(...page.items);
+        next = page.nextCursor;
+      } while (next);
+      const header = ["Name", "Slug", "Type", "Status", "Verified", "Owner", "Owner email", "Admins", "Followers", "Posts", "Created"];
+      const rows = all.map((p) => [
+        p.name,
+        p.slug,
+        PAGE_CATEGORY_LABELS[p.category],
+        STATUS[p.status].label,
+        p.verified ? "Yes" : "No",
+        p.owner?.name ?? "",
+        p.owner?.email ?? "",
+        p.admins,
+        p.followers,
+        p.posts,
+        p.createdAt.slice(0, 10),
+      ]);
+      downloadText(datedFileName("pages"), csvRows([header, ...rows]));
+      toast(t("{count} pages exported.", { count: all.length }));
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -212,103 +317,124 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
             </button>
           ))}
         </div>
-        <label className="relative ml-auto min-w-[220px]">
+        <div className="ms-auto flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="small" disabled={exporting} onClick={() => void exportCsv()}>
+            <Icon name="download" size={16} />
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+          <Button size="small" onClick={() => setEditing("new")}>
+            <Icon name="plus" size={16} />
+            New page
+          </Button>
+        </div>
+      </div>
+
+      <div role="group" aria-label="Filter and sort pages" className="flex flex-wrap items-center gap-2">
+        <label className="relative min-w-[220px] flex-1 sm:max-w-[320px]">
           <span className="sr-only">Search pages</span>
-          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 left-3 my-auto h-fit text-secondary" />
-          <input type="search" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Search by name" className={inputClasses(false, "pl-9")} />
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-secondary" />
+          <input type="search" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Search by name" className={inputClasses(false, "ps-9")} />
         </label>
-        <Button size="small" onClick={() => setEditing("new")}>
-          <Icon name="plus" size={16} />
-          New page
-        </Button>
+        <FilterSelect label="Kind of page" options={CATEGORY_OPTIONS} value={category} onChange={(e) => setCategory(e.target.value as "" | PageCategory)} />
+        <FilterSelect label="Verified tick" options={VERIFIED_OPTIONS} value={verified} onChange={(e) => setVerified(e.target.value as Verified)} />
+        <FilterSelect label="Sort pages" options={SORT_OPTIONS} value={sort} onChange={(e) => setSort(e.target.value as Sort)} />
+        {(category || verified || sort !== "newest") && (
+          <button
+            type="button"
+            onClick={() => {
+              setCategory("");
+              setVerified("");
+              setSort("newest");
+            }}
+            className="rounded-md px-2 py-1 text-sm font-medium text-primary hover:bg-primary-tint-2"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className={cn("rounded-card border border-line bg-card", loading && "opacity-70")} aria-busy={loading}>
         {pages.length === 0 ? (
-          <EmptyState icon="building" title={filter === "pending" ? "Nothing waiting for review" : "No pages here"} />
+          <EmptyState icon="building" title={filter === "pending" && !filtered ? "Nothing waiting for review" : filtered ? "No pages match these filters" : "No pages here"} />
         ) : (
-          <ul className="divide-y divide-line">
-            {pages.map((page) => {
-              const busy = busyId === page.id;
-              return (
-                <li key={page.id} className="flex flex-wrap items-start gap-4 px-5 py-4">
-                  <Logo page={page} />
-                  <div className="flex min-w-[260px] flex-1 flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <a href={webHref(`/pages/${page.slug}`)} target="_blank" rel="noreferrer" className="text-md font-semibold text-ink hover:underline">
-                        {page.name}
-                      </a>
-                      {page.verified && <Icon name="verified" size={16} className="text-primary-light" label="Verified" />}
-                      <Chip tone={STATUS[page.status].tone} className="px-2! py-0.5! text-xs!">
-                        {STATUS[page.status].label}
-                      </Chip>
-                      {page.official && (
-                        <Chip tone="info" className="px-2! py-0.5! text-xs!">
-                          Official
-                        </Chip>
-                      )}
-                    </div>
-                    <p className="text-sm text-secondary">
-                      {PAGE_CATEGORY_LABELS[page.category]} · /pages/{page.slug} · created <DateTime iso={page.createdAt} dateOnly />
-                    </p>
-                    {page.tagline && <p className="text-sm text-body">{page.tagline}</p>}
-                    {page.status === "pending" && page.about && <p className="line-clamp-3 text-sm text-body">{page.about}</p>}
-                    {page.website && (
-                      <a href={page.website} target="_blank" rel="noopener noreferrer nofollow" className="w-fit text-sm text-primary-light hover:underline">
-                        {page.website.replace(/^https?:\/\//, "")}
-                      </a>
-                    )}
-                    {page.reviewNote && page.status !== "active" && <p className="text-sm text-body"><T vars={{ reviewNote: page.reviewNote }}>{"Note to admins: “{reviewNote}”"}</T></p>}
-                    <p className="text-xs text-secondary">
-                      Owner:{" "}
-                      {page.owner ? (
-                        <a href={webHref(`/${page.owner.handle}`)} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline">
-                          {page.owner.name}
+          <>
+            <div className="flex items-center gap-3 border-b border-line bg-muted px-5 py-2 text-label text-secondary uppercase">
+              <SelectAllBox state={selection.state(visibleIds)} onToggle={() => selection.toggleAll(visibleIds)} />
+              <span>Select all pages shown</span>
+            </div>
+            <ul className="divide-y divide-line">
+              {pages.map((page) => {
+                const busy = busyId === page.id;
+                const primary =
+                  page.status === "pending" || page.status === "rejected"
+                    ? { label: "Approve", variant: "primary" as const, onClick: () => setActing({ page, action: "approve" }) }
+                    : page.status === "suspended"
+                      ? { label: "Restore", variant: "secondary" as const, onClick: () => setActing({ page, action: "restore" }) }
+                      : { label: "Edit", variant: "secondary" as const, onClick: () => setEditing(page) };
+                return (
+                  <li key={page.id} className={cn("flex flex-wrap items-start gap-4 px-5 py-4", selection.has(page.id) && "bg-primary-tint-2/40")}>
+                    <PickBox className="mt-3.5" checked={selection.has(page.id)} label={t("Select page {name}", { name: page.name })} onChange={(on) => selection.toggle(page.id, on)} />
+                    <Logo page={page} />
+                    <div className="flex min-w-[260px] flex-1 flex-col gap-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a href={webHref(`/pages/${page.slug}`)} target="_blank" rel="noreferrer" className="text-md font-semibold text-ink hover:underline">
+                          {page.name}
                         </a>
-                      ) : (
-                        "none"
+                        {page.verified && <Icon name="verified" size={16} className="text-primary-light" label="Verified" />}
+                        <Chip tone={STATUS[page.status].tone} className="px-2! py-0.5! text-xs!">
+                          {STATUS[page.status].label}
+                        </Chip>
+                        {page.official && (
+                          <Chip tone="info" className="px-2! py-0.5! text-xs!">
+                            Official
+                          </Chip>
+                        )}
+                      </div>
+                      <p className="text-sm text-secondary">
+                        {PAGE_CATEGORY_LABELS[page.category]} · /pages/{page.slug} · created <DateTime iso={page.createdAt} dateOnly />
+                      </p>
+                      {page.tagline && <p className="text-sm text-body">{page.tagline}</p>}
+                      {page.status === "pending" && page.about && <p className="line-clamp-3 text-sm text-body">{page.about}</p>}
+                      {page.website && (
+                        <a href={page.website} target="_blank" rel="noopener noreferrer nofollow" className="w-fit text-sm text-primary-light hover:underline">
+                          {page.website.replace(/^https?:\/\//, "")}
+                        </a>
                       )}
-                      {page.owner?.email ? ` (${page.owner.email})` : ""} · {page.admins} admin{page.admins === 1 ? "" : "s"} · {formatCount(page.followers)} follower
-                      {page.followers === 1 ? "" : "s"} · {formatCount(page.posts)} post{page.posts === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1">
-                    {(page.status === "pending" || page.status === "rejected") && (
-                      <Button size="small" disabled={busy} onClick={() => setActing({ page, action: "approve" })}>
-                        Approve
+                      {page.reviewNote && page.status !== "active" && <p className="text-sm text-body"><T vars={{ reviewNote: page.reviewNote }}>{"Note to admins: “{reviewNote}”"}</T></p>}
+                      <p className="text-xs text-secondary">
+                        Owner:{" "}
+                        {page.owner ? (
+                          <a href={webHref(`/${page.owner.handle}`)} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline">
+                            {page.owner.name}
+                          </a>
+                        ) : (
+                          "none"
+                        )}
+                        {page.owner?.email ? ` (${page.owner.email})` : ""} · {page.admins} admin{page.admins === 1 ? "" : "s"} · {formatCount(page.followers)} follower
+                        {page.followers === 1 ? "" : "s"} · {formatCount(page.posts)} post{page.posts === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant={primary.variant} size="small" disabled={busy} onClick={primary.onClick}>
+                        {primary.label}
                       </Button>
-                    )}
-                    {page.status === "pending" && (
-                      <Button variant="secondary" size="small" disabled={busy} onClick={() => setActing({ page, action: "reject" })}>
-                        Don’t approve
-                      </Button>
-                    )}
-                    {page.status === "active" && (
-                      <>
-                        <Button variant="ghost" size="small" disabled={busy} onClick={() => void setVerified(page, !page.verified)}>
-                          {page.verified ? "Remove tick" : "Verify"}
-                        </Button>
-                        <Button variant="ghost" size="small" disabled={busy} onClick={() => setActing({ page, action: "suspend" })}>
-                          Suspend
-                        </Button>
-                      </>
-                    )}
-                    {page.status === "suspended" && (
-                      <Button variant="secondary" size="small" disabled={busy} onClick={() => setActing({ page, action: "restore" })}>
-                        Restore
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="small" disabled={busy} onClick={() => setEditing(page)}>
-                      Edit
-                    </Button>
-                    <button type="button" disabled={busy} onClick={() => setRemoving(page)} className="rounded-md p-1.5 text-secondary hover:bg-error-light hover:text-error disabled:opacity-50">
-                      <Icon name="x" size={16} label={t("Remove {name}", { name: page.name })} />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                      <RowMenu
+                        label={t("More actions for page {name}", { name: page.name })}
+                        items={[
+                          { label: "Don’t approve", hidden: page.status !== "pending", disabled: busy, onSelect: () => setActing({ page, action: "reject" }) },
+                          { label: "Verify", hidden: page.status !== "active" || page.verified, disabled: busy, onSelect: () => void setTick(page, true) },
+                          { label: "Remove tick", hidden: page.status !== "active" || !page.verified, disabled: busy, onSelect: () => void setTick(page, false) },
+                          { label: "Edit", hidden: primary.label === "Edit", disabled: busy, onSelect: () => setEditing(page) },
+                          { label: "Suspend", hidden: page.status !== "active", danger: true, disabled: busy, onSelect: () => setActing({ page, action: "suspend" }) },
+                          { label: "Remove page", danger: true, disabled: busy, onSelect: () => setRemoving(page) },
+                        ]}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
       {cursor && (
@@ -317,6 +443,44 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
         </Button>
       )}
 
+      <BulkBar count={selection.count} busy={bulkBusy} onClear={selection.clear}>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => void bulk("verify")}>
+          Verify
+        </Button>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => void bulk("unverify")}>
+          Remove tick
+        </Button>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => setBulkConfirm("suspend")}>
+          Suspend
+        </Button>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => void bulk("restore")}>
+          Restore
+        </Button>
+        <Button variant="ghost" size="small" className="text-error!" disabled={bulkBusy} onClick={() => setBulkConfirm("delete")}>
+          Delete
+        </Button>
+      </BulkBar>
+
+      {bulkConfirm && BULK_CONFIRM[bulkConfirm] && (
+        <ReasonDialog
+          title={t(BULK_CONFIRM[bulkConfirm].title, { count: selection.count })}
+          description={BULK_CONFIRM[bulkConfirm].description}
+          confirmLabel={BULK_CONFIRM[bulkConfirm].confirm}
+          tone="danger"
+          reasonField={bulkConfirm === "suspend" ? "required" : "none"}
+          reasonLabel="Note to the pages’ admins"
+          reasonPlaceholder="Why the pages were taken down"
+          reasonHint="Shown to each page’s admins and recorded in the audit log."
+          requiredMessage="Add a note so the page’s admins know what to fix."
+          minReasonLength={5}
+          onClose={() => setBulkConfirm(null)}
+          onConfirm={async (note) => {
+            const action = bulkConfirm;
+            setBulkConfirm(null);
+            await bulk(action, note);
+          }}
+        />
+      )}
       {editing && (
         <PageFormModal
           page={editing === "new" ? null : editing}
@@ -360,6 +524,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
           onConfirm={async () => {
             await api(`/admin/pages/${removing.id}`, { method: "DELETE" });
             setPages((list) => list.filter((x) => x.id !== removing.id));
+            selection.remove([removing.id]);
             toast(t("{name} removed.", { name: removing.name }));
             setRemoving(null);
           }}
