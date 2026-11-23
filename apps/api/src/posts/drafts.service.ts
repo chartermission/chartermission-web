@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, lte, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import {
   CreatePostInput,
   DraftPayload,
@@ -17,15 +17,19 @@ import { InjectDb, type Db } from '../db/db.module.js';
 import { files, postDrafts } from '../db/schema.js';
 import { AppError, Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
-import type { AuthUser } from '../core/auth-context.js';
+import type { AuthUser, AuthVia } from '../core/auth-context.js';
 import { can } from '../core/policy.js';
 import { mediaUrl } from '../core/members.service.js';
 import { SessionService } from '../core/session.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { QueueService } from '../infra/queue.service.js';
+import { AuditService } from '../infra/audit.service.js';
 import { PostsService } from './posts.service.js';
 
-type DraftRow = typeof postDrafts.$inferSelect;
+export type DraftRow = typeof postDrafts.$inferSelect;
+
+/** Statuses that count towards MAX_DRAFTS and show in the member's lists. */
+const OPEN_STATUSES = ['draft', 'scheduled', 'failed', 'held'];
 
 /** Queue "maintenance" job that publishes due scheduled posts, every minute. */
 export const PUBLISH_SCHEDULED_JOB = 'publish-scheduled';
@@ -68,6 +72,7 @@ export class DraftsService implements OnModuleInit {
     private readonly sessions: SessionService,
     private readonly events: EventsService,
     private readonly queue: QueueService,
+    private readonly audit: AuditService,
   ) {}
 
   onModuleInit() {
@@ -81,8 +86,8 @@ export class DraftsService implements OnModuleInit {
 
   /** GET /me/drafts?status=draft|scheduled — drafts newest first; scheduled (and failed) soonest first. */
   async list(user: AuthUser, q: DraftsQuery): Promise<Page<DraftView>> {
-    const statuses: DraftStatus[] | ['scheduled', 'failed', 'publishing'] =
-      q.status === 'draft' ? ['draft'] : ['scheduled', 'failed', 'publishing'];
+    // Scheduled posts the Charter Mission team paused ("held") stay in the scheduled list.
+    const statuses: string[] = q.status === 'draft' ? ['draft'] : ['scheduled', 'failed', 'publishing', 'held'];
     const base = and(eq(postDrafts.authorId, user.id), inArray(postDrafts.status, statuses));
     if (q.status === 'draft') {
       const ts = draftTs(postDrafts.updatedAt);
@@ -115,17 +120,20 @@ export class DraftsService implements OnModuleInit {
   }
 
   /** POST /me/drafts — save composer state; with scheduledFor it becomes a scheduled post. */
-  async create(user: AuthUser, input: SaveDraftInput): Promise<DraftView> {
+  async create(user: AuthUser, input: SaveDraftInput, via?: AuthVia): Promise<DraftView> {
     if (!can(user, 'post.create')) throw Errors.forbidden();
     const [counted] = await this.db
       .select({ n: sql<number>`count(*)::int` })
       .from(postDrafts)
-      .where(and(eq(postDrafts.authorId, user.id), inArray(postDrafts.status, ['draft', 'scheduled', 'failed'])));
+      .where(and(eq(postDrafts.authorId, user.id), inArray(postDrafts.status, OPEN_STATUSES)));
     if ((counted?.n ?? 0) >= MAX_DRAFTS) {
       throw Errors.conflict(`You have ${MAX_DRAFTS} drafts and scheduled posts. Publish or delete some first.`);
     }
     const payload = await this.checkPayload(user, input.payload);
     const schedule = input.scheduledFor ? this.checkSchedule(user, payload, input.scheduledFor) : null;
+    const source = via?.kind === 'oauth' ? 'claude' : 'web';
+    // Content calendar: a post Claude schedules waits for the team's approval when they ask for it.
+    const pending = !!schedule && source === 'claude' && (await this.posts.claudeApprovalRequired());
     const [row] = await this.db
       .insert(postDrafts)
       .values({
@@ -133,6 +141,8 @@ export class DraftsService implements OnModuleInit {
         payload,
         status: schedule ? 'scheduled' : 'draft',
         scheduledFor: schedule,
+        source,
+        contentReview: pending ? 'pending' : null,
       })
       .returning();
     const [view] = await this.views([row!]);
@@ -140,7 +150,7 @@ export class DraftsService implements OnModuleInit {
   }
 
   /** PATCH /me/drafts/{id} — autosave, schedule (scheduledFor), or unschedule (scheduledFor: null). */
-  async update(user: AuthUser, id: string, input: SaveDraftInput): Promise<DraftView> {
+  async update(user: AuthUser, id: string, input: SaveDraftInput, via?: AuthVia): Promise<DraftView> {
     const row = await this.own(user, id);
     if (row.status === 'publishing') throw Errors.conflict('This post is being published right now');
     const payload = await this.checkPayload(user, input.payload);
@@ -151,13 +161,40 @@ export class DraftsService implements OnModuleInit {
       // Editing a scheduled post keeps it scheduled, so it must stay a valid post.
       scheduledFor = this.checkSchedule(user, payload, scheduledFor.toISOString(), { allowPast: true });
     }
+    const byClaude = via?.kind === 'oauth';
+    const source = byClaude ? 'claude' : row.source;
+    // A paused post stays paused when its author edits or moves it; only the team releases it.
+    const status = scheduledFor ? (row.status === 'held' ? 'held' : 'scheduled') : 'draft';
+    const contentReview = await this.reviewAfterEdit(row, { scheduled: !!scheduledFor, source, byClaude });
     const [updated] = await this.db
       .update(postDrafts)
-      .set({ payload, scheduledFor, status: scheduledFor ? 'scheduled' : 'draft', lastError: null })
+      .set({
+        payload,
+        scheduledFor,
+        status,
+        lastError: null,
+        source,
+        contentReview,
+        ...(contentReview !== row.contentReview ? { contentReviewBy: null, contentReviewAt: null, contentReviewNote: contentReview === 'declined' ? row.contentReviewNote : null } : {}),
+      })
       .where(and(eq(postDrafts.id, id), eq(postDrafts.authorId, user.id)))
       .returning();
     const [view] = await this.views([updated!]);
     return view!;
+  }
+
+  /**
+   * The team's review after an edit. In "approve before publishing" mode a scheduled post written
+   * with Claude needs approval: again after Claude changes it, and after a declined one is
+   * rescheduled. Unscheduling drops a pending review; a decline stays so the author sees the note.
+   */
+  private async reviewAfterEdit(row: DraftRow, next: { scheduled: boolean; source: string; byClaude: boolean }): Promise<string | null> {
+    const current = row.contentReview;
+    if (!next.scheduled) return current === 'pending' ? null : current;
+    const required = next.source === 'claude' && (await this.posts.claudeApprovalRequired());
+    if (!required) return current === 'declined' ? null : current;
+    if (next.byClaude || current !== 'approved') return 'pending';
+    return current;
   }
 
   async remove(user: AuthUser, id: string): Promise<void> {
@@ -167,16 +204,23 @@ export class DraftsService implements OnModuleInit {
   }
 
   /** POST /me/drafts/{id}/publish — publish now; the draft is removed once the post exists. */
-  async publish(user: AuthUser, id: string): Promise<PostView> {
+  async publish(user: AuthUser, id: string, via?: AuthVia): Promise<PostView> {
     const row = await this.own(user, id);
     if (row.status === 'publishing') throw Errors.conflict('This post is being published right now');
+    if (row.status === 'held') throw Errors.conflict('The Charter Mission team paused this post. It can be published once they release it.');
     const parsed = CreatePostInput.safeParse(row.payload);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       throw Errors.validation({ [String(issue?.path[0] ?? 'body')]: issue?.message ?? 'The post is incomplete' }, 'Finish the post before publishing');
     }
-    const post = await this.posts.create(user, parsed.data);
+    const post = await this.posts.create(user, parsed.data, {
+      via,
+      // A post published from a draft written with Claude counts as written with Claude.
+      source: via?.kind === 'oauth' ? 'claude' : (row.source as 'web' | 'claude'),
+      approved: row.contentReview === 'approved' ? { by: row.contentReviewBy, at: row.contentReviewAt, note: row.contentReviewNote } : undefined,
+    });
     await this.db.delete(postDrafts).where(eq(postDrafts.id, id));
+    await this.recordPublished(row, post.id);
     return post;
   }
 
@@ -187,10 +231,17 @@ export class DraftsService implements OnModuleInit {
       .update(postDrafts)
       .set({ status: 'scheduled' })
       .where(and(eq(postDrafts.status, 'publishing'), lte(postDrafts.updatedAt, new Date(now.getTime() - STUCK_MS))));
+    // Held posts have status "held", so they are never picked; posts waiting for approval (or declined) are skipped.
     const due = await this.db
       .select({ id: postDrafts.id })
       .from(postDrafts)
-      .where(and(eq(postDrafts.status, 'scheduled'), lte(postDrafts.scheduledFor, now)))
+      .where(
+        and(
+          eq(postDrafts.status, 'scheduled'),
+          lte(postDrafts.scheduledFor, now),
+          or(isNull(postDrafts.contentReview), eq(postDrafts.contentReview, 'approved')),
+        ),
+      )
       .orderBy(asc(postDrafts.scheduledFor))
       .limit(PUBLISH_BATCH);
     let published = 0;
@@ -200,15 +251,30 @@ export class DraftsService implements OnModuleInit {
       const [claimed] = await this.db
         .update(postDrafts)
         .set({ status: 'publishing' })
-        .where(and(eq(postDrafts.id, id), eq(postDrafts.status, 'scheduled')))
+        .where(
+          and(
+            eq(postDrafts.id, id),
+            eq(postDrafts.status, 'scheduled'),
+            or(isNull(postDrafts.contentReview), eq(postDrafts.contentReview, 'approved')),
+          ),
+        )
         .returning();
       if (!claimed) continue;
       try {
         const author = await this.sessions.userById(claimed.authorId);
         if (!author || author.status !== 'active') throw Errors.forbidden('Your account can’t publish posts right now');
-        const post = await this.posts.create(author, CreatePostInput.parse(claimed.payload));
+        const post = await this.posts.create(author, CreatePostInput.parse(claimed.payload), {
+          source: claimed.source as 'web' | 'claude',
+          approved:
+            claimed.contentReview === 'approved'
+              ? { by: claimed.contentReviewBy, at: claimed.contentReviewAt, note: claimed.contentReviewNote }
+              : undefined,
+        });
         await this.db.delete(postDrafts).where(eq(postDrafts.id, id));
-        await this.events.emit({ type: 'scheduled.published', draftId: id, postId: post.id, authorId: claimed.authorId });
+        await this.recordPublished(claimed, post.id);
+        if (post.status === 'published') {
+          await this.events.emit({ type: 'scheduled.published', draftId: id, postId: post.id, authorId: claimed.authorId });
+        }
         published++;
       } catch (err) {
         const reason = failureMessage(err);
@@ -218,6 +284,22 @@ export class DraftsService implements OnModuleInit {
       }
     }
     return { published, failed };
+  }
+
+  /**
+   * Links a post published from a Claude (or reviewed) draft to that draft in the audit log, so the
+   * content calendar can show the draft's review history and Claude activity on the post.
+   */
+  private async recordPublished(draft: DraftRow, postId: string) {
+    if (draft.source !== 'claude' && !draft.contentReview) return;
+    await this.audit.record({
+      actorId: null,
+      action: 'content_calendar.published',
+      targetType: 'post',
+      targetId: postId,
+      before: { draftId: draft.id, scheduledFor: draft.scheduledFor?.toISOString() ?? null },
+      after: { postId, source: draft.source },
+    });
   }
 
   private async own(user: AuthUser, id: string): Promise<DraftRow> {
@@ -287,6 +369,9 @@ export class DraftsService implements OnModuleInit {
         scheduledFor: r.scheduledFor?.toISOString() ?? null,
         lastError: r.lastError,
         preview,
+        review: r.contentReview
+          ? { state: r.contentReview as 'pending' | 'approved' | 'declined', note: r.contentReview === 'pending' ? null : r.contentReviewNote }
+          : null,
         attachments: payload.attachmentIds
           .map((id) => fileById.get(id))
           .filter((f) => !!f)

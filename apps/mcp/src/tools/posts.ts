@@ -96,8 +96,20 @@ async function composition(ctx: ToolContext, a: CompositionArgs) {
 }
 
 function publishedNote(p: PostView): string | undefined {
+  if (p.status === 'awaiting_approval' || p.contentReview?.state === 'pending') {
+    return 'Saved, but waiting for the Charter Mission team\'s approval: others will see it once they approve it. Tell the member.';
+  }
   if (p.chapterReview?.state === 'pending' || p.status === 'in_review') return 'Published, but waiting for review before others can see it.';
   if (p.status === 'pending_media') return 'Published; attachments are still processing.';
+  return undefined;
+}
+
+/** What to tell the member about a scheduled post the Charter Mission team reviews first, or paused. */
+function scheduledNote(d: DraftView): string | undefined {
+  if (d.status === 'held') return 'Paused by the Charter Mission team: it won\'t be published until they release it. Tell the member.';
+  if (d.review?.state === 'pending') {
+    return 'Scheduled, but waiting for the Charter Mission team\'s approval: it will only be published once they approve it. Tell the member.';
+  }
   return undefined;
 }
 
@@ -203,7 +215,7 @@ export function registerPostTools(server: McpServer, ctx: ToolContext) {
     async (a) => {
       const { publish_at, ...rest } = a;
       const d = await api.post<DraftView>('me/drafts', { payload: await composition(ctx, rest), scheduledFor: publish_at });
-      return json({ scheduled: draft(d) });
+      return json({ scheduled: draft(d), note: scheduledNote(d) });
     },
   );
 
@@ -225,7 +237,7 @@ export function registerPostTools(server: McpServer, ctx: ToolContext) {
       const { draft_id, ...rest } = a;
       const payload = await composition(ctx, rest);
       const d = draft_id ? await api.patch<DraftView>(`me/drafts/${draft_id}`, { payload }) : await api.post<DraftView>('me/drafts', { payload });
-      return json({ saved: draft(d) });
+      return json({ saved: draft(d), note: scheduledNote(d) });
     },
   );
 

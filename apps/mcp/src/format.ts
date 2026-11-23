@@ -96,6 +96,8 @@ export function post(p: PostView, links: Links, bodyMax = POST_BODY_MAX) {
     hashtags: p.hashtags.length ? p.hashtags : undefined,
     ...(p.status !== 'published' ? { status: p.status } : {}),
     ...(p.chapterReview && p.chapterReview.state !== 'approved' ? { chapterReview: p.chapterReview.state } : {}),
+    // Written with Claude while the Charter Mission team approves such posts first.
+    ...(p.contentReview ? { teamReview: p.contentReview.state === 'pending' ? 'waiting for the Charter Mission team\'s approval' : 'not approved by the Charter Mission team', ...(p.contentReview.note ? { teamNote: p.contentReview.note } : {}) } : {}),
     ...(p.moderationState && p.moderationState !== 'visible' ? { moderation: p.moderationState } : {}),
     createdAt: p.createdAt,
     ...(p.editedAt ? { edited: true } : {}),
@@ -132,6 +134,9 @@ export function draft(d: DraftView) {
     preview: d.preview,
     type: d.payload.type,
     lastError: d.lastError,
+    ...(d.status === 'held' ? { teamReview: 'paused by the Charter Mission team' } : {}),
+    ...(d.review?.state === 'pending' ? { teamReview: 'waiting for the Charter Mission team\'s approval' } : {}),
+    ...(d.review?.state === 'declined' ? { teamReview: 'not approved by the Charter Mission team', ...(d.review.note ? { teamNote: d.review.note } : {}) } : {}),
     updatedAt: d.updatedAt,
   };
 }

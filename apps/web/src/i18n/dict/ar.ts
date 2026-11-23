@@ -4458,4 +4458,13 @@ export const ar: Dict = {
   "{count} actions in the last 7 days": "الإجراءات في آخر 7 أيام: {count}",
   "Scheduled a post": "جدول منشورًا",
   "Only continue if you just started connecting Charter Mission from your own Claude. If someone sent you this link, choose Cancel.": "لا تتابع إلا إذا كنت قد بدأت للتو ربط Charter Mission من حسابك الخاص في Claude. إذا أرسل إليك أحدهم هذا الرابط، فاختر «إلغاء».",
+  "Sent to the Charter Mission team for approval. You’ll be told when it’s live.": "أُرسل إلى فريق Charter Mission للموافقة عليه. سنُعلمك عند نشره.",
+  "Paused by the Charter Mission team": "أوقفه فريق Charter Mission مؤقتًا",
+  "Waiting for approval": "بانتظار الموافقة",
+  "The Charter Mission team paused this post. It won’t be published until they release it. Check your notifications for their note.": "أوقف فريق Charter Mission هذا المنشور مؤقتًا. لن يُنشر حتى يُعيد الفريق تفعيله. راجع إشعاراتك لقراءة ملاحظته.",
+  "Posts written with Claude are checked by the Charter Mission team first. This one is published at its time once they approve it.": "يراجع فريق Charter Mission أولًا المنشورات المكتوبة باستخدام Claude. سيُنشر هذا المنشور في موعده بعد موافقة الفريق.",
+  "The Charter Mission team didn’t approve this post.": "لم يوافق فريق Charter Mission على هذا المنشور.",
+  "Waiting for approval.": "بانتظار الموافقة.",
+  "The Charter Mission team checks posts written with Claude first. Only you can see this post until then.": "يراجع فريق Charter Mission أولًا المنشورات المكتوبة باستخدام Claude. لا يمكن لأحد غيرك رؤية هذا المنشور حتى ذلك الحين.",
+  "The Charter Mission team didn’t approve this post. Only you can see it.": "لم يوافق فريق Charter Mission على هذا المنشور. لا يمكن لأحد غيرك رؤيته.",
 };

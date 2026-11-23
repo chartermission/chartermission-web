@@ -198,6 +198,10 @@ export class PostSerializer {
       if (r.chapterReview && own && r.status !== 'published') {
         view.chapterReview = { state: r.chapterReview as 'pending' | 'approved' | 'declined', note: r.chapterReviewNote, by: null, at: r.chapterReviewAt?.toISOString() ?? null };
       }
+      // A post written with Claude that the Charter Mission team hasn't approved (or declined): the author sees why it isn't live.
+      if (r.contentReview && own && r.status !== 'published' && r.contentReview !== 'approved') {
+        view.contentReview = { state: r.contentReview as 'pending' | 'declined', note: r.contentReview === 'declined' ? r.contentReviewNote : null };
+      }
       if (r.moderationState !== 'visible' && (own || isModerator(viewer))) {
         view.moderationState = r.moderationState as NonNullable<PostView['moderationState']>;
       }

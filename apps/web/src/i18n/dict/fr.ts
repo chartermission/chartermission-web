@@ -4458,4 +4458,13 @@ export const fr: Dict = {
   "{count} actions in the last 7 days": { one: "{count} action au cours des 7 derniers jours", other: "{count} actions au cours des 7 derniers jours" },
   "Scheduled a post": "A programmé une publication",
   "Only continue if you just started connecting Charter Mission from your own Claude. If someone sent you this link, choose Cancel.": "Ne continuez que si vous venez de lancer vous-même la connexion de Charter Mission depuis votre propre Claude. Si quelqu’un vous a envoyé ce lien, choisissez Annuler.",
+  "Sent to the Charter Mission team for approval. You’ll be told when it’s live.": "Envoyée à l’équipe Charter Mission pour validation. Vous serez prévenu dès sa mise en ligne.",
+  "Paused by the Charter Mission team": "Mise en pause par l’équipe Charter Mission",
+  "Waiting for approval": "En attente de validation",
+  "The Charter Mission team paused this post. It won’t be published until they release it. Check your notifications for their note.": "L’équipe Charter Mission a mis cette publication en pause. Elle ne sera pas publiée tant que l’équipe ne l’aura pas débloquée. Consultez vos notifications pour lire son message.",
+  "Posts written with Claude are checked by the Charter Mission team first. This one is published at its time once they approve it.": "Les publications rédigées avec Claude sont d’abord vérifiées par l’équipe Charter Mission. Celle-ci sera publiée à l’heure prévue une fois validée.",
+  "The Charter Mission team didn’t approve this post.": "L’équipe Charter Mission n’a pas validé cette publication.",
+  "Waiting for approval.": "En attente de validation.",
+  "The Charter Mission team checks posts written with Claude first. Only you can see this post until then.": "L’équipe Charter Mission vérifie d’abord les publications rédigées avec Claude. D’ici là, vous seul pouvez voir cette publication.",
+  "The Charter Mission team didn’t approve this post. Only you can see it.": "L’équipe Charter Mission n’a pas validé cette publication. Vous seul pouvez la voir.",
 };

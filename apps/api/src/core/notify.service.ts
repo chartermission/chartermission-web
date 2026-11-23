@@ -82,6 +82,7 @@ export const CATEGORY_OF: Record<
   page_enquiry: 'always',
   exam_certificate_name: 'always',
   announcement: 'announcements',
+  content_review: 'always',
 };
 
 export interface NotifyInput {
