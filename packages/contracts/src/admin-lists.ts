@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BulkIds } from "./admin-ops.js";
-<<<<<<< HEAD
+import { InviteKind } from "./invites.js";
 import { AdminMembersFilters, AdminMembersSort, type AdminMemberRow } from "./catalogue.js";
 import type { MemberRef } from "./common.js";
 import type { AuditEntry } from "./moderation.js";
@@ -89,8 +89,6 @@ export type AdminMemberOverview = {
   /** The latest ten audit entries about their account. */
   audit: AuditEntry[];
 };
-=======
-import { InviteKind } from "./invites.js";
 
 /* ---------------- Referrals, topics, chapters, moderation ---------------- */
 
@@ -182,4 +180,3 @@ export const AdminQueueBulkInput = z
     }
   });
 export type AdminQueueBulkInput = z.infer<typeof AdminQueueBulkInput>;
->>>>>>> ws/C

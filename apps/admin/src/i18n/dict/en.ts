@@ -112,4 +112,6 @@ export const en: Dict = {
   "{count} leads exported.": { one: "{count} lead exported.", other: "{count} leads exported." },
   "Assign {count} leads": { one: "Assign {count} lead", other: "Assign {count} leads" },
   "{count} leads assigned.": { one: "{count} lead assigned.", other: "{count} leads assigned." },
+  "{count} selected": { one: "{count} selected", other: "{count} selected" },
+  "Import {count} rows": { one: "Import {count} row", other: "Import {count} rows" },
 };

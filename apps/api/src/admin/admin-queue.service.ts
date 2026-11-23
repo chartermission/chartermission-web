@@ -66,11 +66,7 @@ function mostCommon<T extends string>(values: T[]): T {
 /** Report queue, case detail, hidden content and appeals for the admin console (CM-ADM-02/06). */
 @Injectable()
 export class AdminQueueService {
-<<<<<<< HEAD
   private readonly log = new Logger(AdminQueueService.name);
-=======
-  private readonly log = new Logger('AdminQueue');
->>>>>>> ws/D
 
   constructor(
     @InjectDb() private readonly db: Db,
