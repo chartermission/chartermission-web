@@ -1,0 +1,2 @@
+CREATE INDEX "member_profiles_name_idx" ON "member_profiles" USING btree ("display_name","user_id");--> statement-breakpoint
+CREATE INDEX "users_created_id_idx" ON "users" USING btree ("created_at","id");

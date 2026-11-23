@@ -246,6 +246,13 @@
       "when": 1795420556356,
       "tag": "0034_admin_catalogues_content_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795423754562,
+      "tag": "0035_members_list_indexes",
+      "breakpoints": true
     }
   ]
 }

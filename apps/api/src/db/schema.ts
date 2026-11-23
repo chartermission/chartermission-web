@@ -145,6 +145,8 @@ export const users = pgTable(
   (t) => [
     uniqueIndex('users_email_lower_uq').on(sql`lower(${t.email})`),
     index('users_status_idx').on(t.status),
+    /** Admin Members list: newest / oldest first, paged by (joined, id). */
+    index('users_created_id_idx').on(t.createdAt, t.id),
     check(
       'users_status_ck',
       sql`${t.status} in ('unverified','active','deactivated','suspended','deletion_pending','deleted')`,
@@ -284,6 +286,8 @@ export const memberProfiles = pgTable(
   (t) => [
     uniqueIndex('member_profiles_handle_uq').on(sql`lower(${t.handle})`),
     index('member_profiles_country_idx').on(t.countryCode),
+    /** Admin Members list sorted by name, paged by (name, id). */
+    index('member_profiles_name_idx').on(t.displayName, t.userId),
     check('profile_visibility_ck', sql`${t.profileVisibility} in ('members','public')`),
     check('profile_conn_from_ck', sql`${t.connectionRequestsFrom} in ('members','nobody')`),
   ],
