@@ -34,6 +34,7 @@ import { seedServices } from './seed-services.js';
 import { seedPageDetails } from './seed-page-details.js';
 import { CHAPTER_PHOTOS } from './chapter-photos.js';
 import { seedDemoMfa } from './seed-accounts.js';
+import { seedContentCalendar } from './seed-content-calendar.js';
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
 import { DEFAULT_FIELD_VISIBILITY } from '@chartermission/contracts';
@@ -372,6 +373,7 @@ async function main() {
     await seedPageDetails(db, ctx);
     await seedInitiatives(db, ctx);
     await seedServices(db, ctx);
+    await seedContentCalendar(db, ctx);
     const mfa = await seedDemoMfa(db);
     console.log(`Seeded ${Object.keys(ids).length} demo members (password: ${DEMO_PASSWORD})`);
     if (mfa.length) console.log(`Two-step verification preset for ${mfa.length} staff accounts: ${mfa.join(', ')} (see the demo accounts PDF)`);

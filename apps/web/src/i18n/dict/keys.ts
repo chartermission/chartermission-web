@@ -4456,4 +4456,13 @@ export const KEYS: readonly string[] = [
   "{count} actions in the last 7 days",
   "Scheduled a post",
   "Only continue if you just started connecting Charter Mission from your own Claude. If someone sent you this link, choose Cancel.",
+  "Sent to the Charter Mission team for approval. You’ll be told when it’s live.",
+  "Paused by the Charter Mission team",
+  "Waiting for approval",
+  "The Charter Mission team paused this post. It won’t be published until they release it. Check your notifications for their note.",
+  "Posts written with Claude are checked by the Charter Mission team first. This one is published at its time once they approve it.",
+  "The Charter Mission team didn’t approve this post.",
+  "Waiting for approval.",
+  "The Charter Mission team checks posts written with Claude first. Only you can see this post until then.",
+  "The Charter Mission team didn’t approve this post. Only you can see it.",
 ];

@@ -34,6 +34,7 @@ import { PushModule } from './push/push.module.js';
 import { InvitesModule } from './invites/invites.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { OAuthModule } from './oauth/oauth.module.js';
+import { ContentCalendarModule } from './content-calendar/content-calendar.module.js';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { OAuthModule } from './oauth/oauth.module.js';
     InvitesModule,
     ServicesModule,
     OAuthModule,
+    ContentCalendarModule,
   ],
   controllers: [AppController],
   providers: [

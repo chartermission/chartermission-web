@@ -26,13 +26,13 @@ export class DraftsController {
   @Post()
   @Access('verified', 'post.create')
   create(@Auth() ctx: AuthContext, @ZBody(SaveDraftInput) input: SaveDraftInput): Promise<DraftView> {
-    return this.drafts.create(ctx.user, input);
+    return this.drafts.create(ctx.user, input, ctx.via);
   }
 
   @Patch(':id')
   @Access('verified', 'post.create')
   update(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(SaveDraftInput) input: SaveDraftInput): Promise<DraftView> {
-    return this.drafts.update(ctx.user, id, input);
+    return this.drafts.update(ctx.user, id, input, ctx.via);
   }
 
   @Delete(':id')
@@ -46,6 +46,6 @@ export class DraftsController {
   @HttpCode(200)
   @Access('verified', 'post.create')
   publish(@Auth() ctx: AuthContext, @UuidParam('id') id: string): Promise<PostView> {
-    return this.drafts.publish(ctx.user, id);
+    return this.drafts.publish(ctx.user, id, ctx.via);
   }
 }

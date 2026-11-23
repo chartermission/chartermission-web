@@ -36,7 +36,21 @@ export type DomainEvent =
   | { type: 'initiative.join_requested'; requestId: string }
   | { type: 'initiative.join_decided'; requestId: string }
   | { type: 'booking.created'; bookingId: string }
-  | { type: 'booking.cancelled'; bookingId: string; actorId: string };
+  | { type: 'booking.cancelled'; bookingId: string; actorId: string }
+  | {
+      /** Content calendar: the Charter Mission team acted on a post (or scheduled post) written with Claude. */
+      type: 'content.reviewed';
+      kind: 'draft' | 'post';
+      id: string;
+      authorId: string;
+      action: 'hold' | 'release' | 'reschedule' | 'cancel' | 'approve' | 'decline';
+      actorId: string;
+      note: string | null;
+      scheduledFor: string | null;
+      preview: string;
+      /** Posts: the status after the action (published, in_review or declined). */
+      postStatus: string | null;
+    };
 
 @Injectable()
 export class EventsService {

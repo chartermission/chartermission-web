@@ -283,10 +283,11 @@ export type ArticleState = {
 
 /**
  * "pending_media": files are still being checked. "in_review": waiting for the chapter team to
- * approve it. "declined": not approved, or taken out of the chapter. Only "published" posts are
- * seen by other members.
+ * approve it. "awaiting_approval": written with Claude while the Charter Mission team approves
+ * such posts first (content calendar). "declined": not approved, or taken out of the chapter.
+ * Only "published" posts are seen by other members.
  */
-export const PostStatus = z.enum(["published", "pending_media", "in_review", "declined"]);
+export const PostStatus = z.enum(["published", "pending_media", "in_review", "declined", "awaiting_approval"]);
 export type PostStatus = z.infer<typeof PostStatus>;
 
 export const ChapterReviewInfo = z.object({
@@ -298,6 +299,10 @@ export const ChapterReviewInfo = z.object({
   at: z.string().nullable(),
 });
 export type ChapterReviewInfo = z.infer<typeof ChapterReviewInfo>;
+
+/** The Charter Mission team's review of a post written with Claude, shown to its author. */
+export const PostContentReview = z.object({ state: z.enum(["pending", "approved", "declined"]), note: z.string().nullable() });
+export type PostContentReview = z.infer<typeof PostContentReview>;
 
 export type PostView = {
   id: string;
@@ -344,6 +349,8 @@ export type PostView = {
   status: PostStatus;
   /** Chapter approval, shown to the author and the chapter's reviewers; absent when the post never needed it. */
   chapterReview?: ChapterReviewInfo;
+  /** The team's review of a post written with Claude: the author sees it while it isn't published. */
+  contentReview?: PostContentReview;
   createdAt: string;
   editedAt: string | null;
   counts: { reactions: number; comments: number; reposts: number };
@@ -404,6 +411,7 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     initiative: z.object({ id: z.string().uuid(), slug: z.string(), title: z.string() }).nullable(),
     status: PostStatus,
     chapterReview: ChapterReviewInfo.optional(),
+    contentReview: PostContentReview.optional(),
     createdAt: z.string(),
     editedAt: z.string().nullable(),
     counts: z.object({ reactions: z.number().int(), comments: z.number().int(), reposts: z.number().int() }),
@@ -573,7 +581,8 @@ export const SCHEDULE_MIN_MINUTES = 5;
 export const SCHEDULE_MAX_DAYS = 60;
 export const MAX_DRAFTS = 50;
 
-export const DraftStatus = z.enum(["draft", "scheduled", "failed"]);
+/** "held": a scheduled post the Charter Mission team paused; it won't publish until they release it. */
+export const DraftStatus = z.enum(["draft", "scheduled", "failed", "held"]);
 export type DraftStatus = z.infer<typeof DraftStatus>;
 
 /** POST /me/drafts and PATCH /me/drafts/{id}. scheduledFor turns a draft into a scheduled post; null unschedules. */
@@ -592,6 +601,11 @@ export const DraftView = z.object({
   lastError: z.string().nullable(),
   /** Short text for lists: article title, request title, or the start of the body. */
   preview: z.string(),
+  /**
+   * The Charter Mission team's review of a post written with Claude: "pending" waits for approval
+   * before it can publish; "declined" (with their note) was sent back. Null when none applies.
+   */
+  review: z.object({ state: z.enum(["pending", "approved", "declined"]), note: z.string().nullable() }).nullable().optional(),
   attachments: z.array(z.object({ id: z.string().uuid(), url: z.string().nullable(), kind: z.enum(["image", "document", "video"]), name: z.string().nullable() })),
   createdAt: z.string(),
   updatedAt: z.string(),

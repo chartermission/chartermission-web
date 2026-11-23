@@ -114,4 +114,10 @@ export const en: Dict = {
   "{count} leads assigned.": { one: "{count} lead assigned.", other: "{count} leads assigned." },
   "{count} selected": { one: "{count} selected", other: "{count} selected" },
   "Import {count} rows": { one: "Import {count} row", other: "Import {count} rows" },
+  "+{count} more": { one: "+{count} more", other: "+{count} more" },
+  "{count} posts put on hold.": { one: "{count} post put on hold.", other: "{count} posts put on hold." },
+  "{count} posts released.": { one: "{count} post released.", other: "{count} posts released." },
+  "{count} posts approved.": { one: "{count} post approved.", other: "{count} posts approved." },
+  "{count} posts declined.": { one: "{count} post declined.", other: "{count} posts declined." },
+  "{count} scheduled posts cancelled.": { one: "{count} scheduled post cancelled.", other: "{count} scheduled posts cancelled." },
 };

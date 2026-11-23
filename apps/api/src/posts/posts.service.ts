@@ -28,7 +28,7 @@ import {
   posts,
 } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
-import type { AuthUser } from '../core/auth-context.js';
+import type { AuthUser, AuthVia } from '../core/auth-context.js';
 import { can, isActiveUntil } from '../core/policy.js';
 import { MembersService } from '../core/members.service.js';
 import { ChapterRules } from '../core/chapter-rules.service.js';
@@ -39,6 +39,7 @@ import { EventsService } from '../infra/events.service.js';
 import { QueueService } from '../infra/queue.service.js';
 import { AnalyticsService } from '../infra/analytics.service.js';
 import { AuditService } from '../infra/audit.service.js';
+import { SettingsService } from '../infra/settings.service.js';
 import { MediaService, type FileRow } from '../media/media.service.js';
 import { EventAccess, type EventRow } from '../events/event-access.js';
 import { isPublicStatus } from '../events/event-util.js';
@@ -74,6 +75,17 @@ function checkBody(type: string, body: string) {
   if (type === 'question' && body.length < 10) throw Errors.validation({ body: 'Write your question (at least 10 characters)' });
 }
 
+/**
+ * Where a new post comes from. `via` is set for requests Claude makes (OAuth); `source` overrides it
+ * (a post published from a draft takes the draft's source). `approved` carries a reviewer's approval
+ * from a scheduled post, so it doesn't wait for approval a second time.
+ */
+export type PostOrigin = {
+  via?: AuthVia;
+  source?: 'web' | 'claude';
+  approved?: { by: string | null; at: Date | null; note: string | null };
+};
+
 /** Posting, commenting and reacting are blocked while a time-boxed restriction runs (CM-ADM-04). */
 export function assertNotRestricted(user: AuthUser) {
   if (isActiveUntil(user.restrictedPostingUntil)) throw Errors.restricted('posting', user.restrictedPostingUntil);
@@ -101,6 +113,7 @@ export class PostsService implements OnModuleInit {
     private readonly chapterRules: ChapterRules,
     private readonly eventAccess: EventAccess,
     private readonly initiativeAccess: InitiativeAccess,
+    private readonly settings: SettingsService,
   ) {}
 
   onModuleInit() {
@@ -137,7 +150,12 @@ export class PostsService implements OnModuleInit {
     return this.serializer.one(id, viewer);
   }
 
-  async create(user: AuthUser, input: CreatePostInput): Promise<PostView> {
+  /** Posts written with Claude wait for the team's approval while the content calendar asks for it. */
+  async claudeApprovalRequired(): Promise<boolean> {
+    return (await this.settings.get('claude_content')).approval === 'before';
+  }
+
+  async create(user: AuthUser, input: CreatePostInput, origin: PostOrigin = {}): Promise<PostView> {
     assertNotRestricted(user);
     if (!can(user, 'post.create')) throw Errors.forbidden();
     if (input.kind === 'announcement' && !can(user, 'post.announce')) {
@@ -168,8 +186,17 @@ export class PostsService implements OnModuleInit {
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
     // A shared event's card takes the place of a link preview.
     const linkUrl = sharedEvent ? null : (input.linkUrl ?? firstHttpsUrl(input.body));
+    const source = origin.source ?? (origin.via?.kind === 'oauth' ? 'claude' : 'web');
+    // Content calendar: in "approve before publishing" mode a post written with Claude waits for the team.
+    const awaitingApproval = source === 'claude' && !origin.approved && (await this.claudeApprovalRequired());
     // CM-FED rule: a post is visible only after its attachments pass scanning.
-    const status = !attachments.every((f) => f.scanStatus === 'clean') ? 'pending_media' : review ? 'in_review' : 'published';
+    const status = !attachments.every((f) => f.scanStatus === 'clean')
+      ? 'pending_media'
+      : awaitingApproval
+        ? 'awaiting_approval'
+        : review
+          ? 'in_review'
+          : 'published';
     const now = new Date();
 
     const post = await this.db.transaction(async (tx) => {
@@ -193,6 +220,12 @@ export class PostsService implements OnModuleInit {
           linkPreview: linkUrl ? embedPreview(linkUrl) : null,
           status,
           chapterReview: review ? 'pending' : null,
+          source,
+          ...(awaitingApproval
+            ? { contentReview: 'pending' }
+            : origin.approved && source === 'claude'
+              ? { contentReview: 'approved', contentReviewBy: origin.approved.by, contentReviewAt: origin.approved.at, contentReviewNote: origin.approved.note }
+              : {}),
           pinnedAt: input.kind === 'announcement' ? now : null,
           mediaLayout: input.mediaLayout ?? 'collage',
         })
@@ -250,7 +283,7 @@ export class PostsService implements OnModuleInit {
   }
 
   /** PATCH /posts/{id}: author only; marked edited; hashtags and mentions re-parsed (CM-FED-06). */
-  async update(user: AuthUser, id: string, input: UpdatePostInput): Promise<PostView> {
+  async update(user: AuthUser, id: string, input: UpdatePostInput, origin: Pick<PostOrigin, 'via'> = {}): Promise<PostView> {
     const post = await this.find(id);
     if (!post || post.deletedAt) throw Errors.notFound('Post');
     if (!(await this.owns(user, post))) {
@@ -278,6 +311,8 @@ export class PostsService implements OnModuleInit {
         .set({
           body: input.body,
           editedAt: new Date(),
+          // Edited with Claude: the post now counts as written with Claude.
+          ...(origin.via?.kind === 'oauth' ? { source: 'claude' } : {}),
           ...(newLink ? { linkUrl: newLink, linkPreview: embedPreview(newLink) } : {}),
           ...(details ? { details } : {}),
           ...(input.mediaLayout ? { mediaLayout: input.mediaLayout } : {}),
@@ -583,8 +618,9 @@ export class PostsService implements OnModuleInit {
         return;
       }
     }
-    // A post that still needs the chapter team's approval waits for it once its files are clean.
-    const next = post.chapterReview === 'pending' && post.chapterId ? 'in_review' : 'published';
+    // A post that still needs the Charter Mission team's or the chapter team's approval waits for it once its files are clean.
+    const next =
+      post.contentReview === 'pending' ? 'awaiting_approval' : post.chapterReview === 'pending' && post.chapterId ? 'in_review' : 'published';
     const [settled] = await this.db
       .update(posts)
       .set({ status: next })
@@ -592,7 +628,39 @@ export class PostsService implements OnModuleInit {
       .returning();
     if (!settled) return;
     if (next === 'published') await this.announce(settled);
+    else if (next === 'in_review') await this.events.emit({ type: 'chapter.post_pending', postId: settled.id, chapterId: settled.chapterId!, authorId: settled.authorId });
+  }
+
+  /**
+   * Content calendar: a reviewer approved a post written with Claude. It goes live (as of now, so it
+   * isn't buried in the feeds) and followers and mentioned members are told, exactly as if it had
+   * just been posted; a chapter that reviews posts still gets to review it. Returns the new status,
+   * or null when it was no longer waiting.
+   */
+  async approveContent(postId: string, reviewerId: string, note: string | null): Promise<'published' | 'in_review' | null> {
+    const post = await this.find(postId);
+    if (!post || post.deletedAt || post.status !== 'awaiting_approval') return null;
+    const next = post.chapterReview === 'pending' && post.chapterId ? 'in_review' : 'published';
+    const now = new Date();
+    const [settled] = await this.db
+      .update(posts)
+      .set({ status: next, contentReview: 'approved', contentReviewBy: reviewerId, contentReviewAt: now, contentReviewNote: note, createdAt: now })
+      .where(and(eq(posts.id, postId), eq(posts.status, 'awaiting_approval'), isNull(posts.deletedAt)))
+      .returning();
+    if (!settled) return null;
+    if (next === 'published') await this.announce(settled);
     else await this.events.emit({ type: 'chapter.post_pending', postId: settled.id, chapterId: settled.chapterId!, authorId: settled.authorId });
+    return next;
+  }
+
+  /** Content calendar: a reviewer declined a post written with Claude; only its author still sees it. */
+  async declineContent(postId: string, reviewerId: string, note: string): Promise<boolean> {
+    const rows = await this.db
+      .update(posts)
+      .set({ status: 'declined', contentReview: 'declined', contentReviewBy: reviewerId, contentReviewAt: new Date(), contentReviewNote: note })
+      .where(and(eq(posts.id, postId), eq(posts.status, 'awaiting_approval'), isNull(posts.deletedAt)))
+      .returning({ id: posts.id });
+    return rows.length > 0;
   }
 
   /**

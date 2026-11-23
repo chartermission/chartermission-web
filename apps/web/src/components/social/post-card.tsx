@@ -408,12 +408,21 @@ export function PostCard({
             className="mt-0.5 shrink-0 text-error"
           />
           <p>
-            {post.chapter
+            {post.contentReview?.state === "declined"
+              ? t("The Charter Mission team didn’t approve this post. Only you can see it.")
+              : post.chapter
               ? t(
                   "The {chapter} team didn’t approve this post for the chapter. Only you can see it.",
                   { chapter: post.chapter.name },
                 )
               : t("This post wasn’t approved. Only you can see it.")}
+            {post.contentReview?.note ? (
+              <span className="mt-1 block text-secondary">
+                {t("Note from the team: “{note}”", {
+                  note: post.contentReview.note,
+                })}
+              </span>
+            ) : null}
             {post.chapterReview?.note ? (
               <span className="mt-1 block text-secondary">
                 {t("Note from the team: “{note}”", {
@@ -421,6 +430,19 @@ export function PostCard({
                 })}
               </span>
             ) : null}
+          </p>
+        </div>
+      )}
+      {post.status === "awaiting_approval" && (
+        <div
+          role="note"
+          className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink"
+        >
+          <Icon name="clock" size={18} className="mt-0.5 shrink-0 text-info" />
+          <p>
+            <span className="font-medium">Waiting for approval.</span> The
+            Charter Mission team checks posts written with Claude first. Only
+            you can see this post until then.
           </p>
         </div>
       )}

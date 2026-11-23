@@ -37,7 +37,11 @@ export function DraftCard({ draft, busy, onAction }: { draft: DraftView; busy: D
   const kind = kindOf(draft);
   const more = secondary(draft);
   const failed = draft.status === "failed";
-  const scheduled = draft.status === "scheduled";
+  // Paused by the Charter Mission team (content calendar): it keeps its time but won't publish until released.
+  const held = draft.status === "held";
+  const scheduled = draft.status === "scheduled" || held;
+  const awaitingApproval = draft.review?.state === "pending";
+  const declined = draft.review?.state === "declined";
   const untitled = draft.preview === "Untitled draft";
   const disabled = busy !== null;
 
@@ -68,6 +72,20 @@ export function DraftCard({ draft, busy, onAction }: { draft: DraftView; busy: D
               <Icon name="alert" size={14} />
               <span className="sr-only">Couldn’t publish. Was scheduled for </span>
               <span aria-hidden="true">Not published ·</span> <LocalDateTime iso={draft.scheduledFor} />
+            </span>
+          ) : held && draft.scheduledFor ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-1 text-xs font-medium text-warning">
+              <Icon name="pause" size={14} />
+              <span className="text-ink">Paused by the Charter Mission team</span>
+            </span>
+          ) : awaitingApproval && draft.scheduledFor ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-info-light px-2.5 py-1 text-xs font-medium text-info">
+              <Icon name="clock" size={14} />
+              <span className="text-ink">
+                <span className="text-secondary">Waiting for approval</span>
+                <span className="text-secondary" aria-hidden="true">{" · "}</span>
+                <LocalDateTime iso={draft.scheduledFor} />
+              </span>
             </span>
           ) : scheduled && draft.scheduledFor ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-info-light px-2.5 py-1 text-xs font-medium text-info">
@@ -125,6 +143,32 @@ export function DraftCard({ draft, busy, onAction }: { draft: DraftView; busy: D
         </div>
       )}
 
+      {held && (
+        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-warning-light px-3 py-2.5 text-sm text-ink">
+          <Icon name="alert" size={18} className="mt-0.5 shrink-0 text-warning" />
+          <p>The Charter Mission team paused this post. It won’t be published until they release it. Check your notifications for their note.</p>
+        </div>
+      )}
+      {awaitingApproval && !held && (
+        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink">
+          <Icon name="clock" size={18} className="mt-0.5 shrink-0 text-info" />
+          <p>Posts written with Claude are checked by the Charter Mission team first. This one is published at its time once they approve it.</p>
+        </div>
+      )}
+      {declined && (
+        <div role="note" className="flex items-start gap-2.5 rounded-lg bg-error-light px-3 py-2.5 text-sm text-ink">
+          <Icon name="alert" size={18} className="mt-0.5 shrink-0 text-error" />
+          <p>
+            <span className="font-medium">The Charter Mission team didn’t approve this post.</span>
+            {draft.review?.note ? (
+              <span className="mt-1 block text-secondary">
+                <T vars={{ note: draft.review.note }}>{"Note from the team: “{note}”"}</T>
+              </span>
+            ) : null}
+          </p>
+        </div>
+      )}
+
       <footer className="flex flex-wrap items-center gap-2 border-t border-line pt-3.5">
         {failed ? (
           <Button size="small" aria-describedby={`${id}-title`} onClick={() => onAction("edit")} disabled={disabled}>
@@ -135,7 +179,7 @@ export function DraftCard({ draft, busy, onAction }: { draft: DraftView; busy: D
             Edit
           </Button>
         )}
-        <Button size="small" variant={failed ? "secondary" : "primary"} aria-describedby={`${id}-title`} onClick={() => onAction("publish")} disabled={disabled}>
+        <Button size="small" variant={failed ? "secondary" : "primary"} aria-describedby={`${id}-title`} onClick={() => onAction("publish")} disabled={disabled || held}>
           {busy === "publish" ? "Publishing…" : "Publish now"}
         </Button>
         <span className="ms-auto flex items-center gap-1">

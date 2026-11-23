@@ -90,6 +90,9 @@ export const NotificationType = z.enum([
    * when a name they asked for was declined (with the reason). Icon alert.
    */
   "exam_certificate_name",
+  /* Content calendar (always sent: about the member's own post) */
+  /** The Charter Mission team held, released, rescheduled, cancelled, approved or declined a post written with Claude. Icon clock, check or alert. */
+  "content_review",
   /* From Charter Mission */
   /** A bulk message from Charter Mission (segments: the subject in bold); href is its link or the official conversation. Icon megaphone if available, else alert. */
   "announcement",

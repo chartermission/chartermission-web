@@ -184,7 +184,9 @@ export function DraftsView({ tab, initial, counts: initialCounts, viewer }: { ta
         ? "Posted. Your files are being checked; others will see the post once that finishes."
         : post.status === "in_review"
           ? "Sent to the chapter team for approval. You’ll be told when it’s live."
-          : "Your post is live",
+          : post.status === "awaiting_approval"
+            ? "Sent to the Charter Mission team for approval. You’ll be told when it’s live."
+            : "Your post is live",
     );
   }
 

@@ -40,7 +40,7 @@ export class PostsController {
   @Post('posts')
   @Access('verified', 'post.create')
   create(@Auth() ctx: AuthContext, @ZBody(CreatePostInput) input: CreatePostInput): Promise<PostView> {
-    return this.postsService.create(ctx.user, input);
+    return this.postsService.create(ctx.user, input, { via: ctx.via });
   }
 
   /** Members see what the visibility rules allow; visitors only see public posts. */
@@ -53,7 +53,7 @@ export class PostsController {
   @Patch('posts/:id')
   @Access('verified')
   update(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(UpdatePostInput) input: UpdatePostInput): Promise<PostView> {
-    return this.postsService.update(ctx.user, id, input);
+    return this.postsService.update(ctx.user, id, input, { via: ctx.via });
   }
 
   @Delete('posts/:id')
