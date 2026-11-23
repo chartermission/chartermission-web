@@ -4,6 +4,7 @@ import {
   AdminActionInput,
   AdminAppealsQuery,
   AdminHiddenQuery,
+  AdminQueueBulkInput,
   AdminQueueQuery,
   AdminTrendingQuery,
   AppealDecisionInput,
@@ -24,6 +25,7 @@ import {
   type AdminReportRow,
   type AdminTrendingResponse,
   type AuditEntry,
+  type BulkResult,
   type Ok,
   type Page,
   type QueueStats,
@@ -80,6 +82,14 @@ export class AdminModerationController {
     @Req() req: AppRequest,
   ): Promise<AdminReportRow> {
     return this.queue.assign(ctx, id, input.assignee, clientIp(req));
+  }
+
+  /** Assign to me, unassign or dismiss (with a reason) several cases at once; each is handled and audited on its own. */
+  @Post('queue/bulk')
+  @HttpCode(200)
+  @Access('admin', 'moderation.act')
+  bulk(@Auth() ctx: AuthContext, @ZBody(AdminQueueBulkInput) input: AdminQueueBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.queue.bulk(ctx, input, clientIp(req));
   }
 
   /** Act on a report's target. Reason always required (CM-ADM-05). */

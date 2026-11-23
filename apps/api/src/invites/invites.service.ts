@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import type { Response } from 'express';
 import {
   INVITE_EMAILS_PER_DAY,
   type AdminReferrals,
+  type AdminReferralsExportQuery,
+  type AdminReferralsFilters,
+  type AdminReferralsQuery,
+  type InviteKind,
   type InvitePreview,
   type InviteRef,
   type MyReferrals,
@@ -14,11 +20,15 @@ import { chapters, connections, events, follows, memberProfiles, referrals, user
 import { MembersService } from '../core/members.service.js';
 import { PreviewService } from '../preview/preview.service.js';
 import { env } from '../config/env.js';
-import type { AuthUser } from '../core/auth-context.js';
+import type { AuthContext, AuthUser } from '../core/auth-context.js';
 import { Errors } from '../common/errors.js';
 import { MailService } from '../infra/mail.service.js';
 import { webUrl } from '../infra/mail-layout.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
+import { AuditService } from '../infra/audit.service.js';
+import { decodeCursor, paginate } from '../common/cursor.js';
+import { likePrefix, tsKey } from '../moderation/util.js';
+import { csvCell } from '../admin/admin-audit.service.js';
 
 /** Paths the API serves (media, preview pictures) as the web app reaches them. */
 const apiBase = () => new URL(env().API_PUBLIC_URL).pathname.replace(/\/$/, '');
@@ -32,6 +42,21 @@ export function inviteLink(from: string, chapterSlug?: string | null, eventSlug?
   return webUrl(`/invite?${q.toString()}`);
 }
 
+/** The chapter or event a sign-up's invitation was for, when it still exists. */
+function signupTarget(r: { kind: string; chapterName: string | null; chapterSlug: string | null; eventTitle: string | null; eventSlug: string | null }) {
+  if (r.kind === 'chapter' && r.chapterName && r.chapterSlug) return { name: r.chapterName, path: `/chapters/${r.chapterSlug}` };
+  if (r.kind === 'event' && r.eventTitle && r.eventSlug) return { name: r.eventTitle, path: `/events/${r.eventSlug}` };
+  return null;
+}
+
+/** Writes to a streamed response, waiting when its buffer is full. */
+function writeChunk(res: Response, chunk: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (res.write(chunk)) resolve();
+    else res.once('drain', () => resolve());
+  });
+}
+
 /** POST /invites: Charter Mission emails the invitation for the member, with their note. */
 @Injectable()
 export class InvitesService {
@@ -41,6 +66,7 @@ export class InvitesService {
     private readonly limits: RateLimitService,
     private readonly members: MembersService,
     private readonly previews: PreviewService,
+    private readonly audit: AuditService,
   ) {}
 
   /** GET /invites/preview: the inviter and what they invite to, for the invitation page. */
@@ -152,8 +178,20 @@ export class InvitesService {
     };
   }
 
-  /** GET /admin/referrals: the members who brought the most people, and the latest sign-ups through invitations. */
-  async adminReport(): Promise<AdminReferrals> {
+  /** GET /admin/referrals: stats, the members who brought the most people in a period, and one page of the filtered sign-ups. */
+  async adminReport(q: AdminReferralsQuery): Promise<AdminReferrals> {
+    const [stats] = (
+      await this.db.execute<{ total: number; d7: number; d30: number; confirmed: number; member: number; chapter: number; event: number }>(sql`
+        select count(*)::int as total,
+               count(*) filter (where r.created_at > now() - interval '7 days')::int as d7,
+               count(*) filter (where r.created_at > now() - interval '30 days')::int as d30,
+               count(*) filter (where u.email_verified_at is not null)::int as confirmed,
+               count(*) filter (where r.kind = 'member')::int as member,
+               count(*) filter (where r.kind = 'chapter')::int as chapter,
+               count(*) filter (where r.kind = 'event')::int as event
+        from ${referrals} r join ${users} u on u.id = r.invitee_id`)
+    ).rows;
+    const since = q.period === 'all' ? null : sql`now() - ${q.period === '30d' ? sql`interval '30 days'` : sql`interval '90 days'`}`;
     const leadersRows = await this.db
       .select({
         inviterId: referrals.inviterId,
@@ -162,31 +200,142 @@ export class InvitesService {
       })
       .from(referrals)
       .innerJoin(users, eq(users.id, referrals.inviteeId))
+      .where(since ? sql`${referrals.createdAt} > ${since}` : undefined)
       .groupBy(referrals.inviterId)
-      .orderBy(desc(sql`count(*)`))
-      .limit(50);
-    const recentRows = await this.db
-      .select({ inviterId: referrals.inviterId, inviteeId: referrals.inviteeId, kind: referrals.kind, slug: referrals.targetSlug, at: referrals.createdAt, verifiedAt: users.emailVerifiedAt })
-      .from(referrals)
-      .innerJoin(users, eq(users.id, referrals.inviteeId))
-      .orderBy(desc(referrals.createdAt))
-      .limit(100);
-    const [{ n: total } = { n: 0 }] = await this.db.select({ n: sql<number>`count(*)::int` }).from(referrals);
-    const refs = await this.members.refs([...new Set([...leadersRows.map((r) => r.inviterId), ...recentRows.flatMap((r) => [r.inviterId, r.inviteeId])])]);
+      .orderBy(desc(sql`count(*)`), desc(sql`count(*) filter (where ${users.emailVerifiedAt} is not null)`), asc(referrals.inviterId))
+      .limit(20);
+    const rows = await this.signupRows(q, decodeCursor<{ t: string; id: string }>(q.cursor), q.limit + 1);
+    const page = paginate(rows, q.limit, (r) => ({ t: r.key, id: r.id }));
+    const refs = await this.members.refs([
+      ...new Set([...leadersRows.map((r) => r.inviterId), ...page.items.flatMap((r) => [r.inviterId, r.inviteeId]), ...(q.inviter ? [q.inviter] : [])]),
+    ]);
+    const total = stats?.total ?? 0;
     return {
       total,
+      stats: {
+        total,
+        last7Days: stats?.d7 ?? 0,
+        last30Days: stats?.d30 ?? 0,
+        confirmedPercent: total ? Math.round(((stats?.confirmed ?? 0) / total) * 100) : null,
+        byKind: { member: stats?.member ?? 0, chapter: stats?.chapter ?? 0, event: stats?.event ?? 0 },
+      },
+      period: q.period,
       leaders: leadersRows.flatMap((r) => {
         const inviter = refs.get(r.inviterId);
         return inviter ? [{ inviter, joined: r.joined, verified: r.verified }] : [];
       }),
-      recent: recentRows.flatMap((r) => {
+      inviter: q.inviter ? (refs.get(q.inviter) ?? null) : null,
+      recent: page.items.flatMap((r) => {
         const inviter = refs.get(r.inviterId);
         const invitee = refs.get(r.inviteeId);
         return inviter && invitee
-          ? [{ inviter, invitee, kind: r.kind as InvitePreview['kind'], slug: r.slug, joinedAt: r.at.toISOString(), verified: !!r.verifiedAt }]
+          ? [{ id: r.id, inviter, invitee, kind: r.kind as InviteKind, slug: r.slug, target: signupTarget(r), joinedAt: r.at.toISOString(), verified: !!r.verifiedAt }]
           : [];
       }),
+      nextCursor: page.nextCursor,
     };
+  }
+
+  /** GET /admin/referrals/export.csv: the filtered sign-ups as a spreadsheet, newest first, streamed in pages of 500. */
+  async exportCsv(ctx: AuthContext, q: AdminReferralsExportQuery, res: Response, ip?: string): Promise<void> {
+    await this.audit.record({
+      actorId: ctx.user.id,
+      action: 'referrals.exported',
+      targetType: 'referrals',
+      after: { filters: { q: q.q ?? null, kind: q.kind ?? null, inviter: q.inviter ?? null, from: q.from ?? null, to: q.to ?? null, confirmed: q.confirmed ?? null } },
+      ip,
+    });
+    res.status(200);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="referrals-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.setHeader('Cache-Control', 'no-store');
+    const header = ['joined_at', 'member', 'member_handle', 'member_email', 'invited_by', 'invited_by_handle', 'invitation', 'invited_to', 'link_slug', 'email_confirmed'];
+    await writeChunk(res, `\uFEFF${header.join(',')}\r\n`);
+    let cursor: { t: string; id: string } | null = null;
+    for (;;) {
+      const rows = await this.signupRows(q, cursor, 500);
+      if (rows.length === 0) break;
+      const lines = rows.map((r) =>
+        [
+          r.at.toISOString(),
+          r.inviteeName,
+          r.inviteeHandle,
+          r.inviteeEmail,
+          r.inviterName,
+          r.inviterHandle,
+          r.kind,
+          signupTarget(r)?.name ?? '',
+          r.slug,
+          r.verifiedAt ? 'yes' : 'no',
+        ]
+          .map(csvCell)
+          .join(','),
+      );
+      await writeChunk(res, `${lines.join('\r\n')}\r\n`);
+      if (rows.length < 500) break;
+      const last = rows[rows.length - 1]!;
+      cursor = { t: last.key, id: last.id };
+    }
+    res.end();
+  }
+
+  /** Sign-ups through invitations matching the filters, newest first, after the cursor. */
+  private async signupRows(q: AdminReferralsFilters, cursor: { t: string; id: string } | null, limit: number) {
+    const invitee = alias(users, 'invitee');
+    const inviteeProfile = alias(memberProfiles, 'invitee_profile');
+    const inviter = alias(users, 'inviter');
+    const inviterProfile = alias(memberProfiles, 'inviter_profile');
+    const conds: (SQL | undefined)[] = [];
+    if (q.kind) conds.push(eq(referrals.kind, q.kind));
+    if (q.inviter) conds.push(eq(referrals.inviterId, q.inviter));
+    if (q.from) conds.push(sql`${referrals.createdAt} >= ${q.from}::date`);
+    if (q.to) conds.push(sql`${referrals.createdAt} < ${q.to}::date + 1`);
+    if (q.confirmed) conds.push(q.confirmed === 'yes' ? isNotNull(invitee.emailVerifiedAt) : isNull(invitee.emailVerifiedAt));
+    const term = q.q?.trim().replace(/^@/, '');
+    if (term) {
+      const like = `%${likePrefix(term).slice(0, -1)}%`;
+      conds.push(
+        or(
+          ilike(inviteeProfile.displayName, like),
+          ilike(inviteeProfile.handle, like),
+          ilike(invitee.email, like),
+          ilike(inviterProfile.displayName, like),
+          ilike(inviterProfile.handle, like),
+          ilike(inviter.email, like),
+        ),
+      );
+    }
+    if (cursor) conds.push(sql`(${referrals.createdAt}, ${referrals.id}) < (${cursor.t}::timestamptz, ${cursor.id}::uuid)`);
+    return this.db
+      .select({
+        id: referrals.id,
+        inviterId: referrals.inviterId,
+        inviteeId: referrals.inviteeId,
+        kind: referrals.kind,
+        slug: referrals.targetSlug,
+        at: referrals.createdAt,
+        key: tsKey(referrals.createdAt),
+        verifiedAt: invitee.emailVerifiedAt,
+        inviteeName: inviteeProfile.displayName,
+        inviteeHandle: inviteeProfile.handle,
+        inviteeEmail: invitee.email,
+        inviterName: inviterProfile.displayName,
+        inviterHandle: inviterProfile.handle,
+        chapterName: chapters.name,
+        chapterSlug: chapters.slug,
+        eventTitle: events.title,
+        eventSlug: events.slug,
+      })
+      .from(referrals)
+      .innerJoin(invitee, eq(invitee.id, referrals.inviteeId))
+      .innerJoin(inviter, eq(inviter.id, referrals.inviterId))
+      .leftJoin(inviteeProfile, eq(inviteeProfile.userId, referrals.inviteeId))
+      .leftJoin(inviterProfile, eq(inviterProfile.userId, referrals.inviterId))
+      .leftJoin(chapters, and(eq(referrals.kind, 'chapter'), eq(chapters.slug, referrals.targetSlug)))
+      .leftJoin(events, and(eq(referrals.kind, 'event'), eq(events.slug, referrals.targetSlug)))
+      .where(and(...conds))
+      .orderBy(desc(referrals.createdAt), desc(referrals.id))
+      .limit(limit);
   }
 
   /** Once someone who came through an invitation confirms their email: tell the inviter, and connect them for a personal invitation. */

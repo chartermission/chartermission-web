@@ -1,13 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { and, asc, count, eq, gt, inArray, notInArray, or, sql } from 'drizzle-orm';
 import type {
   AdminAppealRow,
   AdminAppealsQuery,
   AdminHiddenQuery,
+  AdminQueueBulkInput,
   AdminHiddenRow,
   AdminQueueQuery,
   AdminReportDetail,
   AdminReportRow,
+  BulkResult,
   ModerationActionKind,
   Page,
   QueueStats,
@@ -29,6 +31,7 @@ import {
   users,
 } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
+import { runEach } from '../common/bulk.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
@@ -61,6 +64,8 @@ function mostCommon<T extends string>(values: T[]): T {
 /** Report queue, case detail, hidden content and appeals for the admin console (CM-ADM-02/06). */
 @Injectable()
 export class AdminQueueService {
+  private readonly log = new Logger(AdminQueueService.name);
+
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly members: MembersService,
@@ -350,6 +355,31 @@ export class AdminQueueService {
       targetKey(rep.targetType, rep.targetId),
     );
     return this.groupRow(fresh, await this.group(fresh), preview?.preview ?? 'Deleted content');
+  }
+
+  /**
+   * POST /admin/queue/bulk: assign to me, unassign or dismiss several cases (report ids as listed).
+   * Each case goes through the single-case route's code, so it is audited on its own and, for a
+   * dismissal, its reporters hear back exactly as they do for one.
+   */
+  async bulk(ctx: AuthContext, input: AdminQueueBulkInput, ip?: string): Promise<BulkResult> {
+    return runEach(
+      input.ids,
+      async (id) => {
+        if (input.action === 'dismiss') {
+          const rep = await this.openReportTarget(id);
+          await this.actions.act(
+            ctx,
+            { type: rep.targetType as ReportTargetType, id: rep.targetId },
+            { action: 'dismiss', reason: input.reason ?? '' },
+            { reportId: rep.id, ip },
+          );
+        } else {
+          await this.assign(ctx, id, input.action === 'assign' ? 'me' : 'none', ip);
+        }
+      },
+      this.log,
+    );
   }
 
   /** The report a report-scoped action applies to (must still be open). */

@@ -5,6 +5,7 @@ import {
   AdminBadgeInput,
   AdminBadgeUpdateInput,
   AdminChapterCreateInput,
+  AdminChaptersBulkInput,
   AdminChaptersQuery,
   AdminChapterUpdateInput,
   AdminMembersBulkInput,
@@ -17,6 +18,8 @@ import {
   AdminSetRoleInput,
   AdminSetVerifiedInput,
   AdminTopicCreateInput,
+  AdminTopicsBulkInput,
+  AdminTopicsImportInput,
   AdminTopicsQuery,
   AdminTopicUpdateInput,
   McpActivityQuery,
@@ -28,6 +31,8 @@ import {
   type BulkResult,
   type Page,
   type AdminTopicRow,
+  type BulkResult,
+  type CsvImportResult,
   type McpActivityView,
   type Ok,
 } from '@chartermission/contracts';
@@ -54,6 +59,14 @@ export class AdminChaptersController {
   @Access('admin', 'chapters.admin')
   create(@Auth() ctx: AuthContext, @ZBody(AdminChapterCreateInput) input: AdminChapterCreateInput, @Req() req: AppRequest): Promise<AdminChapterRow> {
     return this.chapters.create(ctx, input, clientIp(req));
+  }
+
+  /** Activate, deactivate, set the posting rule of, or remove several chapters; each is audited on its own. */
+  @Post('bulk')
+  @HttpCode(200)
+  @Access('admin', 'chapters.admin')
+  bulk(@Auth() ctx: AuthContext, @ZBody(AdminChaptersBulkInput) input: AdminChaptersBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.chapters.bulk(ctx, input, clientIp(req));
   }
 
   @Patch(':id')
@@ -90,6 +103,22 @@ export class AdminTopicsController {
   @Access('admin', 'trending.manage')
   create(@Auth() ctx: AuthContext, @ZBody(AdminTopicCreateInput) input: AdminTopicCreateInput, @Req() req: AppRequest): Promise<AdminTopicRow> {
     return this.topics.create(ctx, input, clientIp(req));
+  }
+
+  /** Feature, unfeature, activate, deactivate or remove several topics; each is audited on its own. */
+  @Post('bulk')
+  @HttpCode(200)
+  @Access('admin', 'trending.manage')
+  bulk(@Auth() ctx: AuthContext, @ZBody(AdminTopicsBulkInput) input: AdminTopicsBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.topics.bulk(ctx, input, clientIp(req));
+  }
+
+  /** Add or update topics from a CSV file (rows parsed by the console). dryRun previews without writing. */
+  @Post('import')
+  @HttpCode(200)
+  @Access('admin', 'trending.manage')
+  import(@Auth() ctx: AuthContext, @ZBody(AdminTopicsImportInput) input: AdminTopicsImportInput, @Req() req: AppRequest): Promise<CsvImportResult> {
+    return this.topics.importCsv(ctx, input, clientIp(req));
   }
 
   @Patch(':id')
