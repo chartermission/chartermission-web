@@ -18,16 +18,15 @@ export function BulkBar({ count, busy, onClear, children }: { count: number; bus
       className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-card border border-line-strong bg-card px-3 py-2 shadow-[0_8px_28px_rgba(25,37,80,0.18)]"
       aria-busy={busy}
     >
-      <span className="flex items-center gap-2 pe-2 text-sm font-medium text-ink tabular-nums">
+      <span className="flex items-center gap-2 text-sm font-medium text-ink tabular-nums">
         <Icon name="check" size={16} className="text-primary" />
         {t("{count} selected", { count })}
       </span>
-      <span className="h-5 w-px bg-line" aria-hidden />
-      <div className="flex flex-wrap items-center gap-1">{children}</div>
-      <span className="h-5 w-px bg-line" aria-hidden />
       <Button variant="ghost" size="small" disabled={busy} onClick={onClear}>
         Clear
       </Button>
+      <span className="h-5 w-px bg-line" aria-hidden />
+      <div className="flex flex-wrap items-center gap-1">{children}</div>
     </div>
   );
 }

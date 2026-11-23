@@ -33,7 +33,7 @@ const dateInput = "rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm t
 
 type More = { base: string; rows: AdminReferrals["recent"]; cursor: string | null };
 
-/** A member on one line: picture, name and @handle (the handle gives way first on narrow columns). */
+/** A member: picture, name and, under it, @handle. Long names are cut with the full name on hover. */
 function Person({ member, handle = true }: { member: MemberRef; handle?: boolean }) {
   return (
     <a
@@ -43,10 +43,10 @@ function Person({ member, handle = true }: { member: MemberRef; handle?: boolean
       title={`${member.name} · @${member.handle}`}
       className="flex min-w-0 items-center gap-2 hover:underline"
     >
-      <Avatar name={member.name} size={24} src={member.avatarUrl ?? undefined} tone={member.tone} />
-      <span className="min-w-0 truncate">
-        <span className="font-medium text-ink">{member.name}</span>
-        {handle && <span className="text-secondary"> @{member.handle}</span>}
+      <Avatar name={member.name} size={handle ? 32 : 24} src={member.avatarUrl ?? undefined} tone={member.tone} />
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate font-medium text-ink">{member.name}</span>
+        {handle && <span className="truncate text-xs text-secondary">@{member.handle}</span>}
       </span>
     </a>
   );
@@ -142,7 +142,7 @@ export function ReferralsConsole({ filters, data }: { filters: ReferralFilters; 
         </Tile>
       </dl>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section aria-labelledby="leaders-heading" className="flex flex-col rounded-card border border-line bg-card xl:order-last">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
             <h2 id="leaders-heading" className="text-h3 text-ink">
@@ -167,11 +167,11 @@ export function ReferralsConsole({ filters, data }: { filters: ReferralFilters; 
               <table className="w-full table-fixed border-collapse text-sm">
                 <caption className="sr-only">Top inviters. Pick one to see who they brought.</caption>
                 <colgroup>
-                  <col className="w-[40px]" />
+                  <col className="w-[36px]" />
                   <col />
-                  <col className="w-[64px]" />
-                  <col className="w-[92px]" />
-                  <col className="w-[60px]" />
+                  <col className="w-[56px]" />
+                  <col className="w-[84px]" />
+                  <col className="w-[52px]" />
                 </colgroup>
                 <thead className="bg-muted text-label text-secondary uppercase">
                   <tr>
@@ -318,7 +318,7 @@ export function ReferralsConsole({ filters, data }: { filters: ReferralFilters; 
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={row.id} className="h-12 border-t border-line">
+                    <tr key={row.id} className="h-14 border-t border-line">
                       <td className="py-2 ps-4 pe-2">
                         <Person member={row.invitee} />
                       </td>
@@ -326,16 +326,16 @@ export function ReferralsConsole({ filters, data }: { filters: ReferralFilters; 
                         <Person member={row.inviter} handle={false} />
                       </td>
                       <td className="px-2 py-2">
-                        <span className="flex min-w-0 items-center gap-2">
+                        <span className="flex min-w-0 flex-col items-start gap-1">
                           <Chip tone={row.kind === "member" ? "neutral" : row.kind === "chapter" ? "hashtag" : "info"} className="px-2! py-0.5! text-xs!">
                             {KIND_LABEL[row.kind]}
                           </Chip>
                           {row.target ? (
-                            <a href={webHref(row.target.path)} target="_blank" rel="noreferrer" title={row.target.name} className="truncate text-body hover:underline">
+                            <a href={webHref(row.target.path)} target="_blank" rel="noreferrer" title={row.target.name} className="max-w-full truncate text-body hover:underline">
                               {row.target.name}
                             </a>
                           ) : row.slug ? (
-                            <span title={row.slug} className="truncate text-secondary">
+                            <span title={row.slug} className="max-w-full truncate text-secondary">
                               {row.slug}
                             </span>
                           ) : null}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon, cn } from "@chartermission/ui";
 
 export type RowMenuItem = {
@@ -19,19 +20,50 @@ export type RowMenuItem = {
 export function RowMenu({ label, items, align = "end" }: { label: string; items: RowMenuItem[]; align?: "start" | "end" }) {
   const shown = items.filter((i) => !i.hidden);
   const [open, setOpen] = useState(false);
+  /** Where the menu goes: under the button, or above it near the bottom of the window. Fixed, so a scrolling table never clips it. */
+  const [place, setPlace] = useState<{ top?: number; bottom?: number; left?: number; right?: number } | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const id = useId();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
+    const at = () => {
+      const r = button.current?.getBoundingClientRect();
+      if (!r) return;
+      const rtl = document.documentElement.dir === "rtl";
+      const end = (align === "end") !== rtl;
+      const below = window.innerHeight - r.bottom > 260 || r.top < 260;
+      setPlace({
+        ...(below ? { top: r.bottom + 4 } : { bottom: window.innerHeight - r.top + 4 }),
+        ...(end ? { right: window.innerWidth - r.right } : { left: r.left }),
+      });
+    };
+    at();
+    // Follow the button when the page or a table scrolls; close once it leaves the window.
+    const follow = (e: Event) => {
+      if (menu.current?.contains(e.target as Node)) return;
+      const r = button.current?.getBoundingClientRect();
+      if (!r || r.bottom < 0 || r.top > window.innerHeight) setOpen(false);
+      else at();
+    };
+    window.addEventListener("resize", follow);
+    window.addEventListener("scroll", follow, true);
+    return () => {
+      window.removeEventListener("resize", follow);
+      window.removeEventListener("scroll", follow, true);
+    };
+  }, [open, align]);
+
+  useEffect(() => {
+    if (!open || !place) return;
     const onDown = (e: MouseEvent) => {
       if (!menu.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
-    menu.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    menu.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
     return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
+  }, [open, place]);
 
   if (shown.length === 0) return null;
 
@@ -55,7 +87,7 @@ export function RowMenu({ label, items, align = "end" }: { label: string; items:
       >
         <Icon name="more" size={18} />
       </button>
-      {open && (
+      {open && place && createPortal(
         <div
           ref={menu}
           id={id}
@@ -72,10 +104,8 @@ export function RowMenu({ label, items, align = "end" }: { label: string; items:
               move(-1);
             }
           }}
-          className={cn(
-            "absolute top-full z-30 mt-1 flex min-w-[200px] flex-col rounded-lg border border-line bg-card py-1 shadow-[0_8px_28px_rgba(25,37,80,0.18)]",
-            align === "end" ? "end-0" : "start-0",
-          )}
+          style={{ position: "fixed", ...place }}
+          className="z-50 flex min-w-[200px] flex-col rounded-lg border border-line bg-card py-1 shadow-[0_8px_28px_rgba(25,37,80,0.18)]"
         >
           {shown.map((item) => (
             <button
@@ -95,7 +125,8 @@ export function RowMenu({ label, items, align = "end" }: { label: string; items:
               {item.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </span>
   );
