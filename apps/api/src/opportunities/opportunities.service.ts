@@ -395,8 +395,9 @@ export class OpportunitiesService {
       const [c] = await this.db.select({ code: countries.code }).from(countries).where(eq(countries.code, input.countryCode)).limit(1);
       if (!c) fields.countryCode = 'Choose a country from the list';
     }
-    if (input.sectorId) {
-      const [s] = await this.db.select({ id: sectors.id }).from(sectors).where(eq(sectors.id, input.sectorId)).limit(1);
+    // A hidden sector is no longer offered, but one the listing already has may stay.
+    if (input.sectorId && input.sectorId !== existing?.sectorId) {
+      const [s] = await this.db.select({ id: sectors.id }).from(sectors).where(and(eq(sectors.id, input.sectorId), eq(sectors.status, 'active'))).limit(1);
       if (!s) fields.sectorId = 'Choose a sector from the list';
     }
     if (Object.keys(fields).length) throw Errors.validation(fields);

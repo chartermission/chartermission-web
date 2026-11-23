@@ -9,6 +9,8 @@ import { AdminBadgesController, AdminChaptersController, AdminMembersController,
 import { AdminChaptersService } from './admin-chapters.service.js';
 import { AdminTopicsService } from './admin-topics.service.js';
 import { AdminMembersService } from './admin-members.service.js';
+import { AdminProfileOptionsController } from './admin-profile-options.controller.js';
+import { AdminProfileOptionsService } from './admin-profile-options.service.js';
 
 /** Admin console APIs for moderation, trending controls and the audit log (spec 4.15). */
 @Module({
@@ -22,7 +24,8 @@ import { AdminMembersService } from './admin-members.service.js';
     AdminTopicsController,
     AdminBadgesController,
     AdminMembersController,
+    AdminProfileOptionsController,
   ],
-  providers: [AdminQueueService, AdminTrendingService, AdminAuditService, AdminChaptersService, AdminTopicsService, AdminMembersService],
+  providers: [AdminQueueService, AdminTrendingService, AdminAuditService, AdminChaptersService, AdminTopicsService, AdminMembersService, AdminProfileOptionsService],
 })
 export class AdminModule {}

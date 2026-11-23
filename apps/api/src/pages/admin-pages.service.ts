@@ -160,7 +160,7 @@ export class AdminPagesService {
     const before = await this.pages.findRow(id);
     if (!before) throw Errors.notFound('That page');
     const { owner, official, verified, ...fields } = input;
-    const sectorIds = await this.pages.assertSectors(fields.sectorIds);
+    const sectorIds = await this.pages.assertSectors(fields.sectorIds, id);
     const set = this.pages.changes(fields);
     if (official !== undefined) set.official = official;
     if (verified !== undefined && verified !== !!before.verifiedAt) set.verifiedAt = verified ? new Date() : null;

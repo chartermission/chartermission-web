@@ -48,4 +48,11 @@ export const en: Dict = {
   "{count} get the email · {optedOut} turned announcement emails off": { one: "{count} gets the email · {optedOut} turned announcement emails off", other: "{count} get the email · {optedOut} turned announcement emails off" },
   "On · {count} active connections": { one: "On · {count} active connection", other: "On · {count} active connections" },
   "{count} active connections will stop working at once, and they can’t connect again until access is turned back on.": { one: "{count} active connection will stop working at once, and they can’t connect again until access is turned back on.", other: "{count} active connections will stop working at once, and they can’t connect again until access is turned back on." },
+  "{count} options hidden from pickers.": { one: "{count} option hidden from pickers.", other: "{count} options hidden from pickers." },
+  "{count} options shown in pickers.": { one: "{count} option shown in pickers.", other: "{count} options shown in pickers." },
+  "{count} options deleted.": { one: "{count} option deleted.", other: "{count} options deleted." },
+  "{count} options added.": { one: "{count} option added.", other: "{count} options added." },
+  "{count} options merged.": { one: "{count} option merged.", other: "{count} options merged." },
+  "Delete {count} options?": { one: "Delete {count} option?", other: "Delete {count} options?" },
+  "Merge {count} options into…": { one: "Merge {count} option into…", other: "Merge {count} options into…" },
 };

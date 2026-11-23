@@ -105,7 +105,7 @@ export class OnboardingService {
         return;
       case 'topics': {
         if (data.interestIds) {
-          const ids = await this.taxonomy.validate('interests', data.interestIds, 'interestIds');
+          const ids = await this.taxonomy.validate('interests', data.interestIds, 'interestIds', userId);
           await this.taxonomy.replace(this.db, 'interests', userId, ids);
         }
         for (const tag of data.followedHashtags ?? []) {
@@ -114,8 +114,8 @@ export class OnboardingService {
         return;
       }
       case 'skills': {
-        const skillIds = data.skillIds ? await this.taxonomy.validate('skills', data.skillIds, 'skillIds') : undefined;
-        const sectorIds = data.sectorIds ? await this.taxonomy.validate('sectors', data.sectorIds, 'sectorIds') : undefined;
+        const skillIds = data.skillIds ? await this.taxonomy.validate('skills', data.skillIds, 'skillIds', userId) : undefined;
+        const sectorIds = data.sectorIds ? await this.taxonomy.validate('sectors', data.sectorIds, 'sectorIds', userId) : undefined;
         await this.db.transaction(async (tx) => {
           if (skillIds) await this.taxonomy.replace(tx, 'skills', userId, skillIds);
           if (sectorIds) await this.taxonomy.replace(tx, 'sectors', userId, sectorIds);

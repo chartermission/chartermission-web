@@ -172,10 +172,12 @@ export class EventCatalogService {
     return { month: q.month, tz: q.tz, days, total: rows.length };
   }
 
+  /** Categories hosts can pick (status 'active'), in the admins' order. */
   async categories(): Promise<EventCategory[]> {
     return this.db
       .select({ id: eventCategories.id, slug: eventCategories.slug, name: eventCategories.name })
       .from(eventCategories)
+      .where(eq(eventCategories.status, 'active'))
       .orderBy(asc(eventCategories.position), asc(eventCategories.name));
   }
 

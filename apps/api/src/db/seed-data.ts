@@ -211,7 +211,15 @@ export const CHAPTERS: [string, string, string][] = [
  * "reference_seeds"), so an item an admin removes isn't re-created on the next start. Bump a
  * version to seed newly added items; existing rows are never overwritten.
  */
-export const REFERENCE_SEED_VERSIONS = { chapters: 4, hashtags: 2, badges: 1, exams: 1 } as const;
+export const REFERENCE_SEED_VERSIONS = { chapters: 4, hashtags: 2, badges: 1, exams: 1, taxonomies: 1 } as const;
+
+/*
+ * taxonomies (profile options: sectors, skills, interests, languages, event categories):
+ *   1 = the lists below, each only into an empty table. Until this version they were re-inserted on
+ *       every start; a database that already has them just records the version, so an option an admin
+ *       deletes or merges in Profile options is not re-created. New items added to a list below need
+ *       a new version that inserts just those.
+ */
 
 /**
  * What each chapters version added, so a later version never redoes an earlier step on a database

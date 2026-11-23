@@ -189,6 +189,15 @@ function Section({ id, title, description, children }: { id: string; title: stri
   );
 }
 
+/**
+ * Picker options: the list members can choose from, plus any option this member already has that
+ * an admin has since hidden from pickers (so they still see it and can remove it).
+ */
+function pickerOptions(list: { id: string; name: string }[], held: { id: string; name: string }[]) {
+  const ids = new Set(list.map((item) => item.id));
+  return [...list, ...held.filter((item) => !ids.has(item.id))].map((item) => ({ id: item.id, label: item.name }));
+}
+
 /** Profile editor (CM-PRF-01, 04, 07): GET/PATCH /me/profile with a completeness meter. */
 export function ProfileForm({
   profile,
@@ -485,7 +494,7 @@ export function ProfileForm({
       >
         <ChipPicker
           label="Skills"
-          options={taxonomies.skills.map((t) => ({ id: t.id, label: t.name }))}
+          options={pickerOptions(taxonomies.skills, profile.skills)}
           selected={draft.skillIds}
           onChange={(skillIds) => update({ skillIds })}
           max={30}
@@ -493,7 +502,7 @@ export function ProfileForm({
         <ChipPicker
           id="sectors"
           label="Sectors"
-          options={taxonomies.sectors.map((t) => ({ id: t.id, label: t.name }))}
+          options={pickerOptions(taxonomies.sectors, profile.sectors)}
           selected={draft.sectorIds}
           onChange={(sectorIds) => update({ sectorIds })}
           max={10}
@@ -501,7 +510,7 @@ export function ProfileForm({
         <ChipPicker
           id="interests"
           label="Interests"
-          options={taxonomies.interests.map((t) => ({ id: t.id, label: t.name }))}
+          options={pickerOptions(taxonomies.interests, profile.interests)}
           selected={draft.interestIds}
           onChange={(interestIds) => update({ interestIds })}
           max={20}
@@ -509,7 +518,7 @@ export function ProfileForm({
         <ChipPicker
           id="languages"
           label="Languages"
-          options={taxonomies.languages.map((t) => ({ id: t.id, label: t.name }))}
+          options={pickerOptions(taxonomies.languages, profile.languages)}
           selected={draft.languageIds}
           onChange={(languageIds) => update({ languageIds })}
           max={10}

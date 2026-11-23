@@ -1,9 +1,10 @@
 import { CertificationItem, PROFILE_CERTIFICATIONS_MAX } from '@chartermission/contracts';
-import { INTERESTS, LANGUAGES, MEMBERS, SECTORS, SKILLS, taxonomySlug } from './seed-data.js';
+import { INTERESTS, LANGUAGES, MEMBERS, REFERENCE_SEED_VERSIONS, SECTORS, SKILLS, taxonomySlug } from './seed-data.js';
 
 /*
- * The live site gets these catalogues from seedReference() on every start: rows are matched by slug
- * and positions are list indexes, so the items it already has must stay first, in the same order.
+ * These lists are seeded once, into an empty database (REFERENCE_SEED_VERSIONS.taxonomies); after
+ * that admins manage them in Profile options. Rows are matched by slug and positions are list
+ * indexes, so the items the live site started with stay first, in the same order.
  */
 const ORIGINAL = {
   sectors: [
@@ -31,6 +32,10 @@ describe('profile catalogues', () => {
     expect(slugs.every((s) => s.length > 0)).toBe(true);
     expect(new Set(slugs).size).toBe(list.length);
     expect(new Set(list.map((n) => n.toLowerCase())).size).toBe(list.length);
+  });
+
+  it('are seeded once per version, not on every start', () => {
+    expect(REFERENCE_SEED_VERSIONS.taxonomies).toBeGreaterThanOrEqual(1);
   });
 
   it('are full lists', () => {

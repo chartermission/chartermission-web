@@ -43,18 +43,6 @@ import { chapterDefaults } from '../chapters/chapter-defaults.js';
 
 export async function seedReference(db: Db) {
   await db.insert(s.countries).values(COUNTRIES.map(([code, name, region]) => ({ code, name, region }))).onConflictDoNothing();
-  for (const [table, items] of [
-    [s.sectors, SECTORS],
-    [s.skills, SKILLS],
-    [s.interests, INTERESTS],
-    [s.languages, LANGUAGES],
-    [s.eventCategories, EVENT_CATEGORIES],
-  ] as const) {
-    await db
-      .insert(table)
-      .values(items.map((name, i) => ({ slug: slug(name), name, position: i })))
-      .onConflictDoNothing();
-  }
   await db
     .insert(s.courseTopics)
     .values(COURSE_TOPICS.map(([sl, name], i) => ({ slug: sl, name, position: i })))
@@ -84,7 +72,8 @@ export async function seedReference(db: Db) {
 const SEEDS_KEY = 'reference_seeds';
 
 /**
- * Chapters, featured hashtags, badges and exams: admins add, remove and edit these, so each catalogue is
+ * Chapters, featured hashtags, badges, exams and profile options (sectors, skills, interests, languages,
+ * event categories): admins add, remove and edit these, so each catalogue is
  * seeded only when its REFERENCE_SEED_VERSIONS entry is newer than the version recorded in
  * platform_settings. Inserts never overwrite existing rows.
  */
@@ -93,6 +82,25 @@ async function seedCatalogues(db: Db) {
   const done: Record<string, number> = { ...(row?.value as Record<string, number> | undefined) };
   const due = (k: keyof typeof REFERENCE_SEED_VERSIONS) => (done[k] ?? 0) < REFERENCE_SEED_VERSIONS[k];
 
+  if (due('taxonomies')) {
+    // 1 = the first lists, only into empty tables: on a database that has them (they used to be
+    // re-inserted on every start) this just records the version.
+    for (const [table, items] of [
+      [s.sectors, SECTORS],
+      [s.skills, SKILLS],
+      [s.interests, INTERESTS],
+      [s.languages, LANGUAGES],
+      [s.eventCategories, EVENT_CATEGORIES],
+    ] as const) {
+      const [any] = await db.select({ id: table.id }).from(table).limit(1);
+      if (any) continue;
+      await db
+        .insert(table)
+        .values(items.map((name, i) => ({ slug: slug(name), name, position: i })))
+        .onConflictDoNothing();
+    }
+    done.taxonomies = REFERENCE_SEED_VERSIONS.taxonomies;
+  }
   if (due('chapters')) {
     // Each step runs once: a later version never re-creates a chapter an admin removed.
     const had = done.chapters ?? 0;

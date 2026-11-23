@@ -37,13 +37,14 @@ export const isUuid = (v: string) => UUID.test(v);
 export class TaxonomyService {
   constructor(@InjectDb() private readonly db: Db) {}
 
-  /** GET /taxonomies */
+  /** GET /taxonomies. Pickers offer only the options shown (status 'active'), in the admins' order. */
   async all(): Promise<Taxonomies> {
     const list = async (kind: TaxKind) =>
       (
         await this.db
           .select({ id: TABLES[kind].item.id, slug: TABLES[kind].item.slug, name: TABLES[kind].item.name })
           .from(TABLES[kind].item)
+          .where(eq(TABLES[kind].item.status, 'active'))
           .orderBy(asc(TABLES[kind].item.position), asc(TABLES[kind].item.name))
       ).map((r) => ({ ...r }));
     const [countryRows, chapterRows, sectorItems, skillItems, interestItems, languageItems] = await Promise.all([
@@ -88,13 +89,21 @@ export class TaxonomyService {
     return map;
   }
 
-  /** Checks every id exists; throws a field error otherwise. Returns de-duplicated ids. */
-  async validate(kind: TaxKind, ids: string[], field: string): Promise<string[]> {
-    const unique = [...new Set(ids)];
+  /**
+   * Checks every id is an option members can pick (status 'active'); throws a field error otherwise.
+   * With `userId`, options that member already has stay allowed even when an admin has hidden them
+   * since, so they can still save their profile. Returns de-duplicated ids.
+   */
+  async validate(kind: TaxKind, ids: string[], field: string, userId?: string): Promise<string[]> {
+    const unique = [...new Set(ids.map((id) => id.toLowerCase()))];
     if (unique.length === 0) return [];
     if (!unique.every(isUuid)) throw Errors.validation({ [field]: 'Choose from the list' });
-    const { item } = TABLES[kind];
-    const rows = await this.db.select({ id: item.id }).from(item).where(inArray(item.id, unique));
+    const { item, join } = TABLES[kind];
+    const held = userId ? this.db.select({ id: join.itemId }).from(join).where(eq(join.userId, userId)) : undefined;
+    const rows = await this.db
+      .select({ id: item.id })
+      .from(item)
+      .where(and(inArray(item.id, unique), held ? or(eq(item.status, 'active'), inArray(item.id, held)) : eq(item.status, 'active')));
     if (rows.length !== unique.length) throw Errors.validation({ [field]: 'Choose from the list' });
     return unique;
   }

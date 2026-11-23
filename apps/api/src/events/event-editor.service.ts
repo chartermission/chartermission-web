@@ -125,7 +125,12 @@ export class EventEditorService {
       if (!c) fields['venue.countryCode'] = 'Choose a country';
     }
     if (v.categoryId && v.categoryId !== current?.categoryId) {
-      const [cat] = await this.db.select({ id: eventCategories.id }).from(eventCategories).where(eq(eventCategories.id, v.categoryId)).limit(1);
+      // Only categories shown in pickers; an event keeps a category an admin has hidden since.
+      const [cat] = await this.db
+        .select({ id: eventCategories.id })
+        .from(eventCategories)
+        .where(and(eq(eventCategories.id, v.categoryId), eq(eventCategories.status, 'active')))
+        .limit(1);
       if (!cat) fields.categoryId = 'Choose a category';
     }
     if (v.coverFileId && v.coverFileId !== current?.coverFileId) {

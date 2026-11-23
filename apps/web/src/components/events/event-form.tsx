@@ -462,7 +462,10 @@ const SUBMITTABLE = new Set(["draft", "changes_requested", "rejected", "unpublis
  * preview in the host's own zone), format and place, registration, speakers, agenda and
  * description. Validates with the contract's CreateEventInput before calling the API.
  */
-export function EventForm({ mode, event, viewer, hostOptions, categories, countryGroups }: EventFormProps) {
+export function EventForm({ mode, event, viewer, hostOptions, categories: offered, countryGroups }: EventFormProps) {
+  // A category an admin has hidden since stays on the event (and in this list) until the host changes it.
+  const current = event?.category;
+  const categories = current && !offered.some((c) => c.id === current.id) ? [...offered, current] : offered;
   const intl = useIntlTag();
   const t = useT();
   const router = useRouter();

@@ -517,12 +517,12 @@ export class ProfilesService {
     }
 
     const taxonomies = {
-      skills: input.skillIds !== undefined ? await this.taxonomy.validate('skills', input.skillIds, 'skillIds') : undefined,
-      sectors: input.sectorIds !== undefined ? await this.taxonomy.validate('sectors', input.sectorIds, 'sectorIds') : undefined,
+      skills: input.skillIds !== undefined ? await this.taxonomy.validate('skills', input.skillIds, 'skillIds', userId) : undefined,
+      sectors: input.sectorIds !== undefined ? await this.taxonomy.validate('sectors', input.sectorIds, 'sectorIds', userId) : undefined,
       interests:
-        input.interestIds !== undefined ? await this.taxonomy.validate('interests', input.interestIds, 'interestIds') : undefined,
+        input.interestIds !== undefined ? await this.taxonomy.validate('interests', input.interestIds, 'interestIds', userId) : undefined,
       languages:
-        input.languageIds !== undefined ? await this.taxonomy.validate('languages', input.languageIds, 'languageIds') : undefined,
+        input.languageIds !== undefined ? await this.taxonomy.validate('languages', input.languageIds, 'languageIds', userId) : undefined,
     };
 
     try {

@@ -383,7 +383,7 @@ export class PagesService {
     const { row } = await this.editableRow(user, idOrSlug);
     await this.assertFiles(user.id, input);
     await this.assertCountry(input.countryCode);
-    const sectorIds = await this.assertSectors(input.sectorIds);
+    const sectorIds = await this.assertSectors(input.sectorIds, row.id);
     const set = this.changes(input);
     const resubmit = row.status === 'rejected' && !isPagesStaff(user);
     if (resubmit) Object.assign(set, { status: 'pending', reviewNote: null });
@@ -452,12 +452,20 @@ export class PagesService {
     if (sectorIds.length) await tx.insert(pageSectors).values(sectorIds.map((sectorId) => ({ pageId, sectorId })));
   }
 
-  /** Sector ids must be in the catalogue. Returns them without repeats (undefined when not sent). */
-  async assertSectors(ids: string[] | undefined): Promise<string[] | undefined> {
+  /**
+   * Sector ids must be in the catalogue and shown in pickers (status 'active'); sectors the page
+   * (`pageId`) already has stay allowed after an admin hides them. Returns them without repeats
+   * (undefined when not sent).
+   */
+  async assertSectors(ids: string[] | undefined, pageId?: string): Promise<string[] | undefined> {
     if (ids === undefined) return undefined;
     const unique = [...new Set(ids.map((id) => id.toLowerCase()))];
     if (!unique.length) return [];
-    const rows = await this.db.select({ id: sectors.id }).from(sectors).where(inArray(sectors.id, unique));
+    const held = pageId ? this.db.select({ id: pageSectors.sectorId }).from(pageSectors).where(eq(pageSectors.pageId, pageId)) : undefined;
+    const rows = await this.db
+      .select({ id: sectors.id })
+      .from(sectors)
+      .where(and(inArray(sectors.id, unique), held ? or(eq(sectors.status, 'active'), inArray(sectors.id, held)) : eq(sectors.status, 'active')));
     if (rows.length !== unique.length) throw Errors.validation({ sectorIds: 'Choose sectors from the list' });
     return unique;
   }

@@ -496,8 +496,9 @@ export class InitiativesService {
 
   /** Theme, country and cover checks shared by create and update. */
   private async checkCommon(userId: string, input: Partial<Pick<InitiativeInputParsed, 'themeId' | 'countryCode' | 'coverFileId'>>, existing?: InitiativeRow) {
-    if (input.themeId) {
-      const [sector] = await this.db.select({ id: sectors.id }).from(sectors).where(eq(sectors.id, input.themeId)).limit(1);
+    // A hidden sector is no longer offered, but the theme the initiative already has may stay.
+    if (input.themeId && input.themeId !== existing?.sectorId) {
+      const [sector] = await this.db.select({ id: sectors.id }).from(sectors).where(and(eq(sectors.id, input.themeId), eq(sectors.status, 'active'))).limit(1);
       if (!sector) throw Errors.validation({ themeId: 'Choose a theme from the list' });
     }
     if (input.countryCode) {

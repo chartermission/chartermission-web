@@ -42,7 +42,7 @@ async function Manage({ params }: { params: Params }) {
             <T vars={{ slug: page.slug }}>{"The page’s address is chartermission.com/pages/{slug} and stays the same when you rename it."}</T>
           </p>
         </div>
-        <PageForm page={page} countries={groupCountries(taxonomies.countries)} sectors={sectorOptions(taxonomies.sectors)} />
+        <PageForm page={page} countries={groupCountries(taxonomies.countries)} sectors={sectorOptions(taxonomies.sectors, page.sectors)} />
       </Panel>
 
       <Panel id="verification" className="flex scroll-mt-24 flex-col gap-4 p-6 max-sm:p-4">
