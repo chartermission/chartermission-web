@@ -1,4 +1,5 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   AdminAwardBadgeInput,
   AdminBadgeInput,
@@ -6,6 +7,9 @@ import {
   AdminChapterCreateInput,
   AdminChaptersQuery,
   AdminChapterUpdateInput,
+  AdminMembersBulkInput,
+  AdminMembersExportInput,
+  AdminMembersExportQuery,
   AdminMembersQuery,
   AdminSetFeaturedInput,
   AdminSetMcpAccessInput,
@@ -19,7 +23,9 @@ import {
   type AdminBadge,
   type AdminChapterRow,
   type AdminMemberRow,
+  type AdminMemberOverview,
   type AdminMembersPage,
+  type BulkResult,
   type Page,
   type AdminTopicRow,
   type McpActivityView,
@@ -27,7 +33,7 @@ import {
 } from '@chartermission/contracts';
 import { Access, Auth } from '../core/guards.js';
 import { clientIp, type AppRequest, type AuthContext } from '../core/auth-context.js';
-import { ZBody, ZQuery } from '../common/validation.js';
+import { ZBody, ZQuery, parseOrThrow } from '../common/validation.js';
 import { AdminChaptersService } from './admin-chapters.service.js';
 import { AdminTopicsService } from './admin-topics.service.js';
 import { AdminMembersService } from './admin-members.service.js';
@@ -152,10 +158,46 @@ export class AdminMembersController {
     return this.members.list(q);
   }
 
+  /** The list's filters (or ?ids=a,b,c for picked members) as a CSV download. Streamed; audited. */
+  @Get('export.csv')
+  @Access('admin', 'members.manage')
+  async export(@Auth() ctx: AuthContext, @Query() query: unknown, @Req() req: AppRequest, @Res() res: Response): Promise<void> {
+    const q = parseOrThrow(AdminMembersExportQuery, query);
+    await this.members.exportCsv(ctx, q, res, clientIp(req));
+  }
+
+  /** The picked members as a CSV download, ids in the body (a long pick doesn't fit in a link). Audited. */
+  @Post('export.csv')
+  @HttpCode(200)
+  @Access('admin', 'members.manage')
+  async exportPicked(
+    @Auth() ctx: AuthContext,
+    @ZBody(AdminMembersExportInput) input: AdminMembersExportInput,
+    @Req() req: AppRequest,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.members.exportPickedCsv(ctx, input, res, clientIp(req));
+  }
+
+  /** One change to many members: verified tick, sign-up suggestions, badges, Claude access. */
+  @Post('bulk')
+  @HttpCode(200)
+  @Access('admin', 'members.manage')
+  bulk(@Auth() ctx: AuthContext, @ZBody(AdminMembersBulkInput) input: AdminMembersBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.members.bulk(ctx, input, clientIp(req));
+  }
+
   @Get(':id')
   @Access('admin', 'members.manage')
   get(@Param('id') id: string): Promise<AdminMemberRow> {
     return this.members.row(id);
+  }
+
+  /** Everything the member detail panel shows. */
+  @Get(':id/overview')
+  @Access('admin', 'members.manage')
+  overview(@Param('id') id: string): Promise<AdminMemberOverview> {
+    return this.members.overview(id);
   }
 
   @Put(':id/verified')

@@ -1,18 +1,31 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   and,
   asc,
   desc,
   eq,
+  gte,
   ilike,
   inArray,
   isNotNull,
   isNull,
+  lt,
   ne,
   or,
   sql,
   type SQL,
 } from 'drizzle-orm';
+import {
+  MEMBERS_EXPORT_MAX,
+  type AdminMemberOverview,
+  type AdminMembersBulkInput,
+  type AdminMembersExportInput,
+  type AdminMembersExportQuery,
+  type AdminMembersFilters,
+  type AdminMembersSort,
+  type BulkResult,
+} from '@chartermission/contracts';
 import type {
   AdminAssignableRole,
   AdminSetRoleInput,
@@ -32,18 +45,33 @@ import type {
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import {
+  auditLog,
   badges,
+  chapters,
+  connections,
+  contentReports,
   featuredMembers,
+  follows,
   mcpAccessGrants,
   memberBadges,
   memberProfiles,
   mfaDevices,
+  posts,
+  profileInterests,
+  profileLanguages,
+  profileSectors,
+  profileSkills,
+  referrals,
   roles,
+  sessions,
   userRoles,
   users,
 } from '../db/schema.js';
 import type { AuthContext } from '../core/auth-context.js';
-import { mediaUrl } from '../core/members.service.js';
+import { MembersService, mediaUrl } from '../core/members.service.js';
+import { runEach } from '../common/bulk.js';
+import { decodeCursor, paginate } from '../common/cursor.js';
+import { auditSummary, csvCell } from './admin-audit.service.js';
 import { SessionService } from '../core/session.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
@@ -54,8 +82,11 @@ import { adminUrl, webUrl } from '../infra/mail-layout.js';
 import { PRIVILEGED_ROLES, ROLES, mustUseMfa } from '../core/permissions.js';
 import { can } from '../core/policy.js';
 import {
+  DAY_MS,
   isUniqueViolation,
+  isUuid,
   likePrefix,
+  tsKey,
   uuidOr404,
 } from '../moderation/util.js';
 import { mcpAccessSql, mcpConnectionsSql } from '../oauth/mcp-access.js';
@@ -71,6 +102,41 @@ const FEATURED = sql`exists (select 1 from ${featuredMembers} fm where fm.user_i
 /** Claude access: given by an admin, or staff (who have it without a grant). */
 const CLAUDE_ACCESS = sql`(${users.isStaff} or exists (select 1 from ${mcpAccessGrants} mag where mag.user_id = ${users.id}))`;
 
+/**
+ * Chapters a member belongs to: those they follow, and those they hold a role in (Chapter Lead,
+ * Ambassador; user_roles scoped to the chapter). Chapter ids as text.
+ */
+const chapterIdsOf = (userId: SQL | string) =>
+  sql`select f.target_id from ${follows} f where f.follower_id = ${userId} and f.target_type = 'chapter'
+      union select ur.scope_id from ${userRoles} ur where ur.user_id = ${userId} and ur.scope_type = 'chapter' and ur.revoked_at is null`;
+/** In the chapter: follows it or holds a role in it (both lookups use the tables' keys). */
+const inChapter = (chapterId: string) =>
+  sql`(exists (select 1 from ${follows} f where f.follower_id = ${users.id} and f.target_type = 'chapter' and f.target_id = ${chapterId})
+      or exists (select 1 from ${userRoles} ur where ur.user_id = ${users.id} and ur.scope_type = 'chapter' and ur.scope_id = ${chapterId} and ur.revoked_at is null))`;
+/** Reports still waiting for a decision. */
+const OPEN_REPORT = ['open', 'in_review'];
+
+/** Start of a YYYY-MM-DD day in UTC. */
+function utcDay(day: string, field: string): Date {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== day) throw Errors.validation({ [field]: 'Use a real date (YYYY-MM-DD)' });
+  return d;
+}
+
+const MEMBER_CSV_COLUMNS = ['name', 'handle', 'email', 'country', 'status', 'joined', 'email_confirmed', 'verified', 'roles', 'badges', 'two_step'];
+
+/** The filters an export used, for its audit entry (only those that were set). */
+function exportedFilters(q: AdminMembersFilters): Record<string, string> {
+  return Object.fromEntries(Object.entries(q).filter(([k, v]) => v !== undefined && v !== '' && !(k === 'filter' && v === 'all'))) as Record<string, string>;
+}
+
+function write(res: Response, chunk: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (res.write(chunk)) resolve();
+    else res.once('drain', () => resolve());
+  });
+}
+
 const slugify = (v: string) =>
   v
     .normalize('NFKD')
@@ -83,6 +149,8 @@ const slugify = (v: string) =>
 /** Admin console: the badge catalogue and per-member controls (verified tick, badges, featured suggestion). */
 @Injectable()
 export class AdminMembersService {
+  private readonly log = new Logger(AdminMembersService.name);
+
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly audit: AuditService,
@@ -91,6 +159,7 @@ export class AdminMembersService {
     private readonly limits: RateLimitService,
     private readonly oauth: OAuthService,
     private readonly mcpActivity: McpActivityService,
+    private readonly memberRefs: MembersService,
   ) {}
 
   /* ------------------------------ Two-step verification ------------------------------ */
@@ -376,25 +445,34 @@ export class AdminMembersService {
   /* ---------------------------------- Members ---------------------------------- */
 
   /**
-   * GET /admin/members: search by name, handle or email. The first page (no cursor) also carries
-   * `total` (matching the filter and search) and `counts` (per filter, ignoring the search).
+   * GET /admin/members: search by name, handle or email, narrowed by the page's filters, in keyset
+   * pages (sort key + id). The first page (no cursor) also carries `total` (matching everything
+   * asked) and `counts` (per quick filter, ignoring the search and the other filters).
    */
   async list(q: AdminMembersQuery): Promise<AdminMembersPage> {
-    const offset = q.cursor
-      ? Number(Buffer.from(q.cursor, 'base64url').toString())
-      : 0;
-    if (!Number.isInteger(offset) || offset < 0 || offset > 100_000)
-      throw Errors.badRequest('Invalid cursor');
+    const conds = await this.memberConds(q);
+    const first = !q.cursor;
+    const narrowed = !!q.q || conds.length > 1;
+    const [page, counts, matching] = await Promise.all([
+      this.pageOfIds(conds, q.sort, q.limit, q.cursor),
+      first ? this.counts() : null,
+      // "All" without a search or filters is counts.all: no second count.
+      first && narrowed ? this.countWhere(and(...conds)!) : null,
+    ]);
+    return {
+      items: await this.rows(page.ids),
+      nextCursor: page.nextCursor,
+      total: first ? (matching ?? counts!.all) : null,
+      counts,
+    };
+  }
+
+  /** The WHERE conditions for the Members page's search and filters (index-friendly: equality and exists on keyed tables). */
+  private async memberConds(q: AdminMembersFilters): Promise<SQL[]> {
     const conds: SQL[] = [LISTED];
     if (q.q) {
       const term = `%${likePrefix(q.q.replace(/^@/, '')).slice(0, -1)}%`;
-      conds.push(
-        or(
-          ilike(memberProfiles.displayName, term),
-          ilike(memberProfiles.handle, term),
-          ilike(users.email, term),
-        )!,
-      );
+      conds.push(or(ilike(memberProfiles.displayName, term), ilike(memberProfiles.handle, term), ilike(users.email, term))!);
     }
     if (q.filter === 'verified') conds.push(isNotNull(users.verifiedAt));
     if (q.filter === 'unverified') conds.push(isNull(users.verifiedAt));
@@ -407,30 +485,69 @@ export class AdminMembersService {
         sql`exists (select 1 from ${memberBadges} mb join ${badges} b on b.id = mb.badge_id where mb.user_id = ${users.id} and b.slug = ${q.badge})`,
       );
     }
-    const first = !q.cursor;
-    const [rows, counts, matching] = await Promise.all([
-      this.db
-        .select({ id: users.id })
-        .from(users)
-        .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
-        .where(and(...conds))
-        .orderBy(desc(users.createdAt), asc(users.id))
-        .limit(q.limit + 1)
-        .offset(offset),
-      first ? this.counts() : null,
-      // "All" without a search is counts.all: no second count.
-      first && (q.q || q.filter !== 'all') ? this.countWhere(and(...conds)!) : null,
-    ]);
-    const ids = rows.slice(0, q.limit).map((r) => r.id);
-    return {
-      items: await this.rows(ids),
-      nextCursor:
-        rows.length > q.limit
-          ? Buffer.from(String(offset + q.limit)).toString('base64url')
-          : null,
-      total: first ? (matching ?? counts!.all) : null,
-      counts,
+    if (q.country) conds.push(eq(memberProfiles.countryCode, q.country));
+    if (q.chapter) conds.push(inChapter(q.chapter));
+    if (q.status) conds.push(eq(users.status, q.status));
+    if (q.role === 'team') conds.push(eq(users.isStaff, true));
+    else if (q.role === 'official') conds.push(eq(users.isOfficial, true));
+    else if (q.role)
+      conds.push(
+        sql`exists (select 1 from ${userRoles} ur join ${roles} r on r.id = ur.role_id where ur.user_id = ${users.id} and ur.revoked_at is null and ur.scope_type is null and r.key = ${q.role})`,
+      );
+    if (q.joinedFrom && q.joinedTo && q.joinedFrom > q.joinedTo)
+      throw Errors.validation({ joinedTo: 'The end date must be on or after the start date' });
+    if (q.joinedFrom) conds.push(gte(users.createdAt, utcDay(q.joinedFrom, 'joinedFrom')));
+    if (q.joinedTo) conds.push(lt(users.createdAt, new Date(utcDay(q.joinedTo, 'joinedTo').getTime() + DAY_MS)));
+    if (q.emailVerified) conds.push(q.emailVerified === 'yes' ? isNotNull(users.emailVerifiedAt) : isNull(users.emailVerifiedAt));
+    if (q.twoStep) conds.push(q.twoStep === 'on' ? isNotNull(users.mfaEnabledAt) : isNull(users.mfaEnabledAt));
+    if (q.photo) conds.push(q.photo === 'yes' ? isNotNull(memberProfiles.avatarFileId) : isNull(memberProfiles.avatarFileId));
+    if (q.referred) {
+      const referred = sql`exists (select 1 from ${referrals} rf where rf.invitee_id = ${users.id})`;
+      conds.push(q.referred === 'yes' ? referred : sql`not ${referred}`);
+    }
+    const option = (table: typeof profileSkills, itemId: string | undefined) => {
+      if (itemId) conds.push(sql`exists (select 1 from ${table} po where po.user_id = ${users.id} and po.item_id = ${itemId})`);
     };
+    option(profileSkills, q.skill);
+    option(profileSectors, q.sector);
+    option(profileInterests, q.interest);
+    option(profileLanguages, q.language);
+    return conds;
+  }
+
+  /**
+   * One keyset page of member ids. The cursor holds the sort, the last row's sort key (a
+   * microsecond-exact timestamp, or the name) and its id, so new sign-ups never shift a page.
+   */
+  private async pageOfIds(
+    conds: SQL[],
+    sort: AdminMembersSort,
+    limit: number,
+    cursor?: string,
+  ): Promise<{ ids: string[]; nextCursor: string | null }> {
+    const where = [...conds];
+    const after = decodeCursor<{ s: string; k: string; id: string }>(cursor);
+    if (after) {
+      if (after.s !== sort || typeof after.k !== 'string' || !isUuid(after.id)) throw Errors.badRequest('Invalid cursor');
+      if (sort === 'name') where.push(sql`(${memberProfiles.displayName}, ${users.id}) > (${after.k}, ${after.id}::uuid)`);
+      else if (sort === 'oldest') where.push(sql`(${users.createdAt}, ${users.id}) > (${after.k}::timestamptz, ${after.id}::uuid)`);
+      else where.push(sql`(${users.createdAt}, ${users.id}) < (${after.k}::timestamptz, ${after.id}::uuid)`);
+    }
+    const order =
+      sort === 'name'
+        ? [asc(memberProfiles.displayName), asc(users.id)]
+        : sort === 'oldest'
+          ? [asc(users.createdAt), asc(users.id)]
+          : [desc(users.createdAt), desc(users.id)];
+    const rows = await this.db
+      .select({ id: users.id, key: sort === 'name' ? memberProfiles.displayName : tsKey(users.createdAt) })
+      .from(users)
+      .innerJoin(memberProfiles, eq(memberProfiles.userId, users.id))
+      .where(and(...where))
+      .orderBy(...order)
+      .limit(limit + 1);
+    const page = paginate(rows, limit, (last) => ({ s: sort, k: last.key, id: last.id }));
+    return { ids: page.items.map((r) => r.id), nextCursor: page.nextCursor };
   }
 
   /** Members per filter of the Members page (the search left aside). */
@@ -464,6 +581,179 @@ export class AdminMembersService {
     const [row] = await this.rows([id]);
     if (!row) throw Errors.notFound('That member');
     return row;
+  }
+
+  /* ------------------------------ Members: export ------------------------------ */
+
+  /**
+   * GET /admin/members/export.csv: the list's filters (or just the picked `ids`) as a CSV download,
+   * in the list's order, at most MEMBERS_EXPORT_MAX rows. Streamed in pages; audited first.
+   */
+  async exportCsv(ctx: AuthContext, q: AdminMembersExportQuery, res: Response, ip?: string): Promise<void> {
+    const { ids, ...filters } = q;
+    return this.writeCsv(ctx, filters, ids, res, ip);
+  }
+
+  /** POST /admin/members/export.csv: just the picked members (a body, for picks too long for a link). */
+  async exportPickedCsv(ctx: AuthContext, input: AdminMembersExportInput, res: Response, ip?: string): Promise<void> {
+    return this.writeCsv(ctx, { filter: 'all', sort: input.sort }, input.ids, res, ip);
+  }
+
+  private async writeCsv(ctx: AuthContext, filters: AdminMembersFilters, ids: string[] | undefined, res: Response, ip?: string): Promise<void> {
+    const conds = ids?.length ? [LISTED, inArray(users.id, ids)] : await this.memberConds(filters);
+    await this.audit.record({
+      actorId: ctx.user.id,
+      action: 'members.exported',
+      targetType: 'members',
+      after: ids?.length ? { ids: ids.length } : { filters: exportedFilters(filters) },
+      ip,
+    });
+    res.status(200);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="members-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.setHeader('Cache-Control', 'no-store');
+    await write(res, `${MEMBER_CSV_COLUMNS.join(',')}\r\n`);
+    let cursor: string | undefined;
+    let written = 0;
+    while (written < MEMBERS_EXPORT_MAX) {
+      const page = await this.pageOfIds(conds, filters.sort, Math.min(500, MEMBERS_EXPORT_MAX - written), cursor);
+      if (!page.ids.length) break;
+      const rows = await this.rows(page.ids);
+      const lines = rows.map((r) =>
+        [
+          r.name,
+          r.handle,
+          r.email,
+          r.countryCode,
+          r.status,
+          r.joinedAt.slice(0, 10),
+          r.emailVerified ? 'yes' : 'no',
+          r.verified ? 'yes' : 'no',
+          [...r.roles.map((role) => ROLES[role]?.name ?? role), ...(r.staff ? ['Team'] : []), ...(r.official ? ['Official account'] : [])].join('; '),
+          r.badges.map((b) => b.name).join('; '),
+          r.twoStep ? 'on' : 'off',
+        ]
+          .map(csvCell)
+          .join(','),
+      );
+      await write(res, `${lines.join('\r\n')}\r\n`);
+      written += rows.length;
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+    res.end();
+  }
+
+  /* ------------------------------ Members: bulk ------------------------------ */
+
+  /**
+   * POST /admin/members/bulk: one change to many members, each through the same method as the
+   * single change (same rules, audit entries and emails). Failures are reported per id.
+   */
+  async bulk(ctx: AuthContext, input: AdminMembersBulkInput, ip?: string): Promise<BulkResult> {
+    if (input.action === 'award_badge' || input.action === 'remove_badge') {
+      const [badge] = await this.db.select({ id: badges.id, status: badges.status }).from(badges).where(eq(badges.id, input.badgeId!)).limit(1);
+      if (!badge) throw Errors.notFound('That badge');
+      if (input.action === 'award_badge' && badge.status !== 'active')
+        throw Errors.validation({ badgeId: 'This badge is disabled. Turn it on before awarding it.' });
+    }
+    const change: Record<AdminMembersBulkInput['action'], (id: string) => Promise<unknown>> = {
+      verify: (id) => this.setVerified(ctx, id, true, ip),
+      unverify: (id) => this.setVerified(ctx, id, false, ip),
+      feature: (id) => this.setFeatured(ctx, id, true, ip),
+      unfeature: (id) => this.setFeatured(ctx, id, false, ip),
+      award_badge: (id) => this.award(ctx, id, { badgeId: input.badgeId!, note: input.note }, ip),
+      remove_badge: (id) => this.revoke(ctx, id, input.badgeId!, ip),
+      claude_on: (id) => this.setMcpAccess(ctx, id, true, ip),
+      claude_off: (id) => this.setMcpAccess(ctx, id, false, ip),
+    };
+    return runEach(input.ids, change[input.action], this.log);
+  }
+
+  /* ------------------------------ Members: detail panel ------------------------------ */
+
+  /** GET /admin/members/{id}/overview: the member detail panel. */
+  async overview(rawId: string): Promise<AdminMemberOverview> {
+    const member = await this.row(rawId);
+    const id = member.id;
+    const [[profile], chapterRows, [counts], [inviter], invited, [invitedTotal], openReports, [reportTotal], auditRows] = await Promise.all([
+      this.db.select({ city: memberProfiles.city }).from(memberProfiles).where(eq(memberProfiles.userId, id)).limit(1),
+      this.db
+        .select({ id: chapters.id, slug: chapters.slug, name: chapters.name })
+        .from(chapters)
+        .where(sql`${chapters.id}::text in (${chapterIdsOf(id)})`)
+        .orderBy(asc(chapters.name)),
+      this.db.execute<{ posts: number; connections: number; followers: number }>(sql`select
+          (select count(*)::int from ${posts} p where p.author_id = ${id} and p.deleted_at is null) as posts,
+          (select count(*)::int from ${connections} c where c.status = 'accepted' and (c.requester_id = ${id} or c.addressee_id = ${id})) as connections,
+          (select count(*)::int from ${follows} f where f.target_type = 'member' and f.target_id = ${id}) as followers`).then((r) => r.rows),
+      this.db.select({ inviterId: referrals.inviterId }).from(referrals).where(eq(referrals.inviteeId, id)).limit(1),
+      this.db
+        .select({ inviteeId: referrals.inviteeId })
+        .from(referrals)
+        .where(eq(referrals.inviterId, id))
+        .orderBy(desc(referrals.createdAt))
+        .limit(10),
+      this.db.select({ n: sql<number>`count(*)::int` }).from(referrals).where(eq(referrals.inviterId, id)),
+      this.db
+        .select({
+          id: contentReports.id,
+          targetType: contentReports.targetType,
+          reasonCode: contentReports.reasonCode,
+          status: contentReports.status,
+          createdAt: contentReports.createdAt,
+        })
+        .from(contentReports)
+        .where(and(eq(contentReports.targetUserId, id), inArray(contentReports.status, OPEN_REPORT)))
+        .orderBy(desc(contentReports.createdAt))
+        .limit(5),
+      this.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(contentReports)
+        .where(and(eq(contentReports.targetUserId, id), inArray(contentReports.status, OPEN_REPORT))),
+      this.db
+        .select({
+          id: auditLog.id,
+          actorId: auditLog.actorId,
+          action: auditLog.action,
+          targetType: auditLog.targetType,
+          targetId: auditLog.targetId,
+          createdAt: auditLog.createdAt,
+        })
+        .from(auditLog)
+        .where(and(inArray(auditLog.targetType, ['user', 'member']), eq(auditLog.targetId, id)))
+        .orderBy(desc(auditLog.id))
+        .limit(10),
+    ]);
+    const refs = await this.memberRefs.refs([
+      id,
+      ...(inviter ? [inviter.inviterId] : []),
+      ...invited.map((r) => r.inviteeId),
+      ...auditRows.flatMap((r) => (r.actorId ? [r.actorId] : [])),
+    ]);
+    return {
+      member,
+      city: profile?.city ?? null,
+      chapters: chapterRows,
+      counts: { posts: counts?.posts ?? 0, connections: counts?.connections ?? 0, followers: counts?.followers ?? 0 },
+      invitedBy: inviter ? (refs.get(inviter.inviterId) ?? null) : null,
+      invited: { total: invitedTotal?.n ?? 0, recent: invited.flatMap((r) => refs.get(r.inviteeId) ?? []) },
+      openReports: {
+        total: reportTotal?.n ?? 0,
+        recent: openReports.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+      },
+      audit: auditRows.map((r) => ({
+        id: String(r.id),
+        actor: r.actorId ? (refs.get(r.actorId) ?? null) : null,
+        action: r.action,
+        targetType: r.targetType,
+        targetId: r.targetId,
+        summary: auditSummary(r, refs),
+        createdAt: r.createdAt.toISOString(),
+        // The panel is for members.manage; IP hashes stay in the audit log itself.
+        ipHash: null,
+      })),
+    };
   }
 
   /** PUT /admin/members/{id}/verified */
@@ -700,7 +990,10 @@ export class AdminMembersService {
         isStaff: users.isStaff,
         isOfficial: users.isOfficial,
         mfaEnabledAt: users.mfaEnabledAt,
+        emailVerifiedAt: users.emailVerifiedAt,
         createdAt: users.createdAt,
+        lastActiveAt: sql<string | null>`greatest(${users.lastLoginAt}, (select max(se.last_seen_at) from ${sessions} se where se.user_id = ${users.id}))`,
+        chapterNames: sql<string[]>`coalesce((select array_agg(c.name order by c.name) from (select ch.name from ${chapters} ch where ch.id::text in (${chapterIdsOf(sql`${users.id}`)}) order by ch.name limit 3) c), '{}')`,
         handle: memberProfiles.handle,
         name: memberProfiles.displayName,
         headline: memberProfiles.headline,
@@ -758,6 +1051,9 @@ export class AdminMembersService {
         roles: (r.roles ?? []) as AdminAssignableRole[],
         twoStep: !!r.mfaEnabledAt,
         joinedAt: r.createdAt.toISOString(),
+        emailVerified: !!r.emailVerifiedAt,
+        lastActiveAt: r.lastActiveAt ? new Date(r.lastActiveAt).toISOString() : null,
+        chapterNames: r.chapterNames ?? [],
       }));
   }
 }
