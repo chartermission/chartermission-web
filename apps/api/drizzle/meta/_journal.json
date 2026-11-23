@@ -239,6 +239,13 @@
       "when": 1795420091424,
       "tag": "0033_mcp_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795420556356,
+      "tag": "0034_admin_catalogues_content_calendar",
+      "breakpoints": true
     }
   ]
 }

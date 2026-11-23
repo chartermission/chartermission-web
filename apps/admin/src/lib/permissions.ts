@@ -71,6 +71,7 @@ export function roleLabel(roles: readonly string[]): string {
 export type NavKey =
   | "moderation"
   | "hidden"
+  | "content-calendar"
   | "appeals"
   | "trending"
   | "topics"
@@ -89,6 +90,7 @@ export type NavKey =
   | "learning-access"
   | "media"
   | "network"
+  | "profile-options"
   | "audit";
 
 export type ConsoleNavItem = {
@@ -105,6 +107,7 @@ export type ConsoleNavItem = {
 export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "moderation", href: "/moderation", label: "Moderation", icon: "shield", permission: PERM.moderationView },
   { key: "hidden", href: "/moderation/hidden", label: "Hidden content", icon: "eye-off", permission: PERM.moderationView },
+  { key: "content-calendar", href: "/content-calendar", label: "Content calendar", icon: "calendar", permission: PERM.moderationView },
   { key: "appeals", href: "/appeals", label: "Appeals", icon: "flag", permission: PERM.moderationView },
   { key: "trending", href: "/trending", label: "Trending", icon: "trending", permission: PERM.moderationView },
   { key: "topics", href: "/topics", label: "Topics", icon: "hash", permission: PERM.trendingManage },
@@ -123,6 +126,7 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "learning-access", href: "/settings/learning", label: "E-learning access", icon: "target", permission: PERM.courseCurate },
   { key: "media", href: "/settings/media", label: "Media settings", icon: "video", permission: PERM.settingsManage },
   { key: "network", href: "/settings/network", label: "Network settings", icon: "users", permission: PERM.settingsManage },
+  { key: "profile-options", href: "/settings/profile-options", label: "Profile options", icon: "filter", permission: PERM.settingsManage },
   { key: "audit", href: "/audit", label: "Audit log", icon: "clock", permission: PERM.auditView },
 ];
 

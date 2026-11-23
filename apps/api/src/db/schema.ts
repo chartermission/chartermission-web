@@ -42,15 +42,25 @@ export const countries = pgTable('countries', {
   updatedAt: updatedAt(),
 });
 
+/**
+ * Option lists members pick from (skills, sectors, interests, languages, event categories). Managed in
+ * the admin console (Profile options): 'hidden' items leave every picker but stay on the profiles that
+ * already have them.
+ */
 const taxonomy = (name: string) =>
-  pgTable(name, {
-    id: id(),
-    slug: text('slug').notNull().unique(),
-    name: text('name').notNull(),
-    position: integer('position').notNull().default(0),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  });
+  pgTable(
+    name,
+    {
+      id: id(),
+      slug: text('slug').notNull().unique(),
+      name: text('name').notNull(),
+      position: integer('position').notNull().default(0),
+      status: text('status').notNull().default('active'),
+      createdAt: createdAt(),
+      updatedAt: updatedAt(),
+    },
+    (t) => [check(`${name}_status_ck`, sql`${t.status} in ('active','hidden')`)],
+  );
 
 export const sectors = taxonomy('sectors');
 export const skills = taxonomy('skills');
@@ -604,6 +614,16 @@ export const posts = pgTable(
     pinnedAt: ts('pinned_at'),
     /** How the post's images are shown: collage | carousel | grid (contracts MediaLayout). */
     mediaLayout: text('media_layout').notNull().default('collage'),
+    /** Where the post was written: 'web' (the site or app) or 'claude' (the Claude connector). */
+    source: text('source').notNull().default('web'),
+    /**
+     * Content calendar review of Claude posts: null when never needed, else 'pending' (status
+     * 'awaiting_approval' until a reviewer approves), 'approved' or 'declined'.
+     */
+    contentReview: text('content_review'),
+    contentReviewBy: uuid('content_review_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    contentReviewAt: ts('content_review_at'),
+    contentReviewNote: text('content_review_note'),
     editedAt: ts('edited_at'),
     deletedAt: ts('deleted_at'),
     reactionCount: integer('reaction_count').notNull().default(0),
@@ -628,7 +648,10 @@ export const posts = pgTable(
     check('posts_kind_ck', sql`${t.kind} in ('standard','announcement')`),
     check('posts_type_ck', sql`${t.type} in ('standard','question','celebration','request','article')`),
     check('posts_visibility_ck', sql`${t.visibility} in ('members','public')`),
-    check('posts_status_ck', sql`${t.status} in ('pending_media','published','in_review','declined')`),
+    check('posts_status_ck', sql`${t.status} in ('pending_media','published','in_review','declined','awaiting_approval')`),
+    check('posts_source_ck', sql`${t.source} in ('web','claude')`),
+    check('posts_content_review_ck', sql`${t.contentReview} is null or ${t.contentReview} in ('pending','approved','declined')`),
+    index('posts_source_idx').on(t.source, t.createdAt),
     check('posts_chapter_review_ck', sql`${t.chapterReview} is null or ${t.chapterReview} in ('pending','approved','declined')`),
     check('posts_mod_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
     check('posts_media_layout_ck', sql`${t.mediaLayout} in ('collage','carousel','grid')`),
@@ -688,13 +711,26 @@ export const postDrafts = pgTable(
     scheduledFor: ts('scheduled_for'),
     lastError: text('last_error'),
     publishedPostId: uuid('published_post_id'),
+    /** Where the draft was written: 'web' or 'claude' (the Claude connector). */
+    source: text('source').notNull().default('web'),
+    /**
+     * Content calendar: 'held' drafts were scheduled but a reviewer paused them (status stays
+     * 'scheduled' only when not held). Review of Claude posts: null, 'pending', 'approved' or 'declined'.
+     */
+    contentReview: text('content_review'),
+    contentReviewBy: uuid('content_review_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    contentReviewAt: ts('content_review_at'),
+    contentReviewNote: text('content_review_note'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index('post_drafts_author_idx').on(t.authorId, t.status, t.updatedAt),
     index('post_drafts_due_idx').on(t.status, t.scheduledFor),
-    check('post_drafts_status_ck', sql`${t.status} in ('draft','scheduled','publishing','failed')`),
+    index('post_drafts_source_idx').on(t.source, t.scheduledFor),
+    check('post_drafts_status_ck', sql`${t.status} in ('draft','scheduled','publishing','failed','held')`),
+    check('post_drafts_source_ck', sql`${t.source} in ('web','claude')`),
+    check('post_drafts_content_review_ck', sql`${t.contentReview} is null or ${t.contentReview} in ('pending','approved','declined')`),
   ],
 );
 

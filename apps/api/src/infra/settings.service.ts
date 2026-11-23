@@ -39,6 +39,11 @@ export const SETTING_DEFAULTS = {
   network: { dailyConnectionRequestLimit: null } as NetworkSettings,
   /** The official account bulk messages and Charter Mission inbox replies come from (admin console, Messages settings). */
   messaging: { senderId: null as string | null },
+  /**
+   * Content calendar (admin console): posts members write with Claude. 'after' (the default) publishes
+   * on time and staff review afterwards (hold, reschedule, cancel, hide); 'before' waits for approval.
+   */
+  claude_content: { approval: 'after' as 'after' | 'before' },
 };
 
 type SettingKey = keyof typeof SETTING_DEFAULTS;
