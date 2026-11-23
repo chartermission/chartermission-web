@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BulkIds } from "./admin-ops.js";
 import { MemberRef } from "./common.js";
 
 /*
@@ -348,6 +349,12 @@ export type AppealView = z.infer<typeof AppealView>;
 /** GET /admin/hidden?targetType=&cursor= */
 export const AdminHiddenQuery = z.object({
   targetType: z.enum(["post", "comment"]).optional(),
+  /** Words in the post or comment. */
+  q: z.string().trim().max(100).optional(),
+  /** Hidden in the last 7 or 30 days. */
+  since: z.enum(["7d", "30d"]).optional(),
+  /** moderator: a moderator's hide or remove is on record; automatic: none is (hidden by the system). */
+  by: z.enum(["moderator", "automatic"]).optional(),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -363,6 +370,18 @@ export const AdminHiddenRow = z.object({
   action: AdminActionView.nullable(),
 });
 export type AdminHiddenRow = z.infer<typeof AdminHiddenRow>;
+
+/**
+ * POST /admin/hidden/bulk (moderation.act) → BulkResult. ids are post or comment ids from
+ * GET /admin/hidden. Each is restored like POST /admin/moderation-actions with action "restore"
+ * (author notified, audited); one reason applies to all.
+ */
+export const AdminHiddenBulkInput = z.object({
+  ids: BulkIds,
+  action: z.literal("restore"),
+  reason: z.string().trim().min(5, "Give a reason of at least 5 characters").max(1000),
+});
+export type AdminHiddenBulkInput = z.infer<typeof AdminHiddenBulkInput>;
 
 /** GET /admin/appeals?status= ("open" includes in_review; "decided" is upheld + overturned). */
 export const AdminAppealsQuery = z.object({

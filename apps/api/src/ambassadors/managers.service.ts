@@ -23,6 +23,7 @@ import { PasswordService } from '../auth/password.service.js';
 import { TokensService } from '../auth/tokens.service.js';
 import { HandleService } from '../profiles/handles.js';
 import { AmbassadorMailer } from './ambassador-mail.js';
+import { scopeForUserId } from './ambassador-scope.js';
 
 type CreateManager = z.output<typeof CreateManagerSchema>;
 const MANAGER_ROLE = 'ambassador_manager';
@@ -204,7 +205,13 @@ export class ManagersService {
       .innerJoin(users, eq(users.id, userRoles.userId))
       .leftJoin(memberProfiles, eq(memberProfiles.userId, users.id))
       .where(and(isNull(userRoles.revokedAt), eq(users.status, 'active')));
-    return rows.map((r) => ({ id: r.id, email: r.email, name: r.name ?? r.email })).sort((a, b) => a.name.localeCompare(b.name));
+    const scopes = await Promise.all(rows.map((r) => scopeForUserId(this.db, r.id)));
+    return rows
+      .map((r, i) => {
+        const scope = scopes[i]!;
+        return { id: r.id, email: r.email, name: r.name ?? r.email, allCountries: scope.all, countryCodes: scope.all ? [] : scope.countries };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** GET /admin/ambassadors/training */

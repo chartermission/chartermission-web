@@ -1,16 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
-import type {
-  AdminCourseView,
-  AdminCoursesQuery,
-  CursorQuery,
-  Page,
-  SyncRunView,
-  UpdateCourseCurationInput,
+import {
+  LEARNING_FEATURED_LIMIT,
+  type AdminCoursesBulkInput,
+  type AdminCourseView,
+  type AdminCoursesQuery,
+  type BulkResult,
+  type CursorQuery,
+  type Page,
+  type SyncRunView,
+  type UpdateCourseCurationInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { analyticsEvents, courses, learningSyncRuns, memberProfiles } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
+import { runEach } from '../common/bulk.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { AuditService } from '../infra/audit.service.js';
@@ -24,6 +28,8 @@ const tsKey = (col: typeof learningSyncRuns.startedAt) => sql<string>`to_char(${
 /** Admin Learning section: the whole synced catalogue with curation, link status and sync history. */
 @Injectable()
 export class AdminCoursesService {
+  private readonly log = new Logger('AdminCourses');
+
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly audit: AuditService,
@@ -98,6 +104,51 @@ export class AdminCoursesService {
     });
     const [view] = await this.views([updated]);
     return view!;
+  }
+
+  /**
+   * POST /admin/courses/bulk — each course curated like PATCH /admin/courses/:id. Featuring stops
+   * once LEARNING_FEATURED_LIMIT visible courses are featured; the rest fail with the reason.
+   */
+  async bulk(ctx: AuthContext, input: AdminCoursesBulkInput, ip?: string): Promise<BulkResult> {
+    let featuredVisible = 0;
+    if (input.action === 'feature') {
+      const [row] = await this.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(courses)
+        .where(and(eq(courses.featured, true), eq(courses.hidden, false), isNull(courses.removedAt)));
+      featuredVisible = row?.n ?? 0;
+    }
+    return runEach(
+      input.ids,
+      async (id) => {
+        if (!isUuid(id)) throw Errors.notFound('Course');
+        const [course] = await this.db.select().from(courses).where(eq(courses.id, id.toLowerCase())).limit(1);
+        if (!course) throw Errors.notFound('Course');
+        switch (input.action) {
+          case 'feature': {
+            if (course.featured) throw Errors.conflict('Already featured');
+            const visible = !course.hidden && !course.removedAt;
+            if (visible && featuredVisible >= LEARNING_FEATURED_LIMIT) {
+              throw Errors.conflict(`The Learning page shows up to ${LEARNING_FEATURED_LIMIT} featured courses. Unfeature one first.`);
+            }
+            await this.curate(ctx, course.id, { featured: true }, ip);
+            if (visible) featuredVisible += 1;
+            return;
+          }
+          case 'unfeature':
+            if (!course.featured) throw Errors.conflict('Not featured');
+            return this.curate(ctx, course.id, { featured: false }, ip);
+          case 'hide':
+            if (course.hidden) throw Errors.conflict('Already hidden');
+            return this.curate(ctx, course.id, { hidden: true }, ip);
+          case 'show':
+            if (!course.hidden) throw Errors.conflict('Not hidden');
+            return this.curate(ctx, course.id, { hidden: false }, ip);
+        }
+      },
+      this.log,
+    );
   }
 
   /** GET /admin/learning/sync-runs — newest first. */

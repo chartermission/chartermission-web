@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BulkIds } from "./admin-ops.js";
 import { QueryBoolean } from "./common.js";
 
 /*
@@ -314,6 +315,14 @@ export const UpdateCourseCurationInput = z
   .object({ hidden: z.boolean().optional(), featured: z.boolean().optional() })
   .refine((v) => v.hidden !== undefined || v.featured !== undefined, "Nothing to change");
 export type UpdateCourseCurationInput = z.infer<typeof UpdateCourseCurationInput>;
+
+/**
+ * POST /admin/courses/bulk (course.curate) → BulkResult. Feature / unfeature / hide / show, each
+ * like PATCH /admin/courses/:id. Featuring stops at LEARNING_FEATURED_LIMIT visible featured
+ * courses: the extra rows fail with a reason.
+ */
+export const AdminCoursesBulkInput = z.object({ ids: BulkIds, action: z.enum(["feature", "unfeature", "hide", "show"]) });
+export type AdminCoursesBulkInput = z.infer<typeof AdminCoursesBulkInput>;
 
 export const SyncRunKind = z.enum(["sync", "link_check"]);
 export type SyncRunKind = z.infer<typeof SyncRunKind>;

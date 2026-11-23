@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BulkIds } from "./admin-ops.js";
 import { CountryCode, MemberRef, PageRef } from "./common.js";
 import { ReactionCounts } from "./social.js";
 
@@ -209,10 +210,16 @@ export type ManagedPage = z.infer<typeof ManagedPage>;
 
 /* ------------------------------- Pages: admin console ------------------------------- */
 
-/** GET /admin/pages (pages.manage) */
+/**
+ * GET /admin/pages (pages.manage). sort: newest (the default: pages waiting for review first, then
+ * newest), followers (most first) or name (A–Z). verified: yes / no for the tick.
+ */
 export const AdminPagesQuery = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(["all", "pending", "active", "rejected", "suspended"]).default("all"),
+  category: PageCategory.optional(),
+  verified: z.enum(["yes", "no"]).optional(),
+  sort: z.enum(["newest", "followers", "name"]).default("newest"),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -271,6 +278,21 @@ export const AdminPageStatusInput = z
   .object({ action: z.enum(["approve", "reject", "suspend", "restore"]), note: z.string().trim().max(500).optional() })
   .refine((v) => (v.action !== "reject" && v.action !== "suspend") || !!v.note, { path: ["note"], message: "Say why, so the page’s admins know what to fix" });
 export type AdminPageStatusInput = z.infer<typeof AdminPageStatusInput>;
+
+/**
+ * POST /admin/pages/bulk (pages.manage) → BulkResult. Each page goes through the same rules as
+ * the single actions: verify / unverify set the tick, suspend (live pages, note required) and
+ * restore (suspended pages) change the status and tell the page's admins, delete removes the page
+ * with its posts and followers.
+ */
+export const AdminPagesBulkInput = z
+  .object({
+    ids: BulkIds,
+    action: z.enum(["verify", "unverify", "suspend", "restore", "delete"]),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => v.action !== "suspend" || !!v.note, { path: ["note"], message: "Say why, so the page’s admins know what to fix" });
+export type AdminPagesBulkInput = z.infer<typeof AdminPagesBulkInput>;
 
 /* ------------------------------- Verification ------------------------------- */
 
@@ -333,9 +355,16 @@ export const VerificationStatus = z.object({
 });
 export type VerificationStatus = z.infer<typeof VerificationStatus>;
 
-/** GET /admin/verification (members.manage) */
+/**
+ * GET /admin/verification (members.manage). q searches the applicant's name, email and the page
+ * name; type limits to member or page requests. sort: oldest or newest first; left out, pending
+ * requests come oldest first (first in, first reviewed) and the rest newest first.
+ */
 export const AdminVerificationQuery = z.object({
   status: z.enum(["pending", "approved", "declined", "all"]).default("pending"),
+  q: z.string().trim().max(100).optional(),
+  type: z.enum(["member", "page"]).optional(),
+  sort: z.enum(["oldest", "newest"]).optional(),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -354,6 +383,16 @@ export const AdminVerificationDecisionInput = z
   .object({ decision: z.enum(["approve", "decline"]), note: z.string().trim().max(500).optional() })
   .refine((v) => v.decision !== "decline" || !!v.note, { path: ["note"], message: "Say why, so the applicant knows what to change" });
 export type AdminVerificationDecisionInput = z.infer<typeof AdminVerificationDecisionInput>;
+
+/**
+ * POST /admin/verification/bulk (members.manage) → BulkResult. Decides each waiting request like
+ * the single decision (same emails, notifications and audit). One note applies to all; it is
+ * required to decline.
+ */
+export const AdminVerificationBulkInput = z
+  .object({ ids: BulkIds, action: z.enum(["approve", "decline"]), note: z.string().trim().max(500).optional() })
+  .refine((v) => v.action !== "decline" || !!v.note, { path: ["note"], message: "Say why, so the applicants know what to change" });
+export type AdminVerificationBulkInput = z.infer<typeof AdminVerificationBulkInput>;
 
 /** GET /admin/queues: open items per review queue, for the console sidebar. */
 export type AdminQueueCounts = { pages: number; verification: number };

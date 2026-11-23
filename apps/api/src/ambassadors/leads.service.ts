@@ -13,7 +13,9 @@ import {
   type AdminLeadDetail,
   type AdminLeadSummary,
   type AdminLeadsPage,
+  type AdminLeadsBulkInput,
   type AdminLeadsQuery,
+  type BulkResult,
   type CertifyLeadInput,
   type EndTermInput,
   type CountryRef,
@@ -55,12 +57,14 @@ import {
   users,
 } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
+import { runEach } from '../common/bulk.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { AuditService } from '../infra/audit.service.js';
 import { SettingsService } from '../infra/settings.service.js';
 import { isUniqueViolation } from '../moderation/util.js';
 import { AmbassadorMailer } from './ambassador-mail.js';
-import { assertCovers, scopeFor, type AmbassadorScope } from './ambassador-scope.js';
+import { assertCovers, covers, scopeFor, scopeForUserId, type AmbassadorScope } from './ambassador-scope.js';
+import { isUuid } from '../media/uuid-param.js';
 
 type LeadRow = typeof ambassadorLeads.$inferSelect;
 type CreateLead = z.output<typeof CreateLeadSchema>;
@@ -277,6 +281,28 @@ export class LeadsService {
     }
     await this.audit.record({ actorId: ctx.user.id, action: 'ambassador.lead.update', targetType: 'ambassador_lead', targetId: id, after: { fields: changed, scoreTotal: patch.scoreTotal }, ip });
     return this.detail(ctx, id);
+  }
+
+  /**
+   * POST /admin/ambassadors/leads/bulk — assign: gives each lead a new owner like PATCH (activity,
+   * audit). A lead fails when the owner doesn't cover its country.
+   */
+  async bulkAssign(ctx: AuthContext, input: AdminLeadsBulkInput, ip?: string): Promise<BulkResult> {
+    await this.assertTeamMember(input.ownerId);
+    const [scope, ownerScope, people] = await Promise.all([scopeFor(this.db, ctx.user), scopeForUserId(this.db, input.ownerId), this.names([input.ownerId])]);
+    const ownerName = people.get(input.ownerId)?.name ?? 'This person';
+    return runEach(
+      input.ids,
+      async (id) => {
+        if (!isUuid(id)) throw Errors.notFound('That lead');
+        const lead = await this.load(id, scope);
+        if (!covers(ownerScope, lead.countryCode)) {
+          throw Errors.validation({ ownerId: `${ownerName} doesn’t cover ${await this.countryName(lead.countryCode)}` });
+        }
+        return this.update(ctx, id, { ownerId: input.ownerId }, ip);
+      },
+      this.log,
+    );
   }
 
   /** POST /admin/ambassadors/leads/:id/stage — entering "onboarding" starts the checklist and emails the lead. */

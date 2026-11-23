@@ -1,5 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import {
+  AdminCoursesBulkInput,
   AdminCoursesQuery,
   AdminLearningMembersQuery,
   CoursesQuery,
@@ -10,6 +11,7 @@ import {
   CursorQuery,
   UpdateCourseCurationInput,
   type AdminCourseView,
+  type BulkResult,
   type CourseDetail,
   type CourseSummary,
   type LearningHub,
@@ -175,6 +177,14 @@ export class AdminLearningController {
   @Access('admin', 'course.curate')
   list(@ZQuery(AdminCoursesQuery) q: AdminCoursesQuery): Promise<Page<AdminCourseView>> {
     return this.admin.list(q);
+  }
+
+  /** Feature, unfeature, hide or show several courses: { ids, action }. */
+  @Post('courses/bulk')
+  @HttpCode(200)
+  @Access('admin', 'course.curate')
+  bulk(@Auth() ctx: AuthContext, @ZBody(AdminCoursesBulkInput) input: AdminCoursesBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.admin.bulk(ctx, input, clientIp(req));
   }
 
   @Patch('courses/:id')

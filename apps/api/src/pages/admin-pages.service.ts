@@ -1,12 +1,14 @@
-import { Injectable } from '@nestjs/common';
-import { and, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { Injectable, Logger } from '@nestjs/common';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type {
   AdminPageCreateInput,
   AdminPageRow,
   AdminPagesQuery,
   AdminPageStatusInput,
   AdminPageUpdateInput,
+  AdminPagesBulkInput,
   AdminQueueCounts,
+  BulkResult,
   Ok,
   Page,
   PageCategory,
@@ -21,6 +23,7 @@ import { AuditService } from '../infra/audit.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { SettingsService } from '../infra/settings.service.js';
 import { Errors } from '../common/errors.js';
+import { runEach } from '../common/bulk.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import { likePrefix, tsKey, uuidOr404 } from '../moderation/util.js';
 import { PagesService, type PageRow } from './pages.service.js';
@@ -35,6 +38,8 @@ const NEXT_STATUS: Record<AdminPageStatusInput['action'], { from: PageStatus[]; 
 /** Admin console → Pages: create pages, review the ones members create, verify, suspend and remove. */
 @Injectable()
 export class AdminPagesService {
+  private readonly log = new Logger('AdminPages');
+
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly pages: PagesService,
@@ -44,12 +49,44 @@ export class AdminPagesService {
     private readonly events: EventsService,
   ) {}
 
-  /** GET /admin/pages: pages waiting for review first, then newest. */
+  /**
+   * GET /admin/pages. newest (default): pages waiting for review first, then newest; followers:
+   * most followed first; name: A–Z.
+   */
   async list(q: AdminPagesQuery): Promise<Page<AdminPageRow>> {
-    const cursor = decodeCursor<{ o: number; t: string; id: string }>(q.cursor);
+    const cursor = decodeCursor<{ o?: number; t?: string; f?: number; n?: string; id: string }>(q.cursor);
     const conds: (SQL | undefined)[] = [];
     if (q.status !== 'all') conds.push(eq(pages.status, q.status));
     if (q.q) conds.push(or(ilike(pages.name, `%${likePrefix(q.q)}`), ilike(pages.slug, likePrefix(q.q))));
+    if (q.category) conds.push(eq(pages.category, q.category));
+    if (q.verified) conds.push(q.verified === 'yes' ? isNotNull(pages.verifiedAt) : isNull(pages.verifiedAt));
+
+    if (q.sort === 'followers') {
+      const followerCount = sql<number>`(select count(*)::int from ${follows} f where f.target_type = 'page' and f.target_id = ${pages.id}::text)`;
+      if (cursor) conds.push(sql`(${followerCount}, ${pages.id}) < (${Number(cursor.f)}::int, ${String(cursor.id)}::uuid)`);
+      const rows = await this.db
+        .select({ page: pages, f: followerCount })
+        .from(pages)
+        .where(and(...conds))
+        .orderBy(desc(followerCount), desc(pages.id))
+        .limit(q.limit + 1);
+      const page = paginate(rows, q.limit, (last) => ({ f: last.f, id: last.page.id }));
+      return { items: await this.rows(page.items.map((r) => r.page)), nextCursor: page.nextCursor };
+    }
+
+    if (q.sort === 'name') {
+      const nameKey = sql<string>`lower(${pages.name})`;
+      if (cursor) conds.push(sql`(${nameKey}, ${pages.id}) > (${String(cursor.n)}, ${String(cursor.id)}::uuid)`);
+      const rows = await this.db
+        .select({ page: pages, n: nameKey })
+        .from(pages)
+        .where(and(...conds))
+        .orderBy(asc(nameKey), asc(pages.id))
+        .limit(q.limit + 1);
+      const page = paginate(rows, q.limit, (last) => ({ n: last.n, id: last.page.id }));
+      return { items: await this.rows(page.items.map((r) => r.page)), nextCursor: page.nextCursor };
+    }
+
     const order = sql<number>`(case when ${pages.status} = 'pending' then 0 else 1 end)`;
     if (cursor) {
       conds.push(
@@ -203,6 +240,38 @@ export class AdminPagesService {
     });
     await this.audit.record({ actorId: ctx.user.id, action: 'page.deleted', targetType: 'page', targetId: id, before: { name: before.name, slug: before.slug }, ip });
     return { ok: true };
+  }
+
+  /**
+   * POST /admin/pages/bulk: the single actions one page at a time, so each keeps its rules,
+   * notifications and audit entry. Pages already in the asked state fail with the reason.
+   */
+  async bulk(ctx: AuthContext, input: AdminPagesBulkInput, ip?: string): Promise<BulkResult> {
+    return runEach(
+      input.ids,
+      async (rawId) => {
+        const id = uuidOr404(rawId, 'That page');
+        const page = await this.pages.findRow(id);
+        if (!page) throw Errors.notFound('That page');
+        switch (input.action) {
+          case 'verify':
+            if (page.verifiedAt) throw Errors.conflict('Already verified');
+            return this.update(ctx, id, { verified: true }, ip);
+          case 'unverify':
+            if (!page.verifiedAt) throw Errors.conflict('Not verified');
+            return this.update(ctx, id, { verified: false }, ip);
+          case 'suspend':
+            if (page.status !== 'active') throw Errors.conflict('Only live pages can be suspended');
+            return this.setStatus(ctx, id, { action: 'suspend', note: input.note }, ip);
+          case 'restore':
+            if (page.status !== 'suspended') throw Errors.conflict('Only suspended pages can be restored');
+            return this.setStatus(ctx, id, { action: 'restore' }, ip);
+          case 'delete':
+            return this.remove(ctx, id, ip);
+        }
+      },
+      this.log,
+    );
   }
 
   getSettings(): Promise<PagesSettings> {

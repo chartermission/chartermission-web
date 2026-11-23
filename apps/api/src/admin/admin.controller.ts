@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import {
   AdminActionInput,
   AdminAppealsQuery,
+  AdminHiddenBulkInput,
   AdminHiddenQuery,
   AdminQueueQuery,
   AdminTrendingQuery,
@@ -24,6 +25,7 @@ import {
   type AdminReportRow,
   type AdminTrendingResponse,
   type AuditEntry,
+  type BulkResult,
   type Ok,
   type Page,
   type QueueStats,
@@ -116,6 +118,14 @@ export class AdminModerationController {
   @Access('admin', 'moderation.view')
   hidden(@ZQuery(AdminHiddenQuery) q: AdminHiddenQuery): Promise<Page<AdminHiddenRow>> {
     return this.queue.hidden(q);
+  }
+
+  /** Restore several hidden posts and comments with one reason: { ids, action: 'restore', reason }. */
+  @Post('hidden/bulk')
+  @HttpCode(200)
+  @Access('admin', 'moderation.act')
+  bulkRestore(@Auth() ctx: AuthContext, @ZBody(AdminHiddenBulkInput) input: AdminHiddenBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.queue.bulkRestore(ctx, input, clientIp(req));
   }
 
   @Get('appeals')

@@ -1,9 +1,11 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from '@nestjs/common';
 import {
   AdminPageCreateInput,
+  AdminPagesBulkInput,
   AdminPagesQuery,
   AdminPageStatusInput,
   AdminPageUpdateInput,
+  AdminVerificationBulkInput,
   AdminVerificationDecisionInput,
   AdminVerificationQuery,
   PageAdminInput,
@@ -16,6 +18,7 @@ import {
   type AdminPageRow,
   type AdminQueueCounts,
   type AdminVerificationRow,
+  type BulkResult,
   type ManagedPage,
   type Ok,
   type Page,
@@ -175,6 +178,14 @@ export class AdminPagesController {
     return this.pages.create(ctx, input, clientIp(req));
   }
 
+  /** Verify, remove the tick, suspend, restore or delete several pages: { ids, action, note? }. */
+  @Post('pages/bulk')
+  @HttpCode(200)
+  @Access('admin', 'pages.manage')
+  bulk(@Auth() ctx: AuthContext, @ZBody(AdminPagesBulkInput) input: AdminPagesBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.pages.bulk(ctx, input, clientIp(req));
+  }
+
   @Patch('pages/:id')
   @Access('admin', 'pages.manage')
   update(@Auth() ctx: AuthContext, @Param('id') id: string, @ZBody(AdminPageUpdateInput) input: AdminPageUpdateInput, @Req() req: AppRequest): Promise<AdminPageRow> {
@@ -210,6 +221,14 @@ export class AdminPagesController {
   @Access('admin', 'members.manage')
   verificationQueue(@ZQuery(AdminVerificationQuery) q: AdminVerificationQuery): Promise<Page<AdminVerificationRow>> {
     return this.verification.adminList(q);
+  }
+
+  /** Approve or decline several waiting requests with one note: { ids, action, note? }. */
+  @Post('verification/bulk')
+  @HttpCode(200)
+  @Access('admin', 'members.manage')
+  bulkDecide(@Auth() ctx: AuthContext, @ZBody(AdminVerificationBulkInput) input: AdminVerificationBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.verification.bulkDecide(ctx, input, clientIp(req));
   }
 
   @Post('verification/:id/decision')

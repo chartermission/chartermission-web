@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import {
   VERIFICATION_REAPPLY_DAYS,
+  type AdminVerificationBulkInput,
   type AdminVerificationDecisionInput,
   type AdminVerificationQuery,
   type AdminVerificationRow,
+  type BulkResult,
   type Ok,
   type Page,
   type VerificationApplyInput,
@@ -21,8 +23,9 @@ import { PageRefsService } from '../core/page-refs.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { EventsService } from '../infra/events.service.js';
 import { Errors } from '../common/errors.js';
+import { runEach } from '../common/bulk.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
-import { DAY_MS, isUniqueViolation, tsKey, uuidOr404 } from '../moderation/util.js';
+import { DAY_MS, isUniqueViolation, likePrefix, tsKey, uuidOr404 } from '../moderation/util.js';
 import { PagesService, type PageRow } from './pages.service.js';
 
 type RequestRow = typeof verificationRequests.$inferSelect;
@@ -50,6 +53,8 @@ function view(r: RequestRow): VerificationRequestView {
  */
 @Injectable()
 export class VerificationService {
+  private readonly log = new Logger('Verification');
+
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly pagesService: PagesService,
@@ -165,14 +170,28 @@ export class VerificationService {
 
   /* ------------------------------------ Admin console ------------------------------------ */
 
-  /** GET /admin/verification: oldest first while pending (first in, first reviewed), newest first otherwise. */
+  /**
+   * GET /admin/verification: oldest first while pending (first in, first reviewed), newest first
+   * otherwise, unless sort says. q matches the applicant's name, handle or email, the legal name
+   * and the page's name.
+   */
   async adminList(q: AdminVerificationQuery): Promise<Page<AdminVerificationRow>> {
     const cursor = decodeCursor<{ t: string; id: string }>(q.cursor);
-    const pending = q.status === 'pending';
+    const oldestFirst = q.sort ? q.sort === 'oldest' : q.status === 'pending';
     const conds: (SQL | undefined)[] = [q.status === 'all' ? undefined : eq(verificationRequests.status, q.status)];
+    if (q.type) conds.push(eq(verificationRequests.subjectType, q.type));
+    if (q.q) {
+      const pat = `%${likePrefix(q.q)}`;
+      conds.push(sql`(
+        ${verificationRequests.legalName} ilike ${pat}
+        or exists (select 1 from ${users} u left join ${memberProfiles} mp on mp.user_id = u.id
+          where u.id = ${verificationRequests.userId} and (u.email ilike ${pat} or mp.display_name ilike ${pat} or mp.handle ilike ${pat}))
+        or exists (select 1 from ${pages} pg where pg.id = ${verificationRequests.pageId} and pg.name ilike ${pat})
+      )`);
+    }
     if (cursor) {
       conds.push(
-        pending
+        oldestFirst
           ? sql`(${verificationRequests.createdAt}, ${verificationRequests.id}) > (${String(cursor.t)}::timestamptz, ${String(cursor.id)}::uuid)`
           : sql`(${verificationRequests.createdAt}, ${verificationRequests.id}) < (${String(cursor.t)}::timestamptz, ${String(cursor.id)}::uuid)`,
       );
@@ -181,7 +200,7 @@ export class VerificationService {
       .select({ r: verificationRequests, t: tsKey(verificationRequests.createdAt) })
       .from(verificationRequests)
       .where(and(...conds))
-      .orderBy(...(pending ? [verificationRequests.createdAt, verificationRequests.id] : [desc(verificationRequests.createdAt), desc(verificationRequests.id)]))
+      .orderBy(...(oldestFirst ? [verificationRequests.createdAt, verificationRequests.id] : [desc(verificationRequests.createdAt), desc(verificationRequests.id)]))
       .limit(q.limit + 1);
     const page = paginate(rows, q.limit, (last) => ({ t: last.t, id: last.r.id }));
     return { items: await this.adminRows(page.items.map((x) => x.r)), nextCursor: page.nextCursor };
@@ -285,5 +304,9 @@ export class VerificationService {
     await this.events.emit({ type: 'verification.decided', requestId: row.id });
     return (await this.adminRows([row]))[0]!;
   }
-}
 
+  /** POST /admin/verification/bulk: each waiting request decided like the single decision. */
+  async bulkDecide(ctx: AuthContext, input: AdminVerificationBulkInput, ip?: string): Promise<BulkResult> {
+    return runEach(input.ids, (id) => this.decide(ctx, id, { decision: input.action, note: input.note }, ip), this.log);
+  }
+}
