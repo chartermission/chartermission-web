@@ -163,9 +163,14 @@ export class DraftsService implements OnModuleInit {
     }
     const byClaude = via?.kind === 'oauth';
     const source = byClaude ? 'claude' : row.source;
-    // A paused post stays paused when its author edits or moves it; only the team releases it.
+    // A paused post stays paused when its author edits or moves it; only the team releases it. Taking
+    // it off the schedule would let it be published straight away, so that waits for the release too.
+    if (row.status === 'held' && !scheduledFor) {
+      throw Errors.conflict('The Charter Mission team paused this post. You can edit it or delete it, and unschedule it once they release it.');
+    }
     const status = scheduledFor ? (row.status === 'held' ? 'held' : 'scheduled') : 'draft';
-    const contentReview = await this.reviewAfterEdit(row, { scheduled: !!scheduledFor, source, byClaude });
+    const changed = JSON.stringify(payload) !== JSON.stringify(row.payload);
+    const contentReview = await this.reviewAfterEdit(row, { scheduled: !!scheduledFor, source, byClaude, changed });
     const [updated] = await this.db
       .update(postDrafts)
       .set({
@@ -177,9 +182,11 @@ export class DraftsService implements OnModuleInit {
         contentReview,
         ...(contentReview !== row.contentReview ? { contentReviewBy: null, contentReviewAt: null, contentReviewNote: contentReview === 'declined' ? row.contentReviewNote : null } : {}),
       })
-      .where(and(eq(postDrafts.id, id), eq(postDrafts.authorId, user.id)))
+      // Only if nobody (the team, the scheduler) changed its state since it was read.
+      .where(and(eq(postDrafts.id, id), eq(postDrafts.authorId, user.id), eq(postDrafts.status, row.status)))
       .returning();
-    const [view] = await this.views([updated!]);
+    if (!updated) throw Errors.conflict('This post changed while you were editing it. Reload it and try again.');
+    const [view] = await this.views([updated]);
     return view!;
   }
 
@@ -187,9 +194,15 @@ export class DraftsService implements OnModuleInit {
    * The team's review after an edit. In "approve before publishing" mode a scheduled post written
    * with Claude needs approval: again after Claude changes it, and after a declined one is
    * rescheduled. Unscheduling drops a pending review; a decline stays so the author sees the note.
+   * An approval covers the text the team saw: Claude editing the post, or anyone changing its
+   * content, drops it (so publishing it later, scheduled or not, is reviewed again).
    */
-  private async reviewAfterEdit(row: DraftRow, next: { scheduled: boolean; source: string; byClaude: boolean }): Promise<string | null> {
-    const current = row.contentReview;
+  private async reviewAfterEdit(
+    row: DraftRow,
+    next: { scheduled: boolean; source: string; byClaude: boolean; changed: boolean },
+  ): Promise<string | null> {
+    const stale = row.contentReview === 'approved' && (next.byClaude || next.changed);
+    const current = stale ? null : row.contentReview;
     if (!next.scheduled) return current === 'pending' ? null : current;
     const required = next.source === 'claude' && (await this.posts.claudeApprovalRequired());
     if (!required) return current === 'declined' ? null : current;
@@ -272,7 +285,9 @@ export class DraftsService implements OnModuleInit {
         });
         await this.db.delete(postDrafts).where(eq(postDrafts.id, id));
         await this.recordPublished(claimed, post.id);
-        if (post.status === 'published') {
+        // As before for posts that went out, or wait for their files or the chapter team; not for
+        // ones that now wait for the Charter Mission team's approval (the author is told then).
+        if (post.status !== 'awaiting_approval') {
           await this.events.emit({ type: 'scheduled.published', draftId: id, postId: post.id, authorId: claimed.authorId });
         }
         published++;

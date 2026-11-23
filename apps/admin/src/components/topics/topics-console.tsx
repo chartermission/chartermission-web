@@ -15,7 +15,7 @@ import { RowMenu } from "@/components/row-menu";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { csvRows, datedFileName, downloadText } from "@/lib/csv";
+import { csvExport, datedFileName, downloadText } from "@/lib/csv";
 import { useT } from "@/i18n/client";
 
 type Filter = "all" | "featured" | "active" | "disabled";
@@ -96,7 +96,7 @@ export function TopicsConsole({ initial }: { initial: AdminTopicRow[] }) {
   function exportCsv() {
     downloadText(
       datedFileName("topics"),
-      csvRows([
+      csvExport([
         ["tag", "description", "featured", "status", "posts", "followers"],
         ...visible.map((r) => [r.display, r.description ?? "", r.featured ? "yes" : "no", r.status === "active" ? "active" : "inactive", r.postCount, r.followerCount]),
       ]),

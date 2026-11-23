@@ -14,7 +14,7 @@ import { RowMenu } from "@/components/row-menu";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { csvRows, datedFileName, downloadText } from "@/lib/csv";
+import { csvExport, datedFileName, downloadText } from "@/lib/csv";
 import { WEB_URL } from "@/lib/navigation";
 import { BulkPictureUpload } from "./bulk-upload";
 import { PictureField } from "./picture-field";
@@ -123,7 +123,7 @@ export function ChaptersConsole({ initial, countries, postRule }: { initial: Adm
   function exportCsv() {
     downloadText(
       datedFileName("chapters"),
-      csvRows([
+      csvExport([
         ["name", "slug", "country", "region", "status", "hashtag", "members", "posts", "post_rule"],
         ...visible.map((r) => [
           r.name,

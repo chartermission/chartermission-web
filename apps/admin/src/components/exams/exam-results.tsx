@@ -9,7 +9,7 @@ import { EmptyState, ErrorState } from "@/components/states";
 import { DateTime } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { csvRows, downloadText } from "@/lib/exam-csv";
+import { csvExport, downloadText } from "@/lib/csv";
 import { useT } from "@/i18n/client";
 import { attemptOutcome, formatDuration } from "./exam-labels";
 
@@ -143,7 +143,7 @@ export function ExamResults({ exam, onChange }: { exam: AdminExamDetail; onChang
         a.durationSeconds,
         a.certificate?.status ?? "",
       ]);
-      downloadText(`${exam.slug}-results.csv`, csvRows([header, ...lines]));
+      downloadText(`${exam.slug}-results.csv`, csvExport([header, ...lines]));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {

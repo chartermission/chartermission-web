@@ -24,3 +24,27 @@ export function paginate<T>(rows: T[], limit: number, cursorOf: (last: T) => Rec
   const last = items[items.length - 1];
   return { items, nextCursor: hasMore && last ? encodeCursor(cursorOf(last)) : null };
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Checks the fields a keyset cursor carries before they reach SQL casts, so a tampered or stale
+ * cursor is a 400, not a database error: 'uuid', 'date' (ISO timestamp), 'int' or 'text'.
+ */
+export function checkCursor(cursor: Record<string, unknown> | null, fields: Record<string, 'uuid' | 'date' | 'int' | 'text'>): void {
+  if (!cursor) return;
+  for (const [key, type] of Object.entries(fields)) {
+    const v = cursor[key];
+    const ok =
+      v === undefined
+        ? false
+        : type === 'uuid'
+          ? typeof v === 'string' && UUID_RE.test(v)
+          : type === 'date'
+            ? typeof v === 'string' && !Number.isNaN(Date.parse(v))
+            : type === 'int'
+              ? Number.isInteger(typeof v === 'string' ? Number(v) : v)
+              : typeof v === 'string';
+    if (!ok) throw Errors.badRequest('Invalid cursor');
+  }
+}

@@ -24,7 +24,7 @@ import { EventsService } from '../infra/events.service.js';
 import { SettingsService } from '../infra/settings.service.js';
 import { Errors } from '../common/errors.js';
 import { runEach } from '../common/bulk.js';
-import { decodeCursor, paginate } from '../common/cursor.js';
+import { checkCursor, decodeCursor, paginate } from '../common/cursor.js';
 import { likePrefix, tsKey, uuidOr404 } from '../moderation/util.js';
 import { PagesService, type PageRow } from './pages.service.js';
 
@@ -61,6 +61,7 @@ export class AdminPagesService {
     if (q.category) conds.push(eq(pages.category, q.category));
     if (q.verified) conds.push(q.verified === 'yes' ? isNotNull(pages.verifiedAt) : isNull(pages.verifiedAt));
 
+    if (cursor) checkCursor(cursor, { id: 'uuid', ...(q.sort === 'followers' ? { f: 'int' } : q.sort === 'name' ? { n: 'text' } : { o: 'int', t: 'date' }) });
     if (q.sort === 'followers') {
       const followerCount = sql<number>`(select count(*)::int from ${follows} f where f.target_type = 'page' and f.target_id = ${pages.id}::text)`;
       if (cursor) conds.push(sql`(${followerCount}, ${pages.id}) < (${Number(cursor.f)}::int, ${String(cursor.id)}::uuid)`);

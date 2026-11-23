@@ -16,7 +16,7 @@ import { Age } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage, isApiError } from "@/lib/api/client";
 import { STAGE_TABS, STAGE_TONE, leadsSearch, type LeadsView } from "@/lib/ambassadors";
-import { csvRows, datedFileName, downloadText } from "@/lib/csv";
+import { csvExport, datedFileName, downloadText } from "@/lib/csv";
 import { LeadFields, leadInputFromForm } from "./lead-fields";
 import { Field, FormModal, SelectBox } from "./modal";
 import { useT } from "@/i18n/client";
@@ -66,7 +66,7 @@ export function LeadsWorkspace({ view, page, team }: { view: LeadsView; page: Ad
       l.createdAt.slice(0, 10),
       l.updatedAt.slice(0, 10),
     ]);
-    downloadText(datedFileName("ambassador-leads"), csvRows([header, ...rows]));
+    downloadText(datedFileName("ambassador-leads"), csvExport([header, ...rows]));
     toast(t("{count} leads exported.", { count: rows.length }));
   }
 

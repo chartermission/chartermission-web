@@ -291,6 +291,10 @@ export class PostsService implements OnModuleInit {
       throw Errors.forbidden(post.pageId ? 'Only the page’s admins can edit this post' : 'Only the author can edit this post');
     }
     assertNotRestricted(user);
+    // With "approve before publishing", Claude can't change a live post the team never saw in its new form.
+    if (origin.via?.kind === 'oauth' && post.status === 'published' && (await this.claudeApprovalRequired())) {
+      throw Errors.conflict('Posts that are already live can’t be edited with Claude while the Charter Mission team approves Claude posts. Edit it on Charter Mission instead.');
+    }
     checkBody(post.type, input.body);
     const attached = await this.db
       .select({ fileId: postAttachments.fileId, kind: postAttachments.kind })
@@ -648,6 +652,11 @@ export class PostsService implements OnModuleInit {
       .where(and(eq(posts.id, postId), eq(posts.status, 'awaiting_approval'), isNull(posts.deletedAt)))
       .returning();
     if (!settled) return null;
+    // A poll runs for its full length from when it goes live, not from when Claude wrote it.
+    await this.db
+      .update(polls)
+      .set({ closesAt: sql`${polls.closesAt} + (${now.toISOString()}::timestamptz - ${post.createdAt.toISOString()}::timestamptz)` })
+      .where(eq(polls.postId, settled.id));
     if (next === 'published') await this.announce(settled);
     else await this.events.emit({ type: 'chapter.post_pending', postId: settled.id, chapterId: settled.chapterId!, authorId: settled.authorId });
     return next;

@@ -24,7 +24,7 @@ import {
 import { InjectDb, type Db } from '../db/db.module.js';
 import { auditLog, chapters, files, mcpActions, pollOptions, polls, postAttachments, postDrafts, posts } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
-import { decodeCursor, paginate } from '../common/cursor.js';
+import { checkCursor, decodeCursor, paginate } from '../common/cursor.js';
 import { runEach } from '../common/bulk.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { MembersService, mediaUrl } from '../core/members.service.js';
@@ -150,6 +150,7 @@ export class ContentCalendarService {
     // Upcoming work reads soonest first; what already happened reads newest first.
     const ascending = !!q.from || ['scheduled', 'held', 'awaiting_approval', 'failed'].includes(q.state);
     const c = decodeCursor<{ t: string; k: string; id: string }>(q.cursor);
+    checkCursor(c, { t: 'date', k: 'text', id: 'uuid' });
     if (c) {
       conds.push(
         ascending
@@ -614,7 +615,13 @@ export class ContentCalendarService {
       }
       case 'cancel':
         if (!['scheduled', 'held', 'failed'].includes(row.status)) throw Errors.conflict('Only scheduled posts can be cancelled');
-        change = { status: 'draft', scheduledFor: null, lastError: null, ...(row.contentReview === 'pending' ? { contentReview: null } : {}) };
+        // Back to the author's drafts with no approval kept: publishing it later is reviewed again.
+        change = {
+          status: 'draft',
+          scheduledFor: null,
+          lastError: null,
+          ...(row.contentReview === 'pending' || row.contentReview === 'approved' ? { contentReview: null, contentReviewBy: null, contentReviewAt: null } : {}),
+        };
         from = [row.status];
         break;
       case 'approve':

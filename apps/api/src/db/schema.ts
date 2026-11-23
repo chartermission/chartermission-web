@@ -3014,5 +3014,7 @@ export const mcpActions = pgTable(
     index('mcp_actions_user_action_idx').on(t.userId, t.action, t.createdAt),
     index('mcp_actions_user_created_idx').on(t.userId, t.createdAt),
     index('mcp_actions_grant_idx').on(t.grantId, t.createdAt),
+    /** Content calendar: the Claude activity for a post or draft. */
+    index('mcp_actions_target_idx').on(t.targetType, t.targetId),
   ],
 );

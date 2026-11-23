@@ -21,7 +21,7 @@ import { SkeletonTable } from "@/components/skeletons";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { csvRows, datedFileName, downloadText } from "@/lib/csv";
+import { csvExport, datedFileName, downloadText } from "@/lib/csv";
 import { useT } from "@/i18n/client";
 import { AddOptionsDialog, ImportModeDialog, MergeDialog, RenameDialog } from "./dialogs";
 import { KIND_LABELS, optionsPath } from "./kinds";
@@ -146,7 +146,7 @@ export function ProfileOptionsConsole({ summary: initialSummary, initial }: { su
 
   function exportCsv() {
     const rows = ordered.map((r) => [r.name, r.slug, r.position, r.status, r.usage]);
-    downloadText(datedFileName(`profile-options-${kind}`), csvRows([["name", "slug", "position", "status", "usage"], ...rows]));
+    downloadText(datedFileName(`profile-options-${kind}`), csvExport([["name", "slug", "position", "status", "usage"], ...rows]));
   }
 
   const canMove = sort === "position";

@@ -253,6 +253,13 @@
       "when": 1795423754562,
       "tag": "0035_members_list_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795425513385,
+      "tag": "0036_mcp_actions_target_index",
+      "breakpoints": true
     }
   ]
 }

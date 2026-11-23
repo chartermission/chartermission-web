@@ -3,7 +3,19 @@
  * uses (comma, semicolon or tab) and written as UTF-8 with a BOM so Excel opens accents correctly.
  */
 export { parseCsv, csvRows, downloadText } from "./exam-csv";
-import { parseCsv } from "./exam-csv";
+import { csvRows, parseCsv } from "./exam-csv";
+
+/** A cell a spreadsheet would run as a formula (= + - @, or a tab/return in front). */
+const FORMULA = /^[=+\-@\t\r]/;
+
+/**
+ * CSV for files people download and open in Excel or Sheets. Text members wrote can start like a
+ * formula, so such cells get a leading apostrophe (shown as plain text; our imports remove it).
+ * Use csvRows only for templates.
+ */
+export function csvExport(rows: (string | number | null | undefined)[][]): string {
+  return csvRows(rows.map((r) => r.map((c) => (typeof c === "string" && FORMULA.test(c) ? `'${c}` : c))));
+}
 
 /** Header names compared loosely: "Display Name" and "display_name" are the same column. */
 export const csvHeaderKey = (h: string) =>
@@ -22,7 +34,8 @@ export function csvRecords(text: string): { header: string[]; records: { row: nu
   const records = rows.slice(1).map((cells, index) => {
     const values: Record<string, string> = {};
     header.forEach((h, i) => {
-      if (h) values[h] = (cells[i] ?? "").trim();
+      // An apostrophe our exports put before formula-like text is not part of the value.
+      if (h) values[h] = (cells[i] ?? "").trim().replace(/^'(?=[=+\-@])/, "");
     });
     return { row: index + 2, values };
   });

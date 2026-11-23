@@ -1,0 +1,1 @@
+CREATE INDEX "mcp_actions_target_idx" ON "mcp_actions" USING btree ("target_type","target_id");

@@ -93,7 +93,13 @@ export type AdminMemberOverview = {
 /* ---------------- Referrals, topics, chapters, moderation ---------------- */
 
 /** A calendar day, YYYY-MM-DD (UTC). */
-const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-23");
+const Day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-23")
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(v);
+  }, "That date doesn’t exist");
 
 /** How far back "Top inviters" counts. */
 export const ReferralPeriod = z.enum(["30d", "90d", "all"]);

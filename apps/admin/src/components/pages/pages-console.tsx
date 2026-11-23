@@ -24,7 +24,7 @@ import { EmptyState } from "@/components/states";
 import { DateTime } from "@/components/time";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { csvRows, datedFileName, downloadText } from "@/lib/csv";
+import { csvExport, datedFileName, downloadText } from "@/lib/csv";
 import { formatCount } from "@/lib/format";
 import { webHref } from "@/lib/navigation";
 import { T, useT } from "@/i18n/client";
@@ -244,7 +244,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
         p.posts,
         p.createdAt.slice(0, 10),
       ]);
-      downloadText(datedFileName("pages"), csvRows([header, ...rows]));
+      downloadText(datedFileName("pages"), csvExport([header, ...rows]));
       toast(t("{count} pages exported.", { count: all.length }));
     } catch (e) {
       toast(errorMessage(e), "error");

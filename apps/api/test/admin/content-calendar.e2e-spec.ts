@@ -241,6 +241,34 @@ describe('Admin: content calendar of posts written with Claude', () => {
     expect(told.some((n) => JSON.stringify(n.data).includes('paused your scheduled post'))).toBe(true);
   });
 
+  it('closes the ways round a review: unscheduling a held post, Claude changing an approved one, Claude editing a live post', async () => {
+    // A held post can't be taken off the schedule (and then published straight away) by its author or Claude.
+    const held = await claudeDraft(amara.id, 'Paused announcement');
+    await mod.post(`/admin/content-calendar/draft/${held.id}/actions`, { action: 'hold', note: 'Wait for the date' }).expect(200);
+    await amara.patch(`/me/drafts/${held.id}`, { payload: { body: 'Paused announcement' }, scheduledFor: null }).expect(409);
+    await amaraClaude.patch(`/me/drafts/${held.id}`, { payload: { body: 'Paused announcement' }, scheduledFor: null }).expect(409);
+    await amara.post(`/me/drafts/${held.id}/publish`).expect(409);
+    expect((await t.db.select().from(s.postDrafts).where(eq(s.postDrafts.id, held.id)))[0]!.status).toBe('held');
+
+    await setMode('before');
+    // An approval covers the text the team saw: Claude rewriting and unscheduling it drops the approval,
+    // so publishing it now waits for the team again.
+    const draft = await claudeDraft(amara.id, 'Approved wording', { contentReview: 'pending' });
+    await mod.post(`/admin/content-calendar/draft/${draft.id}/actions`, { action: 'approve' }).expect(200);
+    const edited = await amaraClaude.patch(`/me/drafts/${draft.id}`, { payload: { body: 'Different wording' }, scheduledFor: null }).expect(200);
+    expect(edited.body.review).toBeNull();
+    const published = await amaraClaude.post(`/me/drafts/${draft.id}/publish`).expect(200);
+    expect(published.body.status).toBe('awaiting_approval');
+    await reader.get(`/posts/${published.body.id}`).expect(404);
+
+    // Claude can't rewrite a post that is already live while approval is required; the member still can.
+    const live = await amara.post('/posts', { body: 'Live already' }).expect(201);
+    await amaraClaude.patch(`/posts/${live.body.id}`, { body: 'Rewritten by Claude' }).expect(409);
+    await amara.patch(`/posts/${live.body.id}`, { body: 'Edited by Amara' }).expect(200);
+    await setMode('after');
+    await amaraClaude.patch(`/posts/${live.body.id}`, { body: 'Edited with Claude' }).expect(200);
+  });
+
   it('reschedules and cancels scheduled posts', async () => {
     const draft = await claudeDraft(amara.id, 'Move me');
     await mod.post(`/admin/content-calendar/draft/${draft.id}/actions`, { action: 'reschedule', scheduledFor: new Date(Date.now() - 60_000).toISOString() }).expect(422);
