@@ -1,5 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from '@nestjs/common';
 import {
+  AdminLeadsBulkInput,
   AdminLeadsQuery,
   AmbassadorTrainingInput,
   CertifyLeadInput,
@@ -16,6 +17,7 @@ import {
   type AdminLeadDetail,
   type AdminLeadsPage,
   type AmbassadorTrainingView,
+  type BulkResult,
   type ManagerView,
   type TeamMember,
 } from '@chartermission/contracts';
@@ -49,6 +51,14 @@ export class AdminAmbassadorsController {
   @Access('admin', 'ambassador.manage')
   create(@Auth() ctx: AuthContext, @ZBody(CreateLeadInput) input: CreateLeadInput, @Req() req: AppRequest): Promise<AdminLeadDetail> {
     return this.leads.create(ctx, input, clientIp(req));
+  }
+
+  /** Give several leads a new owner: { ids, action: 'assign', ownerId }. */
+  @Post('leads/bulk')
+  @HttpCode(200)
+  @Access('admin', 'ambassador.manage')
+  bulk(@Auth() ctx: AuthContext, @ZBody(AdminLeadsBulkInput) input: AdminLeadsBulkInput, @Req() req: AppRequest): Promise<BulkResult> {
+    return this.leads.bulkAssign(ctx, input, clientIp(req));
   }
 
   @Get('leads/:id')

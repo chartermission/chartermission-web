@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { and, asc, count, eq, gt, inArray, notInArray, or, sql } from 'drizzle-orm';
 import type {
+  AdminActionInput,
   AdminAppealRow,
   AdminAppealsQuery,
+  AdminHiddenBulkInput,
   AdminHiddenQuery,
   AdminQueueBulkInput,
   AdminHiddenRow,
@@ -39,7 +41,7 @@ import { AuditService } from '../infra/audit.service.js';
 import { TargetsService, targetKey } from '../moderation/targets.service.js';
 import { formerMember, ModerationActionsService } from '../moderation/actions.service.js';
 import { OPEN_STATUSES } from '../moderation/reports.service.js';
-import { iso, truncate, tsKey, uuidOr404 } from '../moderation/util.js';
+import { iso, likePrefix, truncate, tsKey, uuidOr404 } from '../moderation/util.js';
 
 type ReportRow = typeof contentReports.$inferSelect;
 
@@ -64,7 +66,11 @@ function mostCommon<T extends string>(values: T[]): T {
 /** Report queue, case detail, hidden content and appeals for the admin console (CM-ADM-02/06). */
 @Injectable()
 export class AdminQueueService {
+<<<<<<< HEAD
   private readonly log = new Logger(AdminQueueService.name);
+=======
+  private readonly log = new Logger('AdminQueue');
+>>>>>>> ws/D
 
   constructor(
     @InjectDb() private readonly db: Db,
@@ -389,6 +395,46 @@ export class AdminQueueService {
     return rep;
   }
 
+  /**
+   * POST /admin/hidden/bulk — restores each hidden or removed post or comment like a direct
+   * "restore" action (author notified, reports closed, audited), with the policy of the action that
+   * hid it. Ids are post or comment ids.
+   */
+  async bulkRestore(ctx: AuthContext, input: AdminHiddenBulkInput, ip?: string): Promise<BulkResult> {
+    return runEach(
+      input.ids,
+      async (rawId) => {
+        const id = uuidOr404(rawId, 'That post or comment');
+        const [post] = await this.db.select({ id: posts.id }).from(posts).where(eq(posts.id, id)).limit(1);
+        const type = post ? 'post' : 'comment';
+        if (!post) {
+          const [comment] = await this.db.select({ id: comments.id }).from(comments).where(eq(comments.id, id)).limit(1);
+          if (!comment) throw Errors.notFound('That post or comment');
+        }
+        const [hidBy] = await this.db
+          .select({ policyRef: moderationActions.policyRef })
+          .from(moderationActions)
+          .where(
+            and(
+              eq(moderationActions.targetType, type),
+              eq(moderationActions.targetId, id),
+              inArray(moderationActions.action, ['hide', 'remove']),
+              sql`${moderationActions.revokedAt} is null`,
+            ),
+          )
+          .orderBy(sql`${moderationActions.createdAt} desc`)
+          .limit(1);
+        return this.actions.act(
+          ctx,
+          { type, id },
+          { action: 'restore', reason: input.reason, policyRef: (hidBy?.policyRef ?? undefined) as AdminActionInput['policyRef'] },
+          { ip },
+        );
+      },
+      this.log,
+    );
+  }
+
   /** GET /admin/hidden — hidden or removed posts and comments with the action that hid them, newest first. */
   async hidden(q: AdminHiddenQuery): Promise<Page<AdminHiddenRow>> {
     const cur = decodeCursor<{ t: string; id: string }>(q.cursor);
@@ -426,6 +472,9 @@ export class AdminQueueService {
     }>(sql`
       select x.*, ${tsKey(sql`x.hidden_at`)} as hidden_key from (${sql.join(parts, sql` union all `)}) x
       where true ${cur ? sql`and (x.hidden_at, x.id) < (${cur.t}::timestamptz, ${cur.id}::uuid)` : sql``}
+        ${q.since ? sql`and x.hidden_at >= now() - ${q.since === '7d' ? 7 : 30} * interval '1 day'` : sql``}
+        ${q.by === 'moderator' ? sql`and x.action_id is not null` : q.by === 'automatic' ? sql`and x.action_id is null` : sql``}
+        ${q.q ? sql`and x.body ilike ${`%${likePrefix(q.q)}`}` : sql``}
       order by x.hidden_at desc, x.id desc
       limit ${q.limit + 1}`);
     const page = paginate(res.rows, q.limit, (r) => ({ t: r.hidden_key, id: r.id }));

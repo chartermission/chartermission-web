@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BulkIds } from "./admin-ops.js";
 
 /*
  * Ambassador programme (admin side): leads, the qualification pipeline, onboarding and the
@@ -271,6 +272,14 @@ export const AdminLeadsQuery = z.object({
 });
 export type AdminLeadsQuery = z.input<typeof AdminLeadsQuery>;
 
+/**
+ * POST /admin/ambassadors/leads/bulk (ambassador.manage) → BulkResult. assign: makes ownerId the
+ * owner of each lead, like PATCH /admin/ambassadors/leads/:id. A lead fails when the new owner
+ * doesn't cover its country, or when it is outside the viewer's countries.
+ */
+export const AdminLeadsBulkInput = z.object({ ids: BulkIds, action: z.literal("assign"), ownerId: z.uuid() });
+export type AdminLeadsBulkInput = z.input<typeof AdminLeadsBulkInput>;
+
 export const CreateManagerInput = z.object({
   name: z.string().trim().min(2, "Enter their name").max(80),
   email: z
@@ -400,7 +409,13 @@ export type AdminLeadDetail = AdminLeadSummary & {
   activity: LeadActivity[];
 };
 
-export type TeamMember = PersonRef & { email: string };
+export type TeamMember = PersonRef & {
+  email: string;
+  /** Covers every country (Platform Admins and unscoped managers). */
+  allCountries: boolean;
+  /** The countries they cover, when not allCountries. */
+  countryCodes: string[];
+};
 
 export type ManagerView = {
   userId: string;

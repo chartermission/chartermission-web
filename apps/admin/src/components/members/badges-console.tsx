@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { BADGE_ICONS, type AdminBadge, type AdminBadgeInput, type BadgeTone } from "@chartermission/contracts";
-import { Button, Chip, Icon, ProfileBadgeChip, type IconName } from "@chartermission/ui";
+import { Button, Chip, Icon, ProfileBadgeChip, cn, type IconName } from "@chartermission/ui";
 import { Field, FormModal, SelectBox } from "@/components/ambassadors/modal";
 import { TextField } from "@/components/form-field";
 import { ReasonDialog } from "@/components/reason-dialog";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { useT } from "@/i18n/client";
+import { T, useT } from "@/i18n/client";
 
 const TONES: { value: BadgeTone; label: string }[] = [
   { value: "primary", label: "Green" },
@@ -37,7 +38,7 @@ const ICON_LABELS: Record<(typeof BADGE_ICONS)[number], string> = {
   trending: "Trending",
 };
 
-/** Badge catalogue (GET /admin/badges): create, edit, turn on / off, remove. */
+/** Badge catalogue (GET /admin/badges): create, edit, reorder, turn on / off, remove. */
 export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
   const t = useT();
   const [badges, setBadges] = useState(initial);
@@ -59,6 +60,32 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
     }
   }
 
+  /**
+   * Moves a badge one place up or down. Positions are renumbered 0, 1, 2… in the new order and only
+   * the badges whose position changed are saved (PATCH position).
+   */
+  async function move(b: AdminBadge, delta: -1 | 1) {
+    const from = badges.findIndex((x) => x.id === b.id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= badges.length) return;
+    const previous = badges;
+    const order = [...badges];
+    [order[from], order[to]] = [order[to]!, order[from]!];
+    const next = order.map((x, position) => ({ ...x, position }));
+    setBadges(next);
+    setBusyId(b.id);
+    try {
+      const changed = next.filter((x) => previous.find((p) => p.id === x.id)?.position !== x.position);
+      for (const x of changed) await api<AdminBadge>(`/admin/badges/${x.id}`, { method: "PATCH", body: { position: x.position } });
+      toast(delta < 0 ? t("{name} moved up.", { name: b.name }) : t("{name} moved down.", { name: b.name }));
+    } catch (e) {
+      setBadges(previous);
+      toast(errorMessage(e), "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex justify-end">
@@ -72,8 +99,26 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
           <EmptyState icon="verified" title="No badges yet" />
         ) : (
           <ul className="divide-y divide-line">
-            {badges.map((b) => (
+            {badges.map((b, index) => (
               <li key={b.id} className="flex flex-wrap items-center gap-4 px-5 py-3.5">
+                <div className="flex flex-col" role="group" aria-label={t("Order of {name}", { name: b.name })}>
+                  <button
+                    type="button"
+                    disabled={busyId !== null || index === 0}
+                    onClick={() => void move(b, -1)}
+                    className="rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink disabled:opacity-30"
+                  >
+                    <Icon name="chevron-down" size={16} className="rotate-180" label={t("Move {name} up", { name: b.name })} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId !== null || index === badges.length - 1}
+                    onClick={() => void move(b, 1)}
+                    className="rounded-md p-0.5 text-secondary hover:bg-muted hover:text-ink disabled:opacity-30"
+                  >
+                    <Icon name="chevron-down" size={16} label={t("Move {name} down", { name: b.name })} />
+                  </button>
+                </div>
                 <div className="flex min-w-[220px] flex-1 flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <ProfileBadgeChip badge={b} />
@@ -81,9 +126,13 @@ export function BadgesConsole({ initial }: { initial: AdminBadge[] }) {
                   </div>
                   <p className="text-sm text-secondary">{b.description || "No description"}</p>
                 </div>
-                <span className="text-sm text-body tabular-nums">
-                  {b.holders} {b.holders === 1 ? "member" : "members"}
-                </span>
+                <Link
+                  href={`/members?badge=${encodeURIComponent(b.slug)}`}
+                  className={cn("text-sm tabular-nums hover:underline", b.holders ? "font-medium text-primary" : "text-secondary")}
+                >
+                  {t("{count} members", { count: b.holders })}
+                  <span className="sr-only"> <T vars={{ name: b.name }}>{"with {name}"}</T></span>
+                </Link>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="small" disabled={busyId === b.id} onClick={() => setEditing(b)}>
                     Edit

@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import type { AdminHiddenRow, Page } from "@chartermission/contracts";
-import { HiddenList, HiddenListSkeleton, type HiddenType } from "@/components/hidden/hidden-list";
+import { HiddenList, HiddenListSkeleton } from "@/components/hidden/hidden-list";
+import { hiddenApiQuery, hiddenFilters, hiddenSearch } from "@/lib/hidden-filters";
 import { ModerationStats } from "@/components/moderation/moderation-stats";
 import { ModerationTabs } from "@/components/moderation/moderation-tabs";
 import { StatCardsSkeleton } from "@/components/moderation/stat-card";
@@ -15,12 +16,12 @@ export const metadata: Metadata = { title: "Hidden content" };
 
 async function Hidden({ searchParams }: Pick<PageProps<"/moderation/hidden">, "searchParams">) {
   const params = await searchParams;
-  const type: HiddenType = params.type === "post" || params.type === "comment" ? params.type : "all";
-  const viewer = await requireViewer(`/moderation/hidden${type === "all" ? "" : `?type=${type}`}`);
+  const filters = hiddenFilters(params);
+  const viewer = await requireViewer(`/moderation/hidden${hiddenSearch(filters)}`);
   if (!can(viewer, PERM.moderationView)) return <NoAccess section="hidden content" />;
   let page: Page<AdminHiddenRow>;
   try {
-    page = await apiGet<Page<AdminHiddenRow>>("/admin/hidden", { targetType: type === "all" ? undefined : type, limit: 25 });
+    page = await apiGet<Page<AdminHiddenRow>>("/admin/hidden", { ...hiddenApiQuery(filters), limit: 25 });
   } catch (e) {
     return (
       <div className="rounded-card border border-line bg-card">
@@ -30,8 +31,9 @@ async function Hidden({ searchParams }: Pick<PageProps<"/moderation/hidden">, "s
   }
   return (
     <HiddenList
-      key={type}
-      type={type}
+      // Search keeps the list mounted so the search box keeps focus while typing.
+      key={hiddenSearch({ ...filters, q: "" })}
+      filters={filters}
       initialRows={page.items}
       initialCursor={page.nextCursor}
       viewerId={viewer.id}

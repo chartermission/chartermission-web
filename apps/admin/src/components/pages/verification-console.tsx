@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { VERIFICATION_CATEGORY_LABELS, type AdminVerificationRow, type Page, type VerificationRequestStatus } from "@chartermission/contracts";
-import { Avatar, Button, Chip, Icon, cn, type ChipTone } from "@chartermission/ui";
+import { Avatar, Button, Chip, FilterSelect, Icon, cn, type ChipTone } from "@chartermission/ui";
+import { BulkBar } from "@/components/bulk/bulk-bar";
+import { runBulk } from "@/components/bulk/run-bulk";
+import { SelectAllBox, SelectBox } from "@/components/bulk/select-box";
+import { useSelection } from "@/components/bulk/use-selection";
+import { inputClasses } from "@/components/form-field";
 import { ReasonDialog } from "@/components/reason-dialog";
 import { EmptyState } from "@/components/states";
 import { DateTime, Relative } from "@/components/time";
@@ -13,6 +18,18 @@ import { webHref } from "@/lib/navigation";
 import { useT } from "@/i18n/client";
 
 type Filter = VerificationRequestStatus | "all";
+type Subject = "" | "member" | "page";
+type Sort = "oldest" | "newest";
+
+const SUBJECT_OPTIONS = [
+  { value: "", label: "Members and pages" },
+  { value: "member", label: "Members" },
+  { value: "page", label: "Pages" },
+];
+const SORT_OPTIONS = [
+  { value: "oldest", label: "Oldest requests first" },
+  { value: "newest", label: "Newest requests first" },
+];
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "pending", label: "Waiting for review" },
@@ -42,16 +59,28 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
   const [rows, setRows] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [filter, setFilter] = useState<Filter>("pending");
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState<Subject>("");
+  const [sort, setSort] = useState<Sort>("oldest");
   const [loading, setLoading] = useState(false);
   const [deciding, setDeciding] = useState<{ row: AdminVerificationRow; decision: "approve" | "decline" } | null>(null);
+  const [bulkDecision, setBulkDecision] = useState<"approve" | "decline" | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const selection = useSelection();
   const first = useRef(true);
+
+  const pendingIds = rows.filter((r) => r.status === "pending").map((r) => r.id);
+  const filtered = !!q.trim() || !!kind;
 
   async function load(status: Filter, from?: string | null) {
     setLoading(true);
     try {
-      const page = await api<Page<AdminVerificationRow>>("/admin/verification", { query: { status, cursor: from ?? undefined } });
+      const page = await api<Page<AdminVerificationRow>>("/admin/verification", {
+        query: { status, q: q.trim() || undefined, type: kind || undefined, sort, cursor: from ?? undefined },
+      });
       setRows((list) => (from ? [...list, ...page.items.filter((r) => !list.some((x) => x.id === r.id))] : page.items));
       setCursor(page.nextCursor);
+      if (!from) selection.retain(page.items.filter((r) => r.status === "pending").map((r) => r.id));
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -64,8 +93,29 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
       first.current = false;
       return;
     }
-    void load(filter);
-  }, [filter]);
+    const timer = setTimeout(() => void load(filter), 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load reads the current filters
+  }, [filter, q, kind, sort]);
+
+  /** Decides every picked request; the decided ones leave the list (or update in place). */
+  async function decideAll(decision: "approve" | "decline", note: string) {
+    setBulkBusy(true);
+    try {
+      const result = await runBulk(
+        "/admin/verification/bulk",
+        { ids: selection.list, action: decision, note: note || undefined },
+        t,
+        decision === "approve" ? "{count} requests approved. The applicants have been told." : "{count} requests declined. The applicants have been told.",
+      );
+      if (result) {
+        selection.remove(result.done);
+        await load(filter);
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   return (
     <section className="flex flex-col gap-4">
@@ -84,9 +134,25 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
         ))}
       </div>
 
+      <div role="group" aria-label="Search and sort requests" className="flex flex-wrap items-center gap-2">
+        <label className="relative min-w-[220px] flex-1 sm:max-w-[320px]">
+          <span className="sr-only">Search requests</span>
+          <Icon name="search" size={16} className="pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-secondary" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email" className={inputClasses(false, "ps-9")} />
+        </label>
+        <FilterSelect label="Members or pages" options={SUBJECT_OPTIONS} value={kind} onChange={(e) => setKind(e.target.value as Subject)} />
+        <FilterSelect label="Sort requests" options={SORT_OPTIONS} value={sort} onChange={(e) => setSort(e.target.value as Sort)} />
+        {pendingIds.length > 0 && (
+          <span className="ms-auto flex items-center gap-2 text-sm text-secondary">
+            <SelectAllBox state={selection.state(pendingIds)} onToggle={() => selection.toggleAll(pendingIds)} />
+            Select all waiting
+          </span>
+        )}
+      </div>
+
       {rows.length === 0 ? (
         <div className="rounded-card border border-line bg-card">
-          <EmptyState icon="verified" title={filter === "pending" ? "No requests waiting" : "Nothing here"} />
+          <EmptyState icon="verified" title={filtered ? "No requests match these filters" : filter === "pending" ? "No requests waiting" : "Nothing here"} />
         </div>
       ) : (
         <ul className={cn("flex flex-col gap-3", loading && "opacity-70")} aria-busy={loading}>
@@ -94,8 +160,11 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
             const subject = row.page ? row.page.name : row.applicant.name;
             const subjectHref = row.page ? webHref(`/pages/${row.page.slug}`) : webHref(`/${row.applicant.handle}`);
             return (
-              <li key={row.id} className="flex flex-col gap-4 rounded-card border border-line bg-card p-5">
+              <li key={row.id} className={cn("flex flex-col gap-4 rounded-card border bg-card p-5", selection.has(row.id) ? "border-primary" : "border-line")}>
                 <div className="flex flex-wrap items-start gap-3">
+                  {row.status === "pending" && (
+                    <SelectBox className="mt-3" checked={selection.has(row.id)} label={t("Select request from {name}", { name: subject })} onChange={(on) => selection.toggle(row.id, on)} />
+                  )}
                   <Avatar name={row.applicant.name} src={row.applicant.avatarUrl ?? undefined} tone={row.applicant.tone} size={40} />
                   <div className="flex min-w-[240px] flex-1 flex-col gap-0.5">
                     <div className="flex flex-wrap items-center gap-2">
@@ -188,6 +257,40 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
         </Button>
       )}
 
+      <BulkBar count={selection.count} busy={bulkBusy} onClear={selection.clear}>
+        <Button size="small" disabled={bulkBusy} onClick={() => setBulkDecision("approve")}>
+          Approve
+        </Button>
+        <Button variant="secondary" size="small" disabled={bulkBusy} onClick={() => setBulkDecision("decline")}>
+          Decline
+        </Button>
+      </BulkBar>
+
+      {bulkDecision && (
+        <ReasonDialog
+          title={bulkDecision === "approve" ? t("Approve {count} requests?", { count: selection.count }) : t("Decline {count} requests?", { count: selection.count })}
+          description={
+            bulkDecision === "approve"
+              ? "Each member or page gets the verified tick beside their name everywhere, and each applicant is told."
+              : "Each applicant sees your note and can apply again in 30 days."
+          }
+          confirmLabel={bulkDecision === "approve" ? "Approve and verify" : "Decline requests"}
+          tone={bulkDecision === "approve" ? "primary" : "danger"}
+          reasonField={bulkDecision === "approve" ? "optional" : "required"}
+          reasonLabel="Note to the applicants"
+          reasonPlaceholder={bulkDecision === "approve" ? "Optional" : "What was missing or didn’t match"}
+          reasonHint="The same note goes to every applicant and is recorded in the audit log."
+          requiredMessage="Add a note so the applicants know what to change."
+          minReasonLength={5}
+          onClose={() => setBulkDecision(null)}
+          onConfirm={async (note) => {
+            const decision = bulkDecision;
+            setBulkDecision(null);
+            await decideAll(decision, note);
+          }}
+        />
+      )}
+
       {deciding && (
         <ReasonDialog
           title={deciding.decision === "approve" ? t("Verify {count}?", { count: deciding.row.page?.name ?? deciding.row.applicant.name }) : t("Decline the request from {count}?", { count: deciding.row.page?.name ?? deciding.row.applicant.name })}
@@ -209,6 +312,7 @@ export function VerificationConsole({ initial }: { initial: Page<AdminVerificati
             const { row, decision } = deciding;
             const updated = await api<AdminVerificationRow>(`/admin/verification/${row.id}/decision`, { method: "POST", body: { decision, note: note || undefined } });
             setRows((list) => (filter === "pending" ? list.filter((r) => r.id !== row.id) : list.map((r) => (r.id === row.id ? updated : r))));
+            selection.remove([row.id]);
             toast(decision === "approve" ? t("{count} is verified.", { count: row.page?.name ?? row.applicant.name }) : "Request declined. The applicant has been told.");
             setDeciding(null);
           }}
