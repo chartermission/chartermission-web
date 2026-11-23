@@ -48,4 +48,10 @@ export const en: Dict = {
   "{count} get the email · {optedOut} turned announcement emails off": { one: "{count} gets the email · {optedOut} turned announcement emails off", other: "{count} get the email · {optedOut} turned announcement emails off" },
   "On · {count} active connections": { one: "On · {count} active connection", other: "On · {count} active connections" },
   "{count} active connections will stop working at once, and they can’t connect again until access is turned back on.": { one: "{count} active connection will stop working at once, and they can’t connect again until access is turned back on.", other: "{count} active connections will stop working at once, and they can’t connect again until access is turned back on." },
+  "+{count} more": { one: "+{count} more", other: "+{count} more" },
+  "{count} posts put on hold.": { one: "{count} post put on hold.", other: "{count} posts put on hold." },
+  "{count} posts released.": { one: "{count} post released.", other: "{count} posts released." },
+  "{count} posts approved.": { one: "{count} post approved.", other: "{count} posts approved." },
+  "{count} posts declined.": { one: "{count} post declined.", other: "{count} posts declined." },
+  "{count} scheduled posts cancelled.": { one: "{count} scheduled post cancelled.", other: "{count} scheduled posts cancelled." },
 };

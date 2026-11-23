@@ -24,7 +24,7 @@ async function ViewerAdminBar() {
 async function ViewerSidebar() {
   const viewer = await getViewer().catch(() => null);
   if (!viewer?.mfa.verifiedThisSession) return <AdminSidebar items={[]} />;
-  const [stats, eventQueue, queues, inbox] = await Promise.all([
+  const [stats, eventQueue, queues, inbox, calendar] = await Promise.all([
     can(viewer, PERM.moderationView) ? apiGet<QueueStats>("/admin/queue/stats").catch(() => null) : null,
     // The review queue's length (one page of 100 is plenty for a badge).
     can(viewer, PERM.eventReview)
@@ -34,6 +34,8 @@ async function ViewerSidebar() {
     apiGet<AdminQueueCounts>("/admin/queues").catch(() => null),
     // Unread conversations in the Charter Mission inbox.
     can(viewer, PERM.membersMessage) ? apiGet<{ unread: number }>("/admin/inbox/unread-count").catch(() => null) : null,
+    // Posts written with Claude waiting for the team's approval.
+    can(viewer, PERM.moderationView) ? apiGet<{ count: number }>("/admin/content-calendar/awaiting-count").catch(() => null) : null,
   ]);
   const inboxUnread = inbox?.unread;
   const counts: Partial<Record<string, number>> = {
@@ -41,6 +43,7 @@ async function ViewerSidebar() {
     ...(eventQueue ? { events: eventQueue.items.length } : {}),
     ...(queues ? { pages: queues.pages, verification: queues.verification } : {}),
     ...(typeof inboxUnread === "number" ? { messages: inboxUnread } : {}),
+    ...(calendar ? { "content-calendar": calendar.count } : {}),
   };
   const items = CONSOLE_NAV.filter((item) => can(viewer, item.permission)).map((item) => ({
     ...item,
