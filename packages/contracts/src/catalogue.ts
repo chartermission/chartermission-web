@@ -187,13 +187,57 @@ export type AdminBadgeUpdateInput = z.infer<typeof AdminBadgeUpdateInput>;
 
 /* -------------------------------- Members -------------------------------- */
 
-/** GET /admin/members (members.manage) */
-export const AdminMembersQuery = z.object({
+/** Account states the Members page can filter on (users.status; deleted accounts are never listed). */
+export const AdminMemberStatus = z.enum(["active", "unverified", "suspended", "deactivated", "deletion_pending"]);
+export type AdminMemberStatus = z.infer<typeof AdminMemberStatus>;
+
+/** Role filter: a platform-wide role, "team" (works for Charter Mission) or "official" (organisation account). */
+export const AdminMemberRoleFilter = z.enum(["moderator", "platform_admin", "super_admin", "event_host", "team", "official"]);
+export type AdminMemberRoleFilter = z.infer<typeof AdminMemberRoleFilter>;
+
+/** Order of the Members list: newest or oldest account first, or by name (A to Z). */
+export const AdminMembersSort = z.enum(["newest", "oldest", "name"]);
+export type AdminMembersSort = z.infer<typeof AdminMembersSort>;
+
+const YesNo = z.enum(["yes", "no"]);
+const IsoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
+
+/**
+ * Filters of the Members page, shared by the list (GET /admin/members) and the CSV export
+ * (GET /admin/members/export.csv). Every filter narrows the list; dates are UTC days, both ends included.
+ */
+export const AdminMembersFilters = z.object({
   q: z.string().trim().max(100).optional(),
   filter: z.enum(["all", "verified", "unverified", "featured", "badge", "claude"]).default("all"),
   /** Badge slug, with filter=badge. */
   badge: z.string().max(60).optional(),
-  cursor: z.string().max(200).optional(),
+  /** ISO country code of the member's profile. */
+  country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, "Use a two-letter country code").optional(),
+  /** Chapter id: members who follow the chapter or hold a role in it. */
+  chapter: z.string().uuid().optional(),
+  status: AdminMemberStatus.optional(),
+  role: AdminMemberRoleFilter.optional(),
+  joinedFrom: IsoDay.optional(),
+  joinedTo: IsoDay.optional(),
+  /** Email address confirmed. */
+  emailVerified: YesNo.optional(),
+  twoStep: z.enum(["on", "off"]).optional(),
+  /** Has a profile photo. */
+  photo: YesNo.optional(),
+  /** Joined through someone's invitation. */
+  referred: YesNo.optional(),
+  /** Profile option ids (GET /taxonomies). */
+  skill: z.string().uuid().optional(),
+  sector: z.string().uuid().optional(),
+  interest: z.string().uuid().optional(),
+  language: z.string().uuid().optional(),
+  sort: AdminMembersSort.default("newest"),
+});
+export type AdminMembersFilters = z.infer<typeof AdminMembersFilters>;
+
+/** GET /admin/members (members.manage). Keyset paging: pass nextCursor back as cursor. */
+export const AdminMembersQuery = AdminMembersFilters.extend({
+  cursor: z.string().max(400).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(25),
 });
 export type AdminMembersQuery = z.infer<typeof AdminMembersQuery>;
@@ -225,6 +269,12 @@ export type AdminMemberRow = {
   /** Two-step verification is on for the account. */
   twoStep: boolean;
   joinedAt: string;
+  /** Email address confirmed. */
+  emailVerified: boolean;
+  /** Latest sign-in or session activity; null when never seen. */
+  lastActiveAt: string | null;
+  /** Up to three chapters they follow or hold a role in, by name. */
+  chapterNames: string[];
 };
 
 /**
