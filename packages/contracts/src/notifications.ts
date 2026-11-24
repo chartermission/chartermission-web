@@ -93,6 +93,21 @@ export const NotificationType = z.enum([
   /* Content calendar (always sent: about the member's own post) */
   /** The Charter Mission team held, released, rescheduled, cancelled, approved or declined a post written with Claude. Icon clock, check or alert. */
   "content_review",
+  /* Groups (category "groups" unless noted). href: /groups/{slug} or the post. Icon users unless noted. */
+  /** Someone invited you to a group (accept or ignore from the group page). */
+  "group_invitation",
+  /** To a group's moderators and up: people asked to join (grouped per group). */
+  "group_join_request",
+  /** Your request to join was approved (always sent). Icon check. */
+  "group_request_approved",
+  /** To a group's moderators and up: a member's post waits for approval (grouped per group). Icon clock. */
+  "group_post_pending",
+  /** Your post in a group was approved, declined or removed, with the note (always sent). Icon check or alert. */
+  "group_post_review",
+  /** You were made an admin or moderator, or became the owner (always sent). Icon shield. */
+  "group_role_changed",
+  /** To a group's admins: staff suspended, restored or deleted the group, with the reason (always sent). Icon alert. */
+  "group_status",
   /* From Charter Mission */
   /** A bulk message from Charter Mission (segments: the subject in bold); href is its link or the official conversation. Icon megaphone if available, else alert. */
   "announcement",
@@ -113,6 +128,8 @@ export const NotificationCategory = z.enum([
   /** Applications to your listings and decisions on them; join requests for initiatives and answers to yours. */
   "opportunities",
   "digest",
+  /** Invitations, join requests and posts waiting in groups you run. */
+  "groups",
   /**
    * Messages from Charter Mission sent to many members from the admin. Members can turn the email off
    * (also with the one-click unsubscribe link in every such email); important service notices still arrive.

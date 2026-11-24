@@ -162,6 +162,9 @@ export class PostSerializer {
         id: r.id,
         author: page ? pageAuthor(page) : (authorRefs.get(r.authorId) ?? FALLBACK_AUTHOR),
         page: page ? PageRefsService.toRef(page) : null,
+        // TODO(groups API workstream): load group refs in bulk and the author's group review.
+        group: null,
+        groupReview: null,
         aboutPage: aboutPageRef(r.aboutPageId ? pageMap.get(r.aboutPageId) : undefined),
         body: r.body,
         kind: r.kind as PostKind,

@@ -44,6 +44,8 @@ export const SETTING_DEFAULTS = {
    * on time and staff review afterwards (hold, reschedule, cancel, hide); 'before' waits for approval.
    */
   claude_content: { approval: 'after' as 'after' | 'before' },
+  /** Groups: who can create one (contracts GroupsSettings) and how many one member may own. */
+  groups: { whoCanCreate: 'everyone' as 'everyone' | 'verified' | 'staff', maxOwnedPerMember: 10 },
 };
 
 type SettingKey = keyof typeof SETTING_DEFAULTS;

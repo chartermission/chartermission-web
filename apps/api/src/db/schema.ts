@@ -541,7 +541,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','product_image','profile_video','profile_resume','message_image','message_file','voice_note','certificate_signature')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','group_logo','group_cover','product_image','profile_video','profile_resume','message_image','message_file','voice_note','certificate_signature')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -591,6 +591,16 @@ export const posts = pgTable(
     initiativeId: uuid('initiative_id').references((): AnyPgColumn => initiatives.id, { onDelete: 'set null' }),
     /** Published as a page by one of its admins (author_id stays the admin who wrote it). */
     pageId: uuid('page_id').references((): AnyPgColumn => pages.id, { onDelete: 'cascade' }),
+    /**
+     * Posted in a group. A private group's posts have visibility 'group': only the group's members
+     * (and moderators) see them. A public group's posts keep 'members' or 'public'.
+     */
+    groupId: uuid('group_id').references((): AnyPgColumn => groups.id, { onDelete: 'cascade' }),
+    /** Group approval (groups whose admins review posts): null, 'pending' (status 'in_review'), 'approved' or 'declined'. */
+    groupReview: text('group_review'),
+    groupReviewBy: uuid('group_review_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    groupReviewAt: ts('group_review_at'),
+    groupReviewNote: text('group_review_note'),
     /** The page a member's post is about (certificate posts name Charter Center): listed on that page too. */
     aboutPageId: uuid('about_page_id').references((): AnyPgColumn => pages.id, { onDelete: 'set null' }),
     /** Shown to every member like an official account's post (certificate posts). */
@@ -651,7 +661,10 @@ export const posts = pgTable(
     index('posts_about_page_idx').on(t.aboutPageId, t.createdAt),
     check('posts_kind_ck', sql`${t.kind} in ('standard','announcement')`),
     check('posts_type_ck', sql`${t.type} in ('standard','question','celebration','request','article')`),
-    check('posts_visibility_ck', sql`${t.visibility} in ('members','public')`),
+    check('posts_visibility_ck', sql`${t.visibility} in ('members','public','group')`),
+    check('posts_group_visibility_ck', sql`${t.visibility} <> 'group' or ${t.groupId} is not null`),
+    check('posts_group_review_ck', sql`${t.groupReview} is null or ${t.groupReview} in ('pending','approved','declined')`),
+    index('posts_group_idx').on(t.groupId, t.createdAt),
     check('posts_status_ck', sql`${t.status} in ('pending_media','published','in_review','declined','awaiting_approval')`),
     check('posts_source_ck', sql`${t.source} in ('web','claude')`),
     check('posts_content_review_ck', sql`${t.contentReview} is null or ${t.contentReview} in ('pending','approved','declined')`),
@@ -1052,7 +1065,7 @@ export const contentReports = pgTable(
     uniqueIndex('reports_one_open_per_reporter_uq')
       .on(t.reporterId, t.targetType, t.targetId)
       .where(sql`${t.status} in ('open','in_review')`),
-    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag','story','opportunity','message','initiative')`),
+    check('reports_target_ck', sql`${t.targetType} in ('post','comment','member','hashtag','story','opportunity','message','initiative','group')`),
     check(
       'reports_status_ck',
       sql`${t.status} in ('open','in_review','actioned','dismissed','appealed','upheld','overturned')`,
@@ -2469,6 +2482,104 @@ export const pages = pgTable(
 );
 
 /** Members who manage a page. The owner can add and remove admins; every admin can edit and post. */
+/**
+ * Groups: communities members join to talk about a shared interest. A group belongs to a member,
+ * a page (its admins run it) or a chapter (its team runs it). Public groups: anyone sees the posts and
+ * members join at once. Private groups: listed (name, description, member count) but posts and members
+ * are seen only by members; people ask to join or are invited.
+ */
+export const groups = pgTable(
+  'groups',
+  {
+    id: id(),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    /** One line under the name. */
+    tagline: text('tagline'),
+    about: text('about'),
+    /** House rules shown on the group and when joining (plain text, one rule per line). */
+    rules: text('rules'),
+    /** 'public' | 'private' (contracts GroupVisibility). */
+    visibility: text('visibility').notNull().default('public'),
+    /** Who runs it: 'member' | 'page' | 'chapter' (contracts GroupOwnerType). */
+    ownerType: text('owner_type').notNull().default('member'),
+    pageId: uuid('page_id').references((): AnyPgColumn => pages.id, { onDelete: 'cascade' }),
+    chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'cascade' }),
+    /** Who can post: 'members' (any member) or 'admins' (owner, admins and moderators). */
+    postPermission: text('post_permission').notNull().default('members'),
+    /** Members' posts wait for an admin or moderator before others see them. */
+    postApproval: boolean('post_approval').notNull().default(false),
+    /** A question shown to people asking to join a private group (their answer goes to the admins). */
+    joinQuestion: text('join_question'),
+    countryCode: text('country_code').references(() => countries.code),
+    logoFileId: uuid('logo_file_id'),
+    coverFileId: uuid('cover_file_id'),
+    hashtags: text('hashtags').array().notNull().default(sql`'{}'::text[]`),
+    /** 'active' | 'suspended' (by staff: only its admins and staff can open it) | 'archived' (read-only, by its owner). */
+    status: text('status').notNull().default('active'),
+    /** Why staff suspended it, shown to its admins. */
+    statusNote: text('status_note'),
+    /** Suggested on the Groups page (staff). */
+    featuredAt: ts('featured_at'),
+    memberCount: integer('member_count').notNull().default(0),
+    postCount: integer('post_count').notNull().default(0),
+    lastPostAt: ts('last_post_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: ts('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('groups_slug_uq').on(sql`lower(${t.slug})`),
+    index('groups_status_idx').on(t.status, t.createdAt),
+    index('groups_page_idx').on(t.pageId),
+    index('groups_chapter_idx').on(t.chapterId),
+    index('groups_created_by_idx').on(t.createdBy),
+    check('groups_visibility_ck', sql`${t.visibility} in ('public','private')`),
+    check('groups_owner_type_ck', sql`${t.ownerType} in ('member','page','chapter')`),
+    check(
+      'groups_owner_ck',
+      sql`(${t.ownerType} = 'member' and ${t.pageId} is null and ${t.chapterId} is null) or (${t.ownerType} = 'page' and ${t.pageId} is not null and ${t.chapterId} is null) or (${t.ownerType} = 'chapter' and ${t.chapterId} is not null and ${t.pageId} is null)`,
+    ),
+    check('groups_post_permission_ck', sql`${t.postPermission} in ('members','admins')`),
+    check('groups_status_ck', sql`${t.status} in ('active','suspended','archived')`),
+  ],
+);
+
+/**
+ * Who is in a group. Roles: owner (one per member-run group; page and chapter groups are run by
+ * their page admins / chapter team as well), admin, moderator, member. Status: active, pending (asked
+ * to join a private group), invited (not accepted yet), banned (can't join or ask again).
+ */
+export const groupMembers = pgTable(
+  'group_members',
+  {
+    groupId: uuid('group_id')
+      .notNull()
+      .references(() => groups.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('member'),
+    status: text('status').notNull().default('active'),
+    /** Who invited them (invited), or who approved, removed or banned them. */
+    invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Their answer to the group's join question. */
+    requestAnswer: text('request_answer'),
+    joinedAt: ts('joined_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.groupId, t.userId] }),
+    index('group_members_user_idx').on(t.userId, t.status),
+    index('group_members_group_status_idx').on(t.groupId, t.status, t.role),
+    check('group_members_role_ck', sql`${t.role} in ('owner','admin','moderator','member')`),
+    check('group_members_status_ck', sql`${t.status} in ('active','pending','invited','banned')`),
+  ],
+);
+
 export const pageAdmins = pgTable(
   'page_admins',
   {

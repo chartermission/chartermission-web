@@ -26,6 +26,7 @@ export const DEFAULT_PREFERENCES: Record<
   events: { in_app: true, email: true, push: true },
   opportunities: { in_app: true, email: true, push: true },
   digest: { in_app: false, email: false, push: false },
+  groups: { in_app: true, email: true, push: true },
   announcements: { in_app: true, email: true, push: true },
 };
 
@@ -83,6 +84,13 @@ export const CATEGORY_OF: Record<
   exam_certificate_name: 'always',
   announcement: 'announcements',
   content_review: 'always',
+  group_invitation: 'groups',
+  group_join_request: 'groups',
+  group_request_approved: 'always',
+  group_post_pending: 'groups',
+  group_post_review: 'always',
+  group_role_changed: 'always',
+  group_status: 'always',
 };
 
 export interface NotifyInput {

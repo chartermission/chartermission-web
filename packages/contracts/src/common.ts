@@ -150,6 +150,16 @@ export type TaxonomyItem = z.infer<typeof TaxonomyItem>;
 export const Country = z.object({ code: z.string(), name: z.string(), region: z.string() });
 export type Country = z.infer<typeof Country>;
 
+/** A group, as named on posts and cards (link: /groups/{slug}). */
+export const GroupRef = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  visibility: z.enum(["public", "private"]),
+  logoUrl: z.string().nullable(),
+});
+export type GroupRef = z.infer<typeof GroupRef>;
+
 export const ChapterRef = z.object({ id: z.string().uuid(), slug: z.string(), name: z.string(), countryCode: z.string() });
 export type ChapterRef = z.infer<typeof ChapterRef>;
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ChapterRef, MemberRef, PageRef } from "./common.js";
+import { ChapterRef, GroupRef, MemberRef, PageRef } from "./common.js";
 import { EventSummary } from "./events.js";
 
 /*
@@ -300,6 +300,10 @@ export const ChapterReviewInfo = z.object({
 });
 export type ChapterReviewInfo = z.infer<typeof ChapterReviewInfo>;
 
+/** A group's admins reviewing a member's post (groups with post approval on). */
+export const PostGroupReview = z.object({ state: z.enum(["pending", "approved", "declined"]), note: z.string().nullable() });
+export type PostGroupReview = z.infer<typeof PostGroupReview>;
+
 /** The Charter Mission team's review of a post written with Claude, shown to its author. */
 export const PostContentReview = z.object({ state: z.enum(["pending", "approved", "declined"]), note: z.string().nullable() });
 export type PostContentReview = z.infer<typeof PostContentReview>;
@@ -313,6 +317,10 @@ export type PostView = {
   author: MemberRef;
   /** Set when the post was published as a page: link to /pages/{slug} instead of a member profile. */
   page: PageRef | null;
+  /** The group it was posted in ("Ada Obi ▸ Fintech Builders"). */
+  group: GroupRef | null;
+  /** Group approval, shown to the author while a group's admins review it (null otherwise). */
+  groupReview: PostGroupReview | null;
   /**
    * The page a member's post is about (a Charter Center certificate names Charter Center's page):
    * the celebration links to it and the post is also listed on that page.
@@ -388,6 +396,8 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     id: z.string().uuid(),
     author: MemberRef,
     page: PageRef.nullable(),
+    group: GroupRef.nullable(),
+    groupReview: PostGroupReview.nullable(),
     aboutPage: PageRef.nullable(),
     body: z.string(),
     kind: PostKind,
@@ -458,6 +468,12 @@ export const PostComposition = z.object({
   /** Publish as a page the member manages (the page must be live). */
   pageId: z.string().uuid().optional(),
   visibility: z.enum(["members", "public"]).default("public"),
+  /**
+   * Post in a group the member belongs to (and may post in). A private group's posts are seen only by
+   * its members whatever `visibility` says; a public group's follow `visibility`. Not with chapterId,
+   * pageId, initiativeId or kind "announcement".
+   */
+  groupId: z.string().uuid().optional(),
   /** Only for accounts with post.announce. */
   kind: PostKind.default("standard"),
   celebration: CelebrationDetails.optional(),
@@ -633,6 +649,11 @@ export const FeedQuery = z.object({
   author: z.string().trim().min(1).max(60).optional(),
   /** One page's posts (page id or slug), newest first, for the page's Posts tab. Ignores `tab`. */
   page: z.string().trim().min(1).max(80).optional(),
+  /**
+   * One group's posts (group id or slug), newest first, for the group's feed. Ignores `tab`. Private
+   * groups give 403 to people who aren't members. Pinned group posts come first on the first page.
+   */
+  group: z.string().trim().min(1).max(80).optional(),
   /** One initiative's updates (initiative id or slug), newest first. Ignores `tab`. */
   initiative: z.string().trim().min(1).max(120).optional(),
   /** Query-string boolean: "true"/"1" or "false"/"0" (z.coerce.boolean would read "false" as true). */
@@ -653,7 +674,7 @@ export const FeedQuery = z.object({
 export type FeedQuery = z.infer<typeof FeedQuery>;
 
 /** GET /feed/new — same filters as /feed, counts posts newer than `since` (for the "new posts" pill). */
-export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true, page: true, initiative: true }).extend({
+export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true, page: true, initiative: true, group: true }).extend({
   since: z.string().datetime({ offset: true }),
 });
 export type FeedNewQuery = z.infer<typeof FeedNewQuery>;
@@ -869,6 +890,8 @@ export const UploadPurpose = z.enum([
   "chapter_image",
   "chapter_cover",
   "page_logo",
+  "group_logo",
+  "group_cover",
   "page_cover",
   "product_image",
   "profile_video",
@@ -915,6 +938,8 @@ export const UPLOAD_LIMITS = {
   /** Page logo (square) and page cover (wide 4:1 banner). Page admins and staff. */
   page_logo: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   page_cover: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  group_logo: { maxBytes: 5 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
+  group_cover: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   /** A product picture on a page (up to PRODUCT_MAX_IMAGES each). */
   product_image: { maxBytes: 8 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   /** A member's intro video for their profile. Length is capped separately (MediaSettings.introVideoMaxSeconds). */

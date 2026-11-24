@@ -2,6 +2,7 @@ import { and, isNull, sql, type SQL } from 'drizzle-orm';
 import { blocks, hashtags, mutes, pages, postHashtags, posts, users } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { isActiveUntil } from '../core/policy.js';
+import { groupPostsVisibleSql } from '../groups/group-access.js';
 
 /*
  * Who may see a post (spec 4.5 rules, brief "Moderation states" and "Blocks"):
@@ -9,7 +10,9 @@ import { isActiveUntil } from '../core/policy.js';
  *  - hidden/removed posts: only the author (with moderationState) and moderators;
  *  - pending_media posts: only the author until every attachment is clean;
  *  - blocked either way: never;
- *  - suspended, deactivated or deleted authors: dropped from feeds and topic pages.
+ *  - suspended, deactivated or deleted authors: dropped from feeds and topic pages;
+ *  - group posts: a private group's posts (visibility 'group') only for its members (and the author),
+ *    and nothing from suspended or deleted groups (see groups/group-access.ts).
  */
 
 export type PostRow = typeof posts.$inferSelect;
@@ -33,8 +36,14 @@ export function canViewPost(
   blocked: Set<string>,
   /** For posts published as a page: is that page live? Leave out for ordinary posts. */
   pageIsLive = true,
+  /**
+   * For posts in a group: may the viewer see that group's posts (canSeeGroupPost)? Defaults to false so
+   * a caller that forgets to look never shows a group post; ignored for posts outside groups.
+   */
+  groupVisible = false,
 ): boolean {
   if (post.deletedAt) return false;
+  if (post.groupId && !groupVisible && !isModerator(viewer)) return false;
   const own = viewer?.id === post.authorId;
   const mod = isModerator(viewer);
   if (!viewer && post.visibility !== 'public') return false;
@@ -76,7 +85,7 @@ export const personalPostSql: SQL = sql`${posts.pageId} is null`;
  * member's posts, for when the viewer opens that member's profile.
  */
 export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?: boolean; muteMembers?: boolean } = {}): SQL {
-  const conds: (SQL | undefined)[] = [isNull(posts.deletedAt), sql`(${posts.pageId} is not null or ${authorActiveSql()})`, pageLiveSql];
+  const conds: (SQL | undefined)[] = [isNull(posts.deletedAt), sql`(${posts.pageId} is not null or ${authorActiveSql()})`, pageLiveSql, groupPostsVisibleSql(viewerId)];
   if (!viewerId) {
     conds.push(sql`${posts.visibility} = 'public'`, sql`${posts.status} = 'published'`, sql`${posts.moderationState} = 'visible'`);
     return and(...conds)!;
