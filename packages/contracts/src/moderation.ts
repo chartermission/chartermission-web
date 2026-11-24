@@ -10,7 +10,7 @@ import { MemberRef } from "./common.js";
 export const ReportStatus = z.enum(["open", "in_review", "actioned", "dismissed", "appealed", "upheld", "overturned"]);
 export type ReportStatus = z.infer<typeof ReportStatus>;
 
-export const ReportTargetType = z.enum(["post", "comment", "member", "hashtag", "story", "opportunity", "message", "initiative"]);
+export const ReportTargetType = z.enum(["post", "comment", "member", "hashtag", "story", "opportunity", "message", "initiative", "group"]);
 export type ReportTargetType = z.infer<typeof ReportTargetType>;
 
 export const ReportReason = z.enum([
@@ -191,6 +191,21 @@ export const AdminReportDetail = AdminReportRow.extend({
     })
     .nullable(),
   previousActions: z.array(AdminActionView),
+  /** Group reports: the group as a card (staff suspend it from Groups, or dismiss the report). */
+  group: z
+    .object({
+      id: z.string().uuid(),
+      slug: z.string(),
+      name: z.string(),
+      tagline: z.string().nullable(),
+      visibility: z.enum(["public", "private"]),
+      logoUrl: z.string().nullable(),
+      memberCount: z.number().int(),
+      status: z.enum(["active", "suspended", "archived", "deleted"]),
+      ownerType: z.enum(["member", "page", "chapter"]),
+    })
+    .nullable()
+    .optional(),
 });
 export type AdminReportDetail = z.infer<typeof AdminReportDetail>;
 

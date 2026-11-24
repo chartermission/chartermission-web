@@ -88,6 +88,19 @@ export type AdminMemberOverview = {
   openReports: { total: number; recent: AdminMemberOpenReport[] };
   /** The latest ten audit entries about their account. */
   audit: AuditEntry[];
+  /** Groups they own or run as an admin: how many, and up to ten (newest first). */
+  groups?: { total: number; items: AdminMemberGroup[] };
+};
+
+/** A group a member owns or runs, on the member detail panel. */
+export type AdminMemberGroup = {
+  id: string;
+  slug: string;
+  name: string;
+  visibility: "public" | "private";
+  role: "owner" | "admin";
+  memberCount: number;
+  status: "active" | "suspended" | "archived";
 };
 
 /* ---------------- Referrals, topics, chapters, moderation ---------------- */

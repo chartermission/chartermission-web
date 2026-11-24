@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import type { AdminMemberOverview, AdminMemberRow, MemberRef, Taxonomies } from "@chartermission/contracts";
 import { Avatar, Button, Icon, ProfileBadgeChip, cn } from "@chartermission/ui";
 import { RowMenu, type RowMenuItem } from "@/components/row-menu";
@@ -158,6 +159,27 @@ export function MemberDetailPanel({
                 <p className="text-sm text-secondary">Hasn’t invited anyone yet.</p>
               )}
             </Section>
+
+            {data.groups && (
+              <Section title={data.groups.total ? t("Groups they run · {count}", { count: data.groups.total }) : t("Groups they run")}>
+                {data.groups.items.length ? (
+                  <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
+                    {data.groups.items.map((g) => (
+                      <li key={g.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                        <Link href={`/groups/${g.id}`} className="min-w-0 truncate font-medium text-primary hover:underline" dir="auto">
+                          {g.name}
+                        </Link>
+                        <span className="shrink-0 text-xs text-secondary">
+                          {g.role === "owner" ? t("Owner") : t("Admin")} · {g.visibility === "private" ? t("Private") : t("Public")} · {t("{count} members", { count: g.memberCount })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <Muted>Doesn’t own or run any groups.</Muted>
+                )}
+              </Section>
+            )}
 
             <Section title={data.openReports.total ? t("Open reports · {count}", { count: data.openReports.total }) : t("Open reports")}>
               {data.openReports.recent.length ? (

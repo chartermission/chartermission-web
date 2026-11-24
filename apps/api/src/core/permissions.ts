@@ -38,6 +38,7 @@ export const PERMISSIONS = {
   'chapters.admin': 'Create, remove, activate and deactivate chapters; set chapter pictures and covers',
   'badges.manage': 'Create, edit and remove profile badges',
   'pages.manage': 'Create pages, review pages members create, verify, suspend and remove pages',
+  'groups.manage': 'Suspend, restore, feature and delete groups, change their owner and export their members',
   'members.message': 'Send emails, messages and notifications to members as Charter Mission, and answer replies in the Charter Mission inbox',
 } as const;
 
@@ -82,6 +83,7 @@ const PLATFORM_ADMIN: Permission[] = [
   'chapters.admin',
   'badges.manage',
   'pages.manage',
+  'groups.manage',
   'audit.export',
   'members.manage',
   'members.message',

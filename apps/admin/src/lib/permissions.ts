@@ -39,6 +39,8 @@ export const PERM = {
   mfaReset: "mfa.reset",
   /** Pages: create, review the ones members create, verify, suspend, remove. Platform Admin and above. */
   pagesManage: "pages.manage",
+  /** Groups: suspend, restore, feature, delete, change the owner, export members. Platform Admin and above (moderators look through moderation.view). */
+  groupsManage: "groups.manage",
 } as const;
 
 export type ConsoleViewer = Pick<SessionUser, "id" | "name" | "handle" | "avatarUrl" | "tone" | "roles" | "permissions">;
@@ -84,6 +86,7 @@ export type NavKey =
   | "referrals"
   | "badges"
   | "pages"
+  | "groups"
   | "chapters"
   | "ambassadors"
   | "ambassador-team"
@@ -120,6 +123,7 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "referrals", href: "/referrals", label: "Referrals", icon: "user-plus", permission: PERM.membersManage },
   { key: "badges", href: "/badges", label: "Badges", icon: "verified", permission: PERM.badgesManage },
   { key: "pages", href: "/pages", label: "Pages", icon: "building", permission: PERM.pagesManage },
+  { key: "groups", href: "/groups", label: "Groups", icon: "users", permission: PERM.moderationView },
   { key: "chapters", href: "/chapters", label: "Chapters", icon: "map-pin", permission: PERM.chaptersAdmin },
   { key: "ambassadors", href: "/ambassadors", label: "Ambassadors", icon: "verified", permission: PERM.ambassadorManage },
   { key: "ambassador-team", href: "/ambassadors/team", label: "Ambassador team", icon: "users", permission: PERM.ambassadorManagers },

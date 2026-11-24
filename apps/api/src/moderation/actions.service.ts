@@ -186,6 +186,11 @@ export class ModerationActionsService {
         action: 'Members can’t be hidden or removed. Warn, restrict or suspend the account instead.',
       });
     }
+    if (t.type === 'group' && (CONTENT_ACTIONS.includes(kind) || kind === 'suspend')) {
+      throw Errors.validation({
+        action: 'Groups are suspended from the Groups section (Suspend group). To act on the owner’s account, open their member record.',
+      });
+    }
     if (t.type === 'hashtag' && USER_ACTIONS.includes(kind)) {
       throw Errors.validation({ action: 'Topics have no single author. Hide the topic or act on individual posts.' });
     }

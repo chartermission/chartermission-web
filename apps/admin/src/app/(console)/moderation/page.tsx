@@ -68,6 +68,7 @@ async function ReportsQueue({ searchParams }: Pick<PageProps<"/moderation">, "se
       detailError={detailError ?? (requested && !detail ? "That report was not found." : null)}
       viewerId={viewer.id}
       canAct={can(viewer, PERM.moderationAct)}
+      canManageGroups={can(viewer, PERM.groupsManage)}
     />
   );
 }
