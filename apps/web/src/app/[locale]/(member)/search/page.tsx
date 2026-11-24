@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import type { DirectoryMember, HashtagSuggestion, Page } from "@chartermission/contracts";
+import type { DirectoryMember, GroupSummary, HashtagSuggestion, Page } from "@chartermission/contracts";
 import { Icon, Panel, buttonClasses } from "@chartermission/ui";
+import { GroupLogo, VisibilityChip, groupHref } from "@/components/groups/group-parts";
 import { LeftRail } from "@/components/left-rail";
 import { MemberRow } from "@/components/network/member-row";
 import { PageColumns } from "@/components/page-columns";
@@ -27,18 +28,20 @@ async function SearchResults({ searchParams }: { searchParams: PageProps<"/[loca
   if (!q) {
     return (
       <EmptyState icon="search" title="Search Charter Mission">
-        Find members by name, role or skill, and topics by hashtag.
+        Find members by name, role or skill, groups by name, and topics by hashtag.
       </EmptyState>
     );
   }
 
   const term = q.replace(/^[#@]/, "");
   const tagTerm = term.replace(/[^A-Za-z0-9_]/g, "");
-  const [members, tags] = await Promise.all([
+  const [members, tags, groups] = await Promise.all([
     q.startsWith("#") ? null : apiGet<Page<DirectoryMember>>("/members", { q: term, limit: 10 }).catch(() => null),
     q.startsWith("@") || !tagTerm ? [] : apiGet<HashtagSuggestion[]>("/hashtags/suggest", { q: tagTerm }).catch(() => []),
+    q.startsWith("#") || q.startsWith("@") ? null : apiGet<Page<GroupSummary>>("/groups", { q: term, limit: 5 }).catch(() => null),
   ]);
   const memberItems = members?.items ?? [];
+  const groupItems = groups?.items ?? [];
 
   return (
     <>
@@ -97,7 +100,39 @@ async function SearchResults({ searchParams }: { searchParams: PageProps<"/[loca
         </Panel>
       )}
 
-      {tags.length === 0 && memberItems.length === 0 && (
+      {groupItems.length > 0 && (
+        <Panel aria-labelledby="search-groups" className="flex flex-col">
+          <div className="flex items-center justify-between px-5 pb-2 pt-4">
+            <h2 id="search-groups" className="text-h3 text-ink">
+              Groups
+            </h2>
+            {groups?.nextCursor && (
+              <Link href="/groups" className="text-sm font-medium text-primary-light hover:underline">
+                See all groups
+              </Link>
+            )}
+          </div>
+          <ul className="flex flex-col divide-y divide-line">
+            {groupItems.map((group) => (
+              <li key={group.id}>
+                <Link href={groupHref(group.slug)} className="flex items-center gap-3 px-5 py-3 hover:bg-primary-tint-2">
+                  <GroupLogo name={group.name} src={group.logoUrl} size={40} />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm font-medium text-ink">{group.name}</span>
+                    <span className="truncate text-xs text-secondary">
+                      {t("{count} members", { count: group.memberCount })}
+                      {group.tagline ? ` · ${group.tagline}` : ""}
+                    </span>
+                  </span>
+                  <VisibilityChip visibility={group.visibility} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+
+      {tags.length === 0 && memberItems.length === 0 && groupItems.length === 0 && (
         <EmptyState
           icon="search"
           title={t("No results for “{term}”", { term: q })}
@@ -113,8 +148,8 @@ async function SearchResults({ searchParams }: { searchParams: PageProps<"/[loca
 
       <p className="flex items-start gap-2 rounded-lg bg-surface px-4 py-3 text-xs text-secondary">
         <Icon name="clock" size={14} className="mt-px shrink-0" />
-        Search covers members and topics for now. Opportunities, events, initiatives, courses, chapters and organisations join search as those
-        sections launch.
+        Search covers members, groups and topics for now. Opportunities, events, initiatives, courses, chapters and organisations join search as
+        those sections launch.
       </p>
     </>
   );
@@ -128,7 +163,7 @@ export default function SearchPage({ searchParams }: PageProps<"/[locale]/search
       <form action="/search" role="search" className="flex gap-2">
         <label className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[10px] border border-line bg-card px-3.5 text-disabled focus-within:border-primary-light focus-within:ring-2 focus-within:ring-primary-light/20">
           <Icon name="search" size={18} className="shrink-0" />
-          <span className="sr-only">Search members and topics</span>
+          <span className="sr-only">Search members, groups and topics</span>
           <SearchInput searchParams={searchParams} />
         </label>
         <button type="submit" className={buttonClasses()}>

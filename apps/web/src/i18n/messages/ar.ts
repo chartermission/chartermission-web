@@ -98,6 +98,7 @@ export const ar: Localized = {
     learning: "التعلّم",
     exams: "الاختبارات",
     chapters: "الفروع",
+    groups: "المجموعات",
     ambassadors: "السفراء",
     pages: "الصفحات",
     saved: "المحفوظات",

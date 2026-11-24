@@ -48,6 +48,8 @@ export type ComposerFields = {
   repostOfId?: string;
   /** Publish as this page (one the viewer manages) instead of as themselves. */
   pageId?: string;
+  /** Post into this group (one the viewer belongs to). */
+  groupId?: string;
 };
 
 /** Ready uploads with their descriptions, in order. */
@@ -108,6 +110,7 @@ export function fieldsFromDraft(payload: DraftPayload): ComposerFields {
     chapterId: payload.chapterId,
     repostOfId: payload.repostOfId,
     pageId: payload.pageId,
+    groupId: payload.groupId,
   };
 }
 
@@ -141,6 +144,7 @@ export function toComposition(fields: ComposerFields, files: ReadyFile[]): PostC
   if (layout) input.mediaLayout = layout;
   if (fields.chapterId) input.chapterId = fields.chapterId;
   if (fields.pageId) input.pageId = fields.pageId;
+  if (fields.groupId) input.groupId = fields.groupId;
   if (type === "standard") {
     if (fields.repostOfId) input.repostOfId = fields.repostOfId;
     if (fields.poll) {
@@ -189,6 +193,7 @@ export function toDraftPayload(fields: ComposerFields, files: ReadyFile[]): Draf
   if (layout) payload.mediaLayout = layout;
   if (fields.chapterId) payload.chapterId = fields.chapterId;
   if (fields.pageId) payload.pageId = fields.pageId;
+  if (fields.groupId) payload.groupId = fields.groupId;
   if (type === "standard") {
     if (fields.repostOfId) payload.repostOfId = fields.repostOfId;
     if (fields.poll) payload.poll = { question: fields.poll.question, options: fields.poll.options.slice(0, 4), durationHours: fields.poll.duration };

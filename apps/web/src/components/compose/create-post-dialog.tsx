@@ -6,6 +6,8 @@ import {
   parseVideoEmbed,
   type ChapterRef,
   type DraftView,
+  type GroupRef,
+  type GroupSummary,
   type ManagedPage,
   type PostType,
   type PostView,
@@ -14,6 +16,7 @@ import { Avatar, Button, Divider, Icon, cn, type IconName } from "@chartermissio
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api/client";
 import { stashArticleSeed, writeArticleHref } from "@/components/articles/write-article";
+import { LockIcon } from "@/components/groups/group-parts";
 import { PageLogo } from "@/components/pages/page-logo";
 import { ErrorNotice } from "@/components/social/errors";
 import { absoluteDateTime } from "@/components/social/format";
@@ -106,6 +109,7 @@ export function CreatePostDialog({
   initialBody,
   draft,
   chapter,
+  group,
   pageId,
   presentation = "dialog",
   onClose,
@@ -122,6 +126,8 @@ export function CreatePostDialog({
   presentation?: "dialog" | "page";
   /** Post into this chapter (the chapter page's composer). */
   chapter?: Pick<ChapterRef, "id" | "name">;
+  /** Post into this group (the group page's composer). */
+  group?: Pick<GroupRef, "id" | "slug" | "name" | "visibility">;
   initialTool?: ComposeTool;
   initialType?: PostType;
   /** Pre-filled post text (e.g. "\n\n#DailyPrompt"); the cursor starts before it, and it alone is not a draft. */
@@ -140,6 +146,8 @@ export function CreatePostDialog({
   const sectionRef = useRef<HTMLElement>(null);
   /** Pages the viewer manages and can post as (live ones only). */
   const [pages, setPages] = useState<ManagedPage[]>([]);
+  /** Groups the viewer is in, for "Post to" (the API refuses a group they may not post in). */
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const openerRef = useRef<Element | null>(null);
   const suggestionsOpenRef = useRef(false);
@@ -153,7 +161,7 @@ export function CreatePostDialog({
   const [fields, setFields] = useState<ComposerFields>(() => {
     if (draft) return fieldsFromDraft(draft.payload);
     const base = initialFields(initialType);
-    return { ...base, chapterId: chapter?.id, pageId: chapter ? undefined : pageId, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
+    return { ...base, chapterId: chapter?.id, groupId: chapter ? undefined : group?.id, pageId: chapter || group ? undefined : pageId, text: startText, poll: initialTool === "poll" ? emptyPoll() : null, link: initialTool === "link" ? "" : null };
   });
   const [caret, setCaret] = useState(initialBody !== undefined ? 0 : fields.text.length);
   const [fileMode, setFileMode] = useState<"image" | "document" | "video" | null>(
@@ -191,9 +199,21 @@ export function CreatePostDialog({
   const scheduled = saved?.status === "scheduled" ? saved : null;
   const failed = saved?.status === "failed" ? saved : null;
 
+  // "Post to": groups the member is in. Not from a chapter's or a group's own composer.
+  useEffect(() => {
+    if (chapter || group) return;
+    let alive = true;
+    api<{ items: GroupSummary[] }>("/groups", { query: { scope: "mine", limit: 50, sort: "name" } })
+      .then((page) => alive && setGroups(page.items.filter((g) => g.status === "active" && (g.membership.status === "active" || g.membership.viaOwner))))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [chapter, group]);
+
   // "Post as": the member's live pages. Chapter posts and reposts are always made as yourself.
   useEffect(() => {
-    if (chapter) return;
+    if (chapter || group) return;
     let alive = true;
     api<ManagedPage[]>("/me/pages")
       .then((list) => alive && setPages(list.filter((p) => p.status === "active")))
@@ -201,7 +221,7 @@ export function CreatePostDialog({
     return () => {
       alive = false;
     };
-  }, [chapter]);
+  }, [chapter, group]);
 
   useEffect(() => {
     const root = inPage ? sectionRef.current : dialogRef.current;
@@ -435,7 +455,12 @@ export function CreatePostDialog({
           : "";
 
   const postingAs = pages.find((p) => p.id === fields.pageId);
-  const canPostAs = pages.length > 0 && !fields.chapterId && !fields.repostOfId;
+  const canPostAs = pages.length > 0 && !fields.chapterId && !fields.repostOfId && !fields.groupId;
+  const postingTo: Pick<GroupRef, "id" | "name" | "visibility"> | null = fields.groupId
+    ? (group?.id === fields.groupId ? group : groups.find((g) => g.id === fields.groupId)) ?? null
+    : null;
+  const canPostTo = !group && !fields.chapterId && !fields.repostOfId && type !== "article" && (groups.length > 0 || !!fields.groupId);
+  const privateGroup = postingTo?.visibility === "private";
   const HeadingTag = inPage ? "h1" : "h2";
 
   const form = (
@@ -445,6 +470,13 @@ export function CreatePostDialog({
             <HeadingTag id={titleId} className={cn("truncate text-ink", inPage ? "text-h2" : "text-h3")}>
               {scheduled ? (inPage ? "Edit scheduled article" : "Edit scheduled post") : inPage ? (draft ? "Edit your draft" : "Write an article") : meta.title}
             </HeadingTag>
+            {group && fields.groupId === group.id && (
+              <span className="flex min-w-0 items-center gap-1 rounded-full bg-primary-tint px-2.5 py-0.5 text-xs font-medium text-primary">
+                {group.visibility === "private" ? <LockIcon size={14} /> : <Icon name="users" size={14} />}
+                <span className="sr-only">Posting to </span>
+                <span className="truncate">{group.name}</span>
+              </span>
+            )}
             {chapter && fields.chapterId === chapter.id && (
               <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary-tint px-2.5 py-0.5 text-xs font-medium text-primary">
                 <Icon name="globe" size={14} />
@@ -487,7 +519,7 @@ export function CreatePostDialog({
             <PostTypeSwitcher
               value={type}
               onChange={changeType}
-              disabled={fields.repostOfId ? ["question", "celebration", "request", "article"] : fields.pageId ? ["request"] : []}
+              disabled={fields.repostOfId ? ["question", "celebration", "request", "article"] : fields.pageId ? ["request"] : fields.groupId ? ["article"] : []}
             />
           )}
           {canPostAs && (
@@ -514,6 +546,31 @@ export function CreatePostDialog({
                 ))}
               </select>
               {postingAs && <span className="text-xs">Followers of the page see this; your name isn’t shown.</span>}
+            </label>
+          )}
+          {canPostTo && (
+            <label className="flex flex-wrap items-center gap-2 text-sm text-secondary">
+              <span className="flex items-center gap-1.5">
+                <Icon name="users" size={16} />
+                Post to
+              </span>
+              <select
+                value={fields.groupId ?? ""}
+                onChange={(event) => {
+                  const next = event.target.value || undefined;
+                  // Group posts are made as yourself, and aren't announcements.
+                  patch({ groupId: next, ...(next ? { pageId: undefined, announcement: false } : {}) });
+                  setNotice(next ? t("Posting to {group}", { group: groups.find((g) => g.id === next)?.name ?? t("the group") }) : t("Posting to your feed"));
+                }}
+                className="max-w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm font-medium text-ink outline-none focus:border-primary-light focus:ring-2 focus:ring-primary-tint"
+              >
+                <option value="">{t("Your feed")}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.visibility === "private" ? t("{name} (private group)", { name: g.name }) : t("{name} (group)", { name: g.name })}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
           <p className="sr-only" aria-live="polite">
@@ -567,32 +624,39 @@ export function CreatePostDialog({
             )}
             <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
               <p className="text-md font-medium text-ink">{postingAs?.name ?? viewer.name}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="relative inline-flex items-center rounded-full border border-line text-xs text-body focus-within:ring-2 focus-within:ring-primary-light hover:border-line-strong">
-                  <Icon name={visibilityMeta.icon} size={14} className="pointer-events-none absolute start-2.5 text-secondary" />
-                  <select
-                    aria-label="Who can see this post"
-                    aria-describedby={`${id}-visibility-hint`}
-                    value={fields.visibility}
-                    onChange={(event) => patch({ visibility: event.target.value as Visibility })}
-                    className="appearance-none rounded-full bg-transparent py-1 ps-[30px] pe-[26px] outline-none field-sizing-content"
-                  >
-                    {visibilityOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Icon name="chevron-down" size={12} className="pointer-events-none absolute end-2.5 text-secondary" />
-                </span>
-                <span id={`${id}-visibility-hint`} className="text-xs text-secondary max-sm:hidden">
-                  {visibilityMeta.hint}
-                </span>
-              </div>
+              {privateGroup ? (
+                <p className="flex items-center gap-1.5 text-xs text-secondary">
+                  <LockIcon size={14} />
+                  {t("Only group members will see this")}
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="relative inline-flex items-center rounded-full border border-line text-xs text-body focus-within:ring-2 focus-within:ring-primary-light hover:border-line-strong">
+                    <Icon name={visibilityMeta.icon} size={14} className="pointer-events-none absolute start-2.5 text-secondary" />
+                    <select
+                      aria-label="Who can see this post"
+                      aria-describedby={`${id}-visibility-hint`}
+                      value={fields.visibility}
+                      onChange={(event) => patch({ visibility: event.target.value as Visibility })}
+                      className="appearance-none rounded-full bg-transparent py-1 ps-[30px] pe-[26px] outline-none field-sizing-content"
+                    >
+                      {visibilityOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Icon name="chevron-down" size={12} className="pointer-events-none absolute end-2.5 text-secondary" />
+                  </span>
+                  <span id={`${id}-visibility-hint`} className="text-xs text-secondary max-sm:hidden">
+                    {visibilityMeta.hint}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
-          {can(viewer, "post.announce") && (
+          {can(viewer, "post.announce") && !fields.groupId && (
             <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-accent/30 bg-accent-light px-3 py-2.5 text-sm">
               <input
                 type="checkbox"

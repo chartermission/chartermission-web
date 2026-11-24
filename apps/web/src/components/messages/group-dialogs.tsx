@@ -22,8 +22,8 @@ import { useT } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { announceMessagesChanged } from "./messages-events";
 
-/** The viewer's connections (up to 200), loaded once per dialog. */
-function useConnections(viewerHandle: string) {
+/** The viewer's connections (up to 200), loaded once per dialog. Also used by the group invite dialog. */
+export function useConnections(viewerHandle: string) {
   const [people, setPeople] = useState<MemberRef[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
@@ -51,7 +51,7 @@ function useConnections(viewerHandle: string) {
 }
 
 /** Other members matching a search (2+ characters), for message requests. */
-function useMemberSearch(query: string, exclude: Set<string>) {
+export function useMemberSearch(query: string, exclude: Set<string>) {
   const [found, setFound] = useState<DirectoryMember[]>([]);
   useEffect(() => {
     const q = query.trim();
@@ -70,7 +70,7 @@ function useMemberSearch(query: string, exclude: Set<string>) {
   return query.trim().length < 2 ? [] : found;
 }
 
-function SearchField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+export function SearchField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <label className="flex h-10 items-center gap-2.5 rounded-lg bg-muted px-3.5 text-secondary focus-within:ring-2 focus-within:ring-primary-light">
       <Icon name="search" size={16} />
@@ -80,7 +80,7 @@ function SearchField({ value, onChange, placeholder }: { value: string; onChange
   );
 }
 
-function PersonRow({ person, note, onClick, selected, disabled }: { person: MemberRef; note?: string; onClick: () => void; selected?: boolean; disabled?: boolean }) {
+export function PersonRow({ person, note, onClick, selected, disabled }: { person: MemberRef; note?: string; onClick: () => void; selected?: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"

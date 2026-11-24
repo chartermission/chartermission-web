@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { ChapterSummary, DirectoryMember, HashtagSuggestion, Page } from "@chartermission/contracts";
+import type { ChapterSummary, DirectoryMember, GroupSummary, HashtagSuggestion, Page } from "@chartermission/contracts";
 import { ChapterAvatar, Icon, cn } from "@chartermission/ui";
+import { GroupLogo, LockIcon, groupHref } from "@/components/groups/group-parts";
 import { memberHref, topicHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import { NoTranslate } from "@/i18n/auto";
@@ -15,6 +16,7 @@ type Suggestion =
   | { kind: "member"; key: string; href: string; member: DirectoryMember }
   | { kind: "topic"; key: string; href: string; topic: HashtagSuggestion }
   | { kind: "chapter"; key: string; href: string; chapter: ChapterSummary }
+  | { kind: "group"; key: string; href: string; group: GroupSummary }
   | { kind: "all"; key: string; href: string };
 
 const DEBOUNCE_MS = 180;
@@ -26,7 +28,7 @@ const chapters = () => (chapterList ??= api<ChapterSummary[]>("/chapters").catch
 }));
 
 /**
- * The search box in the top bar. As the member types it suggests members, topics and chapters;
+ * The search box in the top bar. As the member types it suggests members, chapters, groups and topics;
  * arrow keys move through them, Enter opens the highlighted one, and Enter with nothing
  * highlighted (or the last row) opens the full results page.
  */
@@ -53,7 +55,10 @@ export function SearchBox({ className }: { className?: string }) {
         term.startsWith("#") ? Promise.resolve(null) : api<Page<DirectoryMember>>("/members", { query: { q: bare, limit: 5 } }).catch(() => null),
         term.startsWith("@") ? Promise.resolve([] as HashtagSuggestion[]) : api<HashtagSuggestion[]>("/hashtags/suggest", { query: { q: bare } }).catch(() => [] as HashtagSuggestion[]),
         term.startsWith("#") || term.startsWith("@") ? Promise.resolve([] as ChapterSummary[]) : chapters(),
-      ]).then(([members, topics, allChapters]) => {
+        term.startsWith("#") || term.startsWith("@")
+          ? Promise.resolve(null)
+          : api<Page<GroupSummary>>("/groups", { query: { q: bare, limit: 3 } }).catch(() => null),
+      ]).then(([members, topics, allChapters, groups]) => {
         if (!live) return;
         const q = bare.toLowerCase();
         const next: Suggestion[] = [
@@ -62,6 +67,7 @@ export function SearchBox({ className }: { className?: string }) {
             .filter((c) => c.name.toLowerCase().includes(q) || c.countryName.toLowerCase().includes(q))
             .slice(0, 3)
             .map((chapter): Suggestion => ({ kind: "chapter", key: `c:${chapter.id}`, href: `/chapters/${chapter.slug}`, chapter })),
+          ...(groups?.items ?? []).slice(0, 3).map((group): Suggestion => ({ kind: "group", key: `g:${group.id}`, href: groupHref(group.slug), group })),
           ...topics.slice(0, 4).map((topic): Suggestion => ({ kind: "topic", key: `t:${topic.tag}`, href: topicHref(topic.tag), topic })),
           { kind: "all", key: "all", href: `/search?q=${encodeURIComponent(term)}` },
         ];
@@ -110,7 +116,7 @@ export function SearchBox({ className }: { className?: string }) {
     setActive((current) => (event.key === "ArrowDown" ? (current + 1) % shown.length : current <= 0 ? shown.length - 1 : current - 1));
   }
 
-  const heading = (kind: Suggestion["kind"]) => (kind === "member" ? t("Members") : kind === "chapter" ? t("Chapters") : kind === "topic" ? t("Topics") : null);
+  const heading = (kind: Suggestion["kind"]) => (kind === "member" ? t("Members") : kind === "chapter" ? t("Chapters") : kind === "group" ? t("Groups") : kind === "topic" ? t("Topics") : null);
 
   return (
     <form ref={root} action="/search" role="search" onSubmit={onSubmit} className={cn("relative", className)}>
@@ -179,6 +185,15 @@ export function SearchBox({ className }: { className?: string }) {
                       <>
                         <ChapterAvatar name={item.chapter.name} countryCode={item.chapter.countryCode} src={item.chapter.imageUrl} size={32} className="rounded-full" />
                         <span className="truncate font-medium">{item.chapter.name}</span>
+                      </>
+                    )}
+                    {item.kind === "group" && (
+                      <>
+                        <GroupLogo name={item.group.name} src={item.group.logoUrl} size={32} />
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate font-medium">{item.group.name}</span>
+                          {item.group.visibility === "private" && <LockIcon size={12} className="text-secondary" />}
+                        </span>
                       </>
                     )}
                     {item.kind === "topic" && (
