@@ -40,6 +40,16 @@ const groups: {
     ],
   },
   {
+    title: "Groups",
+    rows: [
+      {
+        category: "groups",
+        label: "Groups",
+        description: "Invitations, join requests and posts waiting in groups you run.",
+      },
+    ],
+  },
+  {
     title: "Topics",
     rows: [{ category: "trending", label: "Trending topics you follow", description: "A hashtag you follow starts trending." }],
   },

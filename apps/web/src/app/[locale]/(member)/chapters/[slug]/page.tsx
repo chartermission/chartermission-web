@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import type {
   ChapterDetail,
   EventSummary,
+  GroupSummary,
   MemberRef,
   Page,
   PostView,
@@ -28,6 +29,7 @@ import {
 } from "@/components/chapters/chapter-actions";
 import { InvitePeopleButton } from "@/components/invite/invite-dialog";
 import { ChapterReview } from "@/components/chapters/chapter-moderation";
+import { OwnerGroups } from "@/components/groups/owner-groups";
 import { TabList, TabPanel, Tabs } from "@/components/chapters/tabs";
 import { EventRow } from "@/components/events/event-cards";
 import { RailEventList } from "@/components/events/rail-events";
@@ -88,7 +90,7 @@ async function ChapterView({
   );
   if (!chapter) notFound();
 
-  const [feed, members, events] = await Promise.all([
+  const [feed, members, events, groups] = await Promise.all([
     apiGet<Page<PostView>>("/feed", {
       tab: "latest",
       chapter: chapter.slug,
@@ -101,6 +103,7 @@ async function ChapterView({
       when: "upcoming",
       limit: 12,
     }).catch(() => EMPTY as Page<EventSummary>),
+    apiGet<Page<GroupSummary>>("/groups", { chapter: chapter.slug, limit: 12 }).catch(() => null),
   ]);
   const hostedHere = events.items.filter(
     (e) => e.host.type === "chapter" && e.host.chapter.id === chapter.id,
@@ -127,6 +130,10 @@ async function ChapterView({
       label: t("Events ({count})", { count: hostedHere.length }),
     },
     { value: "members", label: "Members" },
+    // Groups the chapter team runs; the team also gets "Create a group".
+    ...(groups?.items.length || chapter.viewer.canManage
+      ? [{ value: "groups", label: "Groups" }]
+      : []),
     { value: "about", label: "About" },
     // The chapter team's queue of posts waiting for approval.
     ...(chapter.viewer.canManage
@@ -308,6 +315,15 @@ async function ChapterView({
               <ChapterReview
                 chapter={{ slug: chapter.slug, name: chapter.name }}
                 viewer={viewer}
+              />
+            </TabPanel>
+          )}
+          {(groups?.items.length || chapter.viewer.canManage) && (
+            <TabPanel value="groups">
+              <OwnerGroups
+                owner={{ type: "chapter", slug: chapter.slug, name: chapter.name }}
+                initial={groups}
+                canCreate={chapter.viewer.canManage}
               />
             </TabPanel>
           )}

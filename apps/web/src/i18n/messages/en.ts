@@ -101,6 +101,7 @@ export const en = {
     learning: "Learning",
     exams: "Exams",
     chapters: "Chapters",
+    groups: "Groups",
     ambassadors: "Ambassadors",
     pages: "Pages",
     saved: "Saved",

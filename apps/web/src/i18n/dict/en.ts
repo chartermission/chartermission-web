@@ -78,4 +78,10 @@ export const en: Dict = {
   "Show all {count} licenses & certifications": { one: "Show {count} license or certification", other: "Show all {count} licenses & certifications" },
   "{count} licenses & certifications": { one: "{count} license or certification", other: "{count} licenses & certifications" },
   "{count} actions in the last 7 days": { one: "{count} action in the last 7 days", other: "{count} actions in the last 7 days" },
+  "{count} connections are members": { one: "{count} connection is a member", other: "{count} connections are members" },
+  "{count} join requests": { one: "{count} join request", other: "{count} join requests" },
+  "{count} posts waiting": { one: "{count} post waiting", other: "{count} posts waiting" },
+  "{count} admins and moderators": { one: "{count} admin", other: "{count} admins and moderators" },
+  "{count} people approved": { one: "{count} person approved", other: "{count} people approved" },
+  "{count} requests declined": { one: "{count} request declined", other: "{count} requests declined" },
 };

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BulkIds } from "./admin-ops.js";
 import { ChapterRef, CountryCode, GroupRef, MemberRef, PageRef } from "./common.js";
 import type { AuditEntry, ReportReason, ReportStatus } from "./moderation.js";
+import { Relationship } from "./profile.js";
 
 /*
  * Groups: communities members join around a shared interest (decided Nov 2026).
@@ -192,6 +193,8 @@ export const GroupMemberView = z.object({
   joinedAt: z.string().nullable(),
   /** When they asked, were invited or were banned. */
   since: z.string(),
+  /** The viewer's relationship with them, for Connect / Follow in the members list (optional: without it the list links to profiles). */
+  relationship: Relationship.optional(),
 });
 export type GroupMemberView = z.infer<typeof GroupMemberView>;
 

@@ -3,9 +3,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
-import { PAGE_CATEGORY_LABELS, type Page, type PageDetail, type PostView, type ProductView, type ServiceView } from "@chartermission/contracts";
+import { PAGE_CATEGORY_LABELS, type GroupSummary, type Page, type PageDetail, type PostView, type ProductView, type ServiceView } from "@chartermission/contracts";
 import { Chip, Icon, Panel, type IconName } from "@chartermission/ui";
 import { TabList, TabPanel, Tabs } from "@/components/chapters/tabs";
+import { OwnerGroups } from "@/components/groups/owner-groups";
 import { PageColumns } from "@/components/page-columns";
 import { PageActions } from "@/components/pages/page-actions";
 import { PageName } from "@/components/pages/page-card";
@@ -73,21 +74,26 @@ async function PageMain({ params }: { params: Params }) {
   const canManage = page.viewer.canEdit;
   const visible = page.status === "active" || !!page.viewer.role || canManage;
   const query = { page: page.id, limit: POSTS_PAGE };
-  const [posts, products, services] = await Promise.all([
+  const [posts, products, services, groups] = await Promise.all([
     visible ? apiGet<Page<PostView>>("/feed", query).catch(() => undefined) : undefined,
     visible && (page.productCount > 0 || canManage) ? settle(apiGet<ProductView[]>(`/pages/${page.slug}/products`)) : null,
     visible && (page.serviceCount > 0 || canManage) ? settle(apiGet<ServiceView[]>(`/pages/${page.slug}/services`)) : null,
+    visible ? apiGet<Page<GroupSummary>>("/groups", { page: page.slug, limit: 12 }).catch(() => null) : null,
   ]);
   const ref = toPageRef(page);
   const bookable = !!(services?.ok && services.data.some((service) => service.bookable && service.active));
   const showAbout = canManage || hasAboutContent(page);
   const showProducts = canManage || page.productCount > 0;
   const showServices = canManage || page.serviceCount > 0;
+  // Groups the page runs; its admins also get "Create a group" (live pages only).
+  const canCreateGroup = canManage && page.status === "active";
+  const showGroups = !!groups?.items.length || canCreateGroup;
   const tabs = [
     { value: "posts", label: t("Posts") },
     ...(showAbout ? [{ value: "about", label: t("About") }] : []),
     ...(showProducts ? [{ value: "products", label: t("Products ({count})", { count: page.productCount }) }] : []),
     ...(showServices ? [{ value: "services", label: t("Services ({count})", { count: page.serviceCount }) }] : []),
+    ...(showGroups ? [{ value: "groups", label: t("Groups") }] : []),
   ];
 
   return (
@@ -185,6 +191,11 @@ async function PageMain({ params }: { params: Params }) {
             ) : (
               <ServicesSection host={{ type: "page", page: ref }} services={services?.ok ? services.data : []} canManage={canManage} />
             )}
+          </TabPanel>
+        )}
+        {showGroups && (
+          <TabPanel value="groups">
+            <OwnerGroups owner={{ type: "page", slug: page.slug, name: page.name }} initial={groups} canCreate={canCreateGroup} />
           </TabPanel>
         )}
       </Tabs>

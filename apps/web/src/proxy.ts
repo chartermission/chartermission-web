@@ -17,6 +17,7 @@ const MEMBER_AREAS = [
   "/exams",
   "/initiatives",
   "/chapters",
+  "/groups",
   "/ambassadors",
   "/stories",
   "/pages",

@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { PostView } from "@chartermission/contracts";
 import { Icon, buttonClasses, cn } from "@chartermission/ui";
 import { useT, T } from "@/i18n/client";
+import { NoTranslate } from "@/i18n/auto";
 import { api } from "@/lib/api/client";
 import { confetti, pop } from "@/components/motion";
 import { ReportDialog } from "@/components/moderation/report-dialog";
@@ -41,6 +42,7 @@ import { RepostDialog } from "./repost-dialog";
 import { RichText } from "./rich-text";
 import { toast } from "./toast";
 import { PageLogo } from "@/components/pages/page-logo";
+import { LockIcon, groupHref } from "@/components/groups/group-parts";
 import { usePostView } from "./view-tracker";
 import type { Viewer } from "./viewer";
 
@@ -286,6 +288,23 @@ export function PostCard({
               Page
             </span>
           )}
+          {post.group && (
+            <>
+              <Icon name="chevron-right" size={14} className="shrink-0 text-secondary rtl:rotate-180" />
+              <Link
+                href={groupHref(post.group.slug)}
+                className="flex min-w-0 items-center gap-1 text-sm font-medium text-ink hover:underline"
+              >
+                <span className="sr-only">{t("in the group")} </span>
+                {post.group.visibility === "private" && (
+                  <LockIcon size={12} className="text-secondary" label={t("Private group")} />
+                )}
+                <span className="truncate">
+                  <NoTranslate>{post.group.name}</NoTranslate>
+                </span>
+              </Link>
+            </>
+          )}
         </span>
         <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-secondary">
           {post.author.headline && (
@@ -372,7 +391,36 @@ export function PostCard({
           </p>
         </div>
       )}
-      {post.status === "in_review" && (
+      {post.groupReview && post.groupReview.state !== "approved" && (
+        <div
+          role="note"
+          className={cn(
+            "flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-sm text-ink",
+            post.groupReview.state === "pending" ? "bg-info-light" : "bg-error-light",
+          )}
+        >
+          <Icon
+            name={post.groupReview.state === "pending" ? "clock" : "eye-off"}
+            size={18}
+            className={cn("mt-0.5 shrink-0", post.groupReview.state === "pending" ? "text-info" : "text-error")}
+          />
+          <p>
+            {post.groupReview.state === "pending"
+              ? post.author.id === viewer.id
+                ? t("Waiting for the group’s admins to approve. Only you and they can see this post until then.")
+                : t("Waiting for approval in this group.")
+              : post.author.id === viewer.id
+                ? t("The group’s admins didn’t approve this post. Only you can see it.")
+                : t("Declined by the group’s admins.")}
+            {post.groupReview.note ? (
+              <span className="mt-1 block text-secondary">
+                {t("Note from the group’s admins: “{note}”", { note: post.groupReview.note })}
+              </span>
+            ) : null}
+          </p>
+        </div>
+      )}
+      {post.status === "in_review" && !post.groupReview && (
         <div
           role="note"
           className="flex items-start gap-2.5 rounded-lg bg-info-light px-3 py-2.5 text-sm text-ink"
@@ -397,7 +445,7 @@ export function PostCard({
           </p>
         </div>
       )}
-      {post.status === "declined" && (
+      {post.status === "declined" && !post.groupReview && (
         <div
           role="note"
           className="flex items-start gap-2.5 rounded-lg bg-error-light px-3 py-2.5 text-sm text-ink"

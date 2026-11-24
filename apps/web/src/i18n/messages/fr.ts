@@ -98,6 +98,7 @@ export const fr: Localized = {
     learning: "Formation",
     exams: "Examens",
     chapters: "Sections pays",
+    groups: "Groupes",
     ambassadors: "Ambassadeurs",
     pages: "Pages",
     saved: "Enregistrés",

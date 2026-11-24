@@ -38,7 +38,16 @@ const byType: Partial<Record<NotificationType, { icon: { name: IconName; classNa
   exam_certificate_name: { icon: { name: "alert", className: "bg-warning-light text-warning" }, href: (item) => item.href },
   // A message from Charter Mission: opens its link, or the official conversation in Messages.
   announcement: { icon: { name: "megaphone", className: "bg-primary-tint text-primary" }, href: (item) => item.href },
+  // Groups: an invitation or people asking to join open the group (its Manage tab for requests).
+  group_invitation: { icon: { name: "user-plus", className: "bg-success-light text-success" }, href: (item) => item.href },
+  group_join_request: { icon: { name: "user-plus", className: "bg-primary-tint text-primary" }, href: groupManageHref },
+  group_post_pending: { icon: { name: "clock", className: "bg-primary-tint text-primary" }, href: groupManageHref },
 };
+
+/** A group's address opens its Manage tab, where requests and waiting posts are. */
+function groupManageHref(item: NotificationView): string {
+  return /^\/groups\/[^/#?]+$/.test(item.href) ? `${item.href}#manage` : item.href;
+}
 
 /** Booking notifications open Bookings (or the booking itself when the API links to it). */
 function bookingsHref(item: NotificationView): string {
