@@ -38,6 +38,17 @@ export type DomainEvent =
   | { type: 'group.role_changed'; groupId: string; userId: string; role: 'owner' | 'admin' | 'moderator'; actorId: string }
   | { type: 'page.reviewed'; pageId: string; action: 'approve' | 'reject' | 'suspend' | 'restore'; actorId: string }
   | { type: 'page.admin_added'; pageId: string; userId: string; actorId: string }
+  | {
+      /** Staff acted on a group from the admin console (its admins, or the new and old owner, are told). */
+      type: 'group.staff_action';
+      groupId: string;
+      action: 'suspend' | 'restore' | 'delete' | 'set_owner';
+      actorId: string;
+      /** When it happened (ISO), so a suspension after a restore is a new notification. */
+      at: string;
+      ownerId?: string;
+      previousOwnerIds?: string[];
+    }
   | { type: 'verification.decided'; requestId: string }
   | { type: 'initiative.join_requested'; requestId: string }
   | { type: 'initiative.join_decided'; requestId: string }

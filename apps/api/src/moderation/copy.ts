@@ -22,6 +22,7 @@ const NOUN: Record<ReportTargetType, string> = {
   opportunity: 'listing',
   message: 'message',
   initiative: 'initiative',
+  group: 'group',
 };
 
 const date = (d: Date) => d.toISOString().slice(0, 10);
@@ -32,7 +33,9 @@ export function reportNextSteps(reason: ReportReason, targetType: ReportTargetTy
     'Thanks for telling us. A moderator will review this against our Community Guidelines, most urgent reports first.',
     'We’ll let you know when we’ve made a decision. To protect everyone’s privacy we won’t share details of any action taken, and we never tell the other person who reported them.',
   ];
-  if (targetType !== 'hashtag') {
+  if (targetType === 'group') {
+    parts.push('If you’re in the group and don’t want to see its posts in the meantime, you can leave it.');
+  } else if (targetType !== 'hashtag') {
     parts.push(
       'If you don’t want to see this person’s content in the meantime, you can block them from their profile.',
     );

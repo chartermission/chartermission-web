@@ -120,4 +120,13 @@ export const en: Dict = {
   "{count} posts approved.": { one: "{count} post approved.", other: "{count} posts approved." },
   "{count} posts declined.": { one: "{count} post declined.", other: "{count} posts declined." },
   "{count} scheduled posts cancelled.": { one: "{count} scheduled post cancelled.", other: "{count} scheduled posts cancelled." },
+  "The group and its {count} posts disappear for everyone, and its admins are told. Staff can still restore it from the Deleted tab. To hide it for a while instead, suspend it.": { one: "The group and its {count} post disappear for everyone, and its admins are told. Staff can still restore it from the Deleted tab. To hide it for a while instead, suspend it.", other: "The group and its {count} posts disappear for everyone, and its admins are told. Staff can still restore it from the Deleted tab. To hide it for a while instead, suspend it." },
+  "{count} groups featured.": { one: "{count} group featured.", other: "{count} groups featured." },
+  "{count} groups no longer featured.": { one: "{count} group no longer featured.", other: "{count} groups no longer featured." },
+  "{count} groups suspended. Their admins have been told.": { one: "{count} group suspended. Its admins have been told.", other: "{count} groups suspended. Their admins have been told." },
+  "{count} groups restored.": { one: "{count} group restored.", other: "{count} groups restored." },
+  "{count} groups deleted. Their admins have been told.": { one: "{count} group deleted. Its admins have been told.", other: "{count} groups deleted. Their admins have been told." },
+  "{count} groups exported.": { one: "{count} group exported.", other: "{count} groups exported." },
+  "Suspend {count} groups?": { one: "Suspend {count} group?", other: "Suspend {count} groups?" },
+  "Delete {count} groups?": { one: "Delete {count} group?", other: "Delete {count} groups?" },
 };

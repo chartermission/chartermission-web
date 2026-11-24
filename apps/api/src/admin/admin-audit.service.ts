@@ -71,6 +71,7 @@ const AREA_LABELS: Record<string, string> = {
   trending: 'Trending',
   audit: 'Audit log',
   role: 'Roles',
+  group: 'Group',
 };
 
 /**
@@ -156,6 +157,15 @@ export function auditSummary(
     'comment.delete': `Deleted ${target}`,
     'upload.infected': `Blocked an infected upload (${target})`,
     'upload.rejected': `Rejected an upload (${target})`,
+    // Groups (staff actions from the console)
+    'group.suspended': `Suspended ${target}`,
+    'group.restored': `Restored ${target}`,
+    'group.featured': `Featured ${target}`,
+    'group.unfeatured': `Stopped featuring ${target}`,
+    'group.deleted': `Deleted ${target}`,
+    'group.owner_changed': `Changed the owner of ${target}`,
+    'group.members_exported': `Exported the members of ${target}`,
+    'settings.groups_updated': 'Changed who can create groups',
   };
   if (known[row.action]) return known[row.action]!;
   const words = verb.replace(/[._]/g, ' ').trim();

@@ -26,6 +26,7 @@ import {
   comments,
   contentReports,
   files,
+  groups,
   memberProfiles,
   moderationActions,
   postAttachments,
@@ -36,12 +37,12 @@ import { Errors } from '../common/errors.js';
 import { runEach } from '../common/bulk.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthContext } from '../core/auth-context.js';
-import { MembersService } from '../core/members.service.js';
+import { MembersService, mediaUrl } from '../core/members.service.js';
 import { AuditService } from '../infra/audit.service.js';
 import { TargetsService, targetKey } from '../moderation/targets.service.js';
 import { formerMember, ModerationActionsService } from '../moderation/actions.service.js';
 import { OPEN_STATUSES } from '../moderation/reports.service.js';
-import { iso, likePrefix, truncate, tsKey, uuidOr404 } from '../moderation/util.js';
+import { isUuid, iso, likePrefix, truncate, tsKey, uuidOr404 } from '../moderation/util.js';
 
 type ReportRow = typeof contentReports.$inferSelect;
 
@@ -275,6 +276,25 @@ export class AdminQueueService {
           )
         : null,
       previousActions: await this.actions.views(previous),
+      group: rep.targetType === 'group' ? await this.groupCard(rep.targetId) : null,
+    };
+  }
+
+  /** The reported group as a card for the case detail. */
+  private async groupCard(id: string): Promise<AdminReportDetail['group']> {
+    if (!isUuid(id)) return null;
+    const [g] = await this.db.select().from(groups).where(eq(groups.id, id)).limit(1);
+    if (!g) return null;
+    return {
+      id: g.id,
+      slug: g.slug,
+      name: g.name,
+      tagline: g.tagline,
+      visibility: g.visibility as 'public' | 'private',
+      logoUrl: mediaUrl(g.logoFileId),
+      memberCount: g.memberCount,
+      status: g.deletedAt ? 'deleted' : (g.status as 'active' | 'suspended' | 'archived'),
+      ownerType: g.ownerType as 'member' | 'page' | 'chapter',
     };
   }
 

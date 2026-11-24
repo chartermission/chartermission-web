@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BulkIds } from "./admin-ops.js";
 import { ChapterRef, CountryCode, GroupRef, MemberRef, PageRef } from "./common.js";
+import type { AuditEntry, ReportReason, ReportStatus } from "./moderation.js";
 
 /*
  * Groups: communities members join around a shared interest (decided Nov 2026).
@@ -239,7 +240,7 @@ export type GroupPostAction = z.infer<typeof GroupPostAction>;
 
 /* ------------------------------ Admin console ------------------------------ */
 
-/** GET /admin/groups */
+/** GET /admin/groups (moderation.view: moderators look, groups.manage acts) */
 export const AdminGroupsQuery = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(["all", "active", "suspended", "archived", "deleted"]).default("all"),
@@ -275,6 +276,10 @@ export type AdminGroupRow = {
   openReports: number;
   lastPostAt: string | null;
   createdAt: string;
+  /** Added with the console's Groups page (optional so older callers still type-check). */
+  logoUrl?: string | null;
+  tagline?: string | null;
+  deletedAt?: string | null;
 };
 
 export type AdminGroupsPage = {
@@ -283,7 +288,68 @@ export type AdminGroupsPage = {
   counts: { all: number; active: number; suspended: number; archived: number; deleted: number; private: number; public: number };
 };
 
-/** POST /admin/groups/{id} — staff actions on one group. */
+/** One of the last posts in a group, as staff see it (private groups' posts included, marked private). */
+export type AdminGroupPost = {
+  id: string;
+  author: MemberRef | null;
+  preview: string;
+  /** A private group's post: only its members see it on the member site. */
+  private: boolean;
+  status: string;
+  moderationState: "visible" | "hidden" | "removed";
+  deleted: boolean;
+  createdAt: string;
+  href: string;
+};
+
+/** An open report on the group or one of its posts. */
+export type AdminGroupReport = {
+  /** The report id (open it in the moderation queue: /moderation?report={id}). */
+  id: string;
+  target: { type: "group" | "post"; id: string; preview: string };
+  reason: ReportReason;
+  detail: string | null;
+  status: ReportStatus;
+  reporter: MemberRef | null;
+  createdAt: string;
+};
+
+/** GET /admin/groups/{id} (moderation.view) */
+export type AdminGroupDetail = AdminGroupRow & {
+  tagline: string | null;
+  about: string | null;
+  rules: string | null;
+  joinQuestion: string | null;
+  postPermission: GroupPostPermission;
+  postApproval: boolean;
+  hashtags: string[];
+  country: { code: string; name: string } | null;
+  coverUrl: string | null;
+  /** Owner, admins and moderators of the group (people who run it through its page or chapter are not listed). */
+  admins: { member: MemberRef; role: GroupRole }[];
+  /** The last 20 posts, newest first. */
+  recentPosts: AdminGroupPost[];
+  /** Open reports on the group and its posts, newest first (up to 20). */
+  reports: AdminGroupReport[];
+  /** Audit entries about the group, newest first (up to 30). */
+  history: AuditEntry[];
+};
+
+/** GET /admin/groups/{id}/members (moderation.view) and /admin/groups/{id}/members/export.csv (members.manage or groups.manage; no cursor or limit). */
+export const AdminGroupMembersQuery = z.object({
+  /** Name, @handle or email. */
+  q: z.string().trim().max(100).optional(),
+  /** Every status when left out. */
+  status: GroupMemberStatus.optional(),
+  role: GroupRole.optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type AdminGroupMembersQuery = z.infer<typeof AdminGroupMembersQuery>;
+
+export type AdminGroupMember = GroupMemberView & { email: string };
+
+/** POST /admin/groups/{id} (groups.manage) — staff actions on one group. */
 export const AdminGroupAction = z.discriminatedUnion("action", [
   z.object({ action: z.literal("suspend"), note: z.string().trim().min(3, "Say why, for the group's admins").max(500) }),
   z.object({ action: z.literal("restore") }),
@@ -294,7 +360,7 @@ export const AdminGroupAction = z.discriminatedUnion("action", [
 ]);
 export type AdminGroupAction = z.infer<typeof AdminGroupAction>;
 
-/** POST /admin/groups/bulk */
+/** POST /admin/groups/bulk (groups.manage) → BulkResult. suspend needs a note. */
 export const AdminGroupsBulkInput = z.object({
   ids: BulkIds,
   action: z.enum(["suspend", "restore", "feature", "unfeature", "delete"]),
@@ -302,7 +368,7 @@ export const AdminGroupsBulkInput = z.object({
 });
 export type AdminGroupsBulkInput = z.infer<typeof AdminGroupsBulkInput>;
 
-/** GET/PUT /admin/settings/groups — who can create groups and how many one member may own. */
+/** GET/PUT /admin/settings/groups (settings.manage) — who can create groups and how many one member may own. */
 export const GroupsSettings = z.object({
   whoCanCreate: z.enum(["everyone", "verified", "staff"]),
   maxOwnedPerMember: z.number().int().min(1).max(GROUPS_OWNED_MAX),

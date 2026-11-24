@@ -51,6 +51,7 @@ export function ModerationWorkspace({
   detailError,
   viewerId,
   canAct,
+  canManageGroups = false,
 }: {
   filters: QueueFilters;
   initialRows: AdminReportRow[];
@@ -60,6 +61,8 @@ export function ModerationWorkspace({
   detailError: string | null;
   viewerId: string;
   canAct: boolean;
+  /** groups.manage: the case detail of a group report offers "Suspend group". */
+  canManageGroups?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -74,6 +77,7 @@ export function ModerationWorkspace({
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmDismiss, setConfirmDismiss] = useState(false);
+  const [suspendingGroup, setSuspendingGroup] = useState(false);
   const selection = useSelection();
   const detailRef = useRef<HTMLDivElement>(null);
   const lastDetailId = useRef<string | null>(detail?.id ?? null);
@@ -379,10 +383,12 @@ export function ModerationWorkspace({
               detail={detail}
               viewerId={viewerId}
               canAct={canAct}
+              canManageGroups={canManageGroups}
               busy={detailBusy}
               assigning={assigning}
               onAction={setPending}
               onAssign={assign}
+              onSuspendGroup={() => setSuspendingGroup(true)}
             />
           ) : detailError ? (
             <div id={`${ids}-detail`} className="rounded-card border border-line bg-card">
@@ -421,6 +427,28 @@ export function ModerationWorkspace({
           confirmLabel="Dismiss cases"
           onConfirm={(reason) => bulk("dismiss", reason)}
           onClose={() => setConfirmDismiss(false)}
+        />
+      )}
+
+      {suspendingGroup && detail?.group && (
+        <ReasonDialog
+          title={t("Suspend {name}?", { name: detail.group.name })}
+          description="Members can’t open the group or see its posts, in the group or in their feeds. Its admins still can, and they see your note. Open reports on the group are closed as actioned and the reporters are told."
+          confirmLabel="Suspend group"
+          tone="danger"
+          reasonLabel="Note to the group’s admins"
+          reasonPlaceholder="Why the group was suspended"
+          reasonHint="Shown to the group’s admins and recorded in the audit log."
+          requiredMessage="Add a note so the group’s admins know why."
+          minReasonLength={3}
+          onClose={() => setSuspendingGroup(false)}
+          onConfirm={async (note) => {
+            const group = detail.group!;
+            await api(`/admin/groups/${group.id}`, { method: "POST", body: { action: "suspend", note } });
+            setSuspendingGroup(false);
+            setNotice({ tone: "success", text: t("{name} is suspended. Its admins and the reporters have been told.", { name: group.name }) });
+            refresh(detail.id);
+          }}
         />
       )}
 

@@ -174,7 +174,8 @@ export function availableActions(detail: AdminReportDetail): ModerationActionKin
     if (state === "removed") kinds.push("restore");
   }
   if (type === "hashtag") kinds.push(state === "hidden" ? "restore" : "hide");
-  if (type !== "hashtag" && detail.author) kinds.push("warn", "restrict_posting", "restrict_connecting", "suspend");
+  // Groups are suspended from Groups (the case detail offers "Suspend group"); here they are only dismissed or escalated.
+  if (type !== "hashtag" && type !== "group" && detail.author) kinds.push("warn", "restrict_posting", "restrict_connecting", "suspend");
   if (open) kinds.push("escalate", "dismiss");
   return kinds;
 }

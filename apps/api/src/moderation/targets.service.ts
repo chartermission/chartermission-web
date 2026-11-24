@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { ReportTargetType } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { comments, conversationMembers, hashtags, initiatives, memberProfiles, messages, opportunities, posts, stories, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
+import { comments, conversationMembers, groupMembers, groups, hashtags, initiatives, memberProfiles, messages, opportunities, posts, stories, trendingOverrides, userRoles, roles, users } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { PRIVILEGED_ROLES } from '../core/permissions.js';
@@ -57,6 +57,8 @@ export function hrefFor(
       return `/${extra.handle ?? id}`;
     case 'initiative':
       return `/initiatives/${extra.slug ?? id}`;
+    case 'group':
+      return `/groups/${extra.slug ?? id}`;
   }
 }
 
@@ -200,6 +202,32 @@ export class TargetsService {
           href: hrefFor('initiative', i.id, { slug: i.slug }),
         };
       }
+      case 'group': {
+        if (!isUuid(rawId)) throw Errors.notFound('That group');
+        const [g] = await this.db.select().from(groups).where(eq(groups.id, rawId)).limit(1);
+        if (!g) throw Errors.notFound('That group');
+        // The member who owns it answers for it (page and chapter groups may have none).
+        const [owner] = await this.db
+          .select({ userId: groupMembers.userId })
+          .from(groupMembers)
+          .where(and(eq(groupMembers.groupId, g.id), eq(groupMembers.role, 'owner'), eq(groupMembers.status, 'active')))
+          .limit(1);
+        // Suspended groups count as hidden: members can't open (or report) them; deleted ones are gone.
+        const state: ContentState = g.deletedAt ? 'deleted' : g.status === 'suspended' ? 'hidden' : 'visible';
+        return {
+          type,
+          id: g.id,
+          userId: owner?.userId ?? (g.ownerType === 'member' ? g.createdBy : null),
+          state,
+          visibleToMembers: state === 'visible',
+          hashtagId: null,
+          postId: null,
+          body: [g.name, g.tagline, g.about, g.rules ? `Rules:\n${g.rules}` : null].filter(Boolean).join('\n\n'),
+          createdAt: g.createdAt,
+          preview: truncate(g.name),
+          href: hrefFor('group', g.id, { slug: g.slug }),
+        };
+      }
       case 'opportunity': {
         if (!isUuid(rawId)) throw Errors.notFound('That opportunity');
         const [o] = await this.db.select().from(opportunities).where(eq(opportunities.id, rawId)).limit(1);
@@ -320,6 +348,12 @@ export class TargetsService {
         .where(inArray(initiatives.id, initiativeIds));
       for (const r of rows)
         out.set(targetKey('initiative', r.id), { preview: truncate(r.title), userId: r.leadId, href: hrefFor('initiative', r.id, { slug: r.slug }), postId: null });
+    }
+    const groupIds = ids('group').filter(isUuid);
+    if (groupIds.length) {
+      const rows = await this.db.select({ id: groups.id, name: groups.name, slug: groups.slug, createdBy: groups.createdBy }).from(groups).where(inArray(groups.id, groupIds));
+      for (const r of rows)
+        out.set(targetKey('group', r.id), { preview: truncate(r.name), userId: r.createdBy, href: hrefFor('group', r.id, { slug: r.slug }), postId: null });
     }
     const messageIds = ids('message').filter(isUuid);
     if (messageIds.length) {

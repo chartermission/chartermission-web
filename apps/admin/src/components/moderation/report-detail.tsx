@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import Link from "next/link";
 import type { AdminActionView, AdminReportDetail, ModerationActionKind } from "@chartermission/contracts";
 import { Avatar, Chip, Divider, Icon, buttonClasses, cn } from "@chartermission/ui";
 import { Age, DateTime } from "@/components/time";
@@ -81,25 +82,72 @@ export function ActionHistoryItem({ action, current }: { action: AdminActionView
   );
 }
 
+/** The reported group: logo, name, visibility, members and status, with a link to it in Groups. */
+function GroupCard({ group }: { group: NonNullable<AdminReportDetail["group"]> }) {
+  const t = useT();
+  const status = { active: "Active", suspended: "Suspended", archived: "Archived", deleted: "Deleted" }[group.status];
+  return (
+    <div className="flex items-start gap-3 rounded-[10px] border border-line bg-surface p-3.5">
+      {group.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- permission-checked API media
+        <img src={group.logoUrl} alt="" className="size-11 shrink-0 rounded-[10px] border border-line object-cover" />
+      ) : (
+        <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-primary text-md font-semibold text-inverse">
+          {group.name.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <Link href={`/groups/${group.id}`} className="truncate font-semibold text-ink hover:underline" dir="auto">
+            {group.name}
+          </Link>
+          <Chip tone={group.visibility === "private" ? "info" : "neutral"} className="px-2! py-0! text-xs!">
+            {group.visibility === "private" ? "Private" : "Public"}
+          </Chip>
+          {group.status !== "active" && (
+            <Chip tone={group.status === "archived" ? "neutral" : "error"} className="px-2! py-0! text-xs!">
+              {status}
+            </Chip>
+          )}
+        </span>
+        {group.tagline && (
+          <span className="line-clamp-2 text-sm text-body" dir="auto">
+            {group.tagline}
+          </span>
+        )}
+        <span className="text-xs text-secondary">
+          {t("{count} members", { count: group.memberCount })} ·{" "}
+          {group.ownerType === "page" ? t("Run by a page") : group.ownerType === "chapter" ? t("Run by a chapter") : t("Run by a member")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** Case detail and actions (Figma "Report detail", node 12:1731). */
 export function ReportDetail({
   id,
   detail,
   viewerId,
   canAct,
+  canManageGroups = false,
   busy,
   assigning,
   onAction,
   onAssign,
+  onSuspendGroup,
 }: {
   id: string;
   detail: AdminReportDetail;
   viewerId: string;
   canAct: boolean;
+  /** groups.manage: offer "Suspend group" on group reports. */
+  canManageGroups?: boolean;
   busy: boolean;
   assigning: boolean;
   onAction: (kind: ModerationActionKind) => void;
   onAssign: (assignee: "me" | "none") => void;
+  onSuspendGroup?: () => void;
 }) {
   const t = useT();
   const priority = PRIORITY_CHIP[detail.priority];
@@ -165,6 +213,8 @@ export function ReportDetail({
           </button>
         )}
       </div>
+
+      {detail.group && <GroupCard group={detail.group} />}
 
       <figure className="flex flex-col gap-2 rounded-[10px] border border-line bg-surface p-3.5">
         <figcaption className="flex flex-wrap items-center gap-2 text-xs text-secondary">
@@ -294,6 +344,19 @@ export function ReportDetail({
 
       <div className="flex flex-col gap-2.5">
         <SectionLabel>Action</SectionLabel>
+        {detail.group && canManageGroups && onSuspendGroup && (detail.group.status === "active" || detail.group.status === "archived") && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={busy} className={actionClasses.danger} onClick={onSuspendGroup}>
+                Suspend group
+              </button>
+            </div>
+            <p className="text-xs text-secondary">Members can’t open a suspended group or see its posts. Its admins are told why.</p>
+          </div>
+        )}
+        {detail.group && !canManageGroups && (detail.group.status === "active" || detail.group.status === "archived") && (
+          <p className="text-xs text-secondary">A Platform Admin can suspend the group from Groups.</p>
+        )}
         {!canAct ? (
           <p className="text-sm text-secondary">Your role can review reports but not act on them.</p>
         ) : defs.length === 0 ? (

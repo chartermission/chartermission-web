@@ -18,6 +18,7 @@ import {
 } from 'drizzle-orm';
 import {
   MEMBERS_EXPORT_MAX,
+  type AdminMemberGroup,
   type AdminMemberOverview,
   type AdminMembersBulkInput,
   type AdminMembersExportInput,
@@ -52,6 +53,8 @@ import {
   contentReports,
   featuredMembers,
   follows,
+  groupMembers,
+  groups,
   mcpAccessGrants,
   memberBadges,
   memberProfiles,
@@ -725,6 +728,17 @@ export class AdminMembersService {
         .orderBy(desc(auditLog.id))
         .limit(10),
     ]);
+    const runs = and(eq(groupMembers.userId, id), eq(groupMembers.status, 'active'), inArray(groupMembers.role, ['owner', 'admin']), isNull(groups.deletedAt));
+    const [groupRows, [groupTotal]] = await Promise.all([
+      this.db
+        .select({ id: groups.id, slug: groups.slug, name: groups.name, visibility: groups.visibility, role: groupMembers.role, memberCount: groups.memberCount, status: groups.status })
+        .from(groupMembers)
+        .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+        .where(runs)
+        .orderBy(sql`case ${groupMembers.role} when 'owner' then 0 else 1 end`, desc(groups.createdAt))
+        .limit(10),
+      this.db.select({ n: sql<number>`count(*)::int` }).from(groupMembers).innerJoin(groups, eq(groups.id, groupMembers.groupId)).where(runs),
+    ]);
     const refs = await this.memberRefs.refs([
       id,
       ...(inviter ? [inviter.inviterId] : []),
@@ -753,6 +767,7 @@ export class AdminMembersService {
         // The panel is for members.manage; IP hashes stay in the audit log itself.
         ipHash: null,
       })),
+      groups: { total: groupTotal?.n ?? 0, items: groupRows.map((g) => ({ ...g }) as AdminMemberGroup) },
     };
   }
 
