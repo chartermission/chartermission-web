@@ -30,6 +30,12 @@ export type DomainEvent =
   | { type: 'chapter.post_pending'; postId: string; chapterId: string; authorId: string }
   | { type: 'chapter.post_reviewed'; postId: string; chapterId: string; action: 'approve' | 'decline' | 'hold' | 'remove'; actorId: string }
   | { type: 'chapter.banned'; chapterId: string; userId: string; actorId: string }
+  | { type: 'group.join_requested'; groupId: string; userId: string }
+  | { type: 'group.invited'; groupId: string; userIds: string[]; inviterId: string }
+  | { type: 'group.request_approved'; groupId: string; userId: string; actorId: string }
+  | { type: 'group.post_pending'; postId: string; groupId: string; authorId: string }
+  | { type: 'group.post_reviewed'; postId: string; groupId: string; action: 'approve' | 'decline' | 'remove'; actorId: string; note: string | null }
+  | { type: 'group.role_changed'; groupId: string; userId: string; role: 'owner' | 'admin' | 'moderator'; actorId: string }
   | { type: 'page.reviewed'; pageId: string; action: 'approve' | 'reject' | 'suspend' | 'restore'; actorId: string }
   | { type: 'page.admin_added'; pageId: string; userId: string; actorId: string }
   | { type: 'verification.decided'; requestId: string }

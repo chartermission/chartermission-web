@@ -29,6 +29,7 @@ import { seedStories } from './seed-stories.js';
 import { seedModeration } from './seed-moderation.js';
 import { seedChaptersAndOpportunities } from './seed-opportunities.js';
 import { seedPages } from './seed-pages.js';
+import { seedGroups } from './seed-groups.js';
 import { seedInitiatives } from './seed-initiatives.js';
 import { seedServices } from './seed-services.js';
 import { seedPageDetails } from './seed-page-details.js';
@@ -371,6 +372,7 @@ async function main() {
     await seedChaptersAndOpportunities(db, ctx);
     await seedPages(db, ctx);
     await seedPageDetails(db, ctx);
+    await seedGroups(db, ctx);
     await seedInitiatives(db, ctx);
     await seedServices(db, ctx);
     await seedContentCalendar(db, ctx);

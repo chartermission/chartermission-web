@@ -5,6 +5,8 @@ import type {
   ChapterDetail,
   ChapterSummary,
   CreatorAnalytics,
+  GroupDetail,
+  GroupSummary,
   ManagedPage,
   NotificationView,
   Page,
@@ -14,7 +16,7 @@ import type {
   TrendingResponse,
   UnreadCount,
 } from '@chartermission/contracts';
-import { chapterSummary, clip, json, LIST_BODY_MAX, notification, post } from '../format.js';
+import { chapterSummary, clip, group, json, LIST_BODY_MAX, notification, post } from '../format.js';
 import { cursor, IDEMPOTENT_WRITE, pathSegment, READ, stripPrefix, uuid, uuidString, type ToolContext } from './shared.js';
 
 const days = z
@@ -225,6 +227,38 @@ export function registerExploreTools(server: McpServer, ctx: ToolContext) {
       return json({
         pages: pages.map((p) => ({ id: p.id, slug: p.slug, name: p.name, role: p.role, status: p.status, followers: p.followers, url: links.page(p.slug) })),
       });
+    },
+  );
+
+  /* ---------------------------- Groups ---------------------------- */
+
+  server.registerTool(
+    'list_my_groups',
+    {
+      title: 'My groups',
+      description:
+        'Groups the member is in (or runs through a page or chapter), with their role. Use a slug with get_group to see whether they can post there, and with create_post or schedule_post (group) to post in it.',
+      inputSchema: { cursor },
+      annotations: { title: 'My groups', ...READ },
+    },
+    async (a) => {
+      const page = await api.get<Page<GroupSummary>>('groups', { scope: 'mine', limit: 50, cursor: a.cursor });
+      return json({ groups: page.items.map((g) => group(g, links)), nextCursor: page.nextCursor });
+    },
+  );
+
+  server.registerTool(
+    'get_group',
+    {
+      title: 'Get group',
+      description:
+        "One group by slug: what it is about, whether it is public or private, the member's role and whether they can post there (some groups approve posts first, some let only admins post).",
+      inputSchema: { slug: z.string().min(1).max(120).describe('The group\'s slug (from list_my_groups) or id.') },
+      annotations: { title: 'Get group', ...READ },
+    },
+    async (a) => {
+      const g = await api.get<GroupDetail>(`groups/${pathSegment(a.slug.trim().toLowerCase(), 'slug')}`);
+      return json(group(g, links));
     },
   );
 }

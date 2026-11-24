@@ -19,6 +19,30 @@ import type { Config } from '../src/env.js';
 const GOOD = 'cmat_good';
 const CHAPTER_ID = '6f1c2a5e-8b1d-4c3e-9a2b-1d2e3f4a5b6c';
 const POST_ID = '0b9d8c7e-6f5a-4b3c-8d2e-1f0a9b8c7d6e';
+const GROUP_ID = '7a6b5c4d-3e2f-4a1b-8c9d-0e1f2a3b4c5d';
+
+function groupSummary() {
+  return {
+    id: GROUP_ID,
+    slug: 'solar-builders',
+    name: 'Solar Builders',
+    visibility: 'private',
+    logoUrl: null,
+    tagline: 'People building mini-grids',
+    coverUrl: null,
+    ownerType: 'member',
+    page: null,
+    chapter: null,
+    country: null,
+    memberCount: 12,
+    postsThisWeek: 3,
+    connections: [],
+    status: 'active',
+    featured: false,
+    membership: { status: 'active', role: 'member', viaOwner: false },
+    createdAt: '2026-11-01T10:00:00.000Z',
+  };
+}
 
 type Seen = { method: string; path: string; auth?: string; csrf?: string; contentType?: string; body: unknown; forwardedFor?: string };
 
@@ -124,6 +148,35 @@ function fakeApi() {
       return;
     }
     res.json({ id: CHAPTER_ID, slug: 'nigeria' });
+  });
+  v1.get('/groups', (req, res) => {
+    // list_my_groups asks only for the member's own groups.
+    if (req.query.scope !== 'mine') {
+      res.status(400).json({ error: { code: 'VALIDATION_FAILED', message: 'Expected scope=mine' } });
+      return;
+    }
+    res.json({ items: [groupSummary()], nextCursor: null });
+  });
+  v1.get('/groups/:slug', (req, res) => {
+    if (req.params.slug !== 'solar-builders') {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Group was not found' } });
+      return;
+    }
+    res.json({
+      ...groupSummary(),
+      about: 'We share what works.',
+      rules: null,
+      joinQuestion: null,
+      postPermission: 'members',
+      postApproval: true,
+      hashtags: [],
+      postCount: 40,
+      admins: [],
+      createdBy: null,
+      statusNote: null,
+      pending: null,
+      abilities: { seeContent: true, post: true, join: 'none', leave: true, invite: false, moderate: false, manage: false, own: false },
+    });
   });
   v1.post('/posts', (req, res) => {
     if (postFailure) {
@@ -318,8 +371,8 @@ describe('tools', () => {
     expect(names).toEqual(
       [
         'accept_connection_request', 'comment', 'create_post', 'delete_comment', 'delete_post', 'edit_comment', 'edit_post',
-        'follow', 'get_chapter', 'get_member', 'get_post', 'list_chapters', 'list_comments', 'list_connection_requests',
-        'list_drafts', 'list_notifications', 'mark_notifications_read', 'member_suggestions', 'my_analytics', 'my_pages',
+        'follow', 'get_chapter', 'get_group', 'get_member', 'get_post', 'list_chapters', 'list_comments', 'list_connection_requests',
+        'list_drafts', 'list_my_groups', 'list_notifications', 'mark_notifications_read', 'member_suggestions', 'my_analytics', 'my_pages',
         'post_analytics', 'publish_draft', 'react', 'read_feed', 'remove_reaction', 'save_draft', 'schedule_post',
         'search_members', 'send_connection_request', 'topic_posts', 'trending', 'unfollow', 'whoami',
       ].sort(),
@@ -358,6 +411,28 @@ describe('tools', () => {
     const out = JSON.parse(text(result)) as { published: Record<string, unknown> };
     expect(out.published).toMatchObject({ id: POST_ID, url: `https://web.example.test/posts/${POST_ID}`, author: { handle: 'amina' }, chapter: 'nigeria' });
     expect(out.published).not.toHaveProperty('reactionBreakdown');
+    await client.close();
+  });
+
+  it('lists the member\'s groups, opens one, and posts in it by slug', async () => {
+    const client = await connect();
+    const listed = await client.callTool({ name: 'list_my_groups', arguments: {} });
+    expect(listed.isError).toBeFalsy();
+    const list = seen.find((s) => s.method === 'GET' && s.path === '/groups')!;
+    expect(list).toBeTruthy();
+    expect(JSON.parse(text(listed))).toMatchObject({ groups: [{ slug: 'solar-builders', visibility: 'private', yourRole: 'member', url: 'https://web.example.test/groups/solar-builders' }] });
+
+    const opened = await client.callTool({ name: 'get_group', arguments: { slug: 'solar-builders' } });
+    expect(JSON.parse(text(opened))).toMatchObject({ name: 'Solar Builders', canPost: true, postsNeedApproval: true, yourRole: 'member' });
+
+    const result = await client.callTool({ name: 'create_post', arguments: { body: 'Our Kano site is live.', group: 'solar-builders' } });
+    expect(result.isError).toBeFalsy();
+    const create = seen.find((s) => s.method === 'POST' && s.path === '/posts')!;
+    expect(create.body).toMatchObject({ body: 'Our Kano site is live.', groupId: GROUP_ID });
+
+    const missing = await client.callTool({ name: 'create_post', arguments: { body: 'Hi', group: 'atlantis' } });
+    expect(missing.isError).toBe(true);
+    expect(text(missing)).toContain('Group was not found');
     await client.close();
   });
 
@@ -451,6 +526,8 @@ describe('path segments', () => {
       { name: 'send_connection_request', arguments: { member: 'a/b' } },
       { name: 'create_post', arguments: { body: 'Hi', chapter: '..' } },
       { name: 'create_post', arguments: { body: 'Hi', page: '../me' } },
+      { name: 'create_post', arguments: { body: 'Hi', group: '../me' } },
+      { name: 'get_group', arguments: { slug: '../admin' } },
     ];
     for (const c of cases) {
       const result = await client.callTool(c);

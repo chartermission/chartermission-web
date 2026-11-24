@@ -10,6 +10,7 @@ import { ProfilesService } from '../profiles/profiles.service.js';
 import { TaxonomyService } from '../profiles/taxonomy.service.js';
 import { FollowsService } from '../profiles/follows.service.js';
 import { SuggestionsService } from '../profiles/suggestions.service.js';
+import { openPublicGroupSql } from '../groups/group-access.js';
 
 const DONE = ONBOARDING_STEPS.length;
 const HASHTAG_SUGGESTIONS = 12;
@@ -151,6 +152,7 @@ export class OnboardingService {
           isNull(posts.deletedAt),
           eq(posts.moderationState, 'visible'),
           eq(posts.status, 'published'),
+          openPublicGroupSql(sql`${posts.groupId}`),
         ),
       )
       .where(eq(hashtags.status, 'active'))

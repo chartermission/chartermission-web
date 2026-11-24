@@ -17,6 +17,7 @@ import {
   chapters,
   comments,
   files,
+  groups,
   hashtags,
   mentions,
   pollOptions,
@@ -50,6 +51,7 @@ import { attachHashtags, syncHashtags } from './hashtags.js';
 import { replaceMentions, resolveMentions } from './mentions.js';
 import { firstHttpsUrl, parseHashtags } from './text-parse.js';
 import { canViewPost, isInteractive, type PostRow } from './visibility.js';
+import { canSeeGroupPost, groupAccess, roleAtLeast, syncGroupPostStats, type GroupRow } from '../groups/group-access.js';
 
 /** Spec 8.2 (proposed): posts per member per day. */
 export const POSTS_PER_DAY = 20;
@@ -140,8 +142,15 @@ export class PostsService implements OnModuleInit {
       pageIsLive = (await this.pageRefs.refs([post.pageId])).get(post.pageId)?.status === 'active';
       if (!pageIsLive && (await this.pageRefs.role(viewer?.id, post.pageId))) pageIsLive = true;
     }
-    if (!canViewPost(post, states.get(post.authorId), viewer, blocked, pageIsLive)) throw Errors.notFound('Post');
+    // A group's post: only for those who may see the group's posts (private groups: its members).
+    const groupVisible = post.groupId ? await canSeeGroupPost(this.db, post, viewer) : true;
+    if (!canViewPost(post, states.get(post.authorId), viewer, blocked, pageIsLive, groupVisible)) throw Errors.notFound('Post');
     if (opts.interactive && !isInteractive(post)) throw Errors.notFound('Post');
+    // Archived groups are read-only: no new comments, reactions, votes or reposts on their posts.
+    if (opts.interactive && post.groupId) {
+      const [group] = await this.db.select({ status: groups.status }).from(groups).where(eq(groups.id, post.groupId)).limit(1);
+      if (group?.status === 'archived') throw Errors.conflict('This group is archived. Its posts can be read but not answered or reacted to.');
+    }
     return post;
   }
 
@@ -162,6 +171,7 @@ export class PostsService implements OnModuleInit {
       throw Errors.forbidden('Only the platform team can publish announcements');
     }
     if (input.pageId) await this.assertCanPostAs(user, input);
+    const inGroup = input.groupId ? await this.groupForPost(user, input) : null;
     await this.limits.consume(`posts:${user.id}`, POSTS_PER_DAY, 24 * 3600);
 
     const attachments = await this.validateAttachments(user.id, input.attachmentIds);
@@ -190,11 +200,13 @@ export class PostsService implements OnModuleInit {
     // Content calendar: in "approve before publishing" mode a post written with Claude waits for the team.
     const awaitingApproval = source === 'claude' && !origin.approved && (await this.claudeApprovalRequired());
     // CM-FED rule: a post is visible only after its attachments pass scanning.
+    // A group whose admins approve posts: a member's post waits for a moderator (not for moderators themselves).
+    const groupReview = !!inGroup?.review;
     const status = !attachments.every((f) => f.scanStatus === 'clean')
       ? 'pending_media'
       : awaitingApproval
         ? 'awaiting_approval'
-        : review
+        : review || groupReview
           ? 'in_review'
           : 'published';
     const now = new Date();
@@ -208,7 +220,10 @@ export class PostsService implements OnModuleInit {
           kind: input.kind,
           type: input.type,
           details: detailsFor(input),
-          visibility: input.visibility,
+          // A private group's posts are seen only by its members, whatever the composer said.
+          visibility: inGroup?.group.visibility === 'private' ? 'group' : input.visibility,
+          groupId: inGroup?.group.id ?? null,
+          groupReview: groupReview ? 'pending' : null,
           chapterId: input.chapterId ?? null,
           countryCode: user.countryCode,
           repostOfId: original?.id ?? null,
@@ -273,7 +288,7 @@ export class PostsService implements OnModuleInit {
 
     if (linkUrl) await this.queue.add('media', 'link-preview', { postId: post.id });
     if (status === 'published') await this.announce(post);
-    else if (status === 'in_review') await this.events.emit({ type: 'chapter.post_pending', postId: post.id, chapterId: post.chapterId!, authorId: post.authorId });
+    else if (status === 'in_review') await this.emitPending(post);
     this.analytics.track('post_created', user.id, user.countryCode);
     if (sharedEvent) this.analytics.track('event_shared', user.id, user.countryCode, sharedEvent.id);
     if (input.kind === 'announcement') {
@@ -355,8 +370,23 @@ export class PostsService implements OnModuleInit {
       await this.findVisible(user, id);
       throw Errors.forbidden(post.pageId ? 'Only the page’s admins can delete this post' : 'Only the author can delete this post');
     }
+    await this.softDelete(post);
+    if (!owner) {
+      await this.audit.record({ actorId: user.id, action: 'post.delete', targetType: 'post', targetId: id, before: { authorId: post.authorId }, ip });
+    }
+  }
+
+  /** Soft delete (spec 5.2): hashtag and repost counts drop, and the group's post count is recounted. */
+  private async softDelete(post: PostRow, groupNote?: { by: string; note: string | null }) {
+    const id = post.id;
     await this.db.transaction(async (tx) => {
-      await tx.update(posts).set({ deletedAt: new Date() }).where(eq(posts.id, id));
+      await tx
+        .update(posts)
+        .set({
+          deletedAt: new Date(),
+          ...(groupNote ? { groupReviewBy: groupNote.by, groupReviewAt: new Date(), groupReviewNote: groupNote.note } : {}),
+        })
+        .where(eq(posts.id, id));
       await tx
         .update(hashtags)
         .set({ postCount: sql`greatest(${hashtags.postCount} - 1, 0)` })
@@ -367,9 +397,38 @@ export class PostsService implements OnModuleInit {
           .set({ repostCount: sql`greatest(${posts.repostCount} - 1, 0)` })
           .where(eq(posts.id, post.repostOfId));
       }
+      await syncGroupPostStats(tx, post.groupId);
     });
-    if (!owner) {
-      await this.audit.record({ actorId: user.id, action: 'post.delete', targetType: 'post', targetId: id, before: { authorId: post.authorId }, ip });
+  }
+
+  /**
+   * Posting in a group: the member may post there (abilities.post: an active member, or anyone running
+   * it; admins-only groups need a moderator or up; archived and suspended groups take no posts). Group
+   * posts stand alone: not in a chapter, not as a page, not an initiative update or an announcement.
+   */
+  private async groupForPost(user: AuthUser, input: CreatePostInput): Promise<{ group: GroupRow; review: boolean }> {
+    if (input.kind === 'announcement') throw Errors.validation({ groupId: 'Announcements can’t be posted in a group' });
+    if (input.pageId) throw Errors.validation({ groupId: 'Post in a group as yourself, not as a page' });
+    if (input.chapterId) throw Errors.validation({ groupId: 'A post goes to a group or a chapter, not both' });
+    if (input.initiativeId) throw Errors.validation({ groupId: 'Initiative updates are posted on the initiative, not in a group' });
+    const [group] = await this.db.select().from(groups).where(eq(groups.id, input.groupId!)).limit(1);
+    if (!group || group.deletedAt) throw Errors.validation({ groupId: 'That group no longer exists' });
+    const access = await groupAccess(this.db, group, user);
+    if (!access.abilities.post) {
+      if (group.status === 'archived') throw Errors.forbidden('This group is archived. Nothing new can be posted in it.');
+      if (group.status !== 'active') throw Errors.forbidden('This group is closed for now. Nothing can be posted in it.');
+      if (access.role === null) throw Errors.forbidden('Join this group to post in it');
+      throw Errors.forbidden('Only the group’s admins and moderators can post here');
+    }
+    return { group, review: group.postApproval && !roleAtLeast(access.role, 'moderator') };
+  }
+
+  /** A post now waits for a reviewer: the chapter team or the group's moderators. */
+  private async emitPending(post: PostRow) {
+    if (post.chapterReview === 'pending' && post.chapterId) {
+      await this.events.emit({ type: 'chapter.post_pending', postId: post.id, chapterId: post.chapterId, authorId: post.authorId });
+    } else if (post.groupReview === 'pending' && post.groupId) {
+      await this.events.emit({ type: 'group.post_pending', postId: post.id, groupId: post.groupId, authorId: post.authorId });
     }
   }
 
@@ -563,6 +622,8 @@ export class PostsService implements OnModuleInit {
   private async repostTarget(user: AuthUser, id: string): Promise<PostRow> {
     let target = await this.findVisible(user, id, { interactive: true });
     if (target.repostOfId) target = await this.findVisible(user, target.repostOfId, { interactive: true });
+    // A private group's posts stay in the group: a repost would carry them out to everyone.
+    if (target.visibility === 'group') throw Errors.validation({ repostOfId: 'Posts in private groups can’t be reposted' });
     const [existing] = await this.db
       .select({ id: posts.id })
       .from(posts)
@@ -574,6 +635,7 @@ export class PostsService implements OnModuleInit {
 
   /** Domain events once a post is visible (at creation, or when its media becomes clean). */
   private async announce(post: PostRow) {
+    await syncGroupPostStats(this.db, post.groupId);
     await this.events.emit({ type: 'post.created', postId: post.id, authorId: post.authorId });
     const mentioned = await this.db
       .select({ userId: mentions.userId })
@@ -622,9 +684,13 @@ export class PostsService implements OnModuleInit {
         return;
       }
     }
-    // A post that still needs the Charter Mission team's or the chapter team's approval waits for it once its files are clean.
+    // A post that still needs the Charter Mission team's, the chapter team's or the group's approval waits for it once its files are clean.
     const next =
-      post.contentReview === 'pending' ? 'awaiting_approval' : post.chapterReview === 'pending' && post.chapterId ? 'in_review' : 'published';
+      post.contentReview === 'pending'
+        ? 'awaiting_approval'
+        : (post.chapterReview === 'pending' && post.chapterId) || (post.groupReview === 'pending' && post.groupId)
+          ? 'in_review'
+          : 'published';
     const [settled] = await this.db
       .update(posts)
       .set({ status: next })
@@ -632,7 +698,7 @@ export class PostsService implements OnModuleInit {
       .returning();
     if (!settled) return;
     if (next === 'published') await this.announce(settled);
-    else if (next === 'in_review') await this.events.emit({ type: 'chapter.post_pending', postId: settled.id, chapterId: settled.chapterId!, authorId: settled.authorId });
+    else if (next === 'in_review') await this.emitPending(settled);
   }
 
   /**
@@ -644,7 +710,7 @@ export class PostsService implements OnModuleInit {
   async approveContent(postId: string, reviewerId: string, note: string | null): Promise<'published' | 'in_review' | null> {
     const post = await this.find(postId);
     if (!post || post.deletedAt || post.status !== 'awaiting_approval') return null;
-    const next = post.chapterReview === 'pending' && post.chapterId ? 'in_review' : 'published';
+    const next = (post.chapterReview === 'pending' && post.chapterId) || (post.groupReview === 'pending' && post.groupId) ? 'in_review' : 'published';
     const now = new Date();
     const [settled] = await this.db
       .update(posts)
@@ -658,7 +724,7 @@ export class PostsService implements OnModuleInit {
       .set({ closesAt: sql`${polls.closesAt} + (${now.toISOString()}::timestamptz - ${post.createdAt.toISOString()}::timestamptz)` })
       .where(eq(polls.postId, settled.id));
     if (next === 'published') await this.announce(settled);
-    else await this.events.emit({ type: 'chapter.post_pending', postId: settled.id, chapterId: settled.chapterId!, authorId: settled.authorId });
+    else await this.emitPending(settled);
     return next;
   }
 
@@ -685,6 +751,40 @@ export class PostsService implements OnModuleInit {
     if (!published) return false;
     await this.announce(published);
     return true;
+  }
+
+  /**
+   * A group's moderator approved a waiting post: publish it and tell followers and mentioned members,
+   * exactly as if it had just been posted. Returns false when it was no longer waiting.
+   */
+  async publishGroupApproved(postId: string, reviewerId: string): Promise<boolean> {
+    const [published] = await this.db
+      .update(posts)
+      .set({ status: 'published', groupReview: 'approved', groupReviewBy: reviewerId, groupReviewAt: new Date(), groupReviewNote: null })
+      .where(and(eq(posts.id, postId), eq(posts.status, 'in_review'), eq(posts.groupReview, 'pending'), isNull(posts.deletedAt)))
+      .returning();
+    if (!published) return false;
+    await this.announce(published);
+    return true;
+  }
+
+  /** A group's moderator declined a waiting post: only its author still sees it, with the note. */
+  async declineGroupPost(postId: string, reviewerId: string, note: string | null): Promise<boolean> {
+    const rows = await this.db
+      .update(posts)
+      .set({ status: 'declined', groupReview: 'declined', groupReviewBy: reviewerId, groupReviewAt: new Date(), groupReviewNote: note })
+      .where(and(eq(posts.id, postId), eq(posts.status, 'in_review'), eq(posts.groupReview, 'pending'), isNull(posts.deletedAt)))
+      .returning({ id: posts.id });
+    return rows.length > 0;
+  }
+
+  /**
+   * A group's moderator removed a post from the group: it is deleted (kept in the database, gone
+   * everywhere) with the moderator and their note recorded on it for the author's notification.
+   */
+  async removeFromGroup(post: PostRow, actorId: string, note: string | null): Promise<void> {
+    if (post.deletedAt) return;
+    await this.softDelete(post, { by: actorId, note });
   }
 
   private async refreshLinkPreview(postId: string) {

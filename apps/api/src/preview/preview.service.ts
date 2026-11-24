@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { LinkPreviewInfo } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, events, initiatives, memberProfiles, opportunities, pages, postAttachments, posts, users } from '../db/schema.js';
+import { chapters, events, groups, initiatives, memberProfiles, opportunities, pages, postAttachments, posts, users } from '../db/schema.js';
 import { MediaService } from '../media/media.service.js';
+import { openPublicGroupSql } from '../groups/group-access.js';
 
 /** Where a preview picture comes from: a stored upload (served by /public/preview-image) or an outside address. */
 type Picture = { kind: 'file'; route: string; fileId: string } | { kind: 'url'; url: string };
@@ -19,8 +20,10 @@ const clip = (text: string | null | undefined, max = 200) => {
  * Preview bots are never signed in. Each link gets its own picture:
  *  - a member: name and photo (the headline only when the profile is public);
  *  - chapters, published events, live pages, open opportunities and visible initiatives: their title, summary and picture;
+ *  - groups (public and private ones are both listed): their name, tagline and picture, never their posts;
  *  - posts and articles: the first picture (a repost's original when it has none of its own),
- *    else the page's or author's picture, and the start of the text. Hidden posts get nothing.
+ *    else the page's or author's picture, and the start of the text. Hidden posts and posts in private,
+ *    suspended or deleted groups get nothing.
  * Pictures are re-checked against the same rules when the bot fetches them.
  */
 @Injectable()
@@ -46,6 +49,8 @@ export class PreviewService {
         return this.opportunity(key);
       case 'initiatives':
         return this.initiative(key);
+      case 'groups':
+        return this.group(key);
       case 'posts':
       case 'articles':
         return this.post(key);
@@ -84,6 +89,8 @@ export class PreviewService {
         return (await this.postRow(key))?.picture ?? null;
       case 'initiative':
         return (await this.initiativeRow(key))?.picture ?? null;
+      case 'group':
+        return (await this.groupRow(key))?.picture ?? null;
       default:
         return null;
     }
@@ -209,6 +216,26 @@ export class PreviewService {
     return found ? this.out(found.row.title, found.row.summary, found.picture) : null;
   }
 
+  /* ---------- groups ---------- */
+
+  /** A listed group: open (active or archived), not deleted. Private groups show what they list to anyone. */
+  private async groupRow(slug: string) {
+    if (!/^[a-z0-9-]{3,60}$/i.test(slug)) return null;
+    const [row] = await this.db
+      .select({ name: groups.name, tagline: groups.tagline, about: groups.about, logo: groups.logoFileId, cover: groups.coverFileId, slug: groups.slug })
+      .from(groups)
+      .where(and(sql`lower(${groups.slug}) = ${slug.toLowerCase()}`, inArray(groups.status, ['active', 'archived']), isNull(groups.deletedAt)))
+      .limit(1);
+    if (!row) return null;
+    const fileId = (await this.clean(row.cover)) ?? (await this.clean(row.logo));
+    return { row, picture: this.file('group', row.slug, fileId) };
+  }
+
+  private async group(slug: string) {
+    const found = await this.groupRow(slug);
+    return found ? this.out(`${found.row.name} · Charter Mission`, found.row.tagline ?? found.row.about ?? 'A group on Charter Mission.', found.picture) : null;
+  }
+
   /* ---------- posts and articles ---------- */
 
   /**
@@ -230,6 +257,8 @@ export class PreviewService {
           eq(posts.moderationState, 'visible'),
           isNull(posts.deletedAt),
           sql`coalesce(${posts.chapterReview}, '') <> 'pending'`,
+          // Never a private group's post (or one from a suspended or deleted group): the preview is public.
+          openPublicGroupSql(sql`${posts.groupId}`),
         ),
       )
       .limit(1);

@@ -35,6 +35,7 @@ import { InvitesModule } from './invites/invites.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { OAuthModule } from './oauth/oauth.module.js';
 import { ContentCalendarModule } from './content-calendar/content-calendar.module.js';
+import { GroupsModule } from './groups/groups.module.js';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { ContentCalendarModule } from './content-calendar/content-calendar.modul
     ChaptersModule,
     OpportunitiesModule,
     PagesModule,
+    GroupsModule,
     PeopleModule,
     MessagesModule,
     AnnouncementsModule,

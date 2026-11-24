@@ -3,6 +3,8 @@ import type {
   CommentView,
   ConnectionView,
   DraftView,
+  GroupDetail,
+  GroupSummary,
   MemberRef,
   NotificationView,
   PostView,
@@ -51,6 +53,7 @@ export class Links {
   member = (handle: string) => `${this.webUrl}/${handle}`;
   chapter = (slug: string) => `${this.webUrl}/chapters/${slug}`;
   page = (slug: string) => `${this.webUrl}/pages/${slug}`;
+  group = (slug: string) => `${this.webUrl}/groups/${slug}`;
   topic = (tag: string) => `${this.webUrl}/topics/${encodeURIComponent(tag)}`;
   /** Notification hrefs are web paths ("/posts/…"); external links are kept. */
   path = (href: string) => (/^https?:\/\//.test(href) ? href : `${this.webUrl}${href.startsWith('/') ? '' : '/'}${href}`);
@@ -93,6 +96,8 @@ export function post(p: PostView, links: Links, bodyMax = POST_BODY_MAX) {
     ...(p.attachments.length ? { attachments: p.attachments.length } : {}),
     ...(p.repostOf ? { repostOf: { id: p.repostOf.id, author: p.repostOf.author.name, body: clip(p.repostOf.body, 200).text } } : {}),
     chapter: p.chapter?.slug,
+    ...(p.group ? { group: { slug: p.group.slug, name: p.group.name, private: p.group.visibility === 'private' } } : {}),
+    ...(p.groupReview && p.groupReview.state !== 'approved' ? { groupReview: p.groupReview.state, ...(p.groupReview.note ? { groupNote: p.groupReview.note } : {}) } : {}),
     hashtags: p.hashtags.length ? p.hashtags : undefined,
     ...(p.status !== 'published' ? { status: p.status } : {}),
     ...(p.chapterReview && p.chapterReview.state !== 'approved' ? { chapterReview: p.chapterReview.state } : {}),
@@ -104,6 +109,33 @@ export function post(p: PostView, links: Links, bodyMax = POST_BODY_MAX) {
     counts: p.counts,
     yourReaction: p.viewer.reaction,
     ...(p.viewer.canEdit ? { yours: true } : {}),
+  };
+}
+
+/** A group as Claude needs it: what it is, the member's place in it and whether they can post there. */
+export function group(g: GroupSummary | GroupDetail, links: Links) {
+  const detail = 'abilities' in g ? g : null;
+  return {
+    id: g.id,
+    slug: g.slug,
+    name: g.name,
+    url: links.group(g.slug),
+    tagline: g.tagline,
+    visibility: g.visibility,
+    runBy: g.ownerType === 'page' ? { page: g.page?.slug } : g.ownerType === 'chapter' ? { chapter: g.chapter?.slug } : 'a member',
+    members: g.memberCount,
+    ...(g.status !== 'active' ? { status: g.status } : {}),
+    yourRole: g.membership.role,
+    ...(g.membership.status !== 'active' && g.membership.status !== 'none' ? { yourStatus: g.membership.status } : {}),
+    ...(detail
+      ? {
+          canPost: detail.abilities.post,
+          ...(detail.postApproval ? { postsNeedApproval: true } : {}),
+          ...(detail.postPermission === 'admins' ? { onlyAdminsPost: true } : {}),
+          about: detail.about ? clip(detail.about, 600).text : null,
+          postCount: detail.postCount,
+        }
+      : {}),
   };
 }
 

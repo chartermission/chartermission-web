@@ -503,6 +503,12 @@ export function compositionIssues(v: PostComposition): Issue[] {
     if (v.poll) add("eventId", "A post can share an event or have a poll, not both");
     if (v.attachmentIds.length) add("eventId", "A post that shares an event can’t have attachments");
   }
+  if (v.groupId) {
+    if (v.chapterId) add("groupId", "A post goes to a group or a chapter, not both");
+    if (v.pageId) add("groupId", "Post in a group as yourself, not as a page");
+    if (v.initiativeId) add("groupId", "Initiative updates are posted on the initiative, not in a group");
+    if (v.kind === "announcement") add("groupId", "Announcements can’t be posted in a group");
+  }
   if (v.type !== "celebration" && v.celebration) add("celebration", "Only celebration posts have milestone details");
   if (v.type !== "request" && v.request) add("request", "Only “Looking for” posts have request details");
   if (v.type !== "article" && v.article) add("article", "Only articles have a title");

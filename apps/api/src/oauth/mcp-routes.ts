@@ -36,6 +36,9 @@ export const MCP_ROUTES: ReadonlySet<string> = new Set([
   'GET pages',
   'GET me/pages',
   'GET pages/:slug',
+  // Groups: Claude lists the member's groups (scope=mine) and opens one before posting in it.
+  'GET groups',
+  'GET groups/:slug',
   'GET me/drafts',
   'GET me/drafts/:id',
   // Writing

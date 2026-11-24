@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, desc, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type { FeedNewQuery, FeedNewResponse, FeedQuery, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { chapters, connections, follows, users, hashtags, initiativeMembers, initiatives, memberProfiles, pageAdmins, pages, postHashtags, postViews, posts, profileSectors, sectors } from '../db/schema.js';
+import { chapters, connections, follows, groups, users, hashtags, initiativeMembers, initiatives, memberProfiles, pageAdmins, pages, postHashtags, postViews, posts, profileSectors, sectors } from '../db/schema.js';
 import { pseudonym } from '../common/crypto.js';
 import { decodeCursor, encodeCursor, paginate } from '../common/cursor.js';
 import { Errors } from '../common/errors.js';
@@ -11,6 +11,10 @@ import { RelationsService } from '../core/relations.service.js';
 import { PostSerializer } from '../posts/post-serializer.js';
 import { engagementSql, listablePostsSql, personalPostSql, tsKey } from '../posts/visibility.js';
 import { isUuid } from '../media/uuid-param.js';
+import { groupAccess, groupMemberSql, homeFeedGroupSql, roleAtLeast } from '../groups/group-access.js';
+
+/** Pinned posts lifted to the top of a group's feed. */
+const MAX_GROUP_PINNED = 3;
 
 /** Pinned announcements shown above the first page of every tab. */
 const MAX_PINNED = 3;
@@ -75,8 +79,46 @@ export class FeedService {
     private readonly relations: RelationsService,
   ) {}
 
+  /**
+   * GET /feed?group= — one group's posts, newest first, its pinned posts leading the first page.
+   * Private groups: 403 for people who aren't members (401 for visitors); deleted groups, and suspended
+   * ones for anyone but their admins and staff, are 404. Visitors see public groups' public posts.
+   */
+  async groupFeed(viewer: AuthUser | undefined, q: FeedQuery): Promise<Page<PostView>> {
+    const key = q.group!;
+    const [group] = await this.db
+      .select()
+      .from(groups)
+      .where(isUuid(key) ? eq(groups.id, key) : sql`lower(${groups.slug}) = ${key.toLowerCase()}`)
+      .limit(1);
+    if (!group || group.deletedAt) throw Errors.notFound('Group');
+    const access = await groupAccess(this.db, group, viewer);
+    if (group.status === 'suspended' && !access.staff && !roleAtLeast(access.role, 'admin')) throw Errors.notFound('Group');
+    if (!access.abilities.seeContent) {
+      if (!viewer) throw Errors.unauthenticated();
+      throw Errors.forbidden('Only members can see this group’s posts. Ask to join.');
+    }
+    const filters = await this.filters({ ...q, group: undefined, author: undefined, page: undefined, initiative: undefined });
+    if (!filters) return { items: [], nextCursor: null };
+    const conds = [listablePostsSql(viewer?.id ?? null), eq(posts.groupId, group.id), ...filters];
+    const pinned = q.cursor
+      ? []
+      : (
+          await this.db
+            .select({ id: posts.id })
+            .from(posts)
+            .where(and(...conds, isNotNull(posts.pinnedAt)))
+            .orderBy(desc(posts.pinnedAt))
+            .limit(Math.min(MAX_GROUP_PINNED, q.limit - 1))
+        ).map((r) => r.id);
+    const page = await this.newest(q, [...conds, isNull(posts.pinnedAt)], q.limit - pinned.length);
+    const blocked = viewer ? await this.relations.blockedSet(viewer.id) : undefined;
+    return { items: await this.serializer.posts([...pinned, ...page.ids], viewer, blocked), nextCursor: page.nextCursor };
+  }
+
   /** GET /feed (CM-FED-04, -05, -07): cursor-paginated, 20 per page by default. */
   async feed(viewer: AuthUser, q: FeedQuery): Promise<Page<PostView>> {
+    if (q.group) return this.groupFeed(viewer, q);
     const filters = await this.filters(q);
     if (!filters) return { items: [], nextCursor: null };
     const blocked = await this.relations.blockedSet(viewer.id);
@@ -89,7 +131,8 @@ export class FeedService {
       return { items: await this.serializer.posts(page.ids, viewer, blocked), nextCursor: page.nextCursor };
     }
 
-    const visible = listablePostsSql(viewer.id, { muteHashtags: true });
+    // Group posts reach the home feed only of the group's members (public groups too).
+    const visible = and(listablePostsSql(viewer.id, { muteHashtags: true }), homeFeedGroupSql(viewer.id))!;
     const notPinned = sql`not (${posts.kind} = 'announcement' and ${posts.pinnedAt} is not null)`;
     const base = [visible, notPinned, ...filters];
 
@@ -100,7 +143,7 @@ export class FeedService {
     let page: { ids: string[]; nextCursor: string | null };
     if (q.tab === 'for_you') page = await this.forYou(viewer, q, base, limit);
     else {
-      const conds = q.tab === 'following' ? [...base, sql`(${this.followedSql(viewer.id)} or ${this.officialSql()} or ${posts.kind} = 'announcement')`] : base;
+      const conds = q.tab === 'following' ? [...base, this.followingSql(viewer.id)] : base;
       page = await this.newest(q, conds, limit);
     }
     const ids = [...pinned, ...page.ids.filter((id) => !pinned.includes(id))];
@@ -116,12 +159,13 @@ export class FeedService {
     if (!filters) return { count: 0, authors: [] };
     const conds = [
       listablePostsSql(viewer.id, { muteHashtags: true }),
+      homeFeedGroupSql(viewer.id),
       ...filters,
       sql`(${posts.authorId} <> ${viewer.id} or ${posts.pageId} is not null)`,
       sql`${posts.status} = 'published'`,
       sql`${posts.createdAt} > ${q.since}::timestamptz`,
     ];
-    if (q.tab === 'following') conds.push(sql`(${this.followedSql(viewer.id)} or ${this.officialSql()} or ${posts.kind} = 'announcement')`);
+    if (q.tab === 'following') conds.push(this.followingSql(viewer.id));
     if (q.tab === 'for_you') conds.push(sql`${posts.createdAt} > now() - make_interval(days => ${FOR_YOU_DAYS}::int)`);
     const [counted] = await this.db
       .select({ n: sql<number>`count(*)::int` })
@@ -264,6 +308,15 @@ export class FeedService {
       .where(c ? sql`(${spread.score}, ${spread.id}) < (${c.s}::numeric, ${c.id}::uuid)` : undefined)
       .orderBy(desc(spread.score), desc(spread.id))
       .limit(limit + 1);
+  }
+
+  /**
+   * The Following tab: followed sources, official accounts and announcements, and posts in the viewer's
+   * groups (joining a group is following it; group posts get no extra boost in For you).
+   */
+  private followingSql(viewerId: string): SQL {
+    return sql`(${this.followedSql(viewerId)} or ${this.officialSql()} or ${posts.kind} = 'announcement'
+      or (${posts.groupId} is not null and ${groupMemberSql(viewerId, sql`${posts.groupId}`)}))`;
   }
 
   /**

@@ -36,6 +36,25 @@ export type GroupAccess = {
   abilities: GroupAbilities;
 };
 
+/** Is the member on the chapter's team (chapter lead or ambassador scoped to it)? */
+export async function isChapterTeam(db: Db, chapterId: string, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .innerJoin(roles, eq(roles.id, userRoles.roleId))
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        inArray(roles.key, [...CHAPTER_TEAM_ROLE_KEYS]),
+        eq(userRoles.scopeType, 'chapter'),
+        eq(userRoles.scopeId, chapterId),
+        isNull(userRoles.revokedAt),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
+
 /** Does the viewer run this group through the page or chapter that owns it? */
 async function runsViaOwner(db: Db, group: GroupRow, userId: string): Promise<boolean> {
   if (group.ownerType === 'page' && group.pageId) {
@@ -46,29 +65,12 @@ async function runsViaOwner(db: Db, group: GroupRow, userId: string): Promise<bo
       .limit(1);
     return !!row;
   }
-  if (group.ownerType === 'chapter' && group.chapterId) {
-    const [row] = await db
-      .select({ id: userRoles.id })
-      .from(userRoles)
-      .innerJoin(roles, eq(roles.id, userRoles.roleId))
-      .where(
-        and(
-          eq(userRoles.userId, userId),
-          inArray(roles.key, [...CHAPTER_TEAM_ROLE_KEYS]),
-          eq(userRoles.scopeType, 'chapter'),
-          eq(userRoles.scopeId, group.chapterId),
-          isNull(userRoles.revokedAt),
-        ),
-      )
-      .limit(1);
-    return !!row;
-  }
+  if (group.ownerType === 'chapter' && group.chapterId) return isChapterTeam(db, group.chapterId, userId);
   return false;
 }
 
 /** The viewer's access to one group (viewer undefined = signed out). */
 export async function groupAccess(db: Db, group: GroupRow, viewer: AuthUser | undefined): Promise<GroupAccess> {
-  const staff = !!viewer?.permissions.has('moderation.view');
   let status: GroupMembership['status'] = 'none';
   let memberRole: GroupRole | null = null;
   let viaOwner = false;
@@ -84,6 +86,23 @@ export async function groupAccess(db: Db, group: GroupRow, viewer: AuthUser | un
     }
     viaOwner = status !== 'banned' && (await runsViaOwner(db, group, viewer.id));
   }
+  return accessFrom(group, viewer, { status, memberRole, viaOwner });
+}
+
+/**
+ * The same rules as groupAccess, from what the caller already loaded (lists of groups load the
+ * viewer's memberships and page/chapter roles in bulk). `memberRole` is the role of an active
+ * membership only; `viaOwner` is ignored for banned members.
+ */
+export function accessFrom(
+  group: GroupRow,
+  viewer: AuthUser | undefined,
+  m: { status: GroupMembership['status']; memberRole: GroupRole | null; viaOwner: boolean },
+): GroupAccess {
+  const staff = !!viewer?.permissions.has('moderation.view');
+  const status = viewer ? m.status : 'none';
+  const memberRole = viewer && status === 'active' ? m.memberRole : null;
+  const viaOwner = !!viewer && status !== 'banned' && m.viaOwner;
   const role: GroupRole | null = viaOwner && !roleAtLeast(memberRole, 'admin') ? 'admin' : memberRole;
   const active = group.status === 'active' && !group.deletedAt;
   const open = active || group.status === 'archived';
@@ -104,16 +123,92 @@ export async function groupAccess(db: Db, group: GroupRow, viewer: AuthUser | un
 }
 
 /**
+ * The viewer's membership facts for many groups at once (for accessFrom): their group_members rows,
+ * and which of these groups they run through the owning page or chapter.
+ */
+export async function membershipsFor(
+  db: Db,
+  rows: GroupRow[],
+  viewerId: string | undefined,
+): Promise<Map<string, { status: GroupMembership['status']; memberRole: GroupRole | null; viaOwner: boolean }>> {
+  const out = new Map<string, { status: GroupMembership['status']; memberRole: GroupRole | null; viaOwner: boolean }>();
+  for (const g of rows) out.set(g.id, { status: 'none', memberRole: null, viaOwner: false });
+  if (!viewerId || !rows.length) return out;
+  const pageIds = [...new Set(rows.map((g) => g.pageId).filter((x): x is string => !!x))];
+  const chapterIds = [...new Set(rows.map((g) => g.chapterId).filter((x): x is string => !!x))];
+  const [members, pageRows, chapterRows] = await Promise.all([
+    db
+      .select({ groupId: groupMembers.groupId, role: groupMembers.role, status: groupMembers.status })
+      .from(groupMembers)
+      .where(and(eq(groupMembers.userId, viewerId), inArray(groupMembers.groupId, rows.map((g) => g.id)))),
+    pageIds.length
+      ? db
+          .select({ pageId: pageAdmins.pageId })
+          .from(pageAdmins)
+          .where(and(eq(pageAdmins.userId, viewerId), inArray(pageAdmins.pageId, pageIds)))
+      : Promise.resolve([] as { pageId: string }[]),
+    chapterIds.length
+      ? db
+          .select({ chapterId: userRoles.scopeId })
+          .from(userRoles)
+          .innerJoin(roles, eq(roles.id, userRoles.roleId))
+          .where(
+            and(
+              eq(userRoles.userId, viewerId),
+              inArray(roles.key, [...CHAPTER_TEAM_ROLE_KEYS]),
+              eq(userRoles.scopeType, 'chapter'),
+              inArray(userRoles.scopeId, chapterIds),
+              isNull(userRoles.revokedAt),
+            ),
+          )
+      : Promise.resolve([] as { chapterId: string | null }[]),
+  ]);
+  const pagesRun = new Set(pageRows.map((r) => r.pageId));
+  const chaptersRun = new Set(chapterRows.map((r) => r.chapterId));
+  for (const g of rows) {
+    const m = members.find((r) => r.groupId === g.id);
+    const status = (m?.status ?? 'none') as GroupMembership['status'];
+    out.set(g.id, {
+      status,
+      memberRole: m && m.status === 'active' ? (m.role as GroupRole) : null,
+      viaOwner: (g.ownerType === 'page' && !!g.pageId && pagesRun.has(g.pageId)) || (g.ownerType === 'chapter' && !!g.chapterId && chaptersRun.has(g.chapterId)),
+    });
+  }
+  return out;
+}
+
+/**
  * SQL: the post isn't in a group, or its group is open (active or archived) and — for a private
  * group's posts (visibility 'group') — the viewer is an active member, runs it through its page or
  * chapter, or wrote the post. Signed-out viewers never see 'group' posts (callers already require
  * visibility 'public' for them). Used by listablePostsSql for every list of posts.
  */
 export function groupPostsVisibleSql(viewerId: string | null): SQL {
-  if (!viewerId) {
-    return sql`(${posts.groupId} is null or exists (select 1 from ${groups} vg where vg.id = ${posts.groupId} and vg.status in ('active','archived') and vg.deleted_at is null and vg.visibility = 'public'))`;
-  }
-  return sql`(${posts.groupId} is null or exists (select 1 from ${groups} vg where vg.id = ${posts.groupId} and vg.deleted_at is null and vg.status in ('active','archived') and (${posts.visibility} <> 'group' or ${posts.authorId} = ${viewerId} or ${groupMemberSql(viewerId, sql`vg.id`)})))`;
+  return groupPostsVisibleForSql(viewerId, { groupId: sql`${posts.groupId}`, visibility: sql`${posts.visibility}`, authorId: sql`${posts.authorId}` });
+}
+
+/** groupPostsVisibleSql for a posts row under another alias (raw SQL such as `posts p`). */
+export function groupPostsVisibleForSql(viewerId: string | null, p: { groupId: SQL; visibility: SQL; authorId: SQL }): SQL {
+  if (!viewerId) return openPublicGroupSql(p.groupId);
+  return sql`(${p.groupId} is null or exists (select 1 from ${groups} vg where vg.id = ${p.groupId} and vg.deleted_at is null and vg.status in ('active','archived') and (${p.visibility} <> 'group' or ${p.authorId} = ${viewerId} or ${groupMemberSql(viewerId, sql`vg.id`)})))`;
+}
+
+/**
+ * SQL: the post (its group id in `groupIdCol`) isn't in a group, or its group is a public one that is
+ * open (active or archived, not deleted). For what anyone may learn without being a member: link
+ * previews, guest media, counts and topic lists shown to every member, trending.
+ */
+export function openPublicGroupSql(groupIdCol: SQL): SQL {
+  return sql`(${groupIdCol} is null or exists (select 1 from ${groups} vg where vg.id = ${groupIdCol} and vg.status in ('active','archived') and vg.deleted_at is null and vg.visibility = 'public'))`;
+}
+
+/**
+ * Home feed rule: a group's posts reach the home feed (tabs, new-post counts) only of the group's
+ * active members and the people running it — public groups included. Everyone else still meets public
+ * group posts on the author's profile, topic pages and search.
+ */
+export function homeFeedGroupSql(viewerId: string): SQL {
+  return sql`(${posts.groupId} is null or ${groupMemberSql(viewerId, sql`${posts.groupId}`)})`;
 }
 
 /** SQL: the viewer is an active member of the group in `groupIdCol`, or runs it through its page or chapter. */
@@ -131,9 +226,86 @@ export async function canSeeGroupPost(db: Db, post: { groupId: string | null; vi
   if (!post.groupId) return true;
   const [group] = await db.select().from(groups).where(eq(groups.id, post.groupId)).limit(1);
   if (!group) return false;
-  if (viewer?.id === post.authorId && !group.deletedAt) return true;
+  // Authors always see their own posts in an open group (even after leaving it); nobody but staff sees
+  // posts of a suspended group, as in groupPostsVisibleSql.
+  if (viewer?.id === post.authorId && !group.deletedAt && group.status !== 'suspended') return true;
   const access = await groupAccess(db, group, viewer);
+  return seesGroupPost(post, access);
+}
+
+function seesGroupPost(post: { visibility: string }, access: GroupAccess): boolean {
   if (!access.abilities.seeContent) return false;
   // A public group's post marked members-only still needs a signed-in viewer (canViewPost checks that).
   return post.visibility !== 'group' || access.role !== null || access.staff;
+}
+
+/**
+ * canSeeGroupPost for many posts at once (feeds of embeds, single checks in a loop): the ids of the
+ * posts whose group the viewer may see. Posts outside groups are always in the set.
+ */
+export async function groupVisiblePostIds(
+  db: Db,
+  rows: { id: string; groupId: string | null; visibility: string; authorId: string }[],
+  viewer: AuthUser | undefined,
+): Promise<Set<string>> {
+  const out = new Set(rows.filter((r) => !r.groupId).map((r) => r.id));
+  const groupIds = [...new Set(rows.map((r) => r.groupId).filter((x): x is string => !!x))];
+  if (!groupIds.length) return out;
+  const groupRows = await db.select().from(groups).where(inArray(groups.id, groupIds));
+  const facts = await membershipsFor(db, groupRows, viewer?.id);
+  const byId = new Map(groupRows.map((g) => [g.id, g]));
+  for (const r of rows) {
+    if (!r.groupId) continue;
+    const group = byId.get(r.groupId);
+    if (!group) continue;
+    if (viewer?.id === r.authorId && !group.deletedAt && group.status !== 'suspended') {
+      out.add(r.id);
+      continue;
+    }
+    if (seesGroupPost(r, accessFrom(group, viewer, facts.get(group.id)!))) out.add(r.id);
+  }
+  return out;
+}
+
+/**
+ * Keeps groups.post_count and last_post_at right: published, visible, not deleted posts in the group.
+ * Recounted rather than incremented, so publishing, approving, deleting and removing can never drift.
+ */
+export async function syncGroupPostStats(db: Pick<Db, 'execute'>, groupId: string | null | undefined): Promise<void> {
+  if (!groupId) return;
+  await db.execute(sql`update ${groups} set
+      post_count = (select count(*)::int from ${posts} gp where gp.group_id = ${groupId} and gp.deleted_at is null and gp.status = 'published' and gp.moderation_state = 'visible'),
+      last_post_at = (select max(gp.created_at) from ${posts} gp where gp.group_id = ${groupId} and gp.deleted_at is null and gp.status = 'published' and gp.moderation_state = 'visible'),
+      updated_at = now()
+    where id = ${groupId}`);
+}
+
+/** Keeps groups.member_count right (active members only). Call inside the transaction that changed memberships. */
+export async function syncGroupMemberCount(db: Pick<Db, 'execute'>, groupId: string): Promise<void> {
+  await db.execute(
+    sql`update ${groups} set member_count = (select count(*)::int from ${groupMembers} cm where cm.group_id = ${groupId} and cm.status = 'active'), updated_at = now() where id = ${groupId}`,
+  );
+}
+
+/**
+ * Of these members, the ones who may see a group post (for notifications about it, such as mentions):
+ * everyone for an open public group's posts; for a private group's posts ('group'), its active members
+ * and the people running it. Nobody for posts of suspended or deleted groups.
+ */
+export async function groupPostAudience(
+  db: Db,
+  post: { groupId: string | null; visibility: string },
+  userIds: string[],
+): Promise<Set<string>> {
+  if (!post.groupId) return new Set(userIds);
+  const [group] = await db.select().from(groups).where(eq(groups.id, post.groupId)).limit(1);
+  if (!group || group.deletedAt || (group.status !== 'active' && group.status !== 'archived')) return new Set();
+  if (post.visibility !== 'group' || !userIds.length) return new Set(userIds);
+  const facts = await Promise.all(
+    userIds.map(async (id) => {
+      const [hit] = await db.execute<{ ok: boolean }>(sql`select ${groupMemberSql(id, sql`${group.id}::uuid`)} as ok`).then((r) => r.rows);
+      return hit?.ok ? id : null;
+    }),
+  );
+  return new Set(facts.filter((x): x is string => !!x));
 }

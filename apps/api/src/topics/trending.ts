@@ -3,6 +3,7 @@ import type { TrendingRules, TrendingScope, TrendingWindow } from '@chartermissi
 import type { Db } from '../db/db.module.js';
 import { chapters, hashtags, platformSettings, trendingOverrides, trendingSnapshots } from '../db/schema.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
+import { openPublicGroupSql } from '../groups/group-access.js';
 
 /*
  * Trending hashtags (spec 4.5 / admin trending controls). Transparent and rule-based:
@@ -106,6 +107,8 @@ async function countScope(db: Db, rules: TrendingRules, scope: Scope, windowMs: 
         and (u.suspended_until is null or u.suspended_until <= ${now})
         and p.created_at > ${baselineStart}
         and p.created_at <= ${now}
+        -- Trending is shown to everyone: private groups' posts and dead groups' posts don't count.
+        and ${openPublicGroupSql(sql`p.group_id`)}
         ${scopeCond}
     ),
     capped as (

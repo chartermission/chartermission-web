@@ -10,6 +10,7 @@ import {
   type ChapterDetail,
   type CommentView,
   type DraftView,
+  type GroupDetail,
   type Ok,
   type Page,
   type PageDetail,
@@ -40,6 +41,13 @@ const compositionShape = {
     .optional()
     .describe('Post in a chapter: its slug (from list_chapters) or id. Some chapters review posts before they appear.'),
   page: z.string().max(120).optional().describe('Publish as a page the member manages: its slug or id (from my_pages).'),
+  group: z
+    .string()
+    .max(120)
+    .optional()
+    .describe(
+      'Post in a group the member belongs to: its slug (from list_my_groups) or id. Not with chapter or page. In a private group only its members see the post, whatever visibility says; some groups approve posts first.',
+    ),
   link_url: z.string().url().max(500).optional().describe('A link to show as a preview card under the post.'),
   article_title: z.string().min(5).max(150).optional().describe('Articles only: the title (5–150 characters).'),
   article_subtitle: z.string().max(200).optional().describe('Articles only: an optional subtitle.'),
@@ -59,6 +67,7 @@ type CompositionArgs = {
   visibility?: 'public' | 'members';
   chapter?: string;
   page?: string;
+  group?: string;
   link_url?: string;
   article_title?: string;
   article_subtitle?: string;
@@ -80,6 +89,13 @@ async function pageId(ctx: ToolContext, value: string): Promise<string> {
   return page.id;
 }
 
+async function groupId(ctx: ToolContext, value: string): Promise<string> {
+  const v = value.trim();
+  if (isUuid(v)) return v;
+  const group = await ctx.api.get<GroupDetail>(`groups/${pathSegment(v.toLowerCase(), 'slug')}`);
+  return group.id;
+}
+
 /** Tool arguments → PostComposition (POST /posts) or DraftPayload (drafts). */
 async function composition(ctx: ToolContext, a: CompositionArgs) {
   const article = a.article_title || a.article_subtitle ? { title: a.article_title ?? '', subtitle: a.article_subtitle } : undefined;
@@ -89,6 +105,7 @@ async function composition(ctx: ToolContext, a: CompositionArgs) {
     visibility: a.visibility ?? 'public',
     ...(a.chapter ? { chapterId: await chapterId(ctx, a.chapter) } : {}),
     ...(a.page ? { pageId: await pageId(ctx, a.page) } : {}),
+    ...(a.group ? { groupId: await groupId(ctx, a.group) } : {}),
     ...(a.link_url ? { linkUrl: a.link_url } : {}),
     ...(article ? { article } : {}),
     ...(a.poll ? { poll: { question: a.poll.question, options: a.poll.options, durationHours: a.poll.duration_hours ?? 72 } } : {}),
@@ -99,6 +116,7 @@ function publishedNote(p: PostView): string | undefined {
   if (p.status === 'awaiting_approval' || p.contentReview?.state === 'pending') {
     return 'Saved, but waiting for the Charter Mission team\'s approval: others will see it once they approve it. Tell the member.';
   }
+  if (p.groupReview?.state === 'pending') return 'Posted in the group, but waiting for its moderators\' approval before members can see it. Tell the member.';
   if (p.chapterReview?.state === 'pending' || p.status === 'in_review') return 'Published, but waiting for review before others can see it.';
   if (p.status === 'pending_media') return 'Published; attachments are still processing.';
   return undefined;
@@ -114,7 +132,7 @@ function scheduledNote(d: DraftView): string | undefined {
 }
 
 const CONFIRM =
-  ' Before calling, show the member the exact text (and type, chapter, page, visibility) and get their go-ahead, unless they already asked for exactly this content to be published.';
+  ' Before calling, show the member the exact text (and type, chapter, page, group, visibility) and get their go-ahead, unless they already asked for exactly this content to be published.';
 
 export function registerPostTools(server: McpServer, ctx: ToolContext) {
   const { api, links } = ctx;

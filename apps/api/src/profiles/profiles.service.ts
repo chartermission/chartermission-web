@@ -35,6 +35,7 @@ import {
   profileExperiences,
   users,
 } from '../db/schema.js';
+import { openPublicGroupSql } from '../groups/group-access.js';
 import { authorActiveSql } from '../posts/visibility.js';
 import type { AuthContext } from '../core/auth-context.js';
 import { BadgesService } from '../core/badges.service.js';
@@ -421,6 +422,8 @@ export class ProfilesService {
             isNull(posts.deletedAt),
             eq(posts.moderationState, 'visible'),
             eq(posts.status, 'published'),
+            // The count anyone sees on the profile: not posts in private, suspended or deleted groups.
+            openPublicGroupSql(sql`${posts.groupId}`),
           ),
         ),
     ]);

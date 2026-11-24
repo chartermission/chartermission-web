@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import type { PublicOverview } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { chapters, courses, events, follows, hashtags, memberProfiles, pages, postHashtags, posts, users } from '../db/schema.js';
+import { openPublicGroupSql } from '../groups/group-access.js';
 
 const CACHE_MS = 5 * 60_000;
 
@@ -52,6 +53,8 @@ export class PublicOverviewService {
             eq(posts.status, 'published'),
             eq(posts.moderationState, 'visible'),
             sql`${posts.createdAt} > now() - interval '14 days'`,
+            // Seen by visitors: nothing from private, suspended or deleted groups.
+            openPublicGroupSql(sql`${posts.groupId}`),
           ),
         )
         .groupBy(hashtags.id, hashtags.display)

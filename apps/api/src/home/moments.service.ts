@@ -16,6 +16,7 @@ import { chapters, countries, follows, memberProfiles, mutes, posts, profileSect
 import type { AuthUser } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
 import { listablePostsSql } from '../posts/visibility.js';
+import { groupPostsVisibleSql } from '../groups/group-access.js';
 import { fieldVisibleToMemberSql } from '../profiles/visibility.js';
 import { RelationshipService } from '../profiles/relationship.service.js';
 import { cardCandidateSql, followsChapterSql, HomeQueries } from './home-queries.js';
@@ -116,7 +117,17 @@ export class MomentsService {
       this.db
         .select({ n: sql<number>`count(*)::int` })
         .from(posts)
-        .where(and(eq(posts.authorId, id), isNull(posts.pageId), isNull(posts.deletedAt), eq(posts.moderationState, 'visible'), eq(posts.status, 'published'))),
+        // Posts in private groups the viewer isn't in (and in suspended or deleted groups) don't count.
+        .where(
+          and(
+            eq(posts.authorId, id),
+            isNull(posts.pageId),
+            isNull(posts.deletedAt),
+            eq(posts.moderationState, 'visible'),
+            eq(posts.status, 'published'),
+            groupPostsVisibleSql(viewer.id),
+          ),
+        ),
       this.db
         .select({ id: posts.id, type: posts.type, body: posts.body, details: posts.details })
         .from(posts)

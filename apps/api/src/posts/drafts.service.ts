@@ -14,7 +14,8 @@ import {
   type SaveDraftInput,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { files, postDrafts } from '../db/schema.js';
+import { files, groups, postDrafts } from '../db/schema.js';
+import { groupAccess } from '../groups/group-access.js';
 import { AppError, Errors } from '../common/errors.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthUser, AuthVia } from '../core/auth-context.js';
@@ -336,6 +337,13 @@ export class DraftsService implements OnModuleInit {
         .from(files)
         .where(and(inArray(files.id, ids), eq(files.ownerId, user.id)));
       if (owned.length !== ids.length) throw Errors.validation({ attachmentIds: 'Attachment not found' });
+    }
+    // A group post: the member must be able to post there now. PostsService.create checks again when
+    // the draft is published, since they may have left the group (or it was archived) in between.
+    if (payload.groupId) {
+      const [group] = await this.db.select().from(groups).where(eq(groups.id, payload.groupId)).limit(1);
+      if (!group || group.deletedAt) throw Errors.validation({ groupId: 'That group no longer exists' });
+      if (!(await groupAccess(this.db, group, user)).abilities.post) throw Errors.forbidden('You can’t post in this group');
     }
     return payload;
   }

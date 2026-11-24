@@ -12,6 +12,7 @@ import { decodeCursor, paginate } from '../common/cursor.js';
 import { PostsService } from '../posts/posts.service.js';
 import { ProfilesService } from '../profiles/profiles.service.js';
 import { RelationshipService } from '../profiles/relationship.service.js';
+import { groupPostsVisibleForSql } from '../groups/group-access.js';
 
 type Row = { userId: string; at: Date; cursorAt: string; reaction?: string | null };
 type Cursor = { c: string; i: string };
@@ -79,6 +80,7 @@ export class PeopleService {
       sql`select p.author_id as user_id, max(p.created_at) as at from ${posts} p
           where p.repost_of_id = ${postId} and p.deleted_at is null and p.page_id is null and p.status = 'published'
             and p.moderation_state = 'visible' and ${this.listable(ctx.user.id, sql`p.author_id`)}
+            and ${groupPostsVisibleForSql(ctx.user.id, { groupId: sql`p.group_id`, visibility: sql`p.visibility`, authorId: sql`p.author_id` })}
           group by p.author_id`,
     );
   }

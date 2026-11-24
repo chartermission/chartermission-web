@@ -21,6 +21,7 @@ import { PostSerializer } from '../posts/post-serializer.js';
 import { engagementSql, listablePostsSql, tsKey } from '../posts/visibility.js';
 import { isUuid } from '../media/uuid-param.js';
 import { latestSnapshot, servedEntries, type Scope } from './trending.js';
+import { openPublicGroupSql } from '../groups/group-access.js';
 
 const TAG = /^[a-z0-9_]{2,50}$/;
 const GLOBAL: Scope = { type: 'global', id: '' };
@@ -110,6 +111,7 @@ export class TopicsService {
       join posts p on p.id = ph1.post_id
       where ph1.hashtag_id = ${hashtagId}
         and p.deleted_at is null and p.status = 'published' and p.moderation_state = 'visible'
+        and ${openPublicGroupSql(sql`p.group_id`)}
       group by h2.display
       order by n desc, h2.display
       limit 5`);
@@ -177,7 +179,7 @@ export class TopicsService {
     else conds.push(sql`not ${suppressedSql}`);
     const posts7d = sql<number>`(select count(*)::int from ${postHashtags} tph join ${posts} tp on tp.id = tph.post_id
       where tph.hashtag_id = "hashtags"."id" and tp.deleted_at is null and tp.status = 'published' and tp.moderation_state = 'visible'
-      and tp.created_at > now() - interval '7 days')`;
+      and tp.created_at > now() - interval '7 days' and ${openPublicGroupSql(sql`tp.group_id`)})`;
     const order =
       q.sort === 'new'
         ? [desc(hashtags.createdAt), asc(hashtags.tag)]

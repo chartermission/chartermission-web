@@ -6,6 +6,7 @@ import { memberProfiles, posts, users } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { Errors } from '../common/errors.js';
 import { listablePostsSql } from '../posts/visibility.js';
+import { homeFeedGroupSql } from '../groups/group-access.js';
 import { cardCandidateSql, followsChapterSql, HomeQueries } from './home-queries.js';
 import { DAY_MS } from './text.js';
 
@@ -28,7 +29,8 @@ export class HomeService {
     // The "new posts" window; returned as newPostsSince so the feed can show exactly these posts.
     const since = new Date(lastVisit?.getTime() ?? now - DAY_MS).toISOString();
     const weekAgo = new Date(now - WEEK_DAYS * DAY_MS).toISOString();
-    const visible = listablePostsSql(viewer.id, { muteHashtags: true });
+    // The same posts as the home feed: group posts count only for the group's members.
+    const visible = and(listablePostsSql(viewer.id, { muteHashtags: true }), homeFeedGroupSql(viewer.id))!;
     const othersPublished: SQL = and(visible, ne(posts.authorId, viewer.id), eq(posts.status, 'published'), eq(posts.moderationState, 'visible'))!;
     const countPosts = async (...conds: SQL[]) => {
       const [row] = await this.db

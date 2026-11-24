@@ -5,6 +5,7 @@ import { comments, files, follows, hashtags, postAttachments, posts } from '../d
 import { EventsService } from '../infra/events.service.js';
 import { MembersService } from '../core/members.service.js';
 import { NotifyService } from '../core/notify.service.js';
+import { groupPostAudience } from '../groups/group-access.js';
 
 /**
  * Domain-event handlers that create notifications (spec 4.13: created by workers
@@ -120,7 +121,10 @@ export class NotificationHandlers implements OnModuleInit {
     const name = await this.actorName(e.authorId);
     const where = e.sourceType === 'post' ? 'a post' : 'a comment';
     const href = e.sourceType === 'post' ? `/posts/${e.postId}` : `/posts/${e.postId}#comment-${e.sourceId}`;
-    for (const userId of e.userIds) {
+    // In a private group, only people who can open the post hear about a mention in it.
+    const [post] = await this.db.select({ groupId: posts.groupId, visibility: posts.visibility }).from(posts).where(eq(posts.id, e.postId)).limit(1);
+    const audience = post ? await groupPostAudience(this.db, post, e.userIds) : new Set<string>();
+    for (const userId of e.userIds.filter((id) => audience.has(id))) {
       await this.notify.notify({
         userId,
         type: 'mention',

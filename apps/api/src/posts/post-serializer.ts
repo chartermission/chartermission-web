@@ -8,6 +8,7 @@ import {
   type AttachmentView,
   type ChapterRef,
   type EventSummary,
+  type GroupRef,
   type MemberRef,
   type PollView,
   type PostKind,
@@ -23,6 +24,7 @@ import {
   comments,
   events,
   files,
+  groups,
   initiatives,
   hashtags,
   mentions,
@@ -45,6 +47,7 @@ import { canViewPost, isModerator, type AuthorState, type PostRow } from './visi
 import { EventAccess } from '../events/event-access.js';
 import { EventSerializer } from '../events/event-serializer.js';
 import { isPublicStatus } from '../events/event-util.js';
+import { accessFrom, groupVisiblePostIds, membershipsFor, roleAtLeast } from '../groups/group-access.js';
 
 const FALLBACK_AUTHOR: MemberRef = {
   id: '00000000-0000-0000-0000-000000000000',
@@ -117,9 +120,11 @@ export class PostSerializer {
         const originalRows = await this.db.select().from(posts).where(inArray(posts.id, originalIds));
         const states = await this.authorStates(originalRows.map((r) => r.authorId));
         const originalPages = await this.pageRefs.refs(originalRows.map((r) => r.pageId).filter((x): x is string => !!x));
+        // A repost of a private group's post shows "unavailable" (null) to anyone outside the group.
+        const groupVisible = await groupVisiblePostIds(this.db, originalRows, viewer);
         const visible = originalRows.filter(
           (r) =>
-            canViewPost(r, states.get(r.authorId), viewer, blockedSet, !r.pageId || originalPages.get(r.pageId)?.status === 'active') &&
+            canViewPost(r, states.get(r.authorId), viewer, blockedSet, !r.pageId || originalPages.get(r.pageId)?.status === 'active', groupVisible.has(r.id)) &&
             r.moderationState === 'visible',
         );
         const views = await this.posts(
@@ -133,7 +138,7 @@ export class PostSerializer {
     }
 
     const postIds = rows.map((r) => r.id);
-    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap, initiativeMap] = await Promise.all([
+    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap, initiativeMap, groupInfo] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
       this.pageRefs.refs(rows.flatMap((r) => [r.pageId, r.aboutPageId]).filter((x): x is string => !!x)),
       rows.some((r) => r.pageId) ? this.pageRefs.managedIds(viewer?.id) : Promise.resolve(new Set<string>()),
@@ -147,6 +152,7 @@ export class PostSerializer {
       this.helpOffers(rows, viewer),
       this.sharedEvents(rows, viewer),
       this.initiatives(rows),
+      this.groups(rows, viewer),
     ]);
 
     const out: PostView[] = [];
@@ -162,9 +168,12 @@ export class PostSerializer {
         id: r.id,
         author: page ? pageAuthor(page) : (authorRefs.get(r.authorId) ?? FALLBACK_AUTHOR),
         page: page ? PageRefsService.toRef(page) : null,
-        // TODO(groups API workstream): load group refs in bulk and the author's group review.
-        group: null,
-        groupReview: null,
+        group: (r.groupId && groupInfo.refs.get(r.groupId)) || null,
+        // Where a post stands with the group's moderators: for its author and those moderators only.
+        groupReview:
+          r.groupReview && r.groupId && (viewer?.id === r.authorId || groupInfo.moderated.has(r.groupId))
+            ? { state: r.groupReview as 'pending' | 'approved' | 'declined', note: r.groupReview === 'approved' ? null : r.groupReviewNote }
+            : null,
         aboutPage: aboutPageRef(r.aboutPageId ? pageMap.get(r.aboutPageId) : undefined),
         body: r.body,
         kind: r.kind as PostKind,
@@ -340,6 +349,29 @@ export class PostSerializer {
       });
     }
     return map;
+  }
+
+  /**
+   * Groups the posts were posted in (GroupRef), and the groups among them the viewer moderates (they
+   * see where a waiting post stands).
+   */
+  private async groups(rows: PostRow[], viewer: AuthUser | undefined): Promise<{ refs: Map<string, GroupRef>; moderated: Set<string> }> {
+    const ids = [...new Set(rows.map((r) => r.groupId).filter((x): x is string => !!x))];
+    const out = { refs: new Map<string, GroupRef>(), moderated: new Set<string>() };
+    if (!ids.length) return out;
+    const found = await this.db.select().from(groups).where(inArray(groups.id, ids));
+    for (const g of found) {
+      out.refs.set(g.id, { id: g.id, slug: g.slug, name: g.name, visibility: g.visibility as GroupRef['visibility'], logoUrl: mediaUrl(g.logoFileId) });
+    }
+    const reviewed = found.filter((g) => rows.some((r) => r.groupId === g.id && r.groupReview));
+    if (viewer && reviewed.length) {
+      const facts = await membershipsFor(this.db, reviewed, viewer.id);
+      for (const g of reviewed) {
+        const access = accessFrom(g, viewer, facts.get(g.id)!);
+        if (roleAtLeast(access.role, 'moderator')) out.moderated.add(g.id);
+      }
+    }
+    return out;
   }
 
   /** Initiatives that posts are updates on, while they are live. */

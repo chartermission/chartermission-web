@@ -22,8 +22,9 @@ import {
   type UploadPurpose,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { files, memberProfiles, pages, postAttachments, posts, users } from '../db/schema.js';
+import { files, groups, memberProfiles, pages, postAttachments, posts, users } from '../db/schema.js';
 import { authorActiveSql, pageLiveSql } from '../posts/visibility.js';
+import { groupVisiblePostIds, openPublicGroupSql } from '../groups/group-access.js';
 import { Errors } from '../common/errors.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 import { EventsService } from '../infra/events.service.js';
@@ -497,6 +498,7 @@ export class MediaService implements OnModuleInit {
     const file = await this.find(fileId);
     if (!file || file.scanStatus !== 'clean') throw Errors.notFound('File');
     if (!file.isPublic && !viewer && !(await this.guestMayLoad(file))) throw Errors.unauthenticated();
+    if (viewer) await this.assertGroupMediaVisible(viewer, file);
     const inline = file.mime.startsWith('image/') || file.mime.startsWith('video/') || file.mime.startsWith('audio/');
     const name = safeFileName(file.originalName ?? 'file', file.mime);
     const disposition = `${inline ? 'inline' : 'attachment'}; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
@@ -519,7 +521,34 @@ export class MediaService implements OnModuleInit {
       const [p] = await this.db.select({ id: pages.id }).from(pages).where(and(eq(pages.logoFileId, file.id), eq(pages.status, 'active'))).limit(1);
       if (p) return true;
     }
+    // Groups are listed with their pictures (private ones too), like their link previews.
+    if (file.purpose === 'group_logo' || file.purpose === 'group_cover') {
+      const [g] = await this.db
+        .select({ id: groups.id })
+        .from(groups)
+        .where(and(sql`(${groups.logoFileId} = ${file.id} or ${groups.coverFileId} = ${file.id})`, sql`${groups.status} in ('active','archived')`, isNull(groups.deletedAt)))
+        .limit(1);
+      if (g) return true;
+    }
     return this.onPublicPost(file.id);
+  }
+
+  /**
+   * Media attached to group posts: a member who isn't in a private group (or anyone, once the group is
+   * suspended or deleted) can't load it, even with the file's address. Files on any post they may see
+   * stay loadable.
+   */
+  private async assertGroupMediaVisible(viewer: AuthUser, file: FileRow) {
+    if (file.purpose !== 'post_image' && file.purpose !== 'post_video' && file.purpose !== 'post_document') return;
+    const attached = await this.db
+      .select({ id: posts.id, groupId: posts.groupId, visibility: posts.visibility, authorId: posts.authorId })
+      .from(postAttachments)
+      .innerJoin(posts, eq(posts.id, postAttachments.postId))
+      .where(eq(postAttachments.fileId, file.id));
+    if (!attached.some((p) => p.groupId)) return;
+    if (viewer.permissions.has('moderation.view') || file.ownerId === viewer.id) return;
+    const visible = await groupVisiblePostIds(this.db, attached, viewer);
+    if (!attached.some((p) => visible.has(p.id))) throw Errors.notFound('File');
   }
 
   /** The file is attached to a published, visible public post by an active author (or a live page). */
@@ -537,6 +566,7 @@ export class MediaService implements OnModuleInit {
           isNull(posts.deletedAt),
           sql`(${posts.pageId} is not null or ${authorActiveSql()})`,
           pageLiveSql,
+          openPublicGroupSql(sql`${posts.groupId}`),
         ),
       )
       .limit(1);
@@ -548,6 +578,7 @@ export class MediaService implements OnModuleInit {
     const file = await this.find(fileId);
     if (!file || file.scanStatus !== 'clean' || !file.posterKey) throw Errors.notFound('File');
     if (!file.isPublic && !viewer && !(await this.guestMayLoad(file))) throw Errors.unauthenticated();
+    if (viewer) await this.assertGroupMediaVisible(viewer, file);
     const redirect = await this.storage.presignDownload(file.posterKey, { mime: 'image/jpeg', disposition: 'inline; filename="poster.jpg"' });
     return { key: file.posterKey, redirect };
   }
