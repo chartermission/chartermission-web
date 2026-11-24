@@ -95,6 +95,10 @@ describe('Groups: posts and where they show', () => {
       expect(((await outsider.get(`/topics/${tag}`).expect(200)).body.activity7d as number[]).reduce((a, b) => a + b, 0)).toBe(0);
       const topics = (await outsider.get(`/topics?q=${tag}`).expect(200)).body.items as { tag: string; posts7d: number }[];
       expect(topics.every((x) => x.posts7d === 0)).toBe(true);
+      // A tag used only in private groups has no posts to count, so it isn't listed on /topics at all.
+      expect(topics.map((x) => x.tag)).not.toContain(tag);
+      const [counted] = await t.db.select({ n: s.hashtags.postCount }).from(s.hashtags).where(eq(s.hashtags.tag, tag));
+      expect(counted!.n).toBe(0);
 
       // Home cards: today's prompt answers and the welcome strip's new posts.
       const prompt = (m: Member) => m.get('/home/moments').expect(200).then((r) => (r.body as MomentsResponse).moments.find((x) => x.kind === 'prompt') as PromptMoment | undefined);

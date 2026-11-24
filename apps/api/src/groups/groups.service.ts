@@ -1,3 +1,4 @@
+import { recountGroupHashtags } from '../posts/hashtags.js';
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import type {
@@ -547,7 +548,11 @@ export class GroupsService {
       } else if (switched === 'private') {
         await tx.update(posts).set({ visibility: 'group' }).where(and(eq(posts.groupId, row.id), sql`${posts.visibility} <> 'group'`));
       }
-      if (switched) await syncGroupPostStats(tx, row.id);
+      if (switched) {
+        await syncGroupPostStats(tx, row.id);
+        // Private group posts don't count towards hashtags' post counts (see posts/hashtags.ts).
+        await recountGroupHashtags(tx, row.id);
+      }
     });
     await this.audit.record({
       actorId: user.id,
