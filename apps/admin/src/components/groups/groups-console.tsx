@@ -121,7 +121,7 @@ export function VisibilityChip({ visibility }: { visibility: "public" | "private
 }
 
 /** Who runs a group: its owner, page or chapter, linked to the member site. */
-export function RunBy({ group }: { group: Pick<AdminGroupRow, "ownerType" | "owner" | "page" | "chapter"> }) {
+export function RunBy({ group }: { group: Pick<AdminGroupRow, "ownerType" | "owner" | "ownerEmail" | "page" | "chapter"> }) {
   const link = (href: string, text: string) => (
     <a href={webHref(href)} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline" dir="auto">
       {text}
@@ -130,7 +130,19 @@ export function RunBy({ group }: { group: Pick<AdminGroupRow, "ownerType" | "own
   if (group.ownerType === "page") return group.page ? <span className="flex flex-col"><span className="text-xs text-secondary">Page</span>{link(`/pages/${group.page.slug}`, group.page.name)}</span> : <span className="text-secondary">Page</span>;
   if (group.ownerType === "chapter")
     return group.chapter ? <span className="flex flex-col"><span className="text-xs text-secondary">Chapter</span>{link(`/chapters/${group.chapter.slug}`, group.chapter.name)}</span> : <span className="text-secondary">Chapter</span>;
-  return group.owner ? <span className="flex flex-col"><span className="text-xs text-secondary">Member</span>{link(`/${group.owner.handle}`, group.owner.name)}</span> : <span className="text-secondary">No owner</span>;
+  return group.owner ? (
+    <span className="flex flex-col">
+      <span className="text-xs text-secondary">Member</span>
+      {link(`/${group.owner.handle}`, group.owner.name)}
+      {group.ownerEmail && (
+        <span className="text-xs text-secondary" dir="ltr">
+          {group.ownerEmail}
+        </span>
+      )}
+    </span>
+  ) : (
+    <span className="text-secondary">No owner</span>
+  );
 }
 
 /** Groups (GET /admin/groups): every group with tabs, filters, batch actions and a CSV export. */

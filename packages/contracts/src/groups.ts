@@ -124,7 +124,7 @@ export const GroupSummary = GroupRef.extend({
   chapter: ChapterRef.nullable(),
   country: z.object({ code: z.string(), name: z.string() }).nullable(),
   memberCount: z.number().int(),
-  /** Posts in the last 7 days (activity hint); null for private groups the viewer isn't in. */
+  /** Posts in the last 7 days (activity hint); null for viewers who can't see the group's posts. */
   postsThisWeek: z.number().int().nullable(),
   /** Up to 3 members the viewer is connected with (null when the viewer may not see members). */
   connections: z.array(MemberRef).nullable(),
@@ -160,7 +160,8 @@ export const GroupDetail = GroupSummary.extend({
   postPermission: GroupPostPermission,
   postApproval: z.boolean(),
   hashtags: z.array(z.string()),
-  postCount: z.number().int(),
+  /** Published posts; null for viewers who can't see the group's posts (private groups they aren't in, suspended groups). */
+  postCount: z.number().int().nullable(),
   /** Owner, admins and moderators: always shown, even for private groups. */
   admins: z.array(z.object({ member: MemberRef, role: GroupRole })),
   createdBy: MemberRef.nullable(),
@@ -268,7 +269,11 @@ export type AdminGroupRow = {
   page: PageRef | null;
   chapter: ChapterRef | null;
   createdBy: MemberRef | null;
+  /** Member-run groups only: page and chapter groups have no member owner. */
   owner: MemberRef | null;
+  /** The owner's and creator's emails: only for staff with groups.manage (moderators see names only). */
+  ownerEmail?: string | null;
+  createdByEmail?: string | null;
   status: GroupStatus | "deleted";
   statusNote: string | null;
   featured: boolean;

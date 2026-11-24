@@ -1,21 +1,27 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { Tx } from '../db/client.js';
 import type { Db } from '../db/db.module.js';
-import { hashtags, postHashtags, posts } from '../db/schema.js';
+import { groups, hashtags, postHashtags, posts } from '../db/schema.js';
 import type { ParsedTag } from './text-parse.js';
 
 type Conn = Db | Tx;
 
+/** SQL: the post (its id in `postIdCol`) is a private group's: marked 'group', or in a group that is private. */
+export function privateGroupPostSql(postIdCol: SQL): SQL {
+  return sql`exists (select 1 from ${posts} pgp left join ${groups} pgg on pgg.id = pgp.group_id
+    where pgp.id = ${postIdCol} and (pgp.visibility = 'group' or pgg.visibility = 'private'))`;
+}
+
 /**
- * Recount hashtags.post_count for these hashtags. Private group posts (visibility 'group') are left
- * out, so a tag used only inside private groups never shows on /topics or gives away activity there.
+ * Recount hashtags.post_count for these hashtags. Private group posts are left out, so a tag used only
+ * inside private groups never shows on /topics or gives away activity there.
  */
 export async function recountHashtags(tx: Conn, hashtagIds: string[]): Promise<void> {
   if (!hashtagIds.length) return;
   await tx
     .update(hashtags)
     .set({
-      postCount: sql`(select count(*)::int from ${postHashtags} rph join ${posts} rp on rp.id = rph.post_id where rph.hashtag_id = ${hashtags.id} and rp.deleted_at is null and rp.visibility <> 'group')`,
+      postCount: sql`(select count(*)::int from ${postHashtags} rph join ${posts} rp on rp.id = rph.post_id where rph.hashtag_id = ${hashtags.id} and rp.deleted_at is null and not ${privateGroupPostSql(sql`rp.id`)})`,
     })
     .where(inArray(hashtags.id, hashtagIds));
 }

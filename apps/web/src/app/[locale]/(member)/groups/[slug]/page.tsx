@@ -200,10 +200,12 @@ async function GroupRightRail({ params }: { params: Params }) {
           : t("Anyone on Charter Mission can see its posts and join.")}
       </p>
       <ul className="flex flex-col gap-1.5 text-sm text-secondary">
-        <li className="flex items-center gap-1.5">
-          <Icon name="message" size={16} />
-          {t("{count} posts", { count: group.postCount })}
-        </li>
+        {group.postCount !== null && (
+          <li className="flex items-center gap-1.5">
+            <Icon name="message" size={16} />
+            {t("{count} posts", { count: group.postCount })}
+          </li>
+        )}
         {group.postApproval && (
           <li className="flex items-center gap-1.5">
             <Icon name="shield" size={16} />

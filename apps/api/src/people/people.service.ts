@@ -61,7 +61,7 @@ export class PeopleService {
 
   /** GET /posts/{id}/commenters — each member once, by their latest comment. */
   async commenters(ctx: AuthContext, postId: string, q: PeopleQuery): Promise<PeoplePage> {
-    await this.postsService.findVisible(ctx.user, postId);
+    await this.postsService.findVisible(ctx.user, postId, { thread: true });
     return this.latestPerMember(
       ctx,
       q,
@@ -73,14 +73,14 @@ export class PeopleService {
 
   /** GET /posts/{id}/reposts — members who reposted it. Reposts made as a page never name the admin. */
   async reposters(ctx: AuthContext, postId: string, q: PeopleQuery): Promise<PeoplePage> {
-    await this.postsService.findVisible(ctx.user, postId);
+    await this.postsService.findVisible(ctx.user, postId, { thread: true });
     return this.latestPerMember(
       ctx,
       q,
       sql`select p.author_id as user_id, max(p.created_at) as at from ${posts} p
           where p.repost_of_id = ${postId} and p.deleted_at is null and p.page_id is null and p.status = 'published'
             and p.moderation_state = 'visible' and ${this.listable(ctx.user.id, sql`p.author_id`)}
-            and ${groupPostsVisibleForSql(ctx.user.id, { groupId: sql`p.group_id`, visibility: sql`p.visibility`, authorId: sql`p.author_id` })}
+            and ${groupPostsVisibleForSql(ctx.user.id, { groupId: sql`p.group_id`, visibility: sql`p.visibility` })}
           group by p.author_id`,
     );
   }
@@ -172,13 +172,13 @@ export class PeopleService {
 
   private async assertVisible(ctx: AuthContext, targetType: 'post' | 'comment', targetId: string) {
     if (targetType === 'post') {
-      await this.postsService.findVisible(ctx.user, targetId);
+      await this.postsService.findVisible(ctx.user, targetId, { thread: true });
       return;
     }
     const [comment] = await this.db.select().from(comments).where(eq(comments.id, targetId)).limit(1);
     if (!comment || comment.deletedAt || comment.moderationState !== 'visible') throw Errors.notFound('Comment');
     if (await this.relations.isBlockedEitherWay(ctx.user.id, comment.authorId)) throw Errors.notFound('Comment');
-    await this.postsService.findVisible(ctx.user, comment.postId);
+    await this.postsService.findVisible(ctx.user, comment.postId, { thread: true });
   }
 
   /** SQL: the person may appear in a list shown to this viewer (open account, no block either way). */

@@ -18,7 +18,6 @@ import {
   comments,
   files,
   groups,
-  hashtags,
   mentions,
   pollOptions,
   pollVotes,
@@ -47,11 +46,11 @@ import { isPublicStatus } from '../events/event-util.js';
 import { InitiativeAccess } from '../initiatives/initiative-access.service.js';
 import { PostSerializer } from './post-serializer.js';
 import { LinkPreviewService, embedPreview } from './link-preview.js';
-import { attachHashtags, syncHashtags } from './hashtags.js';
+import { attachHashtags, recountHashtags, syncHashtags } from './hashtags.js';
 import { replaceMentions, resolveMentions } from './mentions.js';
 import { firstHttpsUrl, parseHashtags } from './text-parse.js';
-import { canViewPost, isInteractive, type PostRow } from './visibility.js';
-import { canSeeGroupPost, groupAccess, roleAtLeast, syncGroupPostStats, type GroupRow } from '../groups/group-access.js';
+import { canViewPost, isInteractive, recountReposts, type PostRow } from './visibility.js';
+import { groupAccess, groupPostLevel, roleAtLeast, syncGroupPostStats, type GroupPostLevel, type GroupRow } from '../groups/group-access.js';
 
 /** Spec 8.2 (proposed): posts per member per day. */
 export const POSTS_PER_DAY = 20;
@@ -130,8 +129,19 @@ export class PostsService implements OnModuleInit {
     return row;
   }
 
-  /** Loads a post the viewer may see, or 404 (blocked, hidden, pending and deleted look the same). */
-  async findVisible(viewer: AuthUser | undefined, id: string, opts: { interactive?: boolean } = {}): Promise<PostRow> {
+  /**
+   * Loads a post the viewer may see, or 404 (blocked, hidden, pending and deleted look the same).
+   * `thread`: the caller shows or changes the post's conversation (comments, replies, who reacted, who
+   * commented or reposted) — closed to an author who left the post's private group. `interactive`: the
+   * caller takes part (comment, react, vote, repost, offer help) — also closed to people banned from
+   * the group, to staff looking in from the member site, and in archived groups.
+   */
+  async findVisible(viewer: AuthUser | undefined, id: string, opts: { interactive?: boolean; thread?: boolean } = {}): Promise<PostRow> {
+    return (await this.loadVisible(viewer, id, opts)).post;
+  }
+
+  /** findVisible, with how far the viewer may go in the post's group ('full' outside groups). */
+  async loadVisible(viewer: AuthUser | undefined, id: string, opts: { interactive?: boolean; thread?: boolean } = {}): Promise<{ post: PostRow; level: GroupPostLevel }> {
     const post = await this.find(id);
     if (!post) throw Errors.notFound('Post');
     const blocked = viewer ? await this.relations.blockedSet(viewer.id) : new Set<string>();
@@ -143,20 +153,31 @@ export class PostsService implements OnModuleInit {
       if (!pageIsLive && (await this.pageRefs.role(viewer?.id, post.pageId))) pageIsLive = true;
     }
     // A group's post: only for those who may see the group's posts (private groups: its members).
-    const groupVisible = post.groupId ? await canSeeGroupPost(this.db, post, viewer) : true;
-    if (!canViewPost(post, states.get(post.authorId), viewer, blocked, pageIsLive, groupVisible)) throw Errors.notFound('Post');
+    const level = post.groupId ? await groupPostLevel(this.db, post, viewer) : 'full';
+    if (!canViewPost(post, states.get(post.authorId), viewer, blocked, pageIsLive, level !== 'none')) throw Errors.notFound('Post');
     if (opts.interactive && !isInteractive(post)) throw Errors.notFound('Post');
+    if (post.groupId && (opts.interactive || opts.thread)) {
+      if (level === 'own') throw Errors.forbidden('You’re no longer in this group. You can still read or delete your post, but not its conversation.');
+      if (opts.interactive && level === 'banned') throw Errors.forbidden('You’re banned from this group, so you can’t take part in its conversations.');
+      if (opts.interactive && level === 'staff') throw Errors.forbidden('You can read this group’s posts as Charter Mission staff. Act on them from the admin console.');
+    }
     // Archived groups are read-only: no new comments, reactions, votes or reposts on their posts.
     if (opts.interactive && post.groupId) {
       const [group] = await this.db.select({ status: groups.status }).from(groups).where(eq(groups.id, post.groupId)).limit(1);
       if (group?.status === 'archived') throw Errors.conflict('This group is archived. Its posts can be read but not answered or reacted to.');
     }
-    return post;
+    return { post, level };
   }
 
   async get(viewer: AuthUser | undefined, id: string): Promise<PostView> {
-    await this.findVisible(viewer, id);
-    return this.serializer.one(id, viewer);
+    const { level } = await this.loadVisible(viewer, id);
+    const view = await this.serializer.one(id, viewer);
+    // An author who left the post's private group sees the post alone: no sign of the conversation.
+    if (level === 'own') {
+      view.counts = { reactions: 0, comments: 0, reposts: 0 };
+      view.reactionBreakdown = { like: 0, insightful: 0, support: 0 };
+    }
+    return view;
   }
 
   /** Posts written with Claude wait for the team's approval while the content calendar asks for it. */
@@ -212,6 +233,16 @@ export class PostsService implements OnModuleInit {
     const now = new Date();
 
     const post = await this.db.transaction(async (tx) => {
+      // The group's visibility as of now, read under a lock: a post can't be written 'public' while the
+      // group turns private (the switch updates the group row, so one waits for the other).
+      let groupVisibility: string | null = null;
+      if (inGroup) {
+        const [locked] = await tx.select({ visibility: groups.visibility, status: groups.status, deletedAt: groups.deletedAt }).from(groups).where(eq(groups.id, inGroup.group.id)).for('share');
+        if (!locked || locked.deletedAt) throw Errors.validation({ groupId: 'That group no longer exists' });
+        if (locked.status !== 'active') throw Errors.forbidden('This group is closed for now. Nothing can be posted in it.');
+        groupVisibility = locked.visibility;
+      }
+      const visibility = groupVisibility === 'private' ? 'group' : input.visibility;
       const [p] = await tx
         .insert(posts)
         .values({
@@ -221,7 +252,7 @@ export class PostsService implements OnModuleInit {
           type: input.type,
           details: detailsFor(input),
           // A private group's posts are seen only by its members, whatever the composer said.
-          visibility: inGroup?.group.visibility === 'private' ? 'group' : input.visibility,
+          visibility,
           groupId: inGroup?.group.id ?? null,
           groupReview: groupReview ? 'pending' : null,
           chapterId: input.chapterId ?? null,
@@ -277,12 +308,8 @@ export class PostsService implements OnModuleInit {
       }
       await attachHashtags(tx, p!.id, tags);
       await replaceMentions(tx, 'post', p!.id, mentionIds);
-      if (original) {
-        await tx
-          .update(posts)
-          .set({ repostCount: sql`${posts.repostCount} + 1` })
-          .where(eq(posts.id, original.id));
-      }
+      // A repost inside a private group stays there: it doesn't count towards the original's reposts.
+      if (original) await recountReposts(tx, original.id);
       return p!;
     });
 
@@ -305,6 +332,9 @@ export class PostsService implements OnModuleInit {
       await this.findVisible(user, id);
       throw Errors.forbidden(post.pageId ? 'Only the page’s admins can edit this post' : 'Only the author can edit this post');
     }
+    // In a group: the author must still be able to see it there (suspended groups: nobody), and an
+    // author who left a private group may only delete their post.
+    if (post.groupId) await this.findVisible(user, id, { thread: true });
     assertNotRestricted(user);
     // With "approve before publishing", Claude can't change a live post the team never saw in its new form.
     if (origin.via?.kind === 'oauth' && post.status === 'published' && (await this.claudeApprovalRequired())) {
@@ -376,7 +406,7 @@ export class PostsService implements OnModuleInit {
     }
   }
 
-  /** Soft delete (spec 5.2): hashtag and repost counts drop, and the group's post count is recounted. */
+  /** Soft delete (spec 5.2): hashtag, repost and group post counts are recounted (never decremented, so they can't drift). */
   private async softDelete(post: PostRow, groupNote?: { by: string; note: string | null }) {
     const id = post.id;
     await this.db.transaction(async (tx) => {
@@ -387,16 +417,12 @@ export class PostsService implements OnModuleInit {
           ...(groupNote ? { groupReviewBy: groupNote.by, groupReviewAt: new Date(), groupReviewNote: groupNote.note } : {}),
         })
         .where(eq(posts.id, id));
-      await tx
-        .update(hashtags)
-        .set({ postCount: sql`greatest(${hashtags.postCount} - 1, 0)` })
-        .where(inArray(hashtags.id, tx.select({ id: postHashtags.hashtagId }).from(postHashtags).where(eq(postHashtags.postId, id))));
-      if (post.repostOfId) {
-        await tx
-          .update(posts)
-          .set({ repostCount: sql`greatest(${posts.repostCount} - 1, 0)` })
-          .where(eq(posts.id, post.repostOfId));
-      }
+      const tagged = await tx.select({ id: postHashtags.hashtagId }).from(postHashtags).where(eq(postHashtags.postId, id));
+      await recountHashtags(
+        tx,
+        tagged.map((t) => t.id),
+      );
+      if (post.repostOfId) await recountReposts(tx, post.repostOfId);
       await syncGroupPostStats(tx, post.groupId);
     });
   }
@@ -489,7 +515,7 @@ export class PostsService implements OnModuleInit {
 
   /** DELETE /posts/{id}/accepted-answer */
   async clearAnswer(user: AuthUser, postId: string): Promise<PostView> {
-    const post = await this.findVisible(user, postId);
+    const post = await this.findVisible(user, postId, { thread: true });
     if (post.type !== 'question') throw Errors.conflict('Only questions have answers to accept');
     if (post.authorId !== user.id) throw Errors.forbidden('Only the person who asked can choose the best answer');
     await this.db.update(posts).set({ acceptedCommentId: null }).where(eq(posts.id, postId));
@@ -498,7 +524,7 @@ export class PostsService implements OnModuleInit {
 
   /** PUT /posts/{id}/closed: the author closes or reopens a "Looking for" request. */
   async setClosed(user: AuthUser, postId: string, closed: boolean): Promise<PostView> {
-    const post = await this.findVisible(user, postId);
+    const post = await this.findVisible(user, postId, { thread: true });
     if (post.type !== 'request') throw Errors.conflict('Only “Looking for” posts can be closed');
     if (post.authorId !== user.id) throw Errors.forbidden('Only the author can close this request');
     await this.db.update(posts).set({ closedAt: closed ? new Date() : null }).where(eq(posts.id, postId));
@@ -540,7 +566,7 @@ export class PostsService implements OnModuleInit {
 
   /** GET /posts/{id}/help: the request's author (or a moderator) sees who offered and their notes. */
   async helpOffers(user: AuthUser, postId: string): Promise<HelpOfferView[]> {
-    const post = await this.findVisible(user, postId);
+    const post = await this.findVisible(user, postId, { thread: true });
     if (post.type !== 'request') throw Errors.conflict('Only “Looking for” posts take offers of help');
     if (post.authorId !== user.id && !can(user, 'moderation.view')) throw Errors.forbidden('Only the author can see who offered to help');
     const blocked = await this.relations.blockedSet(user.id);
@@ -651,7 +677,8 @@ export class PostsService implements OnModuleInit {
         userIds: mentioned.map((m) => m.userId),
       });
     }
-    if (post.repostOfId) {
+    // A repost made inside a private group stays there: the original's author isn't told about it.
+    if (post.repostOfId && post.visibility !== 'group') {
       await this.events.emit({ type: 'post.reposted', postId: post.id, originalId: post.repostOfId, authorId: post.authorId });
     }
   }

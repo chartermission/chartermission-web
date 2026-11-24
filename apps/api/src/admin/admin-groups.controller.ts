@@ -28,8 +28,8 @@ export class AdminGroupsController {
 
   @Get('groups')
   @Access('admin', 'moderation.view')
-  list(@ZQuery(AdminGroupsQuery) q: AdminGroupsQuery): Promise<AdminGroupsPage> {
-    return this.groups.list(q);
+  list(@Auth() ctx: AuthContext, @ZQuery(AdminGroupsQuery) q: AdminGroupsQuery): Promise<AdminGroupsPage> {
+    return this.groups.list(ctx, q);
   }
 
   /** Suspend (with a note), restore, feature, unfeature or delete several groups: { ids, action, note? }. */
@@ -42,8 +42,8 @@ export class AdminGroupsController {
 
   @Get('groups/:id')
   @Access('admin', 'moderation.view')
-  detail(@Param('id') id: string): Promise<AdminGroupDetail> {
-    return this.groups.detail(id);
+  detail(@Auth() ctx: AuthContext, @Param('id') id: string): Promise<AdminGroupDetail> {
+    return this.groups.detail(ctx, id);
   }
 
   @Post('groups/:id')

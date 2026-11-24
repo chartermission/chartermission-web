@@ -85,6 +85,7 @@ export function GroupDetailView({ initial, canManage, canExport }: { initial: Ad
           <p className="text-xs text-secondary">
             <span dir="ltr">/groups/{group.slug}</span> · created <DateTime iso={group.createdAt} dateOnly />
             {group.createdBy && <> · {t("by {name}", { name: group.createdBy.name })}</>}
+            {group.createdByEmail && <span dir="ltr"> ({group.createdByEmail})</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">

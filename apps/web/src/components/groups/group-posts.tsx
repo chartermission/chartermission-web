@@ -144,6 +144,17 @@ export function LockedPosts({ group }: { group: GroupDetail }) {
   const router = useRouter();
   const invited = group.membership.status === "invited";
   const pending = group.membership.status === "pending";
+  if (group.status === "suspended") {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-card px-6 py-10 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-primary-tint-2 text-primary-light">
+          <LockIcon size={24} />
+        </span>
+        <p className="text-md font-medium text-ink">{t("This group’s posts are hidden while it is suspended.")}</p>
+        <p className="max-w-md text-sm text-secondary">{t("Only the Charter Mission team can see them until the group is restored.")}</p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-card px-6 py-10 text-center">
       <span className="flex size-12 items-center justify-center rounded-full bg-primary-tint-2 text-primary-light">

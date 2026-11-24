@@ -16,7 +16,7 @@ import type {
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import type { Tx } from '../db/client.js';
-import { groupMembers, groups, memberProfiles, users } from '../db/schema.js';
+import { chapters, groupMembers, groups, memberProfiles, pages, users } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
@@ -28,13 +28,18 @@ import { runEach } from '../common/bulk.js';
 import { checkCursor, decodeCursor, paginate } from '../common/cursor.js';
 import { likePrefix } from '../moderation/util.js';
 import { notBlockedSql } from '../posts/visibility.js';
-import { roleAtLeast, syncGroupMemberCount, type GroupAccess, type GroupRow } from './group-access.js';
+import { roleAtLeast, runsViaOwner, syncGroupMemberCount, type GroupAccess, type GroupRow } from './group-access.js';
 import { GroupsService } from './groups.service.js';
 
 /** Invitations one member may send per day, across groups (against spam). */
 export const GROUP_INVITES_PER_DAY = 200;
 /** Join requests one member may send per day. */
 export const GROUP_JOINS_PER_DAY = 50;
+
+/** After someone turns down an invitation, the same group can't invite them again for this long. */
+export const INVITE_COOLDOWN_DAYS = 7;
+const INVITE_COOLDOWN_SECONDS = INVITE_COOLDOWN_DAYS * 24 * 3600;
+const declinedKey = (groupId: string, userId: string) => `group-invite-declined:${groupId}:${userId}`;
 
 const RANK: Record<GroupRole, number> = { owner: 3, admin: 2, moderator: 1, member: 0 };
 
@@ -124,8 +129,9 @@ export class GroupMembersService {
   }
 
   /**
-   * POST /groups/{slug}/leave: leave, withdraw a request or turn down an invitation. The owner can't
-   * leave: they hand the group to someone else or delete it first.
+   * POST /groups/{slug}/leave: leave, withdraw a request or turn down (ignore) an invitation. The owner
+   * can't leave: they hand the group to someone else or delete it first. Turning down an invitation
+   * keeps the group from inviting them again for INVITE_COOLDOWN_SECONDS.
    */
   async leave(user: AuthUser, idOrSlug: string): Promise<GroupDetail> {
     const { row } = await this.groupsService.visibleRow(user, idOrSlug);
@@ -135,6 +141,8 @@ export class GroupMembersService {
       throw Errors.conflict('You own this group. Hand it to another member or delete the group first.');
     }
     await this.change(row.id, (tx) => tx.delete(groupMembers).where(and(eq(groupMembers.groupId, row.id), eq(groupMembers.userId, user.id))));
+    // Turning down (or ignoring) an invitation: the group can't invite them again for a while.
+    if (mine.status === 'invited') await this.limits.hit(declinedKey(row.id, user.id), INVITE_COOLDOWN_SECONDS);
     return this.fresh(user, row.id);
   }
 
@@ -162,6 +170,13 @@ export class GroupMembersService {
     ]);
     const live = new Set(accounts.map((a) => a.id));
     const status = new Map(existing.map((e) => [e.userId, e.status]));
+    const declined = new Set(
+      (await Promise.all(ids.map(async (id) => ((await this.limits.peek(declinedKey(row.id, id))) > 0 ? id : null)))).filter((x): x is string => !!x),
+    );
+    // People who aren't moderators learn only that someone can't be invited, not why (a ban, a
+    // request waiting, an invitation turned down are the group's business).
+    const moderates = roleAtLeast(access.role, 'moderator');
+    const cantInvite = (detail: string) => Errors.conflict(moderates ? detail : 'Can’t be invited');
     const invited: string[] = [];
     const result = await runEach(
       ids,
@@ -171,8 +186,9 @@ export class GroupMembersService {
         const current = status.get(id);
         if (current === 'active') throw Errors.conflict('Already a member');
         if (current === 'invited') throw Errors.conflict('Already invited');
-        if (current === 'pending') throw Errors.conflict('Already asked to join. Approve their request instead.');
-        if (current === 'banned') throw Errors.conflict('Banned from this group');
+        if (current === 'pending') throw cantInvite('Already asked to join. Approve their request instead.');
+        if (current === 'banned') throw cantInvite('Banned from this group');
+        if (declined.has(id)) throw cantInvite(`Turned down an invitation to this group recently. You can invite them again ${INVITE_COOLDOWN_DAYS} days after that.`);
         await this.limits.consume(`group-invites:${user.id}`, GROUP_INVITES_PER_DAY, 24 * 3600, `You can send ${GROUP_INVITES_PER_DAY} group invitations a day.`);
         const [added] = await this.db
           .insert(groupMembers)
@@ -283,6 +299,20 @@ export class GroupMembersService {
   }
 
   /**
+   * People who run the group through its page or chapter are managed there, not in the group: they
+   * can't be removed or banned from it here.
+   */
+  private async assertNotRunner(row: GroupRow, memberId: string): Promise<void> {
+    if (row.ownerType === 'member' || !(await runsViaOwner(this.db, row, memberId))) return;
+    if (row.ownerType === 'page' && row.pageId) {
+      const [page] = await this.db.select({ name: pages.name }).from(pages).where(eq(pages.id, row.pageId)).limit(1);
+      throw Errors.forbidden(`They run this group through ${page?.name ?? 'its page'}. Remove them from the page’s admins instead.`);
+    }
+    const [chapter] = row.chapterId ? await this.db.select({ name: chapters.name }).from(chapters).where(eq(chapters.id, row.chapterId)).limit(1) : [];
+    throw Errors.forbidden(`They run this group through ${chapter?.name ?? 'its chapter'}. Remove them from the chapter team instead.`);
+  }
+
+  /**
    * The rules: moderators approve and decline requests and cancel invitations (as does whoever sent
    * one); admins remove, ban and unban people below their own role and make moderators; only the owner
    * (or the page or chapter running the group) makes admins and hands over ownership. The owner can't
@@ -324,6 +354,7 @@ export class GroupMembersService {
       case 'remove': {
         if (!access.abilities.manage) throw Errors.forbidden('Only the group’s admins can remove people');
         if (!target || target.status !== 'active') throw Errors.notFound('That member');
+        await this.assertNotRunner(row, memberId);
         if (!below(target)) throw Errors.forbidden(target.role === 'owner' ? 'The owner can’t be removed' : 'You can only remove people with a lower role than yours');
         await this.change(row.id, (tx) => tx.delete(groupMembers).where(where));
         await record('removed');
@@ -333,6 +364,7 @@ export class GroupMembersService {
         if (!access.abilities.manage) throw Errors.forbidden('Only the group’s admins can ban people');
         if (memberId === user.id) throw Errors.validation({ memberId: 'You can’t ban yourself' });
         if (target?.status === 'banned') throw Errors.conflict('Already banned');
+        await this.assertNotRunner(row, memberId);
         if (target && target.status === 'active' && !below(target)) {
           throw Errors.forbidden(target.role === 'owner' ? 'The owner can’t be banned' : 'You can only ban people with a lower role than yours');
         }
@@ -371,6 +403,9 @@ export class GroupMembersService {
         return;
       }
       case 'transfer_ownership': {
+        if (row.ownerType !== 'member') {
+          throw Errors.validation({ memberId: 'Page and chapter groups are run by their page’s admins or chapter team, so they have no single owner to hand over.' });
+        }
         if (!own) throw Errors.forbidden('Only the group’s owner can hand it over');
         if (!target || target.status !== 'active') throw Errors.validation({ memberId: 'Choose an active member of the group' });
         if (target.role === 'owner') return;

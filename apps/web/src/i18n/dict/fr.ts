@@ -4719,4 +4719,6 @@ export const fr: Dict = {
   "Search members, groups and topics": "Rechercher des membres, des groupes et des sujets",
   "Invitations, join requests and posts waiting in groups you run.": "Invitations, demandes d’adhésion et publications en attente dans les groupes que vous animez.",
   "Report group": "Signaler le groupe",
+  "This group’s posts are hidden while it is suspended.": "Les publications de ce groupe sont masquées tant qu’il est suspendu.",
+  "Only the Charter Mission team can see them until the group is restored.": "Seule l’équipe Charter Mission peut les voir jusqu’au rétablissement du groupe.",
 };

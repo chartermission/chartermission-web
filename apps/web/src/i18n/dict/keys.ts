@@ -4717,4 +4717,6 @@ export const KEYS: readonly string[] = [
   "Search members, groups and topics",
   "Invitations, join requests and posts waiting in groups you run.",
   "Report group",
+  "This group’s posts are hidden while it is suspended.",
+  "Only the Charter Mission team can see them until the group is restored.",
 ];

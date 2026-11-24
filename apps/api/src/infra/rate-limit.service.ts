@@ -40,6 +40,11 @@ export class RateLimitService {
     return count;
   }
 
+  /** The current count under a key (0 once its window ran out), without changing it. */
+  async peek(key: string): Promise<number> {
+    return Number((await this.redis.get(`rl:${key}`)) ?? 0);
+  }
+
   async reset(key: string): Promise<void> {
     await this.redis.del(`rl:${key}`);
   }

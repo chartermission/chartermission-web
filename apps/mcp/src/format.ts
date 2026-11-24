@@ -133,7 +133,7 @@ export function group(g: GroupSummary | GroupDetail, links: Links) {
           ...(detail.postApproval ? { postsNeedApproval: true } : {}),
           ...(detail.postPermission === 'admins' ? { onlyAdminsPost: true } : {}),
           about: detail.about ? clip(detail.about, 600).text : null,
-          postCount: detail.postCount,
+          ...(detail.postCount !== null ? { postCount: detail.postCount } : {}),
         }
       : {}),
   };

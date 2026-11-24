@@ -88,7 +88,7 @@ export class AdminGroupsEvents implements OnModuleInit {
         suspend: {
           text: ' was suspended by the Charter Mission team',
           subject: `${group.name} was suspended`,
-          lead: `The Charter Mission team suspended your group ${group.name}. Members can’t open it or see its posts; you and the other admins still can.`,
+          lead: `The Charter Mission team suspended your group ${group.name}. Members can’t open it, and its posts are hidden from everyone while it is suspended. You and the other admins can still open its page to read the team’s note.`,
         },
         restore: {
           text: ' is open again',

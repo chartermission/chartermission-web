@@ -208,7 +208,11 @@ export async function seedGroups(db: Db, ctx: SeedContext) {
       .returning({ id: s.groups.id });
     const groupId = row!.id;
 
-    const members: (typeof s.groupMembers.$inferInsert)[] = [{ groupId, userId: owner, role: 'owner', status: 'active', joinedAt: ago(30) }];
+    // Member-run groups have an owner; page and chapter groups are owned by the page's admins or the
+    // chapter team, so whoever started one is an admin of it.
+    const members: (typeof s.groupMembers.$inferInsert)[] = [
+      { groupId, userId: owner, role: g.ownerType === 'member' ? 'owner' : 'admin', status: 'active', joinedAt: ago(30) },
+    ];
     const add = (key: string, role: 'admin' | 'moderator' | 'member', daysAgo: number) => {
       const userId = id(key);
       if (userId && !members.some((m) => m.userId === userId)) members.push({ groupId, userId, role, status: 'active', joinedAt: ago(daysAgo) });
@@ -244,8 +248,8 @@ export async function seedGroups(db: Db, ctx: SeedContext) {
 
     await db.execute(sql`update ${s.groups} set
       member_count = (select count(*)::int from ${s.groupMembers} m where m.group_id = ${groupId} and m.status = 'active'),
-      post_count = (select count(*)::int from ${s.posts} p where p.group_id = ${groupId} and p.deleted_at is null and p.status = 'published'),
-      last_post_at = (select max(p.created_at) from ${s.posts} p where p.group_id = ${groupId} and p.deleted_at is null and p.status = 'published')
+      post_count = (select count(*)::int from ${s.posts} p where p.group_id = ${groupId} and p.deleted_at is null and p.status = 'published' and p.moderation_state = 'visible'),
+      last_post_at = (select max(p.created_at) from ${s.posts} p where p.group_id = ${groupId} and p.deleted_at is null and p.status = 'published' and p.moderation_state = 'visible')
       where id = ${groupId}`);
   }
 }

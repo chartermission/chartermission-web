@@ -19,6 +19,7 @@ import { decodeCursor, paginate } from '../common/cursor.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { PostSerializer } from '../posts/post-serializer.js';
 import { engagementSql, listablePostsSql, tsKey } from '../posts/visibility.js';
+import { privateGroupPostSql } from '../posts/hashtags.js';
 import { isUuid } from '../media/uuid-param.js';
 import { latestSnapshot, servedEntries, type Scope } from './trending.js';
 import { openPublicGroupSql } from '../groups/group-access.js';
@@ -42,9 +43,21 @@ export class TopicsService {
     return row;
   }
 
-  /** GET /topics/{tag} */
+  /**
+   * GET /topics/{tag}. A tag used only in private groups doesn't exist as far as anyone can tell
+   * (404), unless the team features it; other tags with no posts still open.
+   */
   async topic(viewer: AuthUser, raw: string): Promise<TopicView> {
     const h = await this.hashtag(raw);
+    if (h.postCount === 0 && !h.featured) {
+      const [privateOnly] = await this.db
+        .select({ x: sql`1` })
+        .from(postHashtags)
+        .innerJoin(posts, eq(posts.id, postHashtags.postId))
+        .where(and(eq(postHashtags.hashtagId, h.id), sql`${posts.deletedAt} is null`, privateGroupPostSql(sql`${posts.id}`)))
+        .limit(1);
+      if (privateOnly) throw Errors.notFound('Topic');
+    }
     const [[followers], [following], [muted], activity, related, snapshot] = await Promise.all([
       this.db
         .select({ n: sql<number>`count(*)::int` })
@@ -204,13 +217,23 @@ export class TopicsService {
     return { items, nextCursor: hasMore ? Buffer.from(JSON.stringify({ o: offset + q.limit })).toString('base64url') : null };
   }
 
-  /** GET /hashtags/suggest?q= — prefix match on the tag, most used first, up to 8. */
+  /**
+   * GET /hashtags/suggest?q= — prefix match on the tag, most used first, up to 8. Only tags with
+   * counted posts (private group posts aren't counted) or featured ones, so a tag used only inside
+   * private groups is never suggested.
+   */
   async suggest(q: string): Promise<HashtagSuggestion[]> {
     const prefix = q.replace(/^#/, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
     const rows = await this.db
       .select({ tag: hashtags.tag, display: hashtags.display, posts: hashtags.postCount })
       .from(hashtags)
-      .where(and(eq(hashtags.status, 'active'), prefix ? like(hashtags.tag, `${prefix.replace(/_/g, '\\_')}%`) : undefined))
+      .where(
+        and(
+          eq(hashtags.status, 'active'),
+          sql`(${hashtags.postCount} > 0 or ${hashtags.featured})`,
+          prefix ? like(hashtags.tag, `${prefix.replace(/_/g, '\\_')}%`) : undefined,
+        ),
+      )
       .orderBy(desc(hashtags.featured), desc(hashtags.postCount), asc(hashtags.tag))
       .limit(8);
     const snapshot = await latestSnapshot(this.db, GLOBAL, '24h');

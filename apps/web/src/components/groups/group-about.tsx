@@ -53,7 +53,7 @@ export function GroupAbout({ group, compact = false }: { group: GroupDetail; com
               <Icon name="calendar" size={16} />
               {t("Created {date}", { date: absoluteDate(intl, group.createdAt) })}
             </li>
-            {!compact && (
+            {!compact && group.postCount !== null && (
               <li className="flex items-center gap-1.5">
                 <Icon name="message" size={16} />
                 {t("{count} posts", { count: group.postCount })}

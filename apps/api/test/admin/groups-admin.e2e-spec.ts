@@ -169,6 +169,20 @@ describe('Admin console: groups', () => {
       expect(res.items.find((r) => r.id === g.chapter.id)!.chapter?.id).toBe(chapterId);
     });
 
+    it('shows owners’ and creators’ emails only to staff who manage groups', async () => {
+      const asAdmin = (await admin.get('/admin/groups').expect(200)).body as AdminGroupsPage;
+      expect(asAdmin.items.find((r) => r.id === g.agri.id)).toMatchObject({ ownerEmail: 'amara@example.test', createdByEmail: 'amara@example.test' });
+      const asMod = (await mod.get('/admin/groups').expect(200)).body as AdminGroupsPage;
+      const agri = asMod.items.find((r) => r.id === g.agri.id)!;
+      expect(agri.owner?.id).toBe(amara.id);
+      expect(agri).not.toHaveProperty('ownerEmail');
+      expect(agri).not.toHaveProperty('createdByEmail');
+      expect((await mod.get(`/admin/groups/${g.agri.id}`).expect(200)).body).not.toHaveProperty('ownerEmail');
+      expect(((await admin.get(`/admin/groups/${g.agri.id}`).expect(200)).body as AdminGroupDetail).ownerEmail).toBe('amara@example.test');
+      // Moderators can't find groups by an owner's email either.
+      expect(names((await mod.get('/admin/groups?q=amara@example').expect(200)).body)).toEqual([]);
+    });
+
     it('filters by status tab, visibility, who runs it, chapter and featured', async () => {
       expect(names((await admin.get('/admin/groups?status=archived').expect(200)).body)).toEqual(['Chapter Mentors']);
       expect(names((await admin.get('/admin/groups?visibility=private').expect(200)).body)).toEqual(['Chapter Mentors', 'Lagos Builders']);

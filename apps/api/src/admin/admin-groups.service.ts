@@ -81,6 +81,9 @@ function write(res: Response, chunk: string): Promise<void> {
   });
 }
 
+/** Owners' and creators' emails are for staff who manage groups; moderators (moderation.view) see names only. */
+const maySeeEmails = (ctx: AuthContext) => ctx.user.permissions.has('groups.manage');
+
 const statusOf = (g: GroupRow): AdminGroupRow['status'] => (g.deletedAt ? 'deleted' : (g.status as GroupStatus));
 
 /**
@@ -104,7 +107,7 @@ export class AdminGroupsService {
   /* ------------------------------ List ------------------------------ */
 
   /** Filters other than the status tab (the tab counts use these). */
-  private filterConds(q: AdminGroupsQuery, opts: { visibility: boolean }): (SQL | undefined)[] {
+  private filterConds(q: AdminGroupsQuery, opts: { visibility: boolean; emails: boolean }): (SQL | undefined)[] {
     const conds: (SQL | undefined)[] = [];
     if (opts.visibility && q.visibility) conds.push(eq(groups.visibility, q.visibility));
     if (q.ownerType) conds.push(eq(groups.ownerType, q.ownerType));
@@ -118,10 +121,11 @@ export class AdminGroupsService {
         or(
           ilike(groups.name, contains),
           ilike(groups.slug, likePrefix(term)),
+          // Owners' and creators' emails are searched only for staff who may see them (groups.manage).
           sql`exists (select 1 from ${groupMembers} sgm join ${users} su on su.id = sgm.user_id join ${memberProfiles} smp on smp.user_id = sgm.user_id
-            where sgm.group_id = ${groups.id} and sgm.role = 'owner' and (smp.display_name ilike ${contains} or su.email ilike ${contains} or smp.handle ilike ${likePrefix(term)}))`,
+            where sgm.group_id = ${groups.id} and sgm.role = 'owner' and (smp.display_name ilike ${contains} ${opts.emails ? sql`or su.email ilike ${contains}` : sql``} or smp.handle ilike ${likePrefix(term)}))`,
           sql`exists (select 1 from ${users} cu join ${memberProfiles} cmp on cmp.user_id = cu.id
-            where cu.id = ${groups.createdBy} and (cmp.display_name ilike ${contains} or cu.email ilike ${contains}))`,
+            where cu.id = ${groups.createdBy} and (cmp.display_name ilike ${contains} ${opts.emails ? sql`or cu.email ilike ${contains}` : sql``}))`,
         ),
       );
     }
@@ -135,11 +139,12 @@ export class AdminGroupsService {
   }
 
   /** GET /admin/groups: keyset paging per sort; counts for the tabs under the other filters. */
-  async list(q: AdminGroupsQuery): Promise<AdminGroupsPage> {
+  async list(ctx: AuthContext, q: AdminGroupsQuery): Promise<AdminGroupsPage> {
+    const emails = maySeeEmails(ctx);
     const spec = sortSpec(q.sort);
     const cursor = decodeCursor<{ k: string | number; id: string }>(q.cursor);
     checkCursor(cursor, { k: spec.kind, id: 'uuid' });
-    const conds = [...this.filterConds(q, { visibility: true }), this.statusCond(q.status)];
+    const conds = [...this.filterConds(q, { visibility: true, emails }), this.statusCond(q.status)];
     if (cursor) {
       const op = spec.dir === 'desc' ? sql`<` : sql`>`;
       const value = spec.kind === 'int' ? Number(cursor.k) : String(cursor.k);
@@ -154,13 +159,13 @@ export class AdminGroupsService {
         .where(and(...conds))
         .orderBy(sql`${spec.expr} ${dir}`, sql`${groups.id} ${dir}`)
         .limit(q.limit + 1),
-      this.counts(q),
+      this.counts(q, emails),
     ]);
     const page = paginate(rows, q.limit, (last) => ({ k: last.k, id: last.group.id }));
-    return { items: await this.rows(page.items.map((r) => r.group)), nextCursor: page.nextCursor, counts };
+    return { items: await this.rows(page.items.map((r) => r.group), { emails }), nextCursor: page.nextCursor, counts };
   }
 
-  private async counts(q: AdminGroupsQuery): Promise<AdminGroupsPage['counts']> {
+  private async counts(q: AdminGroupsQuery, emails: boolean): Promise<AdminGroupsPage['counts']> {
     const live = sql`${groups.deletedAt} is null`;
     const [row] = await this.db
       .select({
@@ -173,7 +178,7 @@ export class AdminGroupsService {
         public: sql<number>`count(*) filter (where ${live} and ${groups.visibility} = 'public')::int`,
       })
       .from(groups)
-      .where(and(...this.filterConds(q, { visibility: false })));
+      .where(and(...this.filterConds(q, { visibility: false, emails })));
     return {
       all: row?.all ?? 0,
       active: row?.active ?? 0,
@@ -194,7 +199,8 @@ export class AdminGroupsService {
     return new Map(rows.map((r) => [r.id, r]));
   }
 
-  private async rows(list: GroupRow[]): Promise<AdminGroupRow[]> {
+  /** `emails`: add the owner's and creator's emails (staff with groups.manage only). */
+  private async rows(list: GroupRow[], opts: { emails: boolean }): Promise<AdminGroupRow[]> {
     if (!list.length) return [];
     const ids = list.map((g) => g.id);
     const [ownerRows, pendingRows, recentRows, groupReports, postReports] = await Promise.all([
@@ -225,6 +231,12 @@ export class AdminGroupsService {
         .groupBy(posts.groupId),
     ]);
     const ownerOf = new Map(ownerRows.map((r) => [r.groupId, r.userId]));
+    const people = [...ownerRows.map((r) => r.userId), ...list.flatMap((g) => (g.createdBy ? [g.createdBy] : []))];
+    const emailOf = new Map(
+      opts.emails && people.length
+        ? (await this.db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.id, [...new Set(people)]))).map((u) => [u.id, u.email])
+        : [],
+    );
     const [refs, pageRefs, chapterRefs] = await Promise.all([
       this.members.refs([...ownerRows.map((r) => r.userId), ...list.flatMap((g) => (g.createdBy ? [g.createdBy] : []))]),
       this.pageRefs.refs(list.flatMap((g) => (g.pageId ? [g.pageId] : []))),
@@ -250,6 +262,9 @@ export class AdminGroupsService {
         chapter: g.chapterId ? (chapterRefs.get(g.chapterId) ?? null) : null,
         createdBy: g.createdBy ? (refs.get(g.createdBy) ?? null) : null,
         owner: ownerId ? (refs.get(ownerId) ?? null) : null,
+        ...(opts.emails
+          ? { ownerEmail: (ownerId && emailOf.get(ownerId)) || null, createdByEmail: (g.createdBy && emailOf.get(g.createdBy)) || null }
+          : {}),
         status: statusOf(g),
         statusNote: g.statusNote,
         featured: !!g.featuredAt,
@@ -272,17 +287,18 @@ export class AdminGroupsService {
     return group;
   }
 
+  /** One row, for staff who act (groups.manage), so with emails. */
   async row(rawId: string): Promise<AdminGroupRow> {
-    return (await this.rows([await this.find(rawId)]))[0]!;
+    return (await this.rows([await this.find(rawId)], { emails: true }))[0]!;
   }
 
   /* ------------------------------ Detail ------------------------------ */
 
   /** GET /admin/groups/{id}: everything the group's console page shows. Private posts included (marked). */
-  async detail(rawId: string): Promise<AdminGroupDetail> {
+  async detail(ctx: AuthContext, rawId: string): Promise<AdminGroupDetail> {
     const group = await this.find(rawId);
     const [[row], adminRows, postRows, reportRows, auditRows, country] = await Promise.all([
-      this.rows([group]),
+      this.rows([group], { emails: maySeeEmails(ctx) }),
       this.db
         .select({ userId: groupMembers.userId, role: groupMembers.role })
         .from(groupMembers)

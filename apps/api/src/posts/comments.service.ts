@@ -68,7 +68,7 @@ export class CommentsService {
   ) {}
 
   async list(viewer: AuthUser, postId: string, q: CommentsQuery): Promise<Page<CommentView>> {
-    const post = await this.postsService.findVisible(viewer, postId);
+    const post = await this.postsService.findVisible(viewer, postId, { thread: true });
     const ts = commentTs(comments.createdAt);
     const conds: SQL[] = [eq(comments.postId, postId), isNull(comments.parentId), notBlockedSql(viewer.id, sql`${comments.authorId}`)];
     // Questions: the accepted answer leads the first page of the "relevant" sort.
@@ -146,7 +146,7 @@ export class CommentsService {
     const parent = await this.find(commentId);
     if (!parent || parent.parentId) throw Errors.notFound('Comment');
     if (await this.relations.isBlockedEitherWay(viewer.id, parent.authorId)) throw Errors.notFound('Comment');
-    const post = await this.postsService.findVisible(viewer, parent.postId);
+    const post = await this.postsService.findVisible(viewer, parent.postId, { thread: true });
     const ts = commentTs(comments.createdAt);
     const c = decodeCursor<{ t: string; id: string }>(q.cursor);
     const rows = await this.db
@@ -218,7 +218,7 @@ export class CommentsService {
     if (!can(user, 'comment.edit', { authorId: comment.authorId })) throw Errors.forbidden('Only the author can edit this comment');
     if (comment.moderationState !== 'visible') throw Errors.conflict('This comment can’t be edited');
     assertNotRestricted(user);
-    const post = await this.postsService.findVisible(user, comment.postId);
+    const post = await this.postsService.findVisible(user, comment.postId, { thread: true });
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
     const { updated, added } = await this.db.transaction(async (tx) => {
       const [u] = await tx.update(comments).set({ body: input.body, editedAt: new Date() }).where(eq(comments.id, id)).returning();

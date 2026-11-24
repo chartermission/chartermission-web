@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
-import type { CursorQuery, GroupPostAction, Ok, Page, PostView } from '@chartermission/contracts';
+import type { CursorQuery, GroupPostAction, GroupRole, Ok, Page, PostView } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
 import { posts } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -12,6 +12,10 @@ import { PostsService } from '../posts/posts.service.js';
 import { PostSerializer } from '../posts/post-serializer.js';
 import { tsKey } from '../posts/visibility.js';
 import { GroupsService } from './groups.service.js';
+import { rankInGroup } from './group-access.js';
+
+const RANK_OWNER = 3;
+const rankOf = (role: GroupRole | null) => (role === 'owner' ? 3 : role === 'admin' ? 2 : role === 'moderator' ? 1 : role === 'member' ? 0 : -1);
 
 /** Posts one group can pin at the top of its feed. */
 export const GROUP_PIN_LIMIT = 3;
@@ -68,6 +72,19 @@ export class GroupPostsService {
     if (!post || post.deletedAt || post.groupId !== row.id) throw Errors.notFound('That post');
     const waiting = post.status === 'in_review' && post.groupReview === 'pending';
     const note = 'note' in input ? input.note?.trim() || null : null;
+    // Moderators remove or decline only posts by people of lower rank: a moderator can't touch an
+    // admin's, the owner's or a page or chapter runner's post; an admin can't touch the owner's or a
+    // runner's. Staff act through the admin console.
+    if ((input.action === 'remove' || input.action === 'decline') && post.authorId !== user.id) {
+      const mine = access.abilities.own ? RANK_OWNER : rankOf(access.role);
+      if ((await rankInGroup(this.db, row, post.authorId)) >= mine) {
+        throw Errors.forbidden(
+          input.action === 'remove'
+            ? 'You can only remove posts by people with a lower role than yours in this group.'
+            : 'You can only decline posts by people with a lower role than yours in this group.',
+        );
+      }
+    }
 
     switch (input.action) {
       case 'approve':

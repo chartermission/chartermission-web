@@ -92,7 +92,9 @@ describe('Groups: posts and where they show', () => {
       expect(await feed(owner, `author=${insider.handle}`)).toContain(post.id);
       expect(ids((await outsider.get(`/topics/${tag}/posts?sort=latest`).expect(200)).body)).toEqual([]);
       expect(ids((await owner.get(`/topics/${tag}/posts?sort=latest`).expect(200)).body)).toEqual([post.id]);
-      expect(((await outsider.get(`/topics/${tag}`).expect(200)).body.activity7d as number[]).reduce((a, b) => a + b, 0)).toBe(0);
+      // A tag used only in private groups: no topic page, for anyone.
+      await outsider.get(`/topics/${tag}`).expect(404);
+      await owner.get(`/topics/${tag}`).expect(404);
       const topics = (await outsider.get(`/topics?q=${tag}`).expect(200)).body.items as { tag: string; posts7d: number }[];
       expect(topics.every((x) => x.posts7d === 0)).toBe(true);
       // A tag used only in private groups has no posts to count, so it isn't listed on /topics at all.

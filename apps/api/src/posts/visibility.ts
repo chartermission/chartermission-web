@@ -1,5 +1,7 @@
 import { and, isNull, sql, type SQL } from 'drizzle-orm';
 import { blocks, hashtags, mutes, pages, postHashtags, posts, users } from '../db/schema.js';
+import type { Db } from '../db/db.module.js';
+import type { Tx } from '../db/client.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { isActiveUntil } from '../core/policy.js';
 import { groupPostsVisibleSql } from '../groups/group-access.js';
@@ -11,8 +13,8 @@ import { groupPostsVisibleSql } from '../groups/group-access.js';
  *  - pending_media posts: only the author until every attachment is clean;
  *  - blocked either way: never;
  *  - suspended, deactivated or deleted authors: dropped from feeds and topic pages;
- *  - group posts: a private group's posts (visibility 'group') only for its members (and the author),
- *    and nothing from suspended or deleted groups (see groups/group-access.ts).
+ *  - group posts: a private group's posts only for its members (an author who left sees their own post
+ *    alone, read-only), and nothing from suspended or deleted groups but for staff (groups/group-access.ts).
  */
 
 export type PostRow = typeof posts.$inferSelect;
@@ -84,8 +86,10 @@ export const personalPostSql: SQL = sql`${posts.pageId} is null`;
  * opening a muted topic page still shows it). `muteMembers: false` keeps a muted
  * member's posts, for when the viewer opens that member's profile.
  */
-export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?: boolean; muteMembers?: boolean } = {}): SQL {
-  const conds: (SQL | undefined)[] = [isNull(posts.deletedAt), sql`(${posts.pageId} is not null or ${authorActiveSql()})`, pageLiveSql, groupPostsVisibleSql(viewerId)];
+export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?: boolean; muteMembers?: boolean; groupChecked?: boolean } = {}): SQL {
+  // groupChecked: the caller already decided the viewer may read the group's posts (staff opening one
+  // group's feed), so the group rule is left out.
+  const conds: (SQL | undefined)[] = [isNull(posts.deletedAt), sql`(${posts.pageId} is not null or ${authorActiveSql()})`, pageLiveSql, opts.groupChecked ? undefined : groupPostsVisibleSql(viewerId)];
   if (!viewerId) {
     conds.push(sql`${posts.visibility} = 'public'`, sql`${posts.status} = 'published'`, sql`${posts.moderationState} = 'visible'`);
     return and(...conds)!;
@@ -107,6 +111,16 @@ export function listablePostsSql(viewerId: string | null, opts: { muteHashtags?:
     );
   }
   return and(...conds)!;
+}
+
+/**
+ * Recount a post's repost_count from its live reposts. Reposts made inside a private group (visibility
+ * 'group') stay in the group, so they don't count.
+ */
+export async function recountReposts(tx: Pick<Db | Tx, 'execute'>, originalId: string): Promise<void> {
+  await tx.execute(
+    sql`update ${posts} set repost_count = (select count(*)::int from ${posts} rc where rc.repost_of_id = ${originalId} and rc.deleted_at is null and rc.visibility <> 'group') where id = ${originalId}`,
+  );
 }
 
 /** Engagement used by "top" sorts and the For You score: reactions + 2×comments + 3×reposts. */

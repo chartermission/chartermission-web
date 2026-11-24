@@ -23,6 +23,7 @@ import { QueueService } from '../infra/queue.service.js';
 import { TargetsService, targetKey, type ResolvedTarget } from './targets.service.js';
 import { OPEN_STATUSES } from './reports.service.js';
 import { iso, truncate } from './util.js';
+import { syncGroupPostStats } from '../groups/group-access.js';
 
 type ActionRow = typeof moderationActions.$inferSelect;
 type AppealStatus = AdminActionView['appealStatus'];
@@ -262,7 +263,11 @@ export class ModerationActionsService {
   }
 
   private async setContentState(tx: Tx, t: ResolvedTarget, state: 'visible' | 'hidden' | 'removed') {
-    if (t.type === 'post') await tx.update(posts).set({ moderationState: state }).where(eq(posts.id, t.id));
+    if (t.type === 'post') {
+      const [row] = await tx.update(posts).set({ moderationState: state }).where(eq(posts.id, t.id)).returning({ groupId: posts.groupId });
+      // A group's post count and last activity follow its visible posts.
+      await syncGroupPostStats(tx, row?.groupId);
+    }
     if (t.type === 'comment') await tx.update(comments).set({ moderationState: state }).where(eq(comments.id, t.id));
     if (t.type === 'story') await tx.update(stories).set({ moderationState: state }).where(eq(stories.id, t.id));
     if (t.type === 'opportunity') await tx.update(opportunities).set({ moderationState: state }).where(eq(opportunities.id, t.id));
@@ -491,7 +496,8 @@ export class ModerationActionsService {
               'suppress',
             );
         } else if (action.targetType === 'post') {
-          await tx.update(posts).set({ moderationState: 'visible' }).where(eq(posts.id, action.targetId));
+          const [row] = await tx.update(posts).set({ moderationState: 'visible' }).where(eq(posts.id, action.targetId)).returning({ groupId: posts.groupId });
+          await syncGroupPostStats(tx, row?.groupId);
         } else if (action.targetType === 'comment') {
           await tx.update(comments).set({ moderationState: 'visible' }).where(eq(comments.id, action.targetId));
         } else if (action.targetType === 'story') {

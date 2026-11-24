@@ -82,7 +82,8 @@ export class FeedService {
   /**
    * GET /feed?group= — one group's posts, newest first, its pinned posts leading the first page.
    * Private groups: 403 for people who aren't members (401 for visitors); deleted groups, and suspended
-   * ones for anyone but their admins and staff, are 404. Visitors see public groups' public posts.
+   * ones for anyone but their admins and staff, are 404 (403 for those admins: the posts are for staff
+   * only). Staff see every group's posts. Visitors see public groups' public posts.
    */
   async groupFeed(viewer: AuthUser | undefined, q: FeedQuery): Promise<Page<PostView>> {
     const key = q.group!;
@@ -94,13 +95,16 @@ export class FeedService {
     if (!group || group.deletedAt) throw Errors.notFound('Group');
     const access = await groupAccess(this.db, group, viewer);
     if (group.status === 'suspended' && !access.staff && !roleAtLeast(access.role, 'admin')) throw Errors.notFound('Group');
+    // A suspended group's posts are for staff only, its own admins included.
+    if (group.status === 'suspended' && !access.staff) throw Errors.forbidden('This group is suspended, so its posts are hidden.');
     if (!access.abilities.seeContent) {
       if (!viewer) throw Errors.unauthenticated();
       throw Errors.forbidden('Only members can see this group’s posts. Ask to join.');
     }
     const filters = await this.filters({ ...q, group: undefined, author: undefined, page: undefined, initiative: undefined });
     if (!filters) return { items: [], nextCursor: null };
-    const conds = [listablePostsSql(viewer?.id ?? null), eq(posts.groupId, group.id), ...filters];
+    // Staff (moderation.view) read any group's feed here, private and suspended ones included.
+    const conds = [listablePostsSql(viewer?.id ?? null, { groupChecked: access.staff }), eq(posts.groupId, group.id), ...filters];
     const pinned = q.cursor
       ? []
       : (

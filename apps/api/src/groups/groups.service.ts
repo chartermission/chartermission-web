@@ -1,6 +1,6 @@
 import { recountGroupHashtags } from '../posts/hashtags.js';
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type {
   ChapterRef,
   GroupDetail,
@@ -32,6 +32,7 @@ import { checkCursor, decodeCursor, encodeCursor } from '../common/cursor.js';
 import { isUniqueViolation, likePrefix } from '../moderation/util.js';
 import { isUuid } from '../media/uuid-param.js';
 import { assertNotRestricted } from '../posts/posts.service.js';
+import { recountReposts } from '../posts/visibility.js';
 import {
   accessFrom,
   CHAPTER_TEAM_ROLE_KEYS,
@@ -75,12 +76,13 @@ function cleanHashtags(list: string[]): string[] {
   });
 }
 
-/** SQL on the outer "groups" row: the viewer runs the group through the page or chapter that owns it. */
+/** SQL on the outer "groups" row: the viewer runs the group through the page or chapter that owns it (and isn't banned from it). */
 function runsViaOwnerSql(viewerId: string): SQL {
-  return sql`(("groups"."owner_type" = 'page' and exists (select 1 from ${pageAdmins} lpa where lpa.page_id = "groups"."page_id" and lpa.user_id = ${viewerId}))
+  return sql`(not exists (select 1 from ${groupMembers} lgb where lgb.group_id = "groups"."id" and lgb.user_id = ${viewerId} and lgb.status = 'banned')
+    and (("groups"."owner_type" = 'page' and exists (select 1 from ${pageAdmins} lpa where lpa.page_id = "groups"."page_id" and lpa.user_id = ${viewerId}))
     or ("groups"."owner_type" = 'chapter' and exists (select 1 from ${userRoles} lur join ${roles} lrl on lrl.id = lur.role_id
           where lur.user_id = ${viewerId} and lur.scope_type = 'chapter' and lur.scope_id = "groups"."chapter_id"::text and lur.revoked_at is null
-            and lrl.key in (${sql.join(CHAPTER_TEAM_ROLE_KEYS.map((k) => sql`${k}`), sql`, `)}))))`;
+            and lrl.key in (${sql.join(CHAPTER_TEAM_ROLE_KEYS.map((k) => sql`${k}`), sql`, `)})))))`;
 }
 
 /** SQL on the outer "groups" row: the viewer's group_members row has this status (and role, when given). */
@@ -89,7 +91,7 @@ function membershipSql(viewerId: string, status: string, roleIn?: GroupRole[]): 
   return sql`exists (select 1 from ${groupMembers} lgm where lgm.group_id = "groups"."id" and lgm.user_id = ${viewerId} and lgm.status = ${status}${role})`;
 }
 
-type SortKey = { key: SQL; type: 'date' | 'int' | 'text'; dir: 'asc' | 'desc' };
+type SortKey = { key: SQL; type: 'date' | 'int' | 'text'; dir: 'asc' | 'desc'; paging: 'keyset' | 'offset' };
 
 /**
  * Groups for members (contracts/groups.ts): create, list, open, change and delete groups. Who may see
@@ -190,8 +192,28 @@ export class GroupsService {
     }
 
     const sort = this.sortKey(viewer, q);
+    const order = sort.dir === 'desc' ? sql`${sort.key} desc, "groups"."id" desc` : sql`${sort.key} asc, "groups"."id" asc`;
+    // "active" and "suggested" sort on things a cursor mustn't carry (a private group's last post
+    // time, the viewer's suggestion scores), so they page by position; the others by keyset.
+    if (sort.paging === 'offset') {
+      const c = decodeCursor<{ o: number }>(q.cursor);
+      checkCursor(c, { o: 'int' });
+      const offset = c ? Number(c.o) : 0;
+      if (offset < 0 || offset > 10_000) throw Errors.badRequest('Invalid cursor');
+      const rows = await this.db
+        .select()
+        .from(groups)
+        .where(and(...conds))
+        .orderBy(order)
+        .limit(q.limit + 1)
+        .offset(offset);
+      return {
+        items: await this.summaries(rows.slice(0, q.limit), viewer),
+        nextCursor: rows.length > q.limit ? encodeCursor({ o: offset + q.limit }) : null,
+      };
+    }
     const c = decodeCursor<{ k: string; id: string }>(q.cursor);
-    checkCursor(c, { k: 'text', id: 'uuid' });
+    checkCursor(c, { k: sort.type === 'date' ? 'date' : sort.type === 'int' ? 'int' : 'text', id: 'uuid' });
     if (c) {
       const cast = sort.type === 'date' ? sql`${c.k}::timestamptz` : sort.type === 'int' ? sql`${c.k}::int` : sql`${c.k}`;
       conds.push(sort.dir === 'desc' ? sql`(${sort.key}, "groups"."id") < (${cast}, ${c.id}::uuid)` : sql`(${sort.key}, "groups"."id") > (${cast}, ${c.id}::uuid)`);
@@ -201,7 +223,7 @@ export class GroupsService {
       .select({ group: groups, k: keyText })
       .from(groups)
       .where(and(...conds))
-      .orderBy(sort.dir === 'desc' ? sql`${sort.key} desc, "groups"."id" desc` : sql`${sort.key} asc, "groups"."id" asc`)
+      .orderBy(order)
       .limit(q.limit + 1);
     const hasMore = rows.length > q.limit;
     const items = rows.slice(0, q.limit);
@@ -228,17 +250,17 @@ export class GroupsService {
               and least(scn.requester_id, scn.addressee_id) = least(${viewer.id}::uuid, cgm.user_id)
               and greatest(scn.requester_id, scn.addressee_id) = greatest(${viewer.id}::uuid, cgm.user_id)
               where cgm.group_id = "groups"."id" and cgm.status = 'active')))`;
-      return { key: score, type: 'int', dir: 'desc' };
+      return { key: score, type: 'int', dir: 'desc', paging: 'offset' };
     }
     switch (q.sort) {
       case 'members':
-        return { key: sql`"groups"."member_count"`, type: 'int', dir: 'desc' };
+        return { key: sql`"groups"."member_count"`, type: 'int', dir: 'desc', paging: 'keyset' };
       case 'newest':
-        return { key: sql`"groups"."created_at"`, type: 'date', dir: 'desc' };
+        return { key: sql`"groups"."created_at"`, type: 'date', dir: 'desc', paging: 'keyset' };
       case 'name':
-        return { key: sql`lower("groups"."name")`, type: 'text', dir: 'asc' };
+        return { key: sql`lower("groups"."name")`, type: 'text', dir: 'asc', paging: 'keyset' };
       default:
-        return { key: sql`coalesce("groups"."last_post_at", "groups"."created_at")`, type: 'date', dir: 'desc' };
+        return { key: sql`coalesce("groups"."last_post_at", "groups"."created_at")`, type: 'date', dir: 'desc', paging: 'offset' };
     }
   }
 
@@ -370,7 +392,8 @@ export class GroupsService {
       postPermission: row.postPermission as GroupPostPermission,
       postApproval: row.postApproval,
       hashtags: row.hashtags,
-      postCount: row.postCount,
+      // Private groups the viewer isn't in: no activity hint.
+      postCount: access.abilities.seeContent ? row.postCount : null,
       admins,
       createdBy,
       statusNote: roleAtLeast(access.role, 'admin') || access.staff ? row.statusNote : null,
@@ -414,7 +437,9 @@ export class GroupsService {
   /**
    * POST /groups. Who may create one is a platform setting (everyone, verified members, staff); a member
    * owns up to maxOwnedPerMember member-run groups. Page groups need a live page the member manages;
-   * chapter groups need the chapter's team (or staff with chapters.admin). The creator becomes the owner.
+   * chapter groups need the chapter's team (or staff with chapters.admin). The creator of a member-run
+   * group becomes its owner; page and chapter groups have no member owner (the page's admins or the
+   * chapter team own them), so their creator joins as an admin.
    */
   async create(user: AuthUser, input: GroupInput, ip?: string): Promise<GroupDetail> {
     assertNotRestricted(user);
@@ -470,7 +495,7 @@ export class GroupsService {
               createdBy: user.id,
             })
             .returning();
-          await tx.insert(groupMembers).values({ groupId: g!.id, userId: user.id, role: 'owner', status: 'active', joinedAt: new Date() });
+          await tx.insert(groupMembers).values({ groupId: g!.id, userId: user.id, role: input.ownerType === 'member' ? 'owner' : 'admin', status: 'active', joinedAt: new Date() });
           await syncGroupMemberCount(tx, g!.id);
           return g!;
         });
@@ -518,6 +543,17 @@ export class GroupsService {
       if (!access.abilities.own) throw Errors.forbidden('Only the group’s owner can archive it or bring it back');
       if (row.status === 'suspended') throw Errors.conflict('This group is suspended by Charter Mission.');
     }
+    // Opening a private group to everyone exposes what members wrote for members: the owner decides
+    // (for page and chapter groups, the page's admins or the chapter team), not the group's admins.
+    if (fields.visibility === 'public' && row.visibility === 'private' && !access.abilities.own) {
+      throw Errors.forbidden(
+        row.ownerType === 'page'
+          ? 'Only the page’s admins can make this private group public.'
+          : row.ownerType === 'chapter'
+            ? 'Only the chapter team can make this private group public.'
+            : 'Only the group’s owner can make this private group public.',
+      );
+    }
     if (row.status === 'archived' && archived !== false && Object.keys(fields).length) {
       throw Errors.conflict('This group is archived. Bring it back before changing it.');
     }
@@ -550,8 +586,14 @@ export class GroupsService {
       }
       if (switched) {
         await syncGroupPostStats(tx, row.id);
-        // Private group posts don't count towards hashtags' post counts (see posts/hashtags.ts).
+        // Private group posts don't count towards hashtags' post counts (see posts/hashtags.ts),
+        // and reposts made inside a private group don't count towards the original's reposts.
         await recountGroupHashtags(tx, row.id);
+        const originals = await tx
+          .selectDistinct({ id: posts.repostOfId })
+          .from(posts)
+          .where(and(eq(posts.groupId, row.id), isNotNull(posts.repostOfId)));
+        for (const o of originals) if (o.id) await recountReposts(tx, o.id);
       }
     });
     await this.audit.record({

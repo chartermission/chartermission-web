@@ -4719,4 +4719,6 @@ export const ar: Dict = {
   "Search members, groups and topics": "ابحث عن أعضاء ومجموعات ومواضيع",
   "Invitations, join requests and posts waiting in groups you run.": "الدعوات وطلبات الانضمام والمنشورات المعلّقة في المجموعات التي تديرها.",
   "Report group": "الإبلاغ عن المجموعة",
+  "This group’s posts are hidden while it is suspended.": "منشورات هذه المجموعة مخفية ما دامت معلّقة.",
+  "Only the Charter Mission team can see them until the group is restored.": "لا يراها إلا فريق Charter Mission إلى أن تُستعاد المجموعة.",
 };
