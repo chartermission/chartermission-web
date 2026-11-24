@@ -1,3 +1,4 @@
+import { RelationshipService } from '../profiles/relationship.service.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { and, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import type {
@@ -56,6 +57,7 @@ export class GroupMembersService {
     private readonly events: EventsService,
     private readonly audit: AuditService,
     private readonly limits: RateLimitService,
+    private readonly relationships: RelationshipService,
   ) {}
 
   /** Runs a membership change with the group row locked, then recounts its active members. */
@@ -223,6 +225,11 @@ export class GroupMembersService {
       .limit(q.limit + 1);
     const page = paginate(rows, q.limit, (last) => ({ r: last.r, t: last.t, id: last.m.userId }));
     const refs = await this.members.refs(page.items.flatMap((r) => [r.m.userId, ...(r.m.invitedBy ? [r.m.invitedBy] : [])]));
+    // Connect / Follow buttons in the members list.
+    const relationships = await this.relationships.many(
+      user?.id,
+      page.items.map((r) => r.m.userId),
+    );
     return {
       items: page.items.flatMap(({ m }) => {
         const member = refs.get(m.userId);
@@ -236,6 +243,7 @@ export class GroupMembersService {
             invitedBy: moderates && m.invitedBy ? (refs.get(m.invitedBy) ?? null) : null,
             joinedAt: m.joinedAt?.toISOString() ?? null,
             since: (m.status === 'active' ? (m.joinedAt ?? m.createdAt) : m.updatedAt).toISOString(),
+            ...(relationships.get(m.userId) ? { relationship: relationships.get(m.userId) } : {}),
           },
         ];
       }),

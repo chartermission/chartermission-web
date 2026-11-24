@@ -1,3 +1,4 @@
+import { ProfilesModule } from '../profiles/profiles.module.js';
 import { Module } from '@nestjs/common';
 import { PostsModule } from '../posts/posts.module.js';
 import { GroupsController } from './groups.controller.js';
@@ -11,7 +12,7 @@ import { GroupsEvents } from './groups.events.js';
  * Who may see and do what lives in group-access.ts, which the post pipeline uses too.
  */
 @Module({
-  imports: [PostsModule],
+  imports: [PostsModule, ProfilesModule],
   controllers: [GroupsController],
   providers: [GroupsService, GroupMembersService, GroupPostsService, GroupsEvents],
   exports: [GroupsService],

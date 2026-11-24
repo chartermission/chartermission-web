@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { GroupDetail } from "@chartermission/contracts";
 import { Button, Icon, buttonClasses } from "@chartermission/ui";
+import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
 import { absoluteUrl } from "@/components/social/links";
 import { Menu, type MenuItem } from "@/components/social/menu";
@@ -29,6 +30,7 @@ export function GroupActions({ group, viewer }: { group: GroupDetail; viewer: Vi
   const router = useRouter();
   const [inviting, setInviting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const { abilities, membership } = group;
   const waiting = group.pending ? group.pending.requests + group.pending.posts : 0;
   const showJoin = membership.status !== "none" || abilities.join !== "none";
@@ -49,6 +51,8 @@ export function GroupActions({ group, viewer }: { group: GroupDetail; viewer: Vi
     { label: t("Share"), icon: "share", onSelect: share },
     { label: t("Copy link"), icon: "link", onSelect: copyLink },
     ...(abilities.leave && membership.status === "active" ? [{ label: t("Leave group"), icon: "log-out" as const, danger: true, onSelect: () => setLeaving(true) }] : []),
+    // People who run the group fix it themselves; everyone else can tell the Charter Mission team.
+    ...(!abilities.manage && !abilities.own ? [{ label: t("Report group"), icon: "flag" as const, onSelect: () => setReporting(true) }] : []),
   ];
 
   return (
@@ -88,6 +92,7 @@ export function GroupActions({ group, viewer }: { group: GroupDetail; viewer: Vi
           </span>
         }
       />
+      {reporting && <ReportDialog targetType="group" targetId={group.id} subject={`“${group.name}”`} onClose={() => setReporting(false)} />}
       {inviting && <GroupInviteDialog group={group} viewerHandle={viewer.handle} onClose={() => setInviting(false)} />}
       {leaving && (
         <ConfirmDialog

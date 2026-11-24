@@ -4718,4 +4718,5 @@ export const fr: Dict = {
   "Search covers members, groups and topics for now. Opportunities, events, initiatives, courses, chapters and organisations join search as those sections launch.": "Pour l’instant, la recherche porte sur les membres, les groupes et les sujets. Opportunités, événements, initiatives, cours, sections et organisations y seront ajoutés au lancement de ces rubriques.",
   "Search members, groups and topics": "Rechercher des membres, des groupes et des sujets",
   "Invitations, join requests and posts waiting in groups you run.": "Invitations, demandes d’adhésion et publications en attente dans les groupes que vous animez.",
+  "Report group": "Signaler le groupe",
 };

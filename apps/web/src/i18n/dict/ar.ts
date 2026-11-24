@@ -4718,4 +4718,5 @@ export const ar: Dict = {
   "Search covers members, groups and topics for now. Opportunities, events, initiatives, courses, chapters and organisations join search as those sections launch.": "يشمل البحث حاليًا الأعضاء والمجموعات والمواضيع. وستنضم الفرص والفعاليات والمبادرات والدورات والفروع والمؤسسات إلى البحث مع إطلاق هذه الأقسام.",
   "Search members, groups and topics": "ابحث عن أعضاء ومجموعات ومواضيع",
   "Invitations, join requests and posts waiting in groups you run.": "الدعوات وطلبات الانضمام والمنشورات المعلّقة في المجموعات التي تديرها.",
+  "Report group": "الإبلاغ عن المجموعة",
 };

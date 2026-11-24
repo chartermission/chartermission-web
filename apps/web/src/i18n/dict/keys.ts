@@ -4716,4 +4716,5 @@ export const KEYS: readonly string[] = [
   "Search covers members, groups and topics for now. Opportunities, events, initiatives, courses, chapters and organisations join search as those sections launch.",
   "Search members, groups and topics",
   "Invitations, join requests and posts waiting in groups you run.",
+  "Report group",
 ];
