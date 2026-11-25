@@ -34,6 +34,7 @@ import {
   postAttachments,
   postHashtags,
   postHelpOffers,
+  postViews,
   posts,
   reactions,
   users,
@@ -138,7 +139,7 @@ export class PostSerializer {
     }
 
     const postIds = rows.map((r) => r.id);
-    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap, initiativeMap, groupInfo] = await Promise.all([
+    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap, initiativeMap, groupInfo, impressionMap] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
       this.pageRefs.refs(rows.flatMap((r) => [r.pageId, r.aboutPageId]).filter((x): x is string => !!x)),
       rows.some((r) => r.pageId) ? this.pageRefs.managedIds(viewer?.id) : Promise.resolve(new Set<string>()),
@@ -153,6 +154,7 @@ export class PostSerializer {
       this.sharedEvents(rows, viewer),
       this.initiatives(rows),
       this.groups(rows, viewer),
+      this.impressions(rows, viewer),
     ]);
 
     const out: PostView[] = [];
@@ -194,7 +196,13 @@ export class PostSerializer {
         status: r.status as PostView['status'],
         createdAt: r.createdAt.toISOString(),
         editedAt: r.editedAt?.toISOString() ?? null,
-        counts: { reactions: r.reactionCount, comments: r.commentCount, reposts: r.repostCount },
+        counts: {
+          reactions: r.reactionCount,
+          comments: r.commentCount,
+          reposts: r.repostCount,
+          // Only the author (or the page's admins) sees how many times their post was seen.
+          ...(viewer && own && !r.repostOfId ? { impressions: impressionMap.get(r.id) ?? 0 } : {}),
+        },
         reactionBreakdown: { like: r.likeCount, insightful: r.insightfulCount, support: r.supportCount },
         viewer: {
           reaction: viewerState.reactions.get(r.id) ?? null,
@@ -245,6 +253,21 @@ export class PostSerializer {
       .from(chapters)
       .where(inArray(chapters.id, ids));
     return new Map(found.map((c) => [c.id, c]));
+  }
+
+  /**
+   * Times each post was seen (the same figure as "Impressions" in its analytics), for posts the viewer
+   * wrote or could have published as a page; the caller shows it only to the author or page admins.
+   */
+  private async impressions(rows: PostRow[], viewer: AuthUser | undefined): Promise<Map<string, number>> {
+    const ids = rows.filter((r) => viewer && !r.repostOfId && (r.authorId === viewer.id || r.pageId)).map((r) => r.id);
+    if (!ids.length) return new Map();
+    const sums = await this.db
+      .select({ postId: postViews.postId, n: sql<number>`coalesce(sum(${postViews.views}), 0)::int` })
+      .from(postViews)
+      .where(inArray(postViews.postId, ids))
+      .groupBy(postViews.postId);
+    return new Map(sums.map((x) => [x.postId, x.n]));
   }
 
   private async hashtags(postIds: string[]): Promise<Map<string, string[]>> {

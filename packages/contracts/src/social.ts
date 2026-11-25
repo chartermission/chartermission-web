@@ -361,7 +361,8 @@ export type PostView = {
   contentReview?: PostContentReview;
   createdAt: string;
   editedAt: string | null;
-  counts: { reactions: number; comments: number; reposts: number };
+  /** impressions: times the post was seen; only for the author (or the page's admins), absent otherwise. */
+  counts: { reactions: number; comments: number; reposts: number; impressions?: number };
   reactionBreakdown: z.infer<typeof ReactionCounts>;
   viewer: {
     reaction: ReactionKind | null;
@@ -424,7 +425,7 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     contentReview: PostContentReview.optional(),
     createdAt: z.string(),
     editedAt: z.string().nullable(),
-    counts: z.object({ reactions: z.number().int(), comments: z.number().int(), reposts: z.number().int() }),
+    counts: z.object({ reactions: z.number().int(), comments: z.number().int(), reposts: z.number().int(), impressions: z.number().int().optional() }),
     reactionBreakdown: ReactionCounts,
     viewer: z.object({
       reaction: ReactionKind.nullable(),
