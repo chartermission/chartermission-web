@@ -12,7 +12,6 @@ Authorization: Bearer <CHARTER_CENTER_API_KEY>      (only sent when a key is set
   "course_title": "PMP Exam Prep",
   "start_from": "2026-01-01",
   "start_end": "2026-01-15",
-  "duration": 35,
   "exam_hours": 35,
   "instructor_name": "Eng. Abdalla Yousif",
   "instructor_signature_url": "https://chartermission.com/api/v1/exam-signatures/0b6c1c5e-8a55-4b8e-9d0e-2f1d1f6b0a11.png"
@@ -24,10 +23,8 @@ Authorization: Bearer <CHARTER_CENTER_API_KEY>      (only sent when a key is set
   they have.
 - `course_title`, `start_from`, `start_end`, `instructor_name`: the exam's certificate settings in the
   Charter Mission admin console. Dates are `YYYY-MM-DD`.
-- `duration`: the study hours set on the exam's certificate, a number (up to one decimal place,
-  like `35` or `1.5`), or `null` when the exam has no hours set. This is the name in Charter Center's
-  partner API collection (Nov 2026).
-- `exam_hours`: the same value under the name Charter Mission used first; it can be ignored.
+- `exam_hours`: the study hours set on the exam's certificate, a number (up to one decimal place,
+  like `35` or `1.5`), or `null` when the exam has no hours set.
 - `instructor_signature_url`: the signature uploaded on the exam, publicly downloadable (PNG, JPEG or WebP).
 
 The request is sent once per member and exam, as soon as the member has confirmed their name. The

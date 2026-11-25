@@ -340,9 +340,6 @@ export class ExamCertificatesService implements OnModuleInit {
       course_title: settings.title,
       start_from: settings.startDate,
       start_end: settings.endDate,
-      // Charter Center's partner API (Postman collection, Nov 2026) calls the hours "duration";
-      // exam_hours is kept so certificates issued before stay comparable (outdated detection).
-      duration: settings.hours,
       exam_hours: settings.hours,
       instructor_name: settings.issuerName,
       instructor_signature_url: signatureUrl(settings.signatureFileId, settings.signatureMime),
