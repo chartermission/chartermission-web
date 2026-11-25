@@ -278,7 +278,7 @@ describe('Replacing issued exam certificates', () => {
     await admin.post(`/admin/exam-certificates/${row.id}/reissue`).expect(200);
     await t.app.get(ExamCertificatesService).sweep();
     const [cert] = await t.db.select().from(s.examCertificates).where(eq(s.examCertificates.id, row.id));
-    expect(cert!.request).toMatchObject({ course_title: NEW_TITLE, exam_hours: 35 });
+    expect(cert!.request).toMatchObject({ course_title: NEW_TITLE, duration: 35, exam_hours: 35 });
     const after = (await list()).items.find((i) => i.member.id === members.first.id)!;
     expect(after.issuedWith?.hours).toBe(35);
     expect(after.differences).toEqual([]);

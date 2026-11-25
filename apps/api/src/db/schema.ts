@@ -1402,6 +1402,13 @@ export const courses = pgTable(
     thumbnailUrl: text('thumbnail_url'),
     sourceUpdatedAt: ts('source_updated_at'),
     syncedAt: ts('synced_at').notNull().defaultNow(),
+    /**
+     * Fingerprint of the course list entry when its details (outcomes, requirements) were last fetched
+     * from GET /courses/{id}; while it matches (and the details are under a week old) the sync reuses
+     * them instead of asking Charter Center again.
+     */
+    detailsFingerprint: text('details_fingerprint'),
+    detailsSyncedAt: ts('details_synced_at'),
     /** Missing from the source (or archived there) since this time. */
     removedAt: ts('removed_at'),
     hidden: boolean('hidden').notNull().default(false),

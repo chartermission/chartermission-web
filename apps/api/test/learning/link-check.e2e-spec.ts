@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import type { CourseDetail, CourseSummary, Page } from '@chartermission/contracts';
 import { count, createMember, createTestApp, s, type TestApp } from '../helpers.js';
-import { HttpLinkChecker, type RequestFn } from '../../src/learning/link-checker.js';
+import { HttpLinkChecker, type LinkChecker, type RequestFn } from '../../src/learning/link-checker.js';
+import { checkLinks } from '../../src/learning/learning-sync.js';
 import { learning, openLearning } from './learning-helpers.js';
 
 const BROKEN_SLUG = 'cooperative-agribusiness-farm-to-market';
@@ -82,6 +83,25 @@ describe('Learning: link checks', () => {
     await t.db.update(s.courses).set({ hidden: false }).where(eq(s.courses.id, hidden.id));
   });
 
+  it('a site saying "too many requests" (429) isn’t a broken link: that site waits for the next run', async () => {
+    const before = await t.db.select({ id: s.courses.id, failures: s.courses.linkFailures, status: s.courses.linkStatus }).from(s.courses);
+    const asked: string[] = [];
+    const checker: LinkChecker = {
+      check: async (url) => {
+        asked.push(url);
+        return { ok: false, status: 429 };
+      },
+    };
+    const counts = await checkLinks(t.db, checker, undefined, 4, 0);
+    // One request per site, then the rest of that site is left alone.
+    const sites = new Set(before.length ? asked.map((u) => new URL(u).host) : []);
+    expect(asked).toHaveLength(sites.size);
+    expect(counts).toMatchObject({ checked: 0, broken: 0, ok: 0 });
+    expect(counts.skipped).toBeGreaterThanOrEqual(17);
+    const after = await t.db.select({ id: s.courses.id, failures: s.courses.linkFailures, status: s.courses.linkStatus }).from(s.courses);
+    expect(after.sort((a, b) => a.id.localeCompare(b.id))).toEqual(before.sort((a, b) => a.id.localeCompare(b.id)));
+  });
+
   describe('HttpLinkChecker', () => {
     const publicLookup = async () => [{ address: '93.184.216.34', family: 4 }];
     const stub = (answers: Record<string, { HEAD?: number; GET?: number; location?: string }>) => {
@@ -102,6 +122,12 @@ describe('Learning: link checks', () => {
       });
       expect(await checker.check('https://chartercenter.org/courses/a')).toEqual({ ok: true, status: 200 });
       expect(calls).toEqual(['HEAD https://chartercenter.org/courses/a', 'HEAD https://chartercenter.org/learn/a']);
+    });
+
+    it('doesn’t ask again with GET when the site is rate limiting (429)', async () => {
+      const { calls, checker } = stub({ 'https://charter-center.com/courses/9': { HEAD: 429, GET: 200 } });
+      expect(await checker.check('https://charter-center.com/courses/9')).toMatchObject({ ok: false, status: 429 });
+      expect(calls).toEqual(['HEAD https://charter-center.com/courses/9']);
     });
 
     it('falls back to GET when HEAD is refused', async () => {

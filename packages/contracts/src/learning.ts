@@ -32,7 +32,7 @@ import { QueryBoolean } from "./common.js";
  *                                    queue; CONFLICT if one is already running.
  *  POST  /admin/learning/link-check  202 SyncRunView (kind link_check). Same rules.
  *
- * Background (maintenance queue): sync every 6 h (trigger "schedule"); link check weekly. A link
+ * Background (maintenance queue): sync daily (trigger "schedule"); link check weekly. A link
  * check HEADs/GETs each course's startUrl (SSRF-safe fetcher, https only); a 2xx/3xx sets ok, two
  * consecutive failures set broken (hides Start learning) and notify admins with course.curate
  * (course_link_broken). A later success sets ok again.
@@ -131,7 +131,7 @@ export const LEARNING_PERMISSIONS = {
 } as const;
 
 /** How often the scheduled sync runs, and the link-check interval. */
-export const LEARNING_SYNC_INTERVAL_HOURS = 6;
+export const LEARNING_SYNC_INTERVAL_HOURS = 24;
 export const LEARNING_LINK_CHECK_INTERVAL_DAYS = 7;
 /** Consecutive failed checks before a link counts as broken. */
 export const LEARNING_LINK_FAILURES_TO_BREAK = 2;

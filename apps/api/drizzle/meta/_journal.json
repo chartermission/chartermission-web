@@ -267,6 +267,13 @@
       "when": 1795559805835,
       "tag": "0037_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795632252814,
+      "tag": "0038_course_details_fingerprint",
+      "breakpoints": true
     }
   ]
 }

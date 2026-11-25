@@ -112,19 +112,24 @@ describe('Learning: Charter Center mapper', () => {
 
 describe('Learning: HttpCharterCenterClient (partner API)', () => {
   type Call = { url: string; headers: Record<string, string> };
-  function stubFetch(handler: (url: URL, n: number) => { status: number; body?: unknown } | Error) {
+  type Reply = { status: number; body?: unknown; headers?: Record<string, string> };
+  function stubFetch(handler: (url: URL, n: number) => Reply | Error) {
     const calls: Call[] = [];
+    const times: number[] = [];
     const fetchFn: FetchFn = async (url, init) => {
       calls.push({ url, headers: init.headers as Record<string, string> });
+      times.push(Date.now());
       const out = handler(new URL(url), calls.length);
       if (out instanceof Error) throw out;
       return new Response(out.body === undefined ? '' : typeof out.body === 'string' ? out.body : JSON.stringify(out.body), {
         status: out.status,
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...(out.headers ?? {}) },
       });
     };
-    return { calls, fetchFn };
+    return { calls, times, fetchFn };
   }
+  /** Tests don't wait between requests unless they say so. */
+  const fast = { minGapMs: 0, rateLimitWaitMs: 1 };
 
   /** A course as GET https://charter-center.com/api/partner/courses sends it (shape of 9 Nov 2026). */
   const partnerCourse = (id: number, extra: Record<string, unknown> = {}) => ({
@@ -200,6 +205,7 @@ describe('Learning: HttpCharterCenterClient (partner API)', () => {
       ),
     );
     const client = new HttpCharterCenterClient({
+      ...fast,
       baseUrl: 'https://charter-center.test/api/partner/',
       fetch: fetchFn,
       courseUrlTemplate: 'https://charter-center.test/en/courses/{id}',
@@ -270,7 +276,7 @@ describe('Learning: HttpCharterCenterClient (partner API)', () => {
 
   it('sends Bearer auth when a key is set, on list and detail calls', async () => {
     const { calls, fetchFn } = stubFetch(api({ 1: page([partnerCourse(1)], 1, 1) }));
-    await new HttpCharterCenterClient({ baseUrl: 'https://charter-center.test/api/partner', apiKey: 'secret-key', fetch: fetchFn }).listCourses();
+    await new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test/api/partner', apiKey: 'secret-key', fetch: fetchFn }).listCourses();
     expect(calls).toHaveLength(2);
     expect(calls.every((c) => c.headers.Authorization === 'Bearer secret-key')).toBe(true);
   });
@@ -278,7 +284,7 @@ describe('Learning: HttpCharterCenterClient (partner API)', () => {
   it('retries 5xx, 429 and network errors with backoff, then succeeds', async () => {
     const ok = api({ 1: page([partnerCourse(1)], 1, 1) });
     const { calls, fetchFn } = stubFetch((url, n) => (n === 1 ? new Error('ECONNRESET') : n === 2 ? { status: 503 } : n === 3 ? { status: 429 } : ok(url)));
-    const client = new HttpCharterCenterClient({ baseUrl: 'https://charter-center.test', fetch: fetchFn, attempts: 4, backoffMs: 1 });
+    const client = new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: fetchFn, attempts: 4, backoffMs: 1 });
     expect(await client.listCourses()).toHaveLength(1);
     expect(calls).toHaveLength(5);
   });
@@ -286,17 +292,17 @@ describe('Learning: HttpCharterCenterClient (partner API)', () => {
   it('fails the whole read when a course’s details can’t be fetched', async () => {
     const list = api({ 1: page([partnerCourse(1), partnerCourse(2)], 1, 1) });
     const { fetchFn } = stubFetch((url) => (url.pathname.endsWith('/courses/2') ? { status: 500 } : list(url)));
-    const client = new HttpCharterCenterClient({ baseUrl: 'https://charter-center.test', fetch: fetchFn, attempts: 2, backoffMs: 1 });
+    const client = new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: fetchFn, attempts: 2, backoffMs: 1 });
     await expect(client.listCourses()).rejects.toThrow(/HTTP 500 for \/courses\/2/);
     const bad = stubFetch((url) => (url.pathname.endsWith('/courses/1') ? { status: 200, body: { data: null } } : list(url)));
-    await expect(new HttpCharterCenterClient({ baseUrl: 'https://charter-center.test', fetch: bad.fetchFn }).listCourses()).rejects.toThrow(
+    await expect(new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: bad.fetchFn }).listCourses()).rejects.toThrow(
       /Unexpected partner \/courses\/\{id\} response/,
     );
   });
 
   it('gives clear errors', async () => {
     const make = (handler: Parameters<typeof stubFetch>[0], attempts = 2) =>
-      new HttpCharterCenterClient({ baseUrl: 'https://charter-center.test', fetch: stubFetch(handler).fetchFn, attempts, backoffMs: 1 });
+      new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: stubFetch(handler).fetchFn, attempts, backoffMs: 1 });
     await expect(make(() => ({ status: 401 })).listCourses()).rejects.toThrow(/rejected the API key.*CHARTER_CENTER_API_KEY/);
     await expect(make(() => ({ status: 500 })).listCourses()).rejects.toThrow(/HTTP 500.*after 2 attempts/);
     await expect(make(() => ({ status: 404 })).listCourses()).rejects.toBeInstanceOf(CharterCenterError);
@@ -307,12 +313,62 @@ describe('Learning: HttpCharterCenterClient (partner API)', () => {
     await expect(make(() => ({ status: 200, body: page([], 3, 5) })).listCourses()).rejects.toThrow(/did not advance/);
   });
 
+  it('waits as long as Charter Center asks after HTTP 429 (Retry-After), then carries on', async () => {
+    const ok = api({ 1: page([partnerCourse(1)], 1, 1) });
+    const { calls, times, fetchFn } = stubFetch((url, n) => (n === 1 ? { status: 429, headers: { 'Retry-After': '1' } } : ok(url)));
+    const client = new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: fetchFn });
+    expect(await client.listCourses()).toHaveLength(1);
+    expect(calls).toHaveLength(3);
+    expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(950);
+  });
+
+  it('gives up on endless 429s with a clear message, without hammering', async () => {
+    const { calls, fetchFn } = stubFetch(() => ({ status: 429 }));
+    const client = new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: fetchFn, rateLimitRetries: 2 });
+    await expect(client.listCourses()).rejects.toThrow(/kept answering HTTP 429 \(too many requests\) for \/courses\?page=1 after 3 tries/);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('paces requests and slows down when the rate-limit window runs out', async () => {
+    const list = api({ 1: page([partnerCourse(1), partnerCourse(2)], 1, 1) });
+    const paced = stubFetch(list);
+    await new HttpCharterCenterClient({ ...fast, minGapMs: 200, baseUrl: 'https://charter-center.test', fetch: paced.fetchFn }).listCourses();
+    expect(paced.calls).toHaveLength(3);
+    for (let i = 1; i < paced.times.length; i++) expect(paced.times[i]! - paced.times[i - 1]!).toBeGreaterThanOrEqual(190);
+
+    const exhausted = stubFetch((url, n) => {
+      const out = list(url) as Reply;
+      return n === 1 ? { ...out, headers: { 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1' } } : out;
+    });
+    await new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: exhausted.fetchFn }).listCourses();
+    expect(exhausted.times[1]! - exhausted.times[0]!).toBeGreaterThanOrEqual(950);
+  });
+
+  it('asks for a course’s details only when it is new or its list entry changed', async () => {
+    const list = api({ 1: page([partnerCourse(1), partnerCourse(2), partnerCourse(3)], 1, 1) });
+    const { calls, fetchFn } = stubFetch(list);
+    const client = new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: fetchFn });
+    const first = await client.listCourses();
+    expect(calls).toHaveLength(4);
+    const stored = new Map(first.map((r) => [r.id, { fp: (r as { list_fingerprint?: string }).list_fingerprint, outcomes: r.outcomes, eligibility: r.eligibility }]));
+    calls.length = 0;
+    const again = await client.listCourses({
+      reuseDetails: (r) => {
+        const c = stored.get(r.id);
+        return c && c.fp === (r as { list_fingerprint?: string }).list_fingerprint && r.id !== '3' ? { outcomes: c.outcomes, eligibility: c.eligibility } : null;
+      },
+    });
+    expect(calls.map((c) => new URL(c.url).pathname)).toEqual(['/courses', '/courses/3']);
+    expect(again.find((r) => r.id === '1')!.outcomes).toEqual(first.find((r) => r.id === '1')!.outcomes);
+    expect(again.map((r) => (r as { details_fetched?: boolean }).details_fetched)).toEqual([false, false, true]);
+  });
+
   it('times out slow responses', async () => {
     const fetchFn: FetchFn = (_url, init) =>
       new Promise((_resolve, reject) => {
         init.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' })));
       });
-    const client = new HttpCharterCenterClient({ baseUrl: 'https://charter-center.test', fetch: fetchFn, timeoutMs: 20, attempts: 1 });
+    const client = new HttpCharterCenterClient({ ...fast, baseUrl: 'https://charter-center.test', fetch: fetchFn, timeoutMs: 20, attempts: 1 });
     await expect(client.listCourses()).rejects.toThrow(/did not respond within 0.02s/);
   });
 });

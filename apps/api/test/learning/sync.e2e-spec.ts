@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { count, createTestApp, s, type TestApp } from '../helpers.js';
-import { startRun, RunInProgressError } from '../../src/learning/learning-sync.js';
+import { startRun, RunInProgressError, syncCatalogue } from '../../src/learning/learning-sync.js';
+import { HttpCharterCenterClient, type FetchFn } from '../../src/learning/charter-center.client.js';
 import { courseRecord, fixture, learning } from './learning-helpers.js';
 
 describe('Learning: catalogue sync', () => {
@@ -188,5 +189,44 @@ describe('Learning: catalogue sync', () => {
     expect(run!.status).toBe('succeeded');
     const [after] = await t.db.select().from(s.learningSyncRuns).where(eq(s.learningSyncRuns.id, stale!.id));
     expect(after!.status).toBe('failed');
+  });
+
+  it('with the partner API, a second sync asks only for new or changed courses’ details', async () => {
+    // Start from an empty catalogue so the feed of three courses isn't refused as a 70% shrink.
+    await t.db.delete(s.courses);
+    const course = (id: number, title = `Partner course ${id}`) => ({ id, type: 'course', category_id: 1, title, overview: 'Overview', price: 0, price_after_discount: 0, level: 'Beginner', duration: '1 Hr', lessons_count: 3, url: `https://charter-center.test/courses/${id}` });
+    let list = [course(901), course(902), course(903)];
+    const paths: string[] = [];
+    const fetchFn: FetchFn = async (url) => {
+      const u = new URL(url);
+      paths.push(u.pathname);
+      const m = u.pathname.match(/\/courses\/(\d+)$/);
+      const body = m
+        ? { data: { id: Number(m[1]), outcomes: [`Outcome of ${m[1]}`], requirements: [] } }
+        : { data: { categories: [{ id: 1, name: 'Management' }], courses: { data: list, current_page: 1, last_page: 1 } } };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const client = new HttpCharterCenterClient({ baseUrl: 'https://charter-center.test/api/partner', fetch: fetchFn, minGapMs: 0 });
+
+    await syncCatalogue(t.db, client);
+    expect(paths.filter((p) => /\/courses\/\d+$/.test(p))).toHaveLength(3);
+    const [stored] = await t.db.select().from(s.courses).where(eq(s.courses.externalId, '901'));
+    expect(stored).toMatchObject({ outcomes: ['Outcome of 901'] });
+    expect(stored!.detailsFingerprint).toBeTruthy();
+    expect(stored!.detailsSyncedAt).not.toBeNull();
+
+    paths.length = 0;
+    list = [course(901), course(902, 'Partner course 902 (new edition)'), course(903), course(904)];
+    await syncCatalogue(t.db, client);
+    expect(paths.filter((p) => /\/courses\/\d+$/.test(p)).sort()).toEqual(['/api/partner/courses/902', '/api/partner/courses/904']);
+    // Reused details stay as they were.
+    const [again] = await t.db.select().from(s.courses).where(eq(s.courses.externalId, '901'));
+    expect(again).toMatchObject({ outcomes: ['Outcome of 901'], detailsFingerprint: stored!.detailsFingerprint });
+
+    // Details older than a week are fetched again even when nothing changed.
+    await t.db.update(s.courses).set({ detailsSyncedAt: new Date(Date.now() - 8 * 24 * 3600_000) }).where(eq(s.courses.externalId, '903'));
+    paths.length = 0;
+    await syncCatalogue(t.db, client);
+    expect(paths.filter((p) => /\/courses\/\d+$/.test(p))).toEqual(['/api/partner/courses/903']);
   });
 });

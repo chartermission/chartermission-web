@@ -7,7 +7,8 @@ import { CharterCenterError, type FetchFn } from '../learning/charter-center.cli
  * The one Charter Center call exams need (spec for Charter Center: docs/CHARTER-CENTER-EXAMS-API.md).
  *
  *   POST {CHARTER_CENTER_API_URL}/certificate
- *        { "student_name", "course_title", "start_from", "start_end", "exam_hours", "instructor_name", "instructor_signature_url" }
+ *        { "student_name", "course_title", "start_from", "start_end", "duration", "instructor_name", "instructor_signature_url" }
+ *        (plus "exam_hours", the same hours under the name we used first; Charter Center ignores it)
  *
  * The member's name comes from their profile; the rest from the exam's certificate settings. Sent with
  * Authorization: Bearer {CHARTER_CENTER_API_KEY} when a key is set.
@@ -31,7 +32,9 @@ export interface CertificateRequest {
   start_from: string;
   /** YYYY-MM-DD */
   start_end: string;
-  /** Study hours on the certificate; null when the exam has none set (absent in requests sent before hours existed). */
+  /** Study hours on the certificate, as Charter Center's partner API names them; null when the exam has none set. */
+  duration?: number | null;
+  /** The same hours under our earlier name (absent in requests sent before hours existed); kept for comparisons. */
   exam_hours?: number | null;
   instructor_name: string;
   instructor_signature_url: string;

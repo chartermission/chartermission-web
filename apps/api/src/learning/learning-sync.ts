@@ -5,10 +5,12 @@ import { courses, courseTopicLinks, courseTopics, learningPathCourses, learningP
 import { isUniqueViolation } from '../profiles/pg-error.js';
 import type { CharterCenterClient } from './charter-center.client.js';
 import { mapCourse, mapPath, MappingError, resolveTopic, type MappedCourse, type MappedPath } from './charter-center.mapper.js';
-import type { LinkChecker } from './link-checker.js';
+import { FixtureLinkChecker, type LinkChecker } from './link-checker.js';
 
 /** Largest drop in the number of courses one sync may apply (0.3 = 30%). */
 export const MAX_SHRINK = 0.3;
+/** Details of an unchanged course are fetched again at least this often. */
+export const DETAILS_MAX_AGE_MS = 7 * 24 * 3600_000;
 
 /*
  * Catalogue sync and link check, as plain functions over the database so the API (queue jobs,
@@ -100,7 +102,36 @@ function pickSlug(desired: string, current: string | undefined, taken: Set<strin
  * the source (or archived there) as removed, and never touches hidden / featured / link columns.
  */
 export async function syncCatalogue(db: Db, client: CharterCenterClient): Promise<SyncCounts> {
-  const [rawCourses, rawPaths] = await Promise.all([client.listCourses(), client.listPaths()]);
+  // Details (outcomes, requirements) cost one request per course; reuse what is stored for courses
+  // whose list entry hasn't changed since, so a sync stays well inside Charter Center's rate limit.
+  const stored = await db
+    .select({
+      externalId: courses.externalId,
+      outcomes: courses.outcomes,
+      eligibility: courses.eligibility,
+      fingerprint: courses.detailsFingerprint,
+      at: courses.detailsSyncedAt,
+    })
+    .from(courses);
+  const storedByExternal = new Map(stored.map((c) => [c.externalId, c]));
+  const freshAfter = Date.now() - DETAILS_MAX_AGE_MS;
+  const [rawCourses, rawPaths] = await Promise.all([
+    client.listCourses({
+      reuseDetails: (r) => {
+        const c = storedByExternal.get(r.id);
+        const fingerprint = (r as { list_fingerprint?: string }).list_fingerprint;
+        if (!c || !fingerprint || c.fingerprint !== fingerprint || !c.at || c.at.getTime() < freshAfter) return null;
+        return { outcomes: c.outcomes, eligibility: c.eligibility };
+      },
+    }),
+    client.listPaths(),
+  ]);
+  // Which records came with freshly fetched details, and their list fingerprints (HTTP client only).
+  const detailsOf = new Map(
+    rawCourses
+      .filter((r) => (r as { details_fetched?: boolean }).details_fetched)
+      .map((r) => [String(r.id), (r as { list_fingerprint?: string }).list_fingerprint ?? null]),
+  );
   const warnings: string[] = [];
   const mapped: MappedCourse[] = [];
   const seenIds = new Set<string>();
@@ -158,10 +189,11 @@ export async function syncCatalogue(db: Db, client: CharterCenterClient): Promis
       const slug = pickSlug(m.slug, ownSlug, taken);
       taken.add(slug);
       const content = contentOf(m);
+      const details = detailsOf.has(m.externalId) ? { detailsFingerprint: detailsOf.get(m.externalId) ?? null, detailsSyncedAt: now } : {};
       if (!current) {
         const [row] = await tx
           .insert(courses)
-          .values({ externalId: m.externalId, slug, ...content, syncedAt: now })
+          .values({ externalId: m.externalId, slug, ...content, ...details, syncedAt: now })
           .returning({ id: courses.id });
         idByExternal.set(m.externalId, row!.id);
         if (topicIds.length) await tx.insert(courseTopicLinks).values(topicIds.map((topicId) => ({ courseId: row!.id, topicId })));
@@ -175,7 +207,7 @@ export async function syncCatalogue(db: Db, client: CharterCenterClient): Promis
       // Content and removal only: hidden, featured and link-check columns stay as curated.
       await tx
         .update(courses)
-        .set(changed ? { slug, ...content, removedAt: null, syncedAt: now } : { syncedAt: now })
+        .set(changed ? { slug, ...content, ...details, removedAt: null, syncedAt: now } : { ...details, syncedAt: now })
         .where(eq(courses.id, current.id));
       if (topicsChanged) {
         await tx.delete(courseTopicLinks).where(eq(courseTopicLinks.courseId, current.id));
@@ -307,6 +339,8 @@ export interface LinkCheckCounts {
   checked: number;
   ok: number;
   broken: number;
+  /** Not checked this time because the site asked us to slow down (HTTP 429/503); retried next run. */
+  skipped: number;
   /** Courses that became broken in this run (for notifications). */
   newlyBroken: CourseRow[];
 }
@@ -315,23 +349,53 @@ export interface LinkCheckCounts {
  * Checks each visible course's start URL. A success sets ok (and clears the failure count); a
  * failure increments it, and at LEARNING_LINK_FAILURES_TO_BREAK the link is broken. Courses that
  * just turned broken are passed to onBroken once (not again while they stay broken).
+ *
+ * Course pages mostly live on one site (charter-center.com), so links are checked one at a time per
+ * site with a pause between them (gapMs). "Too many requests" (429) or "unavailable" (503) is not a
+ * broken link: that course and the rest of that site are left for the next run, unchanged.
  */
 export async function checkLinks(
   db: Db,
   checker: LinkChecker,
   onBroken: (course: CourseRow) => Promise<void> = async () => {},
   concurrency = 4,
+  gapMs = 1_500,
 ): Promise<LinkCheckCounts> {
   const rows = await db
     .select()
     .from(courses)
     .where(and(eq(courses.hidden, false), isNull(courses.removedAt)));
-  const counts: LinkCheckCounts = { checked: 0, ok: 0, broken: 0, newlyBroken: [] };
-  let next = 0;
+  const counts: LinkCheckCounts = { checked: 0, ok: 0, broken: 0, skipped: 0, newlyBroken: [] };
+  const hostOf = (url: string) => {
+    try {
+      return new URL(url).host.toLowerCase();
+    } catch {
+      return '';
+    }
+  };
+  // One queue per site; sites are checked in parallel (up to `concurrency`), each site's links in turn.
+  const bySite = new Map<string, CourseRow[]>();
+  for (const r of rows) bySite.set(hostOf(r.startUrl), [...(bySite.get(hostOf(r.startUrl)) ?? []), r]);
+  const sites = [...bySite.values()];
+  let nextSite = 0;
   const worker = async () => {
-    while (next < rows.length) {
-      const course = rows[next++]!;
+    while (nextSite < sites.length) {
+      const queue = sites[nextSite++]!;
+      for (let i = 0; i < queue.length; i++) {
+        if (i > 0 && gapMs > 0) await new Promise((r) => setTimeout(r, gapMs));
+        const done = await checkOne(queue[i]!);
+        if (!done) {
+          counts.skipped += queue.length - i;
+          break;
+        }
+      }
+    }
+  };
+  /** Returns false when the site asked us to slow down (the rest of the site waits for the next run). */
+  const checkOne = async (course: CourseRow): Promise<boolean> => {
+    {
       const result = await checker.check(course.startUrl);
+      if (result.status === 429 || result.status === 503) return false;
       const now = new Date();
       counts.checked++;
       if (result.ok) {
@@ -340,7 +404,7 @@ export async function checkLinks(
           .update(courses)
           .set({ linkStatus: 'ok', linkFailures: 0, linkHttpStatus: result.status, linkCheckedAt: now })
           .where(eq(courses.id, course.id));
-        continue;
+        return true;
       }
       const failures = course.linkFailures + 1;
       const broken = failures >= LEARNING_LINK_FAILURES_TO_BREAK;
@@ -357,9 +421,10 @@ export async function checkLinks(
         .returning();
       if (broken) counts.broken++;
       if (broken && course.linkStatus !== 'broken' && updated) counts.newlyBroken.push(updated);
+      return true;
     }
   };
-  await Promise.all(Array.from({ length: Math.min(concurrency, rows.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(concurrency, sites.length) }, worker));
   for (const c of counts.newlyBroken) await onBroken(c);
   return counts;
 }
@@ -372,8 +437,16 @@ export async function executeLinkCheck(
   onBroken?: (course: CourseRow) => Promise<void>,
 ): Promise<SyncRunRow> {
   try {
-    const counts = await checkLinks(db, checker, onBroken);
-    return await finishRun(db, runId, { status: 'succeeded', checkedCount: counts.checked, brokenCount: counts.broken, updatedCount: counts.ok });
+    // Real sites get a pause between links; the fixture checker makes no requests.
+    const counts = await checkLinks(db, checker, onBroken, 4, checker instanceof FixtureLinkChecker ? 0 : 1_500);
+    return await finishRun(db, runId, {
+      status: 'succeeded',
+      checkedCount: counts.checked,
+      brokenCount: counts.broken,
+      updatedCount: counts.ok,
+      // Shown with the run in the admin (a note on a succeeded run, like skipped records on a sync).
+      error: counts.skipped ? `${counts.skipped} course links weren’t checked because the site asked us to slow down (HTTP 429); they’ll be checked next time.` : null,
+    });
   } catch (err) {
     return finishRun(db, runId, { status: 'failed', error: (err instanceof Error ? err.message : String(err)).slice(0, 2000) });
   }

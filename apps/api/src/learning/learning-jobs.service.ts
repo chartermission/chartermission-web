@@ -49,7 +49,7 @@ export function brokenLinkNotice(course: Pick<CourseRow, 'id' | 'title' | 'slug'
 }
 
 /**
- * Schedules and runs the Charter Center catalogue sync (every 6 h) and the course link check
+ * Schedules and runs the Charter Center catalogue sync (daily) and the course link check
  * (weekly) on the maintenance queue; admins can start either on demand.
  */
 @Injectable()

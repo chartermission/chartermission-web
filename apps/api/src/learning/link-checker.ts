@@ -73,7 +73,7 @@ export class HttpLinkChecker implements LinkChecker {
         const { url, address, family } = await assertSafeUrl(current, this.lookup);
         let res = await this.request(url, 'HEAD', address, family);
         // Some servers refuse or mishandle HEAD; ask again with GET before calling it broken.
-        if (res.status >= 400 && res.status !== 404 && res.status !== 410) res = await this.request(url, 'GET', address, family);
+        if (res.status >= 400 && ![404, 410, 429, 503].includes(res.status)) res = await this.request(url, 'GET', address, family);
         if (res.status >= 300 && res.status < 400 && res.location) {
           current = new URL(res.location, url).toString();
           continue;
