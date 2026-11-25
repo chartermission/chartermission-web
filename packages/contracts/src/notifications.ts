@@ -111,6 +111,26 @@ export const NotificationType = z.enum([
   /* From Charter Mission */
   /** A bulk message from Charter Mission (segments: the subject in bold); href is its link or the official conversation. Icon megaphone if available, else alert. */
   "announcement",
+  /* LinkedIn-style depth: profile views, messages, post performance and your network */
+  /**
+   * Who viewed your profile: at most one a day, grouped ("Amara Okafor and 3 others viewed your profile"). Viewers in
+   * private mode are never named: they only add to the count. href /profile-views. Icon eye. Category profile.
+   */
+  "profile_viewed",
+  /** Someone replied to one of your messages (sent at once, never batched). href: the thread at the reply. Icon avatar. */
+  "message_reply",
+  /** Someone reacted to your message (grouped per conversation per day; in-app only by default). Icon avatar. */
+  "message_reaction",
+  /** Your post reached an impressions or reactions milestone (each once per post). href: the post's analytics. Icon chart. */
+  "post_milestone",
+  /** Your post is doing better than your usual in its first 48 hours (once per post). Icon trending. */
+  "post_trending",
+  /** You reached a followers milestone (10, 50, 100, 500, 1,000…). Icon users. */
+  "follower_milestone",
+  /** A connection shared their first post in 30 days (at most 3 a day, in-app only). Icon avatar. */
+  "connection_post",
+  /** Someone commented on a post you commented on (grouped per post per day). Icon message. */
+  "comment_on_followed_post",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -135,6 +155,10 @@ export const NotificationCategory = z.enum([
    * (also with the one-click unsubscribe link in every such email); important service notices still arrive.
    */
   "announcements",
+  /** Who viewed your profile (in-app on; email and push off by default). */
+  "profile",
+  /** Milestones on your posts and posts doing better than usual (in-app on; email and push off by default). */
+  "post_performance",
 ]);
 export type NotificationCategory = z.infer<typeof NotificationCategory>;
 
@@ -161,15 +185,30 @@ export const NotificationView = z.object({
   ),
   /** Web path to open, e.g. /posts/{id}#comment-{id}. */
   href: z.string(),
-  icon: z.enum(["avatar", "trending", "briefcase", "calendar", "lightbulb", "shield", "users", "flag", "alert", "check", "clock"]),
+  icon: z.enum(["avatar", "trending", "briefcase", "calendar", "lightbulb", "shield", "users", "flag", "alert", "check", "clock", "eye", "message", "chart"]),
   createdAt: z.string(),
   read: z.boolean(),
 });
 export type NotificationView = z.infer<typeof NotificationView>;
 
-/** GET /notifications?filter=all|mentions|unread&cursor= */
+/**
+ * GET /notifications?filter=&cursor= — LinkedIn-style tabs. my_posts: reactions, comments, reposts and milestones on
+ * your posts; mentions: mentions and replies to your comments; messages: messages, replies and reactions to them;
+ * network: connections, follows, profile views and posts from connections.
+ */
+export const NotificationFilter = z.enum(["all", "unread", "my_posts", "mentions", "messages", "network"]);
+export type NotificationFilter = z.infer<typeof NotificationFilter>;
+
+/** The notification types each filter shows ("all" and "unread" show every type). */
+export const NOTIFICATION_FILTER_TYPES: Record<Exclude<NotificationFilter, "all" | "unread">, readonly NotificationType[]> = {
+  my_posts: ["reaction", "comment_on_post", "repost", "post_milestone", "post_trending", "help_offered", "scheduled_post_published"],
+  mentions: ["mention", "reply_to_comment"],
+  messages: ["message_received", "message_reply", "message_reaction"],
+  network: ["follow", "follower_milestone", "connection_request", "connection_accepted", "invite_joined", "profile_viewed", "connection_post"],
+};
+
 export const NotificationsQuery = z.object({
-  filter: z.enum(["all", "mentions", "unread"]).default("all"),
+  filter: NotificationFilter.default("all"),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });

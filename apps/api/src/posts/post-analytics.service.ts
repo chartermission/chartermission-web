@@ -9,6 +9,7 @@ import { pseudonym } from '../common/crypto.js';
 import { Errors } from '../common/errors.js';
 import { isUuid } from '../media/uuid-param.js';
 import { listablePostsSql } from './visibility.js';
+import { PostMilestonesService } from './post-milestones.service.js';
 
 /** A member counts as a new impression of the same post after this long. */
 export const IMPRESSION_WINDOW_MINUTES = 30;
@@ -46,6 +47,7 @@ export class PostAnalyticsService {
   constructor(
     @InjectDb() private readonly db: Db,
     private readonly pageRefs: PageRefsService,
+    private readonly milestones: PostMilestonesService,
   ) {}
 
   /**
@@ -107,6 +109,8 @@ export class PostAnalyticsService {
       on conflict (post_id, day) do update
         set impressions = ${postViewDays.impressions} + 1, viewers = ${postViewDays.viewers} + excluded.viewers, updated_at = now()
     `);
+    // "Your post is doing well: 1,000 impressions" — a cheap check of these posts' totals.
+    await this.milestones.checkImpressions(seen.map((r) => r.id));
   }
 
   /** Never lets a failed beacon surface as an error to the member. */

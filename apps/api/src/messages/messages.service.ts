@@ -43,6 +43,7 @@ import {
   messageReactions,
   messageTranslations,
   messages,
+  notifications,
   users,
 } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
@@ -492,7 +493,34 @@ export class MessagesService implements OnModuleInit {
       .insert(messageReactions)
       .values({ messageId: message.id, userId: user.id, emoji: input.emoji })
       .onConflictDoUpdate({ target: [messageReactions.messageId, messageReactions.userId], set: { emoji: input.emoji, createdAt: new Date() } });
+    await this.notifyReaction(user.id, message).catch(() => undefined);
     return this.updated(user.id, message);
+  }
+
+  /**
+   * "Amina and 2 others reacted to your message": to the sender, grouped per conversation per day, in-app only
+   * (category connections, like messages). Not when the sender left or muted the conversation.
+   */
+  private async notifyReaction(reactorId: string, message: MessageRow) {
+    if (message.senderId === reactorId) return;
+    const [m] = await this.db
+      .select()
+      .from(conversationMembers)
+      .where(and(eq(conversationMembers.conversationId, message.conversationId), eq(conversationMembers.userId, message.senderId)))
+      .limit(1);
+    if (!m || m.leftAt || (m.mutedUntil && m.mutedUntil.getTime() > Date.now())) return;
+    await this.notify.notify({
+      userId: message.senderId,
+      type: 'message_reaction',
+      actorId: reactorId,
+      objectType: 'conversation',
+      objectId: message.conversationId,
+      segments: [{ text: ' reacted to your message', strong: false }],
+      href: `/messages/${message.conversationId}?around=${message.id}`,
+      icon: 'avatar',
+      dedupeKey: `message_reaction:${message.conversationId}:${new Date().toISOString().slice(0, 10)}`,
+      windowMinutes: 24 * 60,
+    });
   }
 
   /** DELETE /messages/{id}/reaction */
@@ -511,6 +539,19 @@ export class MessagesService implements OnModuleInit {
       .update(conversationMembers)
       .set({ readAt: now, markedUnread: false })
       .where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, user.id)));
+    // Reading the conversation also clears its notifications (messages, replies and reactions in it).
+    await this.db
+      .update(notifications)
+      .set({ readAt: now })
+      .where(
+        and(
+          eq(notifications.userId, user.id),
+          isNull(notifications.readAt),
+          eq(notifications.objectType, 'conversation'),
+          eq(notifications.objectId, conversationId),
+          inArray(notifications.type, ['message_received', 'message_reply', 'message_reaction']),
+        ),
+      );
     const others = (await this.memberIds(conversationId)).filter((id) => id !== user.id);
     await this.realtime.publish(others, { type: 'read', conversationId, memberId: user.id, readAt: now.toISOString() });
     await this.realtime.publish([user.id], { type: 'conversation', conversationId });
@@ -954,7 +995,42 @@ export class MessagesService implements OnModuleInit {
     const text = summary(message, view.attachments.length) || 'New message';
     const recipients = people.filter((p) => p.userId !== senderId && !(p.mutedUntil && p.mutedUntil.getTime() > now));
     const isRequest = row.status === 'request' && row.requestedBy === senderId;
+    // A reply to someone's message tells them at once (never batched), in place of the daily message notice.
+    let repliedTo: string | null = null;
+    if (message.replyToId) {
+      const [quoted] = await this.db.select({ senderId: messages.senderId }).from(messages).where(eq(messages.id, message.replyToId)).limit(1);
+      if (quoted && quoted.senderId !== senderId) repliedTo = quoted.senderId;
+    }
     for (const p of recipients) {
+      if (p.userId === repliedTo && !quiet.notification) {
+        const href = `/messages/${row.id}?around=${message.id}`;
+        await this.notify
+          .notify({
+            userId: p.userId,
+            type: 'message_reply',
+            actorId: senderId,
+            objectType: 'conversation',
+            objectId: row.id,
+            segments: [
+              { text: ' replied to your message', strong: false },
+              ...(text ? [{ text: `: “${text}”`, strong: false }] : []),
+            ],
+            href,
+            icon: 'avatar',
+            dedupeKey: `message_reply:${message.id}`,
+          })
+          .catch(() => undefined);
+        if (!(await this.realtime.isOnline(p.userId))) {
+          await this.push
+            .send(p.userId, {
+              title: row.kind === 'group' ? `${senderName} replied to your message · ${title}` : `${senderName} replied to your message`,
+              body: text,
+              href,
+              tag: `conversation-${row.id}`,
+            })
+            .catch(() => undefined);
+        }
+      }
       const segments =
         row.kind === 'broadcast'
           ? [{ text: ` posted in ${title}`, strong: false }]
@@ -963,7 +1039,7 @@ export class MessagesService implements OnModuleInit {
             : isRequest
               ? [{ text: ' sent you a message request', strong: false }]
               : [{ text: ' sent you a message', strong: false }];
-      if (!quiet.notification) {
+      if (!quiet.notification && p.userId !== repliedTo) {
         await this.notify
           .notify({
             userId: p.userId,

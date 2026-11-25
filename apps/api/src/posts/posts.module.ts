@@ -12,11 +12,12 @@ import { DraftsController } from './drafts.controller.js';
 import { DraftsService } from './drafts.service.js';
 import { AnalyticsController } from './analytics.controller.js';
 import { PostAnalyticsService } from './post-analytics.service.js';
+import { PostMilestonesService } from './post-milestones.service.js';
 
 @Module({
   imports: [MediaModule, EventsModule, InitiativesModule],
   controllers: [AnalyticsController, PostsController, DraftsController],
-  providers: [PostsService, CommentsService, ReactionsService, PostSerializer, LinkPreviewService, DraftsService, PostAnalyticsService],
+  providers: [PostsService, CommentsService, ReactionsService, PostSerializer, LinkPreviewService, DraftsService, PostAnalyticsService, PostMilestonesService],
   exports: [PostsService, CommentsService, PostSerializer, LinkPreviewService, DraftsService],
 })
 export class PostsModule {}

@@ -1,11 +1,21 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { comments, files, follows, hashtags, postAttachments, posts } from '../db/schema.js';
+import { comments, connections, files, follows, hashtags, mentions, notifications, postAttachments, posts } from '../db/schema.js';
 import { EventsService } from '../infra/events.service.js';
 import { MembersService } from '../core/members.service.js';
 import { NotifyService } from '../core/notify.service.js';
 import { groupPostAudience } from '../groups/group-access.js';
+
+/** "Shared a post" notifications a member gets from connections in one day, at most. */
+export const CONNECTION_POSTS_PER_DAY = 3;
+/** Earlier commenters told about a new comment on a post, at most (the most recent ones). */
+const FOLLOWED_POST_FANOUT = 50;
+
+function excerptOf(body: string, max = 80): string {
+  const text = body.replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
 
 /**
  * Domain-event handlers that create notifications (spec 4.13: created by workers
@@ -34,6 +44,107 @@ export class NotificationHandlers implements OnModuleInit {
     this.events.on('help.offered', (e) => this.onHelpOffered(e));
     this.events.on('scheduled.published', (e) => this.onScheduledPublished(e));
     this.events.on('scheduled.failed', (e) => this.onScheduledFailed(e));
+    this.events.on('post.created', (e) => this.onConnectionPost(e));
+    this.events.on('comment.created', (e) => this.onCommentOnFollowedPost(e));
+  }
+
+  /**
+   * "Kwame Asante shared a post": to the author's connections when this is their first post in 30 days (people who post
+   * rarely are worth hearing from). At most CONNECTION_POSTS_PER_DAY a day per member; in-app only.
+   */
+  private async onConnectionPost(e: { postId: string; authorId: string }) {
+    const [post] = await this.db.select().from(posts).where(eq(posts.id, e.postId)).limit(1);
+    if (!post || post.status !== 'published' || post.moderationState !== 'visible' || post.deletedAt) return;
+    if (post.repostOfId || post.pageId || post.groupId || post.visibility === 'group') return;
+    const since = new Date(post.createdAt.getTime() - 30 * 86_400_000);
+    const [earlier] = await this.db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.authorId, post.authorId),
+          ne(posts.id, post.id),
+          isNull(posts.repostOfId),
+          isNull(posts.pageId),
+          eq(posts.status, 'published'),
+          gt(posts.createdAt, since),
+          sql`${posts.createdAt} <= ${post.createdAt.toISOString()}::timestamptz`,
+        ),
+      )
+      .limit(1);
+    if (earlier) return;
+    const rows = await this.db
+      .select({ a: connections.requesterId, b: connections.addresseeId })
+      .from(connections)
+      .where(and(eq(connections.status, 'accepted'), sql`(${connections.requesterId} = ${post.authorId} or ${connections.addresseeId} = ${post.authorId})`));
+    const recipients = rows.map((r) => (r.a === post.authorId ? r.b : r.a));
+    if (!recipients.length) return;
+    const dayStart = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+    const busy = await this.db
+      .select({ userId: notifications.userId, n: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(inArray(notifications.userId, recipients), eq(notifications.type, 'connection_post'), gt(notifications.createdAt, dayStart)))
+      .groupBy(notifications.userId);
+    const full = new Set(busy.filter((b) => b.n >= CONNECTION_POSTS_PER_DAY).map((b) => b.userId));
+    const text = excerptOf(typeof post.details?.title === 'string' ? post.details.title : post.body);
+    for (const userId of recipients.filter((id) => !full.has(id))) {
+      await this.notify.notify({
+        userId,
+        type: 'connection_post',
+        actorId: post.authorId,
+        objectType: 'post',
+        objectId: post.id,
+        segments: [{ text: ' shared a post', strong: false }, ...(text ? [{ text: `: “${text}”`, strong: false }] : [])],
+        href: `/posts/${post.id}`,
+        icon: 'avatar',
+        dedupeKey: `connection_post:${post.id}`,
+      });
+    }
+  }
+
+  /**
+   * "Amina and 2 others also commented on a post you commented on": to earlier commenters, grouped per post per day.
+   * Not to the post's author (comment_on_post), the comment being replied to (reply_to_comment) or anyone the comment
+   * mentions (mention), so nobody hears twice about one comment.
+   */
+  private async onCommentOnFollowedPost(e: { commentId: string; postId: string; authorId: string; parentId: string | null }) {
+    const [post] = await this.db.select().from(posts).where(eq(posts.id, e.postId)).limit(1);
+    if (!post || post.deletedAt) return;
+    const skip = new Set([e.authorId, post.authorId]);
+    if (e.parentId) {
+      const [parent] = await this.db.select({ authorId: comments.authorId }).from(comments).where(eq(comments.id, e.parentId)).limit(1);
+      if (parent) skip.add(parent.authorId);
+    }
+    const mentioned = await this.db
+      .select({ userId: mentions.userId })
+      .from(mentions)
+      .where(and(eq(mentions.sourceType, 'comment'), eq(mentions.sourceId, e.commentId)));
+    for (const m of mentioned) skip.add(m.userId);
+    const earlier = await this.db
+      .select({ authorId: comments.authorId, last: sql<string>`max(${comments.createdAt})` })
+      .from(comments)
+      .where(and(eq(comments.postId, e.postId), isNull(comments.deletedAt), ne(comments.id, e.commentId)))
+      .groupBy(comments.authorId)
+      .orderBy(sql`max(${comments.createdAt}) desc`)
+      .limit(FOLLOWED_POST_FANOUT);
+    const candidates = earlier.map((c) => c.authorId).filter((id) => !skip.has(id));
+    if (!candidates.length) return;
+    const audience = await groupPostAudience(this.db, post, candidates);
+    const day = new Date().toISOString().slice(0, 10);
+    for (const userId of candidates.filter((id) => audience.has(id))) {
+      await this.notify.notify({
+        userId,
+        type: 'comment_on_followed_post',
+        actorId: e.authorId,
+        objectType: 'post',
+        objectId: post.id,
+        segments: [{ text: ' also commented on a post you commented on', strong: false }],
+        href: `/posts/${post.id}#comment-${e.commentId}`,
+        icon: 'message',
+        dedupeKey: `comment_on_followed_post:${post.id}:${day}`,
+        windowMinutes: 24 * 60,
+      });
+    }
   }
 
   private async onAnswerAccepted(e: { postId: string; commentId: string; commentAuthorId: string; actorId: string }) {

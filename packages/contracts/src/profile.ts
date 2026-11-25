@@ -6,6 +6,14 @@ import { AvatarTone, ChapterRef, CountryCode, FieldVisibility, MemberRef, PageRe
  * (spec 4.3 PRF, 4.2 CM-AUTH-07, 4.6 NET).
  */
 
+/**
+ * How a member appears on the profiles they open. named: their name and headline (the default). private: anonymous
+ * ("Someone at PayBridge", "Someone in the Kenya Chapter", "A Charter Mission member"); like LinkedIn, members in
+ * private mode see only how many people viewed their own profile, not who.
+ */
+export const ProfileViewing = z.enum(["named", "private"]);
+export type ProfileViewing = z.infer<typeof ProfileViewing>;
+
 /** Fields whose visibility the member controls (CM-PRF-02). Name, handle, avatar and headline are always visible to members. */
 export const ProfileField = z.enum([
   "email",
@@ -291,6 +299,8 @@ export const OwnProfile = z.object({
   discoverable: z.boolean(),
   findableByEmail: z.boolean(),
   connectionRequestsFrom: z.enum(["members", "nobody"]),
+  /** How you appear when you view other members' profiles (Settings → Privacy). */
+  profileViewing: ProfileViewing,
   completeness: ProfileCompleteness,
 });
 export type OwnProfile = z.infer<typeof OwnProfile>;
@@ -342,6 +352,7 @@ export const PrivacySettingsInput = z
     discoverable: z.boolean(),
     findableByEmail: z.boolean(),
     connectionRequestsFrom: z.enum(["members", "nobody"]),
+    profileViewing: ProfileViewing,
   })
   .partial();
 export type PrivacySettingsInput = z.infer<typeof PrivacySettingsInput>;
@@ -569,3 +580,69 @@ export type PeoplePage = {
   /** Reaction lists: how many of each (the tabs). */
   byReaction?: { like: number; insightful: number; support: number };
 };
+
+/* ======================= Who viewed your profile ======================= */
+
+/** Profile views are kept this many days. */
+export const PROFILE_VIEWS_KEEP_DAYS = 90;
+
+/** One named viewer (their most recent view in the last 90 days). */
+export const ProfileViewer = z.object({
+  member: MemberRef,
+  /** Their most recent view. */
+  viewedAt: z.string(),
+  /** On how many days they viewed your profile in the last 90 days. */
+  days: z.number().int(),
+  /** You are connected. */
+  connection: z.boolean(),
+});
+export type ProfileViewer = z.infer<typeof ProfileViewer>;
+
+/**
+ * Viewers in private mode, collapsed into groups by what may be said about them: "3 people at PayBridge",
+ * "Someone in the Kenya Chapter", "2 Charter Mission members".
+ */
+export const AnonymousViewers = z.object({
+  kind: z.enum(["company", "chapter", "member"]),
+  /** The company or chapter name; null for kind "member". */
+  name: z.string().nullable(),
+  count: z.number().int(),
+  lastViewedAt: z.string(),
+});
+export type AnonymousViewers = z.infer<typeof AnonymousViewers>;
+
+/** GET /me/profile-views/summary */
+export const ProfileViewsSummary = z.object({
+  /** Different people (a person counts once a day) in the last 90 days. */
+  total: z.number().int(),
+  last7: z.number().int(),
+  last30: z.number().int(),
+  /** The 30 days before the last 30 (for "vs the period before"). */
+  previous30: z.number().int(),
+  /** The last 30 UTC days, oldest first. */
+  daily: z.array(z.object({ day: z.string(), views: z.number().int() })),
+  /** How often you appeared in people search results in the last 7 days, and the 7 before. */
+  searchAppearances: z.object({ last7: z.number().int(), previous7: z.number().int() }),
+  /** False while you browse in private mode: you see counts only. */
+  canSeeViewers: z.boolean(),
+  viewing: ProfileViewing,
+});
+export type ProfileViewsSummary = z.infer<typeof ProfileViewsSummary>;
+
+/** GET /me/profile-views?cursor=&limit= */
+export const ProfileViewsQuery = z.object({
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type ProfileViewsQuery = z.infer<typeof ProfileViewsQuery>;
+
+export const ProfileViewsPage = z.object({
+  /** On the first page only (null after it). */
+  summary: ProfileViewsSummary.nullable(),
+  /** Named viewers, most recent first. Empty in private mode. */
+  items: z.array(ProfileViewer),
+  nextCursor: z.string().nullable(),
+  /** Private-mode viewers, collapsed (first page only; empty in private mode). */
+  anonymous: z.array(AnonymousViewers),
+});
+export type ProfileViewsPage = z.infer<typeof ProfileViewsPage>;

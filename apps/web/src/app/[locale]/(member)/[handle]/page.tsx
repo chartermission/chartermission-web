@@ -17,6 +17,8 @@ import { NoTranslate } from "@/i18n/auto";
 import type { Translate } from "@/i18n/translate";
 import { apiGet, apiGetOrNull } from "@/lib/api/server";
 import { ProfileActions } from "./profile-actions";
+import { ProfileViewBeacon } from "@/components/people/profile-view-beacon";
+import type { ProfileViewsSummary } from "@chartermission/contracts";
 import { ProfileHighlightsLoader } from "@/components/stories/stories-loader";
 import { asServiceList } from "@/components/services/format";
 import { ServicesSection } from "@/components/services/services-section";
@@ -140,6 +142,19 @@ function CertificationRow({ cert, intl, t, thisMonth }: { cert: ProfileCertifica
   );
 }
 
+/** On your own profile: "12 profile views in the last 90 days", opening Who viewed your profile. */
+async function ProfileViewersLink() {
+  const t = await getT();
+  const summary = await apiGet<ProfileViewsSummary>("/me/profile-views/summary").catch(() => null);
+  if (!summary) return null;
+  return (
+    <Link href="/profile-views" className="flex w-fit items-center gap-1.5 text-sm font-medium text-primary-light hover:underline">
+      <Icon name="eye" size={16} />
+      {summary.total > 0 ? t("{count} profile views in the last 90 days", { count: summary.total }) : t("Who viewed your profile")}
+    </Link>
+  );
+}
+
 async function ProfileMain(props: Props) {
   const intl = await getIntlTag();
   const t = await getT();
@@ -236,6 +251,7 @@ async function ProfileMain(props: Props) {
               <ProfileBadgeList badges={member.badges} />
             </div>
           )}
+          {viewer && !isSelf && !preview && !member.relationship.blocked && <ProfileViewBeacon handle={member.handle} />}
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {facts.map((fact, index) => (
               <li key={index} className="flex items-center gap-1.5 text-sm text-secondary">
@@ -244,6 +260,11 @@ async function ProfileMain(props: Props) {
               </li>
             ))}
           </ul>
+          {isSelf && (
+            <Suspense fallback={null}>
+              <ProfileViewersLink />
+            </Suspense>
+          )}
           {(links.length > 0 || member.resume) && (
             <ul className="flex flex-wrap items-center gap-2" aria-label="Links">
               {member.resume && (

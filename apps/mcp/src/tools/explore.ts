@@ -38,7 +38,10 @@ export function registerExploreTools(server: McpServer, ctx: ToolContext) {
       title: 'List notifications',
       description: "The member's notifications, newest first (reactions, comments, mentions, connection requests, follows…), with the unread count.",
       inputSchema: {
-        filter: z.enum(['all', 'unread', 'mentions']).optional().describe('all (default), unread or mentions.'),
+        filter: z
+          .enum(['all', 'unread', 'my_posts', 'mentions', 'messages', 'network'])
+          .optional()
+          .describe('all (default), unread, my_posts (activity and milestones on their posts), mentions, messages or network (follows, connections, profile views).'),
         cursor,
       },
       annotations: { title: 'List notifications', ...READ },

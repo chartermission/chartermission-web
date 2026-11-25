@@ -39,6 +39,7 @@ import { seedContentCalendar } from './seed-content-calendar.js';
 import { PERMISSIONS, ROLES } from '../core/permissions.js';
 import { SETTING_DEFAULTS } from '../infra/settings.service.js';
 import { DEFAULT_FIELD_VISIBILITY } from '@chartermission/contracts';
+import { seedNotificationDepth } from './seed-notifications.js';
 import { isMain } from './is-main.js';
 import { chapterDefaults } from '../chapters/chapter-defaults.js';
 
@@ -376,6 +377,7 @@ async function main() {
     await seedInitiatives(db, ctx);
     await seedServices(db, ctx);
     await seedContentCalendar(db, ctx);
+    await seedNotificationDepth(db, ctx);
     const mfa = await seedDemoMfa(db);
     console.log(`Seeded ${Object.keys(ids).length} demo members (password: ${DEMO_PASSWORD})`);
     if (mfa.length) console.log(`Two-step verification preset for ${mfa.length} staff accounts: ${mfa.join(', ')} (see the demo accounts PDF)`);

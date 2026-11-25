@@ -14,6 +14,10 @@ export type DomainEvent =
   | { type: 'reaction.created'; targetType: 'post' | 'comment'; targetId: string; userId: string; kind: string }
   | { type: 'mention.created'; sourceType: 'post' | 'comment'; sourceId: string; postId: string; authorId: string; userIds: string[] }
   | { type: 'follow.created'; followerId: string; targetType: string; targetId: string }
+  /** A member viewed another's profile for the first time today (UTC day). */
+  | { type: 'profile.viewed'; profileId: string; day: string }
+  /** A post crossed an impressions or reactions milestone (claimed once in milestones_reached). */
+  | { type: 'post.milestone'; postId: string; metric: 'impressions' | 'reactions'; threshold: number }
   | { type: 'connection.requested'; connectionId: string; requesterId: string; addresseeId: string }
   | { type: 'connection.accepted'; connectionId: string; requesterId: string; addresseeId: string }
   | { type: 'moderation.actioned'; actionId: string }

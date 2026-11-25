@@ -86,4 +86,8 @@ export const en: Dict = {
   "{count} requests declined": { one: "{count} request declined", other: "{count} requests declined" },
   "{count} impressions": { one: "{count} impression", other: "{count} impressions" },
   "{count} photos": { one: "{count} photo", other: "{count} photos" },
+  "and {count} others": { one: "and {count} other", other: "and {count} others" },
+  "{count} profile views in the last 90 days": { one: "{count} profile view in the last 90 days", other: "{count} profile views in the last 90 days" },
+  "{count} views": { one: "{count} view", other: "{count} views" },
+  "Viewed on {count} days": { one: "Viewed on {count} day", other: "Viewed on {count} days" },
 };

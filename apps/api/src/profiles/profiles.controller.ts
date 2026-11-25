@@ -8,6 +8,9 @@ import {
   MuteInput,
   PrivacySettingsInput,
   ProfilePreviewQuery,
+  ProfileViewsQuery,
+  type ProfileViewsPage,
+  type ProfileViewsSummary,
   UpdateProfileInput,
   HandleAvailabilityQuery,
   type HandleAvailability,
@@ -33,6 +36,7 @@ import { SuggestionsService } from './suggestions.service.js';
 import { ConnectionsService } from './connections.service.js';
 import { FollowsService } from './follows.service.js';
 import { BlocksService } from './blocks.service.js';
+import { ProfileViewsService } from './profile-views.service.js';
 import { isUuid } from './taxonomy.service.js';
 
 const OK: Ok = { ok: true };
@@ -219,5 +223,32 @@ export class RelationshipsController {
   @Access('session')
   listMutes(@Auth() ctx: AuthContext): Promise<MuteView[]> {
     return this.blocks.listMutes(ctx.user.id);
+  }
+}
+
+/** Who viewed your profile (LinkedIn-style): the web reports profile opens; members see their viewers. */
+@Controller()
+export class ProfileViewsController {
+  constructor(private readonly views: ProfileViewsService) {}
+
+  /** The member site's profile page, opened by a signed-in member (never fails the page: always 200). */
+  @Post('members/:handle/views')
+  @HttpCode(200)
+  @Access('member')
+  async record(@Auth() ctx: AuthContext, @Param('handle') handle: string): Promise<Ok> {
+    if (handle.length <= 60) await this.views.record(ctx, handle);
+    return OK;
+  }
+
+  @Get('me/profile-views/summary')
+  @Access('member')
+  summary(@Auth() ctx: AuthContext): Promise<ProfileViewsSummary> {
+    return this.views.summary(ctx.user.id);
+  }
+
+  @Get('me/profile-views')
+  @Access('member')
+  list(@Auth() ctx: AuthContext, @ZQuery(ProfileViewsQuery) q: ProfileViewsQuery): Promise<ProfileViewsPage> {
+    return this.views.list(ctx.user.id, q);
   }
 }

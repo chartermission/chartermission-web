@@ -7,6 +7,7 @@ import {
   type FieldVisibility,
   type OwnProfile,
   type PrivacySettingsInput,
+  type ProfileViewing,
   type ProfileVisibility,
 } from "@chartermission/contracts";
 import { api, isApiError } from "@/lib/api/client";
@@ -23,6 +24,7 @@ type State = {
   discoverable: boolean;
   findableByEmail: boolean;
   connectionRequestsFrom: "members" | "nobody";
+  profileViewing: ProfileViewing;
 };
 
 const fieldLabels: Record<ProfileField, string> = {
@@ -48,6 +50,11 @@ const profileVisibilityOptions = [
   { value: "public", label: "Public" },
 ] as const;
 
+const viewingOptions = [
+  { value: "named", label: "Show my name" },
+  { value: "private", label: "Private mode" },
+] as const;
+
 const connectionOptions = [
   { value: "members", label: "Any member" },
   { value: "nobody", label: "No one" },
@@ -60,6 +67,7 @@ function stateFrom(profile: OwnProfile): State {
     discoverable: profile.discoverable,
     findableByEmail: profile.findableByEmail,
     connectionRequestsFrom: profile.connectionRequestsFrom,
+    profileViewing: profile.profileViewing ?? "named",
   };
 }
 
@@ -218,6 +226,29 @@ export function PrivacySettingsForm({
               options={connectionOptions}
               value={state.connectionRequestsFrom}
               onChange={(event) => update({ connectionRequestsFrom: event.target.value as State["connectionRequestsFrom"] })}
+            />
+          </li>
+        </SettingsCard>
+
+        <SettingsCard id="profile-viewing" title="Profile viewing">
+          <li className="flex items-center gap-4 py-3.5 max-sm:flex-col max-sm:items-start">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <label htmlFor="profile-viewing-select" className="text-sm font-medium text-ink">
+                When you view profiles
+              </label>
+              <span id="profile-viewing-hint" className="text-xs text-secondary">
+                {state.profileViewing === "private"
+                  ? "Members see “Someone at your organisation”, “Someone in your chapter” or “A Charter Mission member”. In private mode you see how many people viewed your profile, but not who."
+                  : "Members you visit can see your name and headline in “Who viewed your profile”."}
+              </span>
+            </div>
+            <SettingsSelect
+              id="profile-viewing-select"
+              name="profileViewing"
+              aria-describedby="profile-viewing-hint"
+              options={viewingOptions}
+              value={state.profileViewing}
+              onChange={(event) => update({ profileViewing: event.target.value as ProfileViewing })}
             />
           </li>
         </SettingsCard>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import type { FollowView, MemberProfile, OwnProfile, Page } from "@chartermission/contracts";
+import type { FollowView, MemberProfile, OwnProfile, Page, ProfileViewsSummary } from "@chartermission/contracts";
 import { Avatar, Chip, Divider, Panel } from "@chartermission/ui";
 import { apiGet, apiGetOrNull, getViewer } from "@/lib/api/server";
 import { PanelSkeleton } from "./social/skeletons";
@@ -10,9 +10,10 @@ import { SideNav } from "./side-nav";
 async function ProfileSummary() {
   const viewer = await getViewer();
   if (!viewer) return null;
-  const [own, profile] = await Promise.all([
+  const [own, profile, views] = await Promise.all([
     apiGet<OwnProfile>("/me/profile").catch(() => null),
     apiGetOrNull<MemberProfile>(`/${viewer.handle}`).catch(() => null),
+    apiGet<ProfileViewsSummary>("/me/profile-views/summary").catch(() => null),
   ]);
   const percent = own?.completeness.percent ?? null;
   return (
@@ -25,6 +26,12 @@ async function ProfileSummary() {
         </span>
       </Link>
       <Divider />
+      {views && (
+        <Link href="/profile-views" className="flex justify-between rounded-sm text-sm hover:underline">
+          <span className="text-secondary">Profile views</span>
+          <span className="font-medium text-primary">{views.total.toLocaleString("en-US")}</span>
+        </Link>
+      )}
       {profile && (
         <>
           <Link href="/network?tab=connections" className="flex justify-between rounded-sm text-sm hover:underline">

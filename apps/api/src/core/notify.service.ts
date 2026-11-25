@@ -28,6 +28,8 @@ export const DEFAULT_PREFERENCES: Record<
   digest: { in_app: false, email: false, push: false },
   groups: { in_app: true, email: true, push: true },
   announcements: { in_app: true, email: true, push: true },
+  profile: { in_app: true, email: false, push: false },
+  post_performance: { in_app: true, email: false, push: false },
 };
 
 export const CATEGORY_OF: Record<
@@ -91,6 +93,14 @@ export const CATEGORY_OF: Record<
   group_post_review: 'always',
   group_role_changed: 'always',
   group_status: 'always',
+  profile_viewed: 'profile',
+  message_reply: 'connections',
+  message_reaction: 'connections',
+  post_milestone: 'post_performance',
+  post_trending: 'post_performance',
+  follower_milestone: 'follows',
+  connection_post: 'connections',
+  comment_on_followed_post: 'comments',
 };
 
 export interface NotifyInput {
@@ -109,6 +119,15 @@ export interface NotifyInput {
   windowMinutes?: number;
   /** In-app even when the member turned the category off (important service notices from Charter Mission). */
   forceInApp?: boolean;
+  /**
+   * The full actor list and count, replacing what is stored instead of adding `actorId` to it (summaries computed
+   * from a table, such as who viewed a profile today, where anonymous viewers only add to the count).
+   */
+  actors?: { ids: string[]; count: number };
+  /** Updating an existing notification keeps it read if the member already read it (no re-alert for a summary). */
+  keepRead?: boolean;
+  /** Email only when the notification is new, never when an existing one is updated. */
+  emailWhenNew?: boolean;
   /** Optional email copy for categories where the member allows email. */
   email?: {
     subject: string;
@@ -173,11 +192,13 @@ export class NotifyService {
       category === 'always' ||
       !!input.forceInApp ||
       (await this.enabled(input.userId, category, 'in_app'));
-    if (inApp)
-      await this.upsert(input, category === 'always' ? 'moderation' : category);
+    const created = inApp
+      ? await this.upsert(input, category === 'always' ? 'moderation' : category)
+      : true;
 
     if (
       input.email &&
+      (created || !input.emailWhenNew) &&
       (category === 'always' ||
         (await this.enabled(input.userId, category, 'email')))
     ) {
@@ -196,7 +217,8 @@ export class NotifyService {
     }
   }
 
-  private async upsert(input: NotifyInput, category: string) {
+  /** True when a new notification was added, false when an existing one was updated. */
+  private async upsert(input: NotifyInput, category: string): Promise<boolean> {
     const windowStart = new Date(
       Date.now() - (input.windowMinutes ?? 15) * 60_000,
     );
@@ -217,6 +239,18 @@ export class NotifyService {
       href: input.href,
       icon: input.icon,
     };
+    if (existing && input.actors) {
+      await this.db
+        .update(notifications)
+        .set({
+          actorIds: input.actors.ids.slice(0, 10),
+          actorCount: input.actors.count,
+          data,
+          ...(input.keepRead ? {} : { readAt: null }),
+        })
+        .where(eq(notifications.id, existing.id));
+      return false;
+    }
     if (existing) {
       const actors = input.actorId
         ? [
@@ -232,21 +266,30 @@ export class NotifyService {
           actorIds: actors,
           actorCount: sql`${notifications.actorCount} + ${added}`,
           data,
-          readAt: null,
+          ...(input.keepRead ? {} : { readAt: null }),
         })
         .where(eq(notifications.id, existing.id));
-      return;
+      return false;
     }
     await this.db.insert(notifications).values({
       userId: input.userId,
       type: input.type,
       category,
-      actorIds: input.actorId ? [input.actorId] : [],
-      actorCount: input.actorId ? 1 : 0,
+      actorIds: input.actors
+        ? input.actors.ids.slice(0, 10)
+        : input.actorId
+          ? [input.actorId]
+          : [],
+      actorCount: input.actors
+        ? input.actors.count
+        : input.actorId
+          ? 1
+          : 0,
       objectType: input.objectType ?? null,
       objectId: input.objectId ?? null,
       data,
       dedupeKey: input.dedupeKey,
     });
+    return true;
   }
 }

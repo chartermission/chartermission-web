@@ -274,6 +274,13 @@
       "when": 1795632252814,
       "tag": "0038_course_details_fingerprint",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795649152302,
+      "tag": "0039_profile_views_milestones",
+      "breakpoints": true
     }
   ]
 }
