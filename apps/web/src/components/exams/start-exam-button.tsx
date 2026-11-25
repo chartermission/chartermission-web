@@ -58,7 +58,7 @@ export function StartExamButton({
     <>
       <Button variant={variant} block={block} disabled={busy} aria-busy={busy} onClick={() => void onClick()}>
         {busy ? t("Starting…") : label}
-        <Icon name="chevron-right" size={18} className="rtl:rotate-180" />
+        <Icon name="chevron-right" size={18} />
       </Button>
       {confirming && (
         <ConfirmDialog title={t("Ready to start?")} confirmLabel={t("Start the exam")} onClose={() => setConfirming(false)} onConfirm={start}>

@@ -58,7 +58,7 @@ export async function ExamCard({ exam, className }: { exam: ExamSummary; classNa
       <p className="text-xs text-secondary">{examMeta(t, exam)}</p>
       <span aria-hidden="true" className="mt-auto flex items-center gap-1 pt-1 text-sm font-medium text-primary-light">
         {action}
-        <Icon name="chevron-right" size={16} className="transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none rtl:rotate-180" />
+        <Icon name="chevron-right" size={16} className="transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
       </span>
     </article>
   );

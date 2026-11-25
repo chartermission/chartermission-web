@@ -95,7 +95,7 @@ async function ServiceMain({ params }: Pick<Props, "params">) {
   return (
     <>
       <Link href={hostHref(host)} className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
-        <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={18} />
         <NoTranslate>{name}</NoTranslate>
       </Link>
 

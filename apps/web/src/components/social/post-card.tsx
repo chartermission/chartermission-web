@@ -290,7 +290,7 @@ export function PostCard({
           )}
           {post.group && (
             <>
-              <Icon name="chevron-right" size={14} className="shrink-0 text-secondary rtl:rotate-180" />
+              <Icon name="chevron-right" size={14} className="shrink-0 text-secondary" />
               <Link
                 href={groupHref(post.group.slug)}
                 className="flex min-w-0 items-center gap-1 text-sm font-medium text-ink hover:underline"
@@ -341,6 +341,62 @@ export function PostCard({
       <PostTypeChip type={post.type} className="mt-0.5" />
       <Menu label={t("More options for {subject}", { subject })} items={menu} />
     </header>
+  );
+
+  // The post as shown beside its photos in the full-screen viewer (Facebook-style): who posted it,
+  // the whole text, the counts and the main actions, sharing this card's reaction state.
+  const photoPanel = (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-3">
+        <Link href={authorHref(post)} tabIndex={-1} aria-hidden="true">
+          {post.page ? <PageLogo name={post.page.name} src={post.page.logoUrl} size={40} /> : <MemberAvatar member={post.author} />}
+        </Link>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <AuthorName member={post.author} href={authorHref(post)} />
+            {post.group && (
+              <>
+                <Icon name="chevron-right" size={14} className="shrink-0 text-secondary" />
+                <Link href={groupHref(post.group.slug)} className="truncate text-sm font-medium text-ink hover:underline">
+                  <NoTranslate>{post.group.name}</NoTranslate>
+                </Link>
+              </>
+            )}
+          </span>
+          <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-secondary">
+            {post.author.headline && <span className="truncate">{post.author.headline}</span>}
+            {post.author.headline && <span aria-hidden="true">·</span>}
+            <Link href={postHref(post)} className="hover:underline">
+              <TimeAgo iso={post.createdAt} />
+            </Link>
+          </p>
+        </div>
+      </div>
+      {post.body && (
+        <div className="text-sm text-ink">
+          <RichText text={post.body} mentions={post.mentions} />
+        </div>
+      )}
+      <PostCounts post={post} total={reactions.total} breakdown={reactions.breakdown ?? post.reactionBreakdown} />
+      {!guest && (
+        <div className="flex items-center gap-1 border-t border-line pt-2">
+          <ReactionButton targetType="post" targetId={post.id} state={reactions} onChange={setReactions} subject={subject} />
+          <Link
+            href={`${postHref(post)}#${post.type === "question" ? "add-comment" : "comments"}`}
+            className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
+          >
+            <Icon name="message" size={18} />
+            {answerLabel}
+          </Link>
+          <Link
+            href={postHref(post)}
+            className="ms-auto flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-secondary hover:bg-muted hover:text-primary"
+          >
+            View post
+          </Link>
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -633,6 +689,7 @@ export function PostCard({
               attachments={post.attachments}
               layout={post.mediaLayout}
               bleedClassName="-mx-5 max-sm:-mx-4"
+              panel={photoPanel}
             />
           )}
           {post.poll && (
@@ -665,20 +722,6 @@ export function PostCard({
         total={reactions.total}
         breakdown={reactions.breakdown ?? post.reactionBreakdown}
       />
-
-      {post.viewer.canViewAnalytics && post.status === "published" && (
-        <Link
-          href={postAnalyticsHref(post.id)}
-          className="-my-1 flex w-fit items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-secondary hover:bg-muted hover:text-primary"
-        >
-          <Icon name="chart" size={14} />
-          View analytics
-          <span className="sr-only">
-            {" "}
-            <T vars={{ subject }}>{"for {subject}"}</T>
-          </span>
-        </Link>
-      )}
 
       <div className="h-px w-full bg-line" />
 

@@ -298,7 +298,7 @@ async function ChapterView({
             >
               <Icon name="users" size={16} />
               {t("See all members, search and connect")}
-              <Icon name="chevron-right" size={16} className="rtl:rotate-180" />
+              <Icon name="chevron-right" size={16} />
             </Link>
             <ChapterMembers
               slug={chapter.slug}

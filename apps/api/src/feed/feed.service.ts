@@ -123,6 +123,7 @@ export class FeedService {
   /** GET /feed (CM-FED-04, -05, -07): cursor-paginated, 20 per page by default. */
   async feed(viewer: AuthUser, q: FeedQuery): Promise<Page<PostView>> {
     if (q.group) return this.groupFeed(viewer, q);
+    if (q.since) return this.newPosts(viewer, { ...q, since: q.since });
     const filters = await this.filters(q);
     if (!filters) return { items: [], nextCursor: null };
     const blocked = await this.relations.blockedSet(viewer.id);
@@ -159,18 +160,8 @@ export class FeedService {
    * "See N new posts" pill. The viewer's own posts don't count (they already see them).
    */
   async newSince(viewer: AuthUser, q: FeedNewQuery): Promise<FeedNewResponse> {
-    const filters = await this.filters({ ...q, limit: 20 });
-    if (!filters) return { count: 0, authors: [] };
-    const conds = [
-      listablePostsSql(viewer.id, { muteHashtags: true }),
-      homeFeedGroupSql(viewer.id),
-      ...filters,
-      sql`(${posts.authorId} <> ${viewer.id} or ${posts.pageId} is not null)`,
-      sql`${posts.status} = 'published'`,
-      sql`${posts.createdAt} > ${q.since}::timestamptz`,
-    ];
-    if (q.tab === 'following') conds.push(this.followingSql(viewer.id));
-    if (q.tab === 'for_you') conds.push(sql`${posts.createdAt} > now() - make_interval(days => ${FOR_YOU_DAYS}::int)`);
+    const conds = await this.newConds(viewer, q);
+    if (!conds) return { count: 0, authors: [] };
     const [counted] = await this.db
       .select({ n: sql<number>`count(*)::int` })
       .from(posts)
@@ -187,6 +178,35 @@ export class FeedService {
     const authorIds = [...new Set(recent.filter((r) => !r.pageId).map((r) => r.authorId))].slice(0, 3);
     const refs = await this.serializer.memberRefs(authorIds);
     return { count, authors: authorIds.map((id) => refs.get(id)).filter((r) => !!r) };
+  }
+
+  /** What counts as a new post for the pill: shown by the tab and its filters, newer than `since`, by someone else. */
+  private async newConds(viewer: AuthUser, q: FeedNewQuery): Promise<SQL[] | null> {
+    const filters = await this.filters({ ...q, limit: 20 });
+    if (!filters) return null;
+    const conds = [
+      listablePostsSql(viewer.id, { muteHashtags: true }),
+      homeFeedGroupSql(viewer.id),
+      ...filters,
+      sql`(${posts.authorId} <> ${viewer.id} or ${posts.pageId} is not null)`,
+      sql`${posts.status} = 'published'`,
+      sql`${posts.createdAt} > ${q.since}::timestamptz`,
+    ];
+    if (q.tab === 'following') conds.push(this.followingSql(viewer.id));
+    if (q.tab === 'for_you') conds.push(sql`${posts.createdAt} > now() - make_interval(days => ${FOR_YOU_DAYS}::int)`);
+    return conds;
+  }
+
+  /**
+   * GET /feed?since=…: exactly the posts the "N new posts" pill counted (same tab and filters), newest
+   * first, for the /feed/latest page the pill opens.
+   */
+  private async newPosts(viewer: AuthUser, q: FeedQuery & { since: string }): Promise<Page<PostView>> {
+    const conds = await this.newConds(viewer, q);
+    if (!conds) return { items: [], nextCursor: null };
+    const page = await this.newest(q, conds, q.limit);
+    const blocked = await this.relations.blockedSet(viewer.id);
+    return { items: await this.serializer.posts(page.ids, viewer, blocked), nextCursor: page.nextCursor };
   }
 
   private async pinned(conds: SQL[], max: number): Promise<string[]> {

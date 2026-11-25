@@ -282,7 +282,7 @@ export function ManageInitiative({ initiative: initial, requests: initialRequest
         </ConfirmDialog>
       )}
       <Link href={initiativeHref(initiative.slug)} className="flex w-fit items-center gap-1.5 text-sm font-medium text-primary-light hover:underline">
-        <Icon name="chevron-left" size={16} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={16} />
         Back to the initiative
       </Link>
     </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { AgendaItem, EventDetail, EventSpeaker } from "@chartermission/contracts";
-import { Avatar, Icon, Panel, cn } from "@chartermission/ui";
+import { Avatar, Icon, Panel, cn, VerifiedBadge } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { dayKey, formatClock, formatDay, formatLongDay, formatRange, sameWallClock, zoneAbbreviation, zoneCity } from "./time";
 import { useViewerZone } from "./use-viewer-zone";
@@ -71,7 +71,7 @@ function SpeakerCard({ speaker }: { speaker: EventSpeaker }) {
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="flex items-center gap-1 text-md font-medium text-ink">
           <span className="truncate">{name}</span>
-          {speaker.member?.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}
+          {speaker.member?.verified && <VerifiedBadge size={16} className="shrink-0" label="Verified" />}
         </p>
         {role && <p className="line-clamp-2 text-sm text-secondary">{role}</p>}
       </div>

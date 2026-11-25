@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AdminInboxMessage, AdminInboxThread } from "@chartermission/contracts";
-import { Avatar, Button, Icon, cn } from "@chartermission/ui";
+import { Avatar, Button, Icon, cn, VerifiedBadge } from "@chartermission/ui";
 import { inputClasses } from "@/components/form-field";
 import { SkeletonBar } from "@/components/skeletons";
 import { EmptyState } from "@/components/states";
@@ -197,7 +197,7 @@ export function InboxThread({ conversationId }: { conversationId: string }) {
                 <NoTranslate>
                   <span className="truncate">{member.name}</span>
                 </NoTranslate>
-                {member.verified && <Icon name="verified" size={14} className="shrink-0 text-primary-light" label={t("Verified")} />}
+                {member.verified && <VerifiedBadge size={14} className="shrink-0" label={t("Verified")} />}
               </span>
               <span className="truncate text-xs text-secondary">
                 @{member.handle} · {member.email}

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { AdminInboxItem, AdminInboxPage } from "@chartermission/contracts";
-import { Avatar, Button, Icon, SegmentedControl, cn } from "@chartermission/ui";
+import { Avatar, Button, Icon, SegmentedControl, cn, VerifiedBadge } from "@chartermission/ui";
 import { inputClasses } from "@/components/form-field";
 import { SkeletonBar } from "@/components/skeletons";
 import { EmptyState } from "@/components/states";
@@ -211,7 +211,7 @@ function InboxRow({ row, active }: { row: AdminInboxItem; active: boolean }) {
               <NoTranslate>
                 <span className="truncate">{row.member.name}</span>
               </NoTranslate>
-              {row.member.verified && <Icon name="verified" size={14} className="shrink-0 text-primary-light" label={t("Verified")} />}
+              {row.member.verified && <VerifiedBadge size={14} className="shrink-0" label={t("Verified")} />}
             </span>
             {last && <Age iso={last.at} className="shrink-0 text-xs text-secondary" />}
           </span>

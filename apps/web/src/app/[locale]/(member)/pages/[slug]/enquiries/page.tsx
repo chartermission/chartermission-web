@@ -36,7 +36,7 @@ async function Enquiries({ params, searchParams }: Props) {
   return (
     <>
       <Link href={`/pages/${page.slug}`} className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
-        <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={18} />
         <NoTranslate>{page.name}</NoTranslate>
       </Link>
       <header className="flex flex-col gap-1">

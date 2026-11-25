@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { GroupMemberView, GroupMembersQuery, Page, Relationship } from "@chartermission/contracts";
-import { Button, Icon, RoleBadgeIcon, buttonClasses } from "@chartermission/ui";
+import { Button, RoleBadgeIcon, buttonClasses, VerifiedBadge } from "@chartermission/ui";
 import { SearchField } from "@/components/discover/filter-controls";
 import { ConnectControl, FollowControl, canConnectWith, useRelationship } from "@/components/network/relationship";
 import { ErrorNotice } from "@/components/social/errors";
@@ -121,7 +121,7 @@ export function GroupMemberRow({ view, extra, below, children }: { view: GroupMe
           <Link href={memberHref(member.handle)} className="truncate text-sm font-medium text-ink hover:underline">
             {member.name}
           </Link>
-          {member.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label={t("Verified")} />}
+          {member.verified && <VerifiedBadge size={14} className="shrink-0" label={t("Verified")} />}
           <RoleBadgeIcon badge={member.badge} size={14} />
           {role !== "member" && view.status === "active" && (
             <span className="shrink-0 rounded-full bg-primary-tint px-2 py-px text-[11px] font-medium text-primary">{t(ROLE_LABEL[role])}</span>

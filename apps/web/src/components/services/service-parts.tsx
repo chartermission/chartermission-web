@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { CONSULTATION_MODE_LABELS, type ConsultationMode, type ServiceHost } from "@chartermission/contracts";
-import { Icon, cn } from "@chartermission/ui";
+import { Icon, cn, VerifiedBadge } from "@chartermission/ui";
 import { PageLogo } from "@/components/pages/page-logo";
 import { MemberAvatar } from "@/components/social/post-parts";
 import { NoTranslate } from "@/i18n/auto";
@@ -85,7 +85,7 @@ export function HostIdentity({ host, size = 40, subtitle = true, className }: { 
           <Link href={hostHref(host)} className="truncate text-md font-medium text-ink hover:underline">
             <NoTranslate>{name}</NoTranslate>
           </Link>
-          {verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}
+          {verified && <VerifiedBadge size={16} className="shrink-0" label="Verified" />}
         </span>
         {subtitle && line && (
           <NoTranslate>

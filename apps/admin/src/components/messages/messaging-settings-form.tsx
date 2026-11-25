@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { MessagingSettings, MessagingSettingsView } from "@chartermission/contracts";
-import { Avatar, Button, Icon, cn } from "@chartermission/ui";
+import { Avatar, Button, cn, VerifiedBadge } from "@chartermission/ui";
 import { FormNotice } from "@/components/form-field";
 import { EmptyState } from "@/components/states";
 import { toast } from "@/components/toast";
@@ -85,7 +85,7 @@ export function MessagingSettingsForm({ initial, canEdit }: { initial: Messaging
                       <NoTranslate>
                         <span className="truncate">{o.name}</span>
                       </NoTranslate>
-                      {o.verified && <Icon name="verified" size={14} className="shrink-0 text-primary-light" label={t("Verified")} />}
+                      {o.verified && <VerifiedBadge size={14} className="shrink-0" label={t("Verified")} />}
                     </span>
                     <span className="truncate text-xs text-secondary">
                       @{o.handle}

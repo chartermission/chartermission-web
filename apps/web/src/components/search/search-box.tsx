@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { ChapterSummary, DirectoryMember, GroupSummary, HashtagSuggestion, Page } from "@chartermission/contracts";
-import { ChapterAvatar, Icon, cn } from "@chartermission/ui";
+import { ChapterAvatar, Icon, cn, VerifiedBadge } from "@chartermission/ui";
 import { GroupLogo, LockIcon, groupHref } from "@/components/groups/group-parts";
 import { memberHref, topicHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
@@ -175,7 +175,7 @@ export function SearchBox({ className }: { className?: string }) {
                         <span className="flex min-w-0 flex-col">
                           <span className="flex items-center gap-1 truncate font-medium">
                             {item.member.name}
-                            {item.member.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" />}
+                            {item.member.verified && <VerifiedBadge size={14} className="shrink-0" label="Verified" />}
                           </span>
                           {item.member.headline && <span className="truncate text-xs text-secondary">{item.member.headline}</span>}
                         </span>

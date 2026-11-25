@@ -110,7 +110,7 @@ export function ProductImagesField({ id, value, onChange }: { id?: string; value
                       aria-label={t("Move picture {number} earlier", { number: index + 1 })}
                       className="flex size-7 items-center justify-center rounded-full bg-card/90 text-ink shadow hover:bg-card"
                     >
-                      <Icon name="chevron-left" size={16} className="rtl:rotate-180" />
+                      <Icon name="chevron-left" size={16} />
                     </button>
                   )}
                   <button

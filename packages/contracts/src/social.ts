@@ -661,6 +661,11 @@ export const FeedQuery = z.object({
    * groups give 403 to people who aren't members. Pinned group posts come first on the first page.
    */
   group: z.string().trim().min(1).max(80).optional(),
+  /**
+   * Only the posts newer than this that the "N new posts" pill counted (GET /feed/new with the same
+   * tab and filters: by others, published), newest first. For the /feed/latest page the pill opens.
+   */
+  since: z.string().datetime({ offset: true }).optional(),
   /** One initiative's updates (initiative id or slug), newest first. Ignores `tab`. */
   initiative: z.string().trim().min(1).max(120).optional(),
   /** Query-string boolean: "true"/"1" or "false"/"0" (z.coerce.boolean would read "false" as true). */
@@ -681,7 +686,7 @@ export const FeedQuery = z.object({
 export type FeedQuery = z.infer<typeof FeedQuery>;
 
 /** GET /feed/new — same filters as /feed, counts posts newer than `since` (for the "new posts" pill). */
-export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true, page: true, initiative: true, group: true }).extend({
+export const FeedNewQuery = FeedQuery.omit({ cursor: true, limit: true, author: true, page: true, initiative: true, group: true, since: true }).extend({
   since: z.string().datetime({ offset: true }),
 });
 export type FeedNewQuery = z.infer<typeof FeedNewQuery>;

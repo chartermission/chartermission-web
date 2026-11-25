@@ -84,4 +84,6 @@ export const en: Dict = {
   "{count} admins and moderators": { one: "{count} admin", other: "{count} admins and moderators" },
   "{count} people approved": { one: "{count} person approved", other: "{count} people approved" },
   "{count} requests declined": { one: "{count} request declined", other: "{count} requests declined" },
+  "{count} impressions": { one: "{count} impression", other: "{count} impressions" },
+  "{count} photos": { one: "{count} photo", other: "{count} photos" },
 };

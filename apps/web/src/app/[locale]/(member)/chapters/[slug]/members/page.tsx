@@ -65,7 +65,7 @@ async function MembersView({
         href={`/chapters/${chapter.slug}`}
         className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline"
       >
-        <Icon name="chevron-left" size={16} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={16} />
         {t("Back to {name}", { name: chapter.name })}
       </Link>
       <header className="flex flex-wrap items-center justify-between gap-4">

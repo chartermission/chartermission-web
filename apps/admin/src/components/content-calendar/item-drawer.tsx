@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import type { ContentCalendarAction, ContentCalendarActionResult, ContentCalendarDetail, ContentCalendarKind, McpAction } from "@chartermission/contracts";
-import { Avatar, Button, Chip, Icon, cn } from "@chartermission/ui";
+import { Avatar, Button, Chip, Icon, cn, VerifiedBadge } from "@chartermission/ui";
 import { DateTime } from "@/components/time";
 import { api, errorMessage } from "@/lib/api/client";
 import { MCP_ACTION_LABELS } from "@/lib/labels";
@@ -221,7 +221,7 @@ function AuthorCard({ detail, onOnlyAuthor }: { detail: ContentCalendarDetail; o
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-center gap-1 font-medium text-ink">
           {a.name}
-          {a.verified && <Icon name="verified" size={16} className="text-primary-light" label="Verified" />}
+          {a.verified && <VerifiedBadge size={16} label="Verified" />}
         </span>
         <span className="text-xs text-secondary">
           @{a.handle}

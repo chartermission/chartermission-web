@@ -27,7 +27,7 @@ async function Attempt({ params }: { params: Props["params"] }) {
   return (
     <>
       <Link href={examHref(attempt.exam.slug)} className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
-        <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={18} />
         Exam details
       </Link>
       <AttemptScreen key={attempt.id} initial={attempt} finishProfile={!viewer.onboarding.completed} />

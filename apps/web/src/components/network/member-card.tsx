@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { DirectoryMember } from "@chartermission/contracts";
-import { Avatar, Icon, RoleBadgeIcon } from "@chartermission/ui";
+import { Avatar, Icon, RoleBadgeIcon, VerifiedBadge } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import {
   ConnectControl,
@@ -43,12 +43,7 @@ export function DirectoryMemberCard({
           {member.name}
         </Link>
         {member.verified && (
-          <Icon
-            name="verified"
-            size={14}
-            className="shrink-0 text-primary-light"
-            label="Verified"
-          />
+          <VerifiedBadge size={14} className="shrink-0" label="Verified" />
         )}
         <RoleBadgeIcon badge={member.badge} size={14} />
       </p>

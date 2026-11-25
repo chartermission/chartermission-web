@@ -236,7 +236,7 @@ export function BookingDialog({ service, onClose, onBooked }: { service: Service
                 aria-label="Earlier dates"
                 className="shrink-0 rounded-md p-1.5 text-secondary hover:bg-muted hover:text-ink disabled:opacity-30"
               >
-                <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+                <Icon name="chevron-left" size={18} />
               </button>
               <ul aria-label="Choose a day" className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1">
                 {dates.map((date) => {
@@ -278,7 +278,7 @@ export function BookingDialog({ service, onClose, onBooked }: { service: Service
                 aria-label="Later dates"
                 className="shrink-0 rounded-md p-1.5 text-secondary hover:bg-muted hover:text-ink disabled:opacity-30"
               >
-                <Icon name="chevron-right" size={18} className="rtl:rotate-180" />
+                <Icon name="chevron-right" size={18} />
               </button>
             </div>
 
@@ -421,7 +421,7 @@ function BookingConfirmation({ booking, zone }: { booking: BookingView; zone: st
         </a>
         <Link href="/bookings" className={buttonClasses({ variant: "ghost", size: "small" })}>
           See your bookings
-          <Icon name="chevron-right" size={16} className="rtl:rotate-180" />
+          <Icon name="chevron-right" size={16} />
         </Link>
       </div>
     </div>

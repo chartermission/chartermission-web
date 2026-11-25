@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { PostView } from "@chartermission/contracts";
-import { Avatar, Icon, Panel, cn, RoleBadgeIcon } from "@chartermission/ui";
+import { Avatar, Icon, Panel, cn, RoleBadgeIcon, VerifiedBadge } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import type { Viewer } from "@/components/social/viewer";
 import { WriteArticleButton } from "./write-article-button";
@@ -44,7 +44,7 @@ export function FeaturedArticle({ post }: { post: PostView }) {
                 <Link href={authorHref(post)} className="relative z-10 truncate text-md font-medium text-ink hover:underline">
                   {post.author.name}
                 </Link>
-                {post.author.verified && <Icon name="verified" size={16} className="relative z-10 shrink-0 text-primary" label="Verified" />}
+                {post.author.verified && <VerifiedBadge size={16} className="relative z-10 shrink-0" label="Verified" />}
                 <RoleBadgeIcon badge={post.author.badge} size={16} className="relative z-10" />
               </p>
               <p className="flex flex-wrap items-center gap-x-1 text-xs text-secondary">

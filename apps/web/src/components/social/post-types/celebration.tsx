@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CelebrationDetails, PageRef } from "@chartermission/contracts";
-import { Icon } from "@chartermission/ui";
+import { Icon, VerifiedBadge } from "@chartermission/ui";
 import { BrandPattern } from "@/components/illustrations";
 import { celebrationMeta } from "./meta";
 
@@ -47,7 +47,7 @@ export function CelebrationBand({
             >
               <Icon name="building" size={14} className="shrink-0" />
               <span className="truncate">{celebration.organisation || aboutPage.name}</span>
-              {aboutPage.verified && <Icon name="verified" size={14} className="shrink-0 text-info" />}
+              {aboutPage.verified && <VerifiedBadge size={14} className="shrink-0" label="Verified" />}
             </Link>
           ) : (
             celebration.organisation && (

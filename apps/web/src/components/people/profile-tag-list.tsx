@@ -40,7 +40,7 @@ export function ProfileTagList({ label, items, visible = VISIBLE_TAGS }: { label
             >
               {t("Show all ({count})", { count: items.length })}
               <span className="sr-only"> {label}</span>
-              <Icon name="chevron-right" size={14} className="rtl:rotate-180" />
+              <Icon name="chevron-right" size={14} />
             </button>
           </li>
         )}

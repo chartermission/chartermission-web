@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AdminBadge, AdminMemberCounts, AdminMemberRow, AdminMembersBulkAction, AdminMembersPage, Taxonomies } from "@chartermission/contracts";
-import { Avatar, Button, Chip, Icon, ProfileBadgeChip, cn } from "@chartermission/ui";
+import { Avatar, Button, Chip, ProfileBadgeChip, cn, VerifiedBadge } from "@chartermission/ui";
 import { BulkBar } from "@/components/bulk/bulk-bar";
 import { runBulk } from "@/components/bulk/run-bulk";
 import { SelectAllBox, SelectBox } from "@/components/bulk/select-box";
@@ -396,7 +396,7 @@ export function MembersConsole({
                             >
                               {row.name}
                             </button>
-                            {row.verified && <Icon name="verified" size={16} className="shrink-0 text-primary-light" label="Verified" />}
+                            {row.verified && <VerifiedBadge size={16} className="shrink-0" label="Verified" />}
                             <MemberChips row={row} compact max={2} />
                           </span>
                           <span className="truncate text-xs text-secondary">@{row.handle}</span>

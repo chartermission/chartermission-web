@@ -4,12 +4,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense, cache, type ReactNode } from "react";
 import { PreviewAs, socialNetworkOf, type MemberProfile, type MemberRef, type Page, type PostView, type ProfileCertification } from "@chartermission/contracts";
-import { Chip, Icon, Panel, ProfileBadgeList, RoleBadgePill, buttonClasses, type IconName } from "@chartermission/ui";
+import { Chip, Icon, Panel, ProfileBadgeList, RoleBadgePill, buttonClasses, type IconName, VerifiedBadge } from "@chartermission/ui";
 import { PageColumns } from "@/components/page-columns";
 import { getClientViewer } from "@/components/social/data";
 import { absoluteDate, monthLabel } from "@/components/social/format";
 import { MemberAvatar } from "@/components/social/post-parts";
-import { PostStream } from "@/components/social/post-stream";
+import { ActivityCarousel } from "@/components/profile/activity-carousel";
 import { SectionRail } from "@/components/social/section-nav";
 import { EmptyState, LoadingStatus, PanelSkeleton } from "@/components/social/skeletons";
 import { T } from "@/i18n/client";
@@ -225,7 +225,7 @@ async function ProfileMain(props: Props) {
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <h1 className="text-h2 text-ink">{member.name}</h1>
-            {member.verified && <Icon name="verified" size={20} className="text-primary-light" label="Verified member" />}
+            {member.verified && <VerifiedBadge size={20} label="Verified member" />}
             {member.official ? <Chip tone="info">Official account</Chip> : member.staff && <Chip tone="info">Charter Mission team</Chip>}
             {member.relationship.followsYou && !member.relationship.self && <Chip>Follows you</Chip>}
           </div>
@@ -422,12 +422,7 @@ async function ProfileMain(props: Props) {
       )}
 
       {viewer && !preview && !member.relationship.blocked && (
-        <section aria-labelledby="member-posts" className="flex flex-col gap-3">
-          <h2 id="member-posts" className="text-h3 text-ink">
-            Recent posts
-          </h2>
-          <MemberPosts memberId={member.id} name={member.name} viewer={viewer} acceptNew={isSelf} />
-        </section>
+        <MemberActivity memberId={member.id} handle={member.handle} name={member.name} followers={member.counts.followers} own={isSelf} />
       )}
     </>
   );
@@ -459,37 +454,49 @@ async function MemberServices({ member, own, signedIn, compact = false }: { memb
   return <ServicesSection host={{ type: "member", member: ref }} services={services} canManage={own} signedIn={signedIn} compact={compact} />;
 }
 
-const MEMBER_POSTS_PAGE = 10;
+/** Posts in the Activity row before "Show all posts". */
+const ACTIVITY_POSTS = 8;
 
-/** GET /feed?author= — this member's posts, newest first, with "Load more". */
-async function MemberPosts({
-  memberId,
-  name,
-  viewer,
-  acceptNew,
-}: {
-  memberId: string;
-  name: string;
-  viewer: NonNullable<Awaited<ReturnType<typeof getClientViewer>>>;
-  acceptNew: boolean;
-}) {
+/**
+ * Activity, like LinkedIn: the member's latest posts as a row of small cards that scrolls sideways;
+ * "Show all posts" opens the full feed of their posts (/{handle}/activity).
+ */
+async function MemberActivity({ memberId, handle, name, followers, own }: { memberId: string; handle: string; name: string; followers: number; own: boolean }) {
   const t = await getT();
-  const query = { author: memberId, limit: MEMBER_POSTS_PAGE };
-  const page = await apiGet<Page<PostView>>("/feed", query).catch(() => undefined);
+  const page = await apiGet<Page<PostView>>("/feed", { author: memberId, limit: ACTIVITY_POSTS }).catch(() => undefined);
+  const posts = page?.items ?? [];
   return (
-    <PostStream
-      path="/feed"
-      query={query}
-      initial={page}
-      acceptNew={acceptNew}
-      viewer={viewer}
-      label={t("Posts by {name}", { name })}
-      empty={
-        <EmptyState icon="message" title="No posts yet">
-          {acceptNew ? "Posts you share appear here." : t("{name} hasn’t posted yet.", { name })}
-        </EmptyState>
-      }
-    />
+    <section aria-labelledby="member-activity" className="flex flex-col gap-3 rounded-card border border-line bg-card p-5 max-sm:px-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-col">
+          <h2 id="member-activity" className="text-h3 text-ink">
+            Activity
+          </h2>
+          <p className="text-sm text-secondary">{t("{count} followers", { count: followers.toLocaleString() })}</p>
+        </div>
+        {own && (
+          <Link href="/feed?compose=1" className={buttonClasses({ variant: "secondary", size: "small" })}>
+            Create a post
+          </Link>
+        )}
+      </div>
+      {page === undefined ? (
+        <p className="text-sm text-secondary">Posts couldn’t be loaded. Refresh the page to try again.</p>
+      ) : posts.length === 0 ? (
+        <p className="text-sm text-secondary">{own ? "Posts you share appear here." : t("{name} hasn’t posted yet.", { name })}</p>
+      ) : (
+        <ActivityCarousel posts={posts} label={t("Posts by {name}", { name })} />
+      )}
+      {posts.length > 0 && (
+        <Link
+          href={`/${handle}/activity`}
+          className="-mx-5 -mb-5 flex items-center justify-center gap-1 border-t border-line py-3 text-sm font-semibold text-secondary hover:bg-muted hover:text-ink max-sm:-mx-4"
+        >
+          Show all posts
+          <Icon name="chevron-right" size={16} />
+        </Link>
+      )}
+    </section>
   );
 }
 

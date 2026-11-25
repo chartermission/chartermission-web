@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { ChapterRef, SuggestedMember } from "@chartermission/contracts";
-import { Avatar, Button, Icon, cn } from "@chartermission/ui";
+import { Avatar, Button, Icon, cn, VerifiedBadge } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { RestrictedPrompt, VerifyPrompt } from "@/components/account/verify-prompt";
 import { ChipPicker } from "./chip-picker";
@@ -94,7 +94,7 @@ export function CommunityStep({
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex items-center gap-1 truncate text-sm font-medium text-ink">
                         {member.name}
-                        {member.verified && <Icon name="verified" size={14} className="shrink-0 text-info" label="Verified" />}
+                        {member.verified && <VerifiedBadge size={14} className="shrink-0" label="Verified" />}
                       </span>
                       {member.headline && <span className="line-clamp-2 text-xs text-secondary">{member.headline}</span>}
                       <span className="mt-1 inline-flex items-center gap-1 self-start rounded-full bg-primary-tint-2 px-2 py-0.5 text-xs text-primary">

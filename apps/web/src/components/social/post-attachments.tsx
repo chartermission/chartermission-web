@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AttachmentView, MediaLayout } from "@chartermission/contracts";
 import { Icon } from "@chartermission/ui";
 import { ImageCarousel } from "@/components/gallery/image-carousel";
@@ -15,8 +16,11 @@ export function PostAttachments({
   attachments,
   layout = "collage",
   bleedClassName,
+  panel,
 }: {
   attachments: AttachmentView[];
+  /** The post, shown beside (or under) the photos in the full-screen viewer. */
+  panel?: ReactNode;
   /** PostView.mediaLayout; a collage when the API didn't send one. */
   layout?: MediaLayout;
   bleedClassName?: string;
@@ -27,9 +31,9 @@ export function PostAttachments({
   return (
     <>
       {images.length > 1 && layout === "carousel" ? (
-        <ImageCarousel images={images} bleedClassName={bleedClassName} />
+        <ImageCarousel images={images} bleedClassName={bleedClassName} panel={panel} />
       ) : (
-        images.length > 0 && <ImageGrid images={images} layout={layout === "grid" ? "grid" : "collage"} bleedClassName={bleedClassName} />
+        images.length > 0 && <ImageGrid images={images} layout={layout === "grid" ? "grid" : "collage"} bleedClassName={bleedClassName} panel={panel} />
       )}
       {videos.map((video) => (
         <UploadedVideo key={video.id} video={video} />

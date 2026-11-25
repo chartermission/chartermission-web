@@ -1,3 +1,4 @@
+import { VerifiedBadge } from "./verified-badge";
 import type { ElementType, ReactNode } from "react";
 import { Icon, type IconName } from "../icons";
 import { cn } from "../cn";
@@ -66,7 +67,7 @@ export function PostCard({
             ) : (
               <span className="text-md font-medium text-ink">{author.name}</span>
             )}
-            {author.verified && <Icon name="verified" size={16} className="text-primary" label="Verified" />}
+            {author.verified && <VerifiedBadge size={16} label="Verified" />}
           </p>
           <p className="truncate text-xs text-secondary">{meta}</p>
         </div>

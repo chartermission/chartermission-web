@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { AdminMemberOverview, AdminMemberRow, MemberRef, Taxonomies } from "@chartermission/contracts";
-import { Avatar, Button, Icon, ProfileBadgeChip, cn } from "@chartermission/ui";
+import { Avatar, Button, Icon, ProfileBadgeChip, cn, VerifiedBadge } from "@chartermission/ui";
 import { RowMenu, type RowMenuItem } from "@/components/row-menu";
 import { DateTime } from "@/components/time";
 import { api, errorMessage } from "@/lib/api/client";
@@ -70,7 +70,7 @@ export function MemberDetailPanel({
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <h2 id={`${id}-title`} className="flex items-center gap-1 text-h3 text-ink">
               <span className="truncate">{row.name}</span>
-              {row.verified && <Icon name="verified" size={18} className="shrink-0 text-primary-light" label="Verified" />}
+              {row.verified && <VerifiedBadge size={18} className="shrink-0" label="Verified" />}
             </h2>
             <span className="text-sm text-secondary">@{row.handle}</span>
             {row.headline && <p className="text-sm text-body">{row.headline}</p>}

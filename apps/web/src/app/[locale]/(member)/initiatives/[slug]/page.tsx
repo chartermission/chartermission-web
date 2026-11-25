@@ -93,7 +93,7 @@ async function InitiativeDetailView({ params }: Pick<Props, "params">) {
             <Link href="/initiatives" className="text-primary-light hover:underline">
               Initiatives
             </Link>
-            <Icon name="chevron-right" size={14} className="text-disabled rtl:rotate-180" />
+            <Icon name="chevron-right" size={14} className="text-disabled" />
           </li>
           <li aria-current="page" className="truncate text-secondary">
             <NoTranslate>{initiative.title}</NoTranslate>

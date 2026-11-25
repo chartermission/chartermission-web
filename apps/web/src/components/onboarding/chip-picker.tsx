@@ -147,7 +147,7 @@ export function ChipPicker({
               >
                 {t("Show all {count}", { count: options.length })}
                 <span className="sr-only"> {label}</span>
-                <Icon name="chevron-right" size={14} className="rtl:rotate-180" />
+                <Icon name="chevron-right" size={14} />
               </button>
             </li>
           )}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { NEW_MEMBER_DAYS, type NewMembersMoment } from "@chartermission/contracts";
-import { Icon, RoleBadgeIcon } from "@chartermission/ui";
+import { Icon, RoleBadgeIcon, VerifiedBadge } from "@chartermission/ui";
 import { memberHref } from "@/components/social/links";
 import { MemberAvatar } from "@/components/social/post-parts";
 import type { Viewer } from "@/components/social/viewer";
@@ -95,7 +95,7 @@ function NewMemberItem({ member }: { member: NewMember }) {
       <div className="flex w-full min-w-0 flex-col gap-0.5">
         <Link href={memberHref(member.handle)} className="flex min-w-0 items-center justify-center gap-1 text-sm font-medium text-ink hover:underline">
           <span className="truncate">{member.name}</span>
-          {member.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
+          {member.verified && <VerifiedBadge size={14} className="shrink-0" label="Verified" />}
           <RoleBadgeIcon badge={member.badge} size={14} />
         </Link>
         <p className="line-clamp-2 min-h-8 text-xs text-secondary">{member.headline ?? "New member"}</p>

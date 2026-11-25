@@ -13,6 +13,7 @@ import {
   buttonClasses,
   cn,
   RoleBadgeIcon,
+  VerifiedBadge,
 } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { pop } from "@/components/motion";
@@ -344,12 +345,7 @@ export function ArticleReader({
                       {post.author.name}
                     </Link>
                     {post.author.verified && (
-                      <Icon
-                        name="verified"
-                        size={16}
-                        className="shrink-0 text-primary"
-                        label="Verified"
-                      />
+                      <VerifiedBadge size={16} className="shrink-0" label="Verified" />
                     )}
                     <RoleBadgeIcon badge={post.author.badge} size={16} />
                   </span>
@@ -577,12 +573,7 @@ export function ArticleReader({
                   {author.name}
                 </Link>
                 {author.verified && (
-                  <Icon
-                    name="verified"
-                    size={16}
-                    className="text-primary"
-                    label="Verified"
-                  />
+                  <VerifiedBadge size={16} label="Verified" />
                 )}
                 <RoleBadgeIcon badge={author.badge} size={16} />
               </h2>

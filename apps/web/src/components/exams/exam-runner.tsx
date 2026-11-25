@@ -304,7 +304,7 @@ export function ExamRunner({ attempt, onSubmitted }: { attempt: ExamAttemptView;
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
             <Button variant="secondary" disabled={index === 0} onClick={() => go(index - 1)}>
-              <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+              <Icon name="chevron-left" size={18} />
               Previous
             </Button>
             <span className="text-xs text-secondary max-sm:order-last max-sm:w-full max-sm:text-center" aria-live="polite">
@@ -313,7 +313,7 @@ export function ExamRunner({ attempt, onSubmitted }: { attempt: ExamAttemptView;
             {index < total - 1 ? (
               <Button onClick={() => go(index + 1)}>
                 Next
-                <Icon name="chevron-right" size={18} className="rtl:rotate-180" />
+                <Icon name="chevron-right" size={18} />
               </Button>
             ) : (
               <Button variant="accent" disabled={finishing} onClick={() => setConfirming(true)}>

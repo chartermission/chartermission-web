@@ -13,7 +13,7 @@ import {
   type MessageView,
   type TranslationView,
 } from "@chartermission/contracts";
-import { Button, ChapterAvatar, Icon, cn } from "@chartermission/ui";
+import { Button, ChapterAvatar, Icon, cn, VerifiedBadge } from "@chartermission/ui";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
 import { EmojiPicker } from "@/components/social/emoji-picker";
@@ -390,7 +390,7 @@ export function Thread({
     <>
       <header className="flex items-center gap-3 border-b border-line px-4 py-3">
         <Link href="/messages" aria-label={t("Back to messages")} className="-ms-1.5 rounded-md p-1.5 text-secondary hover:bg-muted md:hidden">
-          <Icon name="chevron-left" size={20} className="rtl:rotate-180" />
+          <Icon name="chevron-left" size={20} />
         </Link>
         <ConversationAvatar conversation={conversation} size={40} />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -399,7 +399,7 @@ export function Thread({
               <Link href={memberHref(conversation.member.handle)} className="truncate text-md font-medium text-ink hover:underline">
                 {conversation.member.name}
               </Link>
-              {conversation.member.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label={t("Verified")} />}
+              {conversation.member.verified && <VerifiedBadge size={16} className="shrink-0" label={t("Verified")} />}
               <span className="shrink-0 rounded-full bg-primary-tint px-1.5 py-px text-[11px] font-semibold text-primary">{t("Official")}</span>
             </span>
           ) : conversation.member ? (

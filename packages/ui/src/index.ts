@@ -27,3 +27,4 @@ export { RoleBadgeIcon, RoleBadgePill, type RoleBadgeData } from "./components/r
 export { ChapterAvatar, ChapterCover, chapterLabel, chapterPhotoSrc } from "./components/chapter-art";
 export { FLAG_COLOURS, flagColours } from "./components/flag-colours";
 export { ProfileBadgeChip, ProfileBadgeList, type ProfileBadgeData } from "./components/profile-badge";
+export { VerifiedBadge } from "./components/verified-badge";

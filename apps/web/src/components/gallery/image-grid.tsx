@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type CSSProperties } from "react";
+import type React from "react";
 import type { AttachmentView } from "@chartermission/contracts";
 import { cn } from "@chartermission/ui";
 import { imageAlt } from "./image-alt";
@@ -49,12 +50,15 @@ export function ImageGrid({
   layout = "collage",
   bleedClassName,
   interactive = true,
+  panel,
 }: {
   images: AttachmentView[];
   layout?: "collage" | "grid";
   /** Edge to edge inside a padded card: negative margins matching the card's padding (corners go square). */
   bleedClassName?: string;
   interactive?: boolean;
+  /** The post the photos belong to, shown with them in the full-screen viewer. */
+  panel?: React.ReactNode;
 }) {
   const t = useT();
   const count = images.length;
@@ -124,6 +128,7 @@ export function ImageGrid({
       {open !== null && (
         <Lightbox
           images={images}
+          panel={panel}
           index={open}
           onIndexChange={setOpen}
           onClose={(last) => {

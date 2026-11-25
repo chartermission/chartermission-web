@@ -8,11 +8,11 @@ import Link from "next/link";
 import { useState } from "react";
 import type React from "react";
 import { CELEBRATION_LABELS, REQUEST_LABELS, type LinkPreview, type MemberRef, type PostView } from "@chartermission/contracts";
-import { Avatar, Icon, cn, RoleBadgeIcon } from "@chartermission/ui";
+import { Avatar, Icon, cn, RoleBadgeIcon, VerifiedBadge } from "@chartermission/ui";
 import { PeopleLink } from "@/components/people/people-link";
 import { useT, useIntlTag } from "@/i18n/client";
 import { absoluteDateTime, relativeTime } from "./format";
-import { memberHref, postHref } from "./links";
+import { memberHref, postAnalyticsHref, postHref } from "./links";
 import { postTypeAccent, postTypeMeta } from "./post-types/meta";
 import { RichText } from "./rich-text";
 
@@ -23,7 +23,7 @@ export function AuthorName({ member, className, href }: { member: MemberRef; cla
       <Link href={href ?? memberHref(member.handle)} className="truncate text-md font-medium text-ink hover:underline">
         {member.name}
       </Link>
-      {member.verified && <Icon name="verified" size={16} className="shrink-0 text-primary" label="Verified" />}
+      {member.verified && <VerifiedBadge size={16} className="shrink-0" label="Verified" />}
       <RoleBadgeIcon badge={member.badge} size={16} />
       {member.staff && <span className="shrink-0 rounded-full bg-primary-tint px-1.5 py-px text-[11px] font-semibold text-primary">Team</span>}
     </span>
@@ -131,7 +131,7 @@ export function RepostEmbed({ original: initial }: { original: PostView | null }
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-1">
             <span className="truncate text-sm font-medium text-ink">{original.author.name}</span>
-            {original.author.verified && <Icon name="verified" size={14} className="shrink-0 text-primary" label="Verified" />}
+            {original.author.verified && <VerifiedBadge size={14} className="shrink-0" label="Verified" />}
             <RoleBadgeIcon badge={original.author.badge} size={14} />
           </span>
           <span className="truncate text-xs text-secondary">
@@ -200,51 +200,73 @@ export function RepostEmbed({ original: initial }: { original: PostView | null }
 }
 
 /**
- * "3 reactions · 2 comments · 1 repost" with the reaction kinds that were used. Each count opens
- * the list of members behind it.
+ * One line, like Facebook and LinkedIn: the reaction kinds used and how many on the left; comments,
+ * reposts and — for the author (or the page's admins) — impressions on the right. Each count opens
+ * the people behind it; impressions open the post's analytics. Stays on one line on phones (labels
+ * shorten to numbers with icons when space is tight).
  */
 export function PostCounts({ post, total, breakdown }: { post: PostView; total: number; breakdown: PostView["reactionBreakdown"] }) {
   const t = useT();
   const { comments, reposts } = post.counts;
-  if (!total && !comments && !reposts) return null;
+  const analytics = post.viewer.canViewAnalytics && post.status === "published";
+  const impressions = analytics ? (post.counts.impressions ?? 0) : null;
+  if (!total && !comments && !reposts && impressions === null) return null;
   const used = (["like", "insightful", "support"] as const).filter((kind) => breakdown[kind] > 0);
   const kindIcon = { like: "like", insightful: "lightbulb", support: "users" } as const;
   const kindColor = { like: "bg-primary-light", insightful: "bg-warning", support: "bg-success" } as const;
   // Counts include replies, so questions say "responses" rather than "answers".
   const commentsLabel = t(post.type === "question" ? "post.responses" : "post.comments", { count: comments });
+  const parts: React.ReactNode[] = [];
+  if (comments > 0)
+    parts.push(
+      <PeopleLink key="c" source={{ path: `/posts/${post.id}/commenters`, title: t("people.commenters") }} label={`${commentsLabel}. ${t("people.seeWho")}`} className="whitespace-nowrap">
+        {commentsLabel}
+      </PeopleLink>,
+    );
+  if (reposts > 0)
+    parts.push(
+      <PeopleLink key="r" source={{ path: `/posts/${post.id}/reposts`, title: t("people.reposters") }} label={`${t("post.reposts", { count: reposts })}. ${t("people.seeWho")}`} className="whitespace-nowrap">
+        {t("post.reposts", { count: reposts })}
+      </PeopleLink>,
+    );
+  if (impressions !== null)
+    parts.push(
+      <Link key="i" href={postAnalyticsHref(post.id)} className="flex items-center gap-1 whitespace-nowrap hover:text-primary hover:underline" title={t("View analytics")}>
+        <Icon name="chart" size={13} />
+        {t("{count} impressions", { count: impressions.toLocaleString() })}
+        <span className="sr-only"> · {t("View analytics")}</span>
+      </Link>,
+    );
   return (
-    <div className="flex w-full items-center justify-between gap-3 text-xs text-secondary">
-      <span className="flex items-center gap-1.5">
+    <div className="@container flex w-full min-w-0 items-center justify-between gap-3 text-xs text-secondary">
+      <span className="flex min-w-0 items-center gap-1.5">
         {total > 0 && (
           <PeopleLink
             source={{ path: `/posts/${post.id}/reactions`, title: t("people.reactions"), reactions: true }}
-            className="flex items-center gap-1.5"
+            className="flex min-w-0 items-center gap-1.5"
             label={`${t("post.reactions", { count: total })} (${used.map((kind) => `${breakdown[kind]} ${t(`reaction.${kind}`)}`).join(", ")}). ${t("people.seeWho")}`}
           >
-            <span className="flex -space-x-1" aria-hidden="true">
+            <span className="flex shrink-0 -space-x-1" aria-hidden="true">
               {used.map((kind) => (
                 <span key={kind} className={cn("flex size-[18px] items-center justify-center rounded-full border border-card text-inverse", kindColor[kind])}>
                   <Icon name={kindIcon[kind]} size={10} />
                 </span>
               ))}
             </span>
-            <span>{t("post.reactions", { count: total })}</span>
+            {/* The number alone, like Facebook, where the line is narrow (phones, the photo viewer's side panel); the full label is read out and shown when there is room. */}
+            <span className="tabular-nums @[30rem]:hidden">{total.toLocaleString()}</span>
+            <span className="truncate @max-[30rem]:hidden">{t("post.reactions", { count: total })}</span>
           </PeopleLink>
         )}
       </span>
-      {(comments > 0 || reposts > 0) && (
-        <span className="flex items-center gap-1.5">
-          {comments > 0 && (
-            <PeopleLink source={{ path: `/posts/${post.id}/commenters`, title: t("people.commenters") }} label={`${commentsLabel}. ${t("people.seeWho")}`}>
-              {commentsLabel}
-            </PeopleLink>
-          )}
-          {comments > 0 && reposts > 0 && <span aria-hidden>·</span>}
-          {reposts > 0 && (
-            <PeopleLink source={{ path: `/posts/${post.id}/reposts`, title: t("people.reposters") }} label={`${t("post.reposts", { count: reposts })}. ${t("people.seeWho")}`}>
-              {t("post.reposts", { count: reposts })}
-            </PeopleLink>
-          )}
+      {parts.length > 0 && (
+        <span className="flex shrink-0 items-center gap-1.5">
+          {parts.map((part, i) => (
+            <span key={i} className="flex items-center gap-1.5">
+              {i > 0 && <span aria-hidden>·</span>}
+              {part}
+            </span>
+          ))}
         </span>
       )}
     </div>

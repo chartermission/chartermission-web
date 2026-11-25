@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { MemberProfile } from "@chartermission/contracts";
-import { Icon, Panel, buttonClasses, RoleBadgeIcon } from "@chartermission/ui";
+import { Panel, buttonClasses, RoleBadgeIcon, VerifiedBadge } from "@chartermission/ui";
 import { FollowControl, useRelationship } from "@/components/network/relationship";
 import { memberHref } from "./links";
 import { MemberAvatar } from "./post-parts";
@@ -19,7 +19,7 @@ export function AuthorCard({ member }: { member: MemberProfile }) {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <p className="flex items-center gap-1 text-md font-medium text-ink">
             {member.name}
-            {member.verified && <Icon name="verified" size={16} className="text-primary" label="Verified" />}
+            {member.verified && <VerifiedBadge size={16} label="Verified" />}
             <RoleBadgeIcon badge={member.badge} size={16} />
           </p>
           {member.headline && <p className="text-xs text-secondary">{member.headline}</p>}

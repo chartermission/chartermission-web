@@ -160,7 +160,7 @@ async function Attempts({ exam, attempts }: { exam: ExamDetail; attempts: ExamAt
             )}
             <Link href={attemptHref(exam.slug, a.id)} className="flex items-center gap-1 rounded-sm text-sm font-medium text-primary-light hover:underline">
               {done ? "View result" : "Continue"}
-              <Icon name="chevron-right" size={16} className="rtl:rotate-180" />
+              <Icon name="chevron-right" size={16} />
             </Link>
           </div>
         );
@@ -307,7 +307,7 @@ export default function ExamPage({ params }: Props) {
   return (
     <PageShell className="gap-6 max-sm:px-4 max-sm:pt-4">
       <Link href="/learning" className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
-        <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={18} />
         Learning
       </Link>
       <Suspense

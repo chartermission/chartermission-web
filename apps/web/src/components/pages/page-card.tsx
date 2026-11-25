@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { PAGE_CATEGORY_LABELS, type PageSummary } from "@chartermission/contracts";
-import { Chip, Icon } from "@chartermission/ui";
+import { Chip, VerifiedBadge } from "@chartermission/ui";
 import { pageHref } from "@/components/social/links";
 import { FollowPageButton } from "./follow-page-button";
 import { PageLogo } from "./page-logo";
@@ -16,7 +16,7 @@ export function PageName({ page, className }: { page: Pick<PageSummary, "name" |
   return (
     <span className={className ?? "flex min-w-0 items-center gap-1.5"}>
       <span className="truncate">{page.name}</span>
-      {page.verified && <Icon name="verified" size={16} className="shrink-0 text-primary-light" label="Verified page" />}
+      {page.verified && <VerifiedBadge size={16} className="shrink-0" label="Verified page" />}
       {page.official && <span className="shrink-0 rounded-full bg-primary-tint px-1.5 py-px text-[11px] font-semibold text-primary">Official</span>}
     </span>
   );

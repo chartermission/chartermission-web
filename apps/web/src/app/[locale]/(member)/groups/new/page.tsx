@@ -85,7 +85,7 @@ export default function NewGroupPage({ searchParams }: PageProps<"/[locale]/grou
   return (
     <main id="main" className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pb-12 pt-6 max-sm:px-3 max-sm:pt-4">
       <Link href="/groups" className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
-        <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={18} />
         Groups
       </Link>
       <Suspense

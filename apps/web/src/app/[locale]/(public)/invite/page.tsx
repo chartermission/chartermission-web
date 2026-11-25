@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import type { InvitePreview } from "@chartermission/contracts";
-import { Avatar, Icon, buttonClasses, cn } from "@chartermission/ui";
+import { Avatar, Icon, buttonClasses, cn, VerifiedBadge } from "@chartermission/ui";
 import { AuthFormSkeleton, AuthShell } from "@/components/auth/auth-shell";
 import { NoTranslate } from "@/i18n/auto";
 import { getIntlTag, getT } from "@/i18n/server";
@@ -72,7 +72,7 @@ async function Invitation({ searchParams }: { searchParams: Promise<Search> }) {
             {inviter ? (
               <>
                 <NoTranslate>{inviter.name}</NoTranslate>
-                {inviter.verified && <Icon name="verified" size={18} className="ms-1 inline text-primary" label={t("Verified")} />}{" "}
+                {inviter.verified && <VerifiedBadge size={18} className="ms-1 inline" label={t("Verified")} />}{" "}
                 <span className="font-normal">{t("invited you")}</span>
               </>
             ) : (

@@ -52,12 +52,12 @@ const nudgeIcon: Record<WelcomeNudgeKind, IconName> = {
  */
 type Stat = { key: string; count: number; text: string; short: string; href: string; icon: IconName; reveal?: string };
 
-/** Where "N new posts" leads: the post itself when there is just one, else the Latest feed from `since`. */
+/** Where "N new posts" leads: the post itself when there is just one, else a page with exactly those posts. */
 function newPostsTarget({ stats, lastVisitAt }: WelcomeSummary): { href: string; reveal?: string } {
   if (stats.newPosts === 1 && stats.newPostId) return { href: postHref(stats.newPostId) };
   const since = stats.newPostsSince || lastVisitAt;
   if (!since) return { href: "/feed?tab=latest" };
-  return { href: `/feed?tab=latest&since=${encodeURIComponent(since)}`, reveal: since };
+  return { href: `/feed/latest?tab=latest&since=${encodeURIComponent(since)}` };
 }
 
 function statsOf(t: Translate, summary: WelcomeSummary): Stat[] {

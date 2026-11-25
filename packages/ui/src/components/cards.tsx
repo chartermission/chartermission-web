@@ -1,3 +1,4 @@
+import { VerifiedBadge } from "./verified-badge";
 import type { ElementType, ReactNode } from "react";
 import { Icon } from "../icons";
 import { cn } from "../cn";
@@ -163,7 +164,7 @@ export function MemberCard({
         <MaybeLink href={href} linkAs={linkAs} className="text-md font-medium text-ink">
           {name}
         </MaybeLink>
-        {verified && <Icon name="verified" size={14} className="text-primary" label="Verified" />}
+        {verified && <VerifiedBadge size={14} label="Verified" />}
       </p>
       <p className="w-full text-center text-sm text-body">{headline}</p>
       <p className="flex items-center gap-1 text-xs text-secondary">

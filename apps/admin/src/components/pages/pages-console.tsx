@@ -11,7 +11,7 @@ import {
   type PagesSettings,
   type PageStatus,
 } from "@chartermission/contracts";
-import { Button, Chip, FilterSelect, Icon, cn, type ChipTone } from "@chartermission/ui";
+import { Button, Chip, FilterSelect, Icon, cn, type ChipTone, VerifiedBadge } from "@chartermission/ui";
 import { Field, FormModal, SelectBox } from "@/components/ambassadors/modal";
 import { BulkBar } from "@/components/bulk/bulk-bar";
 import { runBulk } from "@/components/bulk/run-bulk";
@@ -380,7 +380,7 @@ export function PagesConsole({ initial, settings: initialSettings, canChangeSett
                         <a href={webHref(`/pages/${page.slug}`)} target="_blank" rel="noreferrer" className="text-md font-semibold text-ink hover:underline">
                           {page.name}
                         </a>
-                        {page.verified && <Icon name="verified" size={16} className="text-primary-light" label="Verified" />}
+                        {page.verified && <VerifiedBadge size={16} label="Verified" />}
                         <Chip tone={STATUS[page.status].tone} className="px-2! py-0.5! text-xs!">
                           {STATUS[page.status].label}
                         </Chip>

@@ -9,7 +9,9 @@ import { staggerStyle } from "@/components/motion";
 import { ErrorNotice } from "./errors";
 import { PostCard } from "./post-card";
 import type { MenuItem } from "./menu";
+import Link from "next/link";
 import { onNewPostsRequest } from "./new-posts-request";
+import { newPostsSeenAt } from "./new-posts-seen";
 import { onPostCreated, onPostRemoved } from "./post-events";
 import { PostSkeleton } from "./skeletons";
 import { toast } from "./toast";
@@ -397,9 +399,10 @@ function NewPostsPill({
   const [busy, setBusy] = useState(false);
   // An empty list counts from when it was opened.
   const [openedAt] = useState(() => new Date().toISOString());
-  // After the pill is used, count from then: on ranked tabs the new posts may not be on the
-  // first page, so the newest post shown can stay the same and the pill would never go away.
-  const [shownAt, setShownAt] = useState<string | null>(null);
+  // After the new posts were opened (here or on /feed/latest), count from then: on ranked tabs the
+  // new posts may not be on the first page, so the newest post shown can stay the same and the pill
+  // would never go away.
+  const [shownAt] = useState<string | null>(() => (typeof window === "undefined" ? null : newPostsSeenAt()));
   const base = newestShown ?? openedAt;
   const since = shownAt && Date.parse(shownAt) > Date.parse(base) ? shownAt : base;
   const queryRef = useRef(query);
@@ -446,18 +449,11 @@ function NewPostsPill({
     };
   }, [path]);
 
-  async function show() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await onShow(since);
-      setShownAt(new Date().toISOString());
-    } catch (e) {
-      toast.error(e);
-    } finally {
-      setBusy(false);
-    }
-  }
+  // The pill opens a page with exactly these posts (/feed/latest), with the same tab and filters.
+  const latestHref = `/feed/latest?${new URLSearchParams(
+    Object.entries({ ...(query ?? {}), since }).flatMap(([k, v]) => (v === undefined || v === null || v === "" ? [] : [[k, String(v)]])),
+  ).toString()}`;
+  void onShow;
 
   // A count is only for the `since` it was asked with; newer posts on screen reset it.
   const { count, authors } = result.since === since ? result : { count: 0, authors: [] };
@@ -469,9 +465,9 @@ function NewPostsPill({
         {count > 0 ? t("{count} new posts available", { count }) : ""}
       </p>
       {count > 0 && (
-        <button
-          type="button"
-          onClick={show}
+        <Link
+          href={latestHref}
+          onClick={() => setBusy(true)}
           aria-busy={busy}
           className="pointer-events-auto flex h-10 -translate-y-4 items-center gap-2 rounded-full bg-primary py-1 ps-1.5 pe-4 text-sm font-medium text-inverse shadow-[0px_6px_16px_0px_rgba(25,37,80,0.28)] transition-colors hover:bg-primary-light"
         >
@@ -487,8 +483,8 @@ function NewPostsPill({
             </span>
           )}
           <span>{busy ? "Loading…" : text}</span>
-          {authors.length > 0 && <Icon name="chevron-down" size={16} className="rotate-180" />}
-        </button>
+          {authors.length > 0 && <Icon name="chevron-right" size={16} />}
+        </Link>
       )}
     </div>
   );

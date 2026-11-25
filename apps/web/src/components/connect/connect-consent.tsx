@@ -159,7 +159,7 @@ export function ConnectConsent({
             </div>
           </div>
           <Button block variant="secondary" onClick={() => void answer(false)} disabled={busy !== null} aria-busy={busy !== null}>
-            <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+            <Icon name="chevron-left" size={18} />
             Back
           </Button>
         </>

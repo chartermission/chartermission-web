@@ -36,7 +36,7 @@ export default function BookingPage({ params }: PageProps<"/[locale]/bookings/[i
   return (
     <main id="main" className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-6 pb-12 pt-8 max-sm:gap-4 max-sm:px-3 max-sm:pt-5">
       <Link href="/bookings" className="flex w-fit items-center gap-1.5 rounded-sm text-sm font-medium text-primary-light hover:underline">
-        <Icon name="chevron-left" size={18} className="rtl:rotate-180" />
+        <Icon name="chevron-left" size={18} />
         All bookings
       </Link>
       <h1 className="text-h1 text-ink max-sm:text-h2">Booking</h1>
