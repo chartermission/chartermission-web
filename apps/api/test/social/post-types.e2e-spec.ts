@@ -238,6 +238,11 @@ describe('Post types, drafts and scheduling', () => {
       expect(res.body.authors.map((a: { id: string }) => a.id)).toEqual([author.id]);
       const none = await viewer.get(`/feed/new?tab=latest&since=${encodeURIComponent(new Date().toISOString())}`).expect(200);
       expect(none.body).toEqual({ count: 0, authors: [] });
+      // /feed/latest lists exactly the posts the pill counted, newest first, without the viewer's own.
+      const latest = await viewer.get(`/feed?tab=latest&since=${encodeURIComponent(since)}`).expect(200);
+      expect(latest.body.items.map((p: { body: string }) => p.body)).toEqual(['Fresh post two', 'Fresh post one']);
+      const empty = await viewer.get(`/feed?tab=latest&since=${encodeURIComponent(new Date().toISOString())}`).expect(200);
+      expect(empty.body.items).toEqual([]);
     });
 
     it('lists topics for the explore page: popular, new and followed', async () => {
