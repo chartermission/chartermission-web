@@ -6,6 +6,7 @@ import { chapters, countries, follows, memberProfiles, profileSectors, profileSk
 import type { AuthContext } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
+import { ProfileViewsService } from './profile-views.service.js';
 import { RateLimitService } from '../infra/rate-limit.service.js';
 import { decodeCursor, paginate } from '../common/cursor.js';
 import { RelationshipService } from './relationship.service.js';
@@ -28,6 +29,7 @@ export class DirectoryService {
     private readonly members: MembersService,
     private readonly taxonomy: TaxonomyService,
     private readonly limits: RateLimitService,
+    private readonly profileViews: ProfileViewsService,
   ) {}
 
   async search(ctx: AuthContext, query: DirectoryQuery): Promise<DirectoryPage> {
@@ -139,6 +141,11 @@ export class DirectoryService {
       if (!ref) continue;
       const location = r.locationVisible ? [r.city, r.countryName].filter(Boolean).join(', ') || null : null;
       items.push({ ...ref, location, mutualConnections: mutual.get(r.userId) ?? 0, relationship: rels.get(r.userId)! });
+    }
+    // A search (words or filters, not just browsing the directory) counts as an appearance for each member shown.
+    // Type-ahead pickers (mentions, invitations: up to 6 results as you type) are not searches.
+    if (ctx.session.audience === 'member' && !ctx.via && query.limit > 6 && (q || query.country || query.sector || query.skill || query.chapter)) {
+      await this.profileViews.recordSearchAppearances(items.map((i) => i.id));
     }
     return { items, nextCursor: page.nextCursor, total };
   }

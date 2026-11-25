@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConnectionsController, ProfilesController, RelationshipsController } from './profiles.controller.js';
+import { ConnectionsController, ProfileViewsController, ProfilesController, RelationshipsController } from './profiles.controller.js';
+import { ProfileViewsService } from './profile-views.service.js';
 import { ProfilesService } from './profiles.service.js';
 import { TaxonomyService } from './taxonomy.service.js';
 import { HandleService } from './handles.js';
@@ -15,8 +16,8 @@ const exported = [ProfilesService, TaxonomyService, HandleService, RelationshipS
 
 /** Member profiles, directory, suggestions, connections, follows, blocks and mutes (spec 4.3, 4.4, 4.6). */
 @Module({
-  controllers: [ProfilesController, ConnectionsController, RelationshipsController],
-  providers: [...exported, DirectoryService, ConnectionsService, BlocksService, ProfilesEvents],
+  controllers: [ProfilesController, ConnectionsController, RelationshipsController, ProfileViewsController],
+  providers: [...exported, DirectoryService, ConnectionsService, BlocksService, ProfilesEvents, ProfileViewsService],
   exports: exported,
 })
 export class ProfilesModule {}

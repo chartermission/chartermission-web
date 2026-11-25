@@ -26,6 +26,9 @@ const iconFor: Record<NotificationView["icon"], { name: IconName; className: str
   alert: { name: "alert", className: "bg-warning-light text-warning" },
   check: { name: "check", className: "bg-success-light text-success" },
   clock: { name: "clock", className: "bg-primary-tint text-primary" },
+  eye: { name: "eye", className: "bg-primary-tint text-primary" },
+  message: { name: "message", className: "bg-accent-light text-accent" },
+  chart: { name: "chart", className: "bg-success-light text-success" },
 };
 
 /** Types shown with their own icon and link, whatever icon the API sent. */
@@ -42,7 +45,15 @@ const byType: Partial<Record<NotificationType, { icon: { name: IconName; classNa
   group_invitation: { icon: { name: "user-plus", className: "bg-success-light text-success" }, href: (item) => item.href },
   group_join_request: { icon: { name: "user-plus", className: "bg-primary-tint text-primary" }, href: groupManageHref },
   group_post_pending: { icon: { name: "clock", className: "bg-primary-tint text-primary" }, href: groupManageHref },
+  // Who viewed your profile, post performance and followers milestones: their own icons, whoever is named.
+  profile_viewed: { icon: { name: "eye", className: "bg-primary-tint text-primary" }, href: () => "/profile-views" },
+  post_milestone: { icon: { name: "chart", className: "bg-success-light text-success" }, href: (item) => item.href },
+  post_trending: { icon: { name: "trending", className: "bg-accent-light text-accent" }, href: (item) => item.href },
+  follower_milestone: { icon: { name: "users", className: "bg-success-light text-success" }, href: (item) => item.href },
 };
+
+/** Types that show the people behind them (one avatar, or a stack of up to three when grouped). */
+const withPeople = new Set<NotificationType>(["profile_viewed"]);
 
 /** A group's address opens its Manage tab, where requests and waiting posts are. */
 function groupManageHref(item: NotificationView): string {
@@ -56,8 +67,37 @@ function bookingsHref(item: NotificationView): string {
 
 const filters: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "my_posts", label: "My posts" },
   { value: "mentions", label: "Mentions" },
+  { value: "messages", label: "Messages" },
+  { value: "network", label: "Network" },
 ];
+
+const empty: Record<Filter, { icon: IconName; title: string; text: string }> = {
+  all: { icon: "bell", title: "No notifications yet", text: "Comments, reactions, connection requests and updates about your reports show up here." },
+  unread: { icon: "bell", title: "No notifications yet", text: "Comments, reactions, connection requests and updates about your reports show up here." },
+  my_posts: { icon: "chart", title: "Nothing on your posts yet", text: "Reactions, comments, reposts and milestones on your posts show up here." },
+  mentions: { icon: "at", title: "No mentions yet", text: "When someone mentions you with @your-handle in a post or comment, it shows up here." },
+  messages: { icon: "message", title: "No message notifications", text: "Replies to your messages and reactions to them show up here." },
+  network: { icon: "users", title: "Nothing from your network yet", text: "New followers, connection requests and who viewed your profile show up here." },
+};
+
+/** Two faces, overlapping, for "Amina and 4 others" (the two most recent). */
+function StackedAvatars({ actors }: { actors: NotificationView["actors"] }) {
+  return (
+    <span className="relative flex size-10 shrink-0" aria-hidden="true">
+      <span className="absolute start-0 top-0 rounded-full ring-2 ring-card">
+        <MemberAvatar member={actors[0]!} size={32} />
+      </span>
+      <span className="absolute end-0 bottom-0 rounded-full ring-2 ring-card">
+        <MemberAvatar member={actors[1]!} size={24} />
+      </span>
+    </span>
+  );
+}
+
+/** " and 4 others" from the API, in the page's language. */
+const OTHERS = /^ and ([\d,]+) others?$/;
 
 const noSubscribe = () => () => {};
 
@@ -83,14 +123,23 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
   // Announcements may link to another site: open it in a new tab.
   const external = /^https?:\/\//i.test(href);
   const text = item.segments.map((s) => s.text).join("");
+  const grouped = item.actorCount > 1 && item.actors.length > 1;
+  const people = (item.icon === "avatar" && !special) || withPeople.has(item.type);
   return (
     <li className={cn("relative flex items-start gap-3 px-5 py-4 max-sm:px-4", !item.read && "bg-primary-tint-2")}>
       <span className="relative shrink-0">
-        {item.icon === "avatar" && actor && !special ? (
-          <MemberAvatar member={actor} size={40} link />
+        {people && actor && grouped ? (
+          <StackedAvatars actors={item.actors} />
+        ) : people && actor ? (
+          <MemberAvatar member={actor} size={40} link={!special} />
         ) : (
           <span className={cn("flex size-10 items-center justify-center rounded-full", icon.className)}>
             <Icon name={icon.name} size={20} />
+          </span>
+        )}
+        {people && actor && special && (
+          <span className={cn("absolute -end-1 -bottom-1 flex size-5 items-center justify-center rounded-full ring-2 ring-card", icon.className)} aria-hidden="true">
+            <Icon name={icon.name} size={12} />
           </span>
         )}
       </span>
@@ -102,15 +151,17 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
           className="text-sm text-body after:absolute after:inset-0 hover:text-ink focus-visible:outline-none"
           aria-label={item.read ? text : t("Unread: {text}", { text })}
         >
-          {item.segments.map((segment, index) =>
-            segment.strong ? (
+          {item.segments.map((segment, index) => {
+            const others = !segment.strong && index > 0 ? OTHERS.exec(segment.text) : null;
+            if (others) return <span key={index}> {t("and {count} others", { count: Number(others[1]!.replace(/,/g, "")) })}</span>;
+            return segment.strong ? (
               <strong key={index} className="font-semibold text-ink">
                 {segment.text}
               </strong>
             ) : (
               <span key={index}>{segment.at ? <LocalWhen iso={segment.at} fallback={segment.text} /> : segment.text}</span>
-            ),
-          )}
+            );
+          })}
         </Link>
         <p className="text-xs text-secondary">
           <TimeAgo iso={item.createdAt} />
@@ -124,7 +175,8 @@ function Item({ item, onOpen }: { item: NotificationView; onOpen: (item: Notific
 }
 
 /**
- * Notifications (CM-NTF-01): All / Mentions, unread styling, mark one (on open) or all as read
+ * Notifications (CM-NTF-01): All / My posts / Mentions / Messages / Network (LinkedIn-style), grouped items with
+ * stacked faces ("Amina and 4 others"), unread styling, mark one (on open) or all as read
  * (POST /notifications/read), "Load more". router.refresh() clears the top-nav badge.
  */
 export function NotificationList({ initial, initialFilter, unread: initialUnread }: { initial: Page<NotificationView>; initialFilter: Filter; unread: number }) {
@@ -187,7 +239,7 @@ export function NotificationList({ initial, initialFilter, unread: initialUnread
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Filter notifications" className="inline-flex gap-1 rounded-[10px] bg-muted p-1">
+        <div role="tablist" aria-label="Filter notifications" className="inline-flex max-w-full gap-1 overflow-x-auto rounded-[10px] bg-muted p-1">
           {filters.map((item) => (
             <button
               key={item.value}
@@ -196,7 +248,7 @@ export function NotificationList({ initial, initialFilter, unread: initialUnread
               aria-selected={filter === item.value}
               onClick={() => switchFilter(item.value)}
               className={cn(
-                "rounded-[7px] px-3.5 py-1.5 text-sm",
+                "shrink-0 rounded-[7px] px-3.5 py-1.5 text-sm whitespace-nowrap",
                 filter === item.value ? "bg-card font-medium text-primary shadow-[0px_1px_3px_0px_rgba(0,0,0,0.06)]" : "text-secondary hover:text-ink",
               )}
             >
@@ -231,14 +283,10 @@ export function NotificationList({ initial, initialFilter, unread: initialUnread
         {!loading && !error && items.length === 0 && (
           <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
             <span className="flex size-12 items-center justify-center rounded-full bg-primary-tint-2 text-primary-light">
-              <Icon name={filter === "mentions" ? "at" : "bell"} size={24} />
+              <Icon name={empty[filter].icon} size={24} />
             </span>
-            <p className="text-md font-medium text-ink">{filter === "mentions" ? "No mentions yet" : "No notifications yet"}</p>
-            <p className="max-w-sm text-sm text-secondary">
-              {filter === "mentions"
-                ? "When someone mentions you with @your-handle in a post or comment, it shows up here."
-                : "Comments, reactions, connection requests and updates about your reports show up here."}
-            </p>
+            <p className="text-md font-medium text-ink">{empty[filter].title}</p>
+            <p className="max-w-sm text-sm text-secondary">{empty[filter].text}</p>
           </div>
         )}
         {error ? <ErrorNotice error={error} onRetry={() => load(filter, cursor)} className="m-4" /> : null}

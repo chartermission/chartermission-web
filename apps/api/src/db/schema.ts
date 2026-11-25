@@ -275,6 +275,8 @@ export const memberProfiles = pgTable(
     discoverable: boolean('discoverable').notNull().default(true),
     findableByEmail: boolean('findable_by_email').notNull().default(false),
     connectionRequestsFrom: text('connection_requests_from').notNull().default('members'),
+    /** How the member appears on profiles they open: 'named' (name and headline) or 'private' (anonymous). */
+    profileViewing: text('profile_viewing').notNull().default('named'),
     onboardingStep: integer('onboarding_step').notNull().default(0),
     onboardingCompletedAt: ts('onboarding_completed_at'),
     /** Home feed visits (GET /home/welcome): the current visit and the one before it. */
@@ -290,6 +292,7 @@ export const memberProfiles = pgTable(
     index('member_profiles_name_idx').on(t.displayName, t.userId),
     check('profile_visibility_ck', sql`${t.profileVisibility} in ('members','public')`),
     check('profile_conn_from_ck', sql`${t.connectionRequestsFrom} in ('members','nobody')`),
+    check('profile_viewing_ck', sql`${t.profileViewing} in ('named','private')`),
   ],
 );
 
@@ -2821,6 +2824,69 @@ export const postViewDays = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [primaryKey({ columns: [t.postId, t.day] })],
+);
+
+/**
+ * Who viewed your profile: one row per viewer, profile and UTC day (kept 90 days). A view made in private mode keeps
+ * only what may be said about the viewer (anon_kind/anon_name: "Someone at PayBridge"); the viewer id stays so blocks
+ * and deleted accounts are honoured, but it is never shown to the profile's owner.
+ */
+export const profileViews = pgTable(
+  'profile_views',
+  {
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    viewerId: uuid('viewer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    viewedAt: ts('viewed_at').notNull().defaultNow(),
+    private: boolean('private').notNull().default(false),
+    /** Private views: company | chapter | member, and the company or chapter name. */
+    anonKind: text('anon_kind'),
+    anonName: text('anon_name'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.profileId, t.viewerId, t.day] }),
+    index('profile_views_profile_idx').on(t.profileId, t.viewedAt),
+    index('profile_views_viewer_idx').on(t.viewerId),
+    index('profile_views_day_idx').on(t.day),
+    check('profile_views_anon_kind_ck', sql`${t.anonKind} is null or ${t.anonKind} in ('company','chapter','member')`),
+  ],
+);
+
+/** How often a member appeared in people search results, per UTC day (kept 90 days). */
+export const searchAppearances = pgTable(
+  'search_appearances',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] }), index('search_appearances_day_idx').on(t.day)],
+);
+
+/**
+ * Milestones already announced, so each is sent once: a post's impressions or reactions (subject_type 'post'),
+ * a member's followers (subject_type 'member'), and "doing better than usual" (metric 'trending', threshold 0).
+ */
+export const milestonesReached = pgTable(
+  'milestones_reached',
+  {
+    subjectType: text('subject_type').notNull(),
+    subjectId: uuid('subject_id').notNull(),
+    metric: text('metric').notNull(),
+    threshold: integer('threshold').notNull(),
+    reachedAt: ts('reached_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.subjectType, t.subjectId, t.metric, t.threshold] }),
+    check('milestones_subject_ck', sql`${t.subjectType} in ('post','member')`),
+    check('milestones_metric_ck', sql`${t.metric} in ('impressions','reactions','followers','trending')`),
+  ],
 );
 
 /** Who invited whom: one row per member who signed up through an invitation link. */

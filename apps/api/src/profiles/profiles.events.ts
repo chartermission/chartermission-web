@@ -1,7 +1,10 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { connections, follows } from '../db/schema.js';
+import { connections, follows, milestonesReached, notifications } from '../db/schema.js';
+
+/** Followers milestones announced once each (LinkedIn-style). */
+export const FOLLOWER_MILESTONES = [10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000];
 import { MembersService } from '../core/members.service.js';
 import { NotifyService } from '../core/notify.service.js';
 import { EventsService } from '../infra/events.service.js';
@@ -81,19 +84,62 @@ export class ProfilesEvents implements OnModuleInit {
       if (!still) return;
       const actor = await this.members.ref(e.followerId);
       if (!actor) return;
+      // Grouped per day like LinkedIn ("Amina and 4 others started following you"). One follower opens their
+      // profile; several open your own, where your followers are listed.
+      const day = new Date().toISOString().slice(0, 10);
+      const dedupeKey = `follow:${day}`;
+      const [today] = await this.db
+        .select({ actorIds: notifications.actorIds })
+        .from(notifications)
+        .where(and(eq(notifications.userId, e.targetId), eq(notifications.dedupeKey, dedupeKey)))
+        .limit(1);
+      const several = !!today && today.actorIds.some((id) => id !== e.followerId);
+      const own = several ? await this.members.ref(e.targetId) : null;
       await this.notify.notify({
         userId: e.targetId,
         type: 'follow',
         actorId: e.followerId,
         objectType: 'member',
         objectId: e.followerId,
-        segments: [
-          { text: ' started following you', strong: false },
-        ],
-        href: `/${actor.handle}`,
+        segments: [{ text: ' started following you', strong: false }],
+        href: own ? `/${own.handle}` : `/${actor.handle}`,
         icon: 'avatar',
-        dedupeKey: `follow:${e.followerId}`,
+        dedupeKey,
+        windowMinutes: 24 * 60,
       });
+      await this.followerMilestone(e.targetId);
+    });
+  }
+
+  /** "You reached 100 followers": each milestone once (claimed in milestones_reached), the highest one reached. */
+  private async followerMilestone(userId: string) {
+    const [{ n } = { n: 0 }] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(follows)
+      .where(and(eq(follows.targetType, 'member'), eq(follows.targetId, userId)));
+    const reached = FOLLOWER_MILESTONES.filter((m) => m <= n);
+    if (!reached.length) return;
+    const claimed = await this.db
+      .insert(milestonesReached)
+      .values(reached.map((threshold) => ({ subjectType: 'member', subjectId: userId, metric: 'followers', threshold })))
+      .onConflictDoNothing()
+      .returning({ threshold: milestonesReached.threshold });
+    if (!claimed.length) return;
+    const top = Math.max(...claimed.map((c) => c.threshold));
+    const me = await this.members.ref(userId);
+    await this.notify.notify({
+      userId,
+      type: 'follower_milestone',
+      objectType: 'member',
+      objectId: userId,
+      segments: [
+        { text: 'You reached a milestone: ', strong: false },
+        { text: top.toLocaleString('en-US'), strong: true },
+        { text: ' followers', strong: false },
+      ],
+      href: me ? `/${me.handle}` : '/',
+      icon: 'users',
+      dedupeKey: `follower_milestone:${top}`,
     });
   }
 }

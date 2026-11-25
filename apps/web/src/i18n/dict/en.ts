@@ -84,4 +84,8 @@ export const en: Dict = {
   "{count} admins and moderators": { one: "{count} admin", other: "{count} admins and moderators" },
   "{count} people approved": { one: "{count} person approved", other: "{count} people approved" },
   "{count} requests declined": { one: "{count} request declined", other: "{count} requests declined" },
+  "and {count} others": { one: "and {count} other", other: "and {count} others" },
+  "{count} profile views in the last 90 days": { one: "{count} profile view in the last 90 days", other: "{count} profile views in the last 90 days" },
+  "{count} views": { one: "{count} view", other: "{count} views" },
+  "Viewed on {count} days": { one: "Viewed on {count} day", other: "Viewed on {count} days" },
 };

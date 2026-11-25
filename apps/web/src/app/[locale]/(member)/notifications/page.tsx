@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { NotificationsQuery, type NotificationView, type Page, type UnreadCount } from "@chartermission/contracts";
+import { NotificationFilter, NotificationsQuery, type NotificationView, type Page, type UnreadCount } from "@chartermission/contracts";
 import { LeftRail } from "@/components/left-rail";
 import { NotificationList } from "@/components/notifications/notification-list";
 import { PageColumns } from "@/components/page-columns";
@@ -19,7 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
 async function NotificationsMain({ searchParams }: { searchParams: PageProps<"/[locale]/notifications">["searchParams"] }) {
   const sp = await searchParams;
   const raw = Array.isArray(sp.filter) ? sp.filter[0] : sp.filter;
-  const filter = raw === "mentions" ? "mentions" : "all";
+  const parsed = NotificationFilter.safeParse(raw);
+  const filter = parsed.success && parsed.data !== "unread" ? parsed.data : "all";
   await requireClientViewer("/notifications");
   const result = await settle(
     Promise.all([

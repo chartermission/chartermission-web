@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
+  NOTIFICATION_FILTER_TYPES,
   NotificationCategory,
   NotificationChannel,
   type MarkReadInput,
@@ -53,7 +54,7 @@ export class NotificationsService {
         and(
           eq(notifications.userId, userId),
           q.filter === 'unread' ? isNull(notifications.readAt) : undefined,
-          q.filter === 'mentions' ? inArray(notifications.type, ['mention', 'reply_to_comment']) : undefined,
+          q.filter !== 'all' && q.filter !== 'unread' ? inArray(notifications.type, [...NOTIFICATION_FILTER_TYPES[q.filter]]) : undefined,
           c ? sql`(${notifications.updatedAt}, ${notifications.id}) < (${c.t}::timestamptz, ${c.id}::uuid)` : undefined,
         ),
       )

@@ -28,15 +28,34 @@ const groups: {
         label: "Mentions and replies",
         description: "Someone mentions you or replies to your comment.",
       },
-      { category: "comments", label: "Comments", description: "Someone comments on your post." },
+      { category: "comments", label: "Comments", description: "Someone comments on your post, or on a post you commented on." },
       { category: "reactions", label: "Reactions", description: "Grouped, e.g. “Amina and 4 others reacted”." },
+      {
+        category: "post_performance",
+        label: "How your posts are doing",
+        description: "Milestones such as 1,000 impressions, and posts doing better than usual.",
+      },
+    ],
+  },
+  {
+    title: "Your profile",
+    rows: [
+      {
+        category: "profile",
+        label: "Who viewed your profile",
+        description: "At most once a day, e.g. “Amara and 3 others viewed your profile”.",
+      },
     ],
   },
   {
     title: "Your network",
     rows: [
-      { category: "connections", label: "Connection requests", description: "New requests and accepted requests." },
-      { category: "follows", label: "New followers", description: "Someone starts following you." },
+      {
+        category: "connections",
+        label: "Connections and messages",
+        description: "Connection requests, messages, replies to your messages, and posts from connections who rarely post.",
+      },
+      { category: "follows", label: "New followers", description: "New followers, grouped by day, and followers milestones." },
     ],
   },
   {

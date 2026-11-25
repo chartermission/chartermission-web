@@ -78,6 +78,7 @@ const profileColumns = {
   discoverable: memberProfiles.discoverable,
   findableByEmail: memberProfiles.findableByEmail,
   connectionRequestsFrom: memberProfiles.connectionRequestsFrom,
+  profileViewing: memberProfiles.profileViewing,
 };
 
 export type ProfileRow = {
@@ -107,6 +108,7 @@ export type ProfileRow = {
   discoverable: boolean;
   findableByEmail: boolean;
   connectionRequestsFrom: string;
+  profileViewing: string;
 };
 
 const PREVIEW_RELATION: Record<PreviewAs, ViewerRelation> = {
@@ -468,6 +470,7 @@ export class ProfilesService {
       discoverable: row.discoverable,
       findableByEmail: row.findableByEmail,
       connectionRequestsFrom: row.connectionRequestsFrom as OwnProfile['connectionRequestsFrom'],
+      profileViewing: row.profileViewing as OwnProfile['profileViewing'],
       completeness: completeness(row, tax, experience.length, !!media.introVideo),
     };
   }
@@ -619,6 +622,7 @@ export class ProfilesService {
     if (input.discoverable !== undefined) set.discoverable = input.discoverable;
     if (input.findableByEmail !== undefined) set.findableByEmail = input.findableByEmail;
     if (input.connectionRequestsFrom !== undefined) set.connectionRequestsFrom = input.connectionRequestsFrom;
+    if (input.profileViewing !== undefined) set.profileViewing = input.profileViewing;
     if (Object.keys(set).length > 0) await this.db.update(memberProfiles).set(set).where(eq(memberProfiles.userId, userId));
     return this.own(userId);
   }
