@@ -32,7 +32,7 @@ async function ownerOptions(t: Awaited<ReturnType<typeof getT>>, chapterSlug: st
     settle(apiGet<EventHostOptions>("/events/host-options")),
     settle(apiGet<MyAmbassadorView>("/ambassadors/me")),
   ]);
-  const chapters = new Map<string, { id: string; slug: string; name: string }>();
+  const chapters = new Map<string, { id: string; slug: string; name: string; countryCode: string }>();
   if (hosts.ok) for (const chapter of hosts.data.chapters) chapters.set(chapter.slug, chapter);
   // Chapters the member may be on the team of without leading them: check each one's own answer.
   const candidates = new Set<string>();
@@ -48,7 +48,7 @@ async function ownerOptions(t: Awaited<ReturnType<typeof getT>>, chapterSlug: st
     ),
     ...[...chapters.values()]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((chapter): OwnerOption => ({ type: "chapter", id: chapter.id, slug: chapter.slug, name: chapter.name, note: t("The chapter team runs it with you.") })),
+      .map((chapter): OwnerOption => ({ type: "chapter", id: chapter.id, slug: chapter.slug, name: chapter.name, countryCode: chapter.countryCode, note: t("The chapter team runs it with you.") })),
   ];
 }
 

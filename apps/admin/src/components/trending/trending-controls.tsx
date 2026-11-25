@@ -21,6 +21,7 @@ import { trendingSearch, type TrendingView } from "@/lib/trending-view";
 import { TrendingRulesPanel } from "./trending-rules";
 import { TrendingRunStatus } from "./trending-run-status";
 import { useT } from "@/i18n/client";
+import { ChapterFilter } from "@/components/chapter-picker";
 
 type Status = AdminTrendingRow["status"];
 type Pending =
@@ -173,11 +174,13 @@ export function TrendingConsole({
         options={[{ value: "", label: "Choose a country" }, ...countries.map((c) => ({ value: c.code, label: c.name }))]}
       />
     ) : view.scope === "chapter" ? (
-      <FilterSelect
-        label="Chapter"
-        value={view.scopeId ?? ""}
-        onChange={(e) => go({ ...view, scopeId: e.target.value || undefined })}
-        options={[{ value: "", label: "Choose a chapter" }, ...chapters.map((c) => ({ value: c.id, label: c.name }))]}
+      <ChapterFilter
+        value={view.scopeId}
+        onChange={(chapter) => go({ ...view, scopeId: chapter ?? undefined })}
+        options={chapters.length ? chapters : undefined}
+        allowAny={false}
+        emptyText={t("Choose a chapter")}
+        className="max-w-56"
       />
     ) : null;
 

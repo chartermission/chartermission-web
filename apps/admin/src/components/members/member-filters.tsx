@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { AdminBadge, AdminMemberCounts, Taxonomies } from "@chartermission/contracts";
 import { Button, FilterSelect, Icon, SegmentedControl, buttonClasses, cn } from "@chartermission/ui";
+import { ChapterFilter } from "@/components/chapter-picker";
 import { inputClasses } from "@/components/form-field";
 import { useIntlTag, useT } from "@/i18n/client";
 import { PANEL_FILTERS, panelCount, type MembersFilters, type PanelFilter, type QuickFilter } from "@/lib/members-filters";
@@ -175,10 +176,21 @@ export function MemberFilterBar({
           {PANEL_FILTERS.map((key) => {
             const list = options[key];
             const label = t(FILTER_LABELS[key]);
+            const Wrap = key === "chapter" ? "div" : "label";
             return (
-              <label key={key} className="flex min-w-0 flex-col gap-1">
+              // The chapter filter opens a popup: a <label> around it would reopen it on every click inside.
+              <Wrap key={key} className="flex min-w-0 flex-col gap-1">
                 <span className="text-label text-secondary">{label}</span>
-                {list ? (
+                {key === "chapter" ? (
+                  <ChapterFilter
+                    value={filters.chapter}
+                    onChange={(chapter) => onChange({ chapter: chapter ?? undefined })}
+                    options={taxonomies?.chapters.length ? taxonomies.chapters : undefined}
+                    anyLabel={t("Any")}
+                    prefix={false}
+                    className="w-full"
+                  />
+                ) : list ? (
                   <FilterSelect
                     label={label}
                     value={filters[key] ?? ""}
@@ -196,7 +208,7 @@ export function MemberFilterBar({
                     className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-body hover:border-line-strong"
                   />
                 )}
-              </label>
+              </Wrap>
             );
           })}
         </div>

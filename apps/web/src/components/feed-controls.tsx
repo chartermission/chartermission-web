@@ -5,6 +5,7 @@ import { usePathname } from "@/i18n/client";
 import { useEffect, useId, useOptimistic, useRef, useState, useTransition } from "react";
 import type { FeedQuery, PostType, Taxonomies } from "@chartermission/contracts";
 import { FilterSelect, Icon, SegmentedControl, chipClasses, cn } from "@chartermission/ui";
+import { ChapterFilter } from "@/components/chapters/chapter-picker";
 
 const views = [
   { value: "for_you", label: "For you" },
@@ -88,7 +89,8 @@ export function FeedControls({ query: serverQuery, taxonomies }: { query: FeedQu
       if (!panelRef.current?.contains(target) && !buttonRef.current?.contains(target)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      // Esc in the chapter popup closes only the popup.
+      if (event.key !== "Escape" || (event.target instanceof Element && event.target.closest("dialog"))) return;
       setOpen(false);
       buttonRef.current?.focus();
     };
@@ -151,7 +153,6 @@ export function FeedControls({ query: serverQuery, taxonomies }: { query: FeedQu
               [
                 ["Country", "country", "All countries", taxonomies.countries.map((c) => ({ value: c.code, label: c.name }))],
                 ["Sector", "sector", "All sectors", taxonomies.sectors.map((s) => ({ value: s.slug, label: s.name }))],
-                ["Chapter", "chapter", "All chapters", taxonomies.chapters.map((c) => ({ value: c.slug, label: c.name }))],
               ] as const
             ).map(([label, key, all, options]) => (
               <label key={key} className="flex flex-col gap-1.5">
@@ -165,6 +166,16 @@ export function FeedControls({ query: serverQuery, taxonomies }: { query: FeedQu
                 />
               </label>
             ))}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-label text-secondary">Chapter</span>
+              <ChapterFilter
+                value={query.chapter}
+                onChange={(chapter) => navigate({ chapter: chapter ?? undefined })}
+                options={taxonomies.chapters.length ? taxonomies.chapters : undefined}
+                prefix={false}
+                className="w-full py-2"
+              />
+            </div>
             <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-line pt-3.5">
               <span className="flex flex-col">
                 <span className="text-sm font-medium text-ink">Announcements only</span>

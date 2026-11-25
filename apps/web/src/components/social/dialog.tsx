@@ -18,6 +18,7 @@ export function Dialog({
   initialFocus,
   className,
   flush = false,
+  bodyClassName,
 }: {
   title: string;
   description?: ReactNode;
@@ -30,6 +31,8 @@ export function Dialog({
   className?: string;
   /** No padding around the body: for lists that run edge to edge. */
   flush?: boolean;
+  /** Extra classes for the body (e.g. "min-h-0 flex-1" in a full-height sheet). */
+  bodyClassName?: string;
 }) {
   const id = useId();
   const ref = useRef<HTMLDialogElement>(null);
@@ -91,7 +94,7 @@ export function Dialog({
         </button>
       </div>
       <Divider />
-      {children && <div className={flush ? "flex flex-col" : "flex flex-col gap-4 p-5"}>{children}</div>}
+      {children && <div className={cn(flush ? "flex flex-col" : "flex flex-col gap-4 p-5", bodyClassName)}>{children}</div>}
       {footer && (
         <>
           <Divider />

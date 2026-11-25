@@ -30,6 +30,11 @@ describe('Chapters: pages, members and Ambassador pins', () => {
     expect(nigeria).toMatchObject({ countryName: expect.any(String), viewer: { following: true } });
     expect(nigeria!.followers).toBeGreaterThanOrEqual(1);
     expect((res.body as ChapterSummary[]).find((c) => c.slug === 'ghana')?.viewer.following).toBe(false);
+    expect(nigeria).toMatchObject({ region: expect.any(String), viewer: { leads: false } });
+    // The chapter picker puts the chapters a member leads under "Your chapters".
+    const led = (await ambassador.get('/chapters').expect(200)).body as ChapterSummary[];
+    expect(led.find((c) => c.slug === 'nigeria')?.viewer.leads).toBe(true);
+    expect(led.find((c) => c.slug === 'ghana')?.viewer.leads).toBe(false);
   });
 
   it('serves a chapter page by slug with its team, members and counts; unknown slugs are 404', async () => {

@@ -6,6 +6,7 @@ import { usePathname, useT, useIntlTag } from "@/i18n/client";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { EVENT_FORMAT_LABELS, EventFormat, type EventCategory, type EventSummary, type Page } from "@chartermission/contracts";
 import { FilterSelect, Icon, buttonClasses, cn, type IconName } from "@chartermission/ui";
+import { ChapterFilter, type ChapterChoice } from "@/components/chapters/chapter-picker";
 import { ToggleChip } from "@/components/discover/filter-controls";
 import { EventGridCard, EventGridCardSkeleton, FeaturedEvent } from "@/components/events/event-cards";
 import { EventsCalendar } from "@/components/events/events-calendar";
@@ -19,7 +20,7 @@ import { EmptyState } from "@/components/social/skeletons";
 import { api } from "@/lib/api/client";
 
 type Option = { value: string; label: string };
-export type FilterOptions = { categories: EventCategory[]; countries: Option[]; chapters: Option[] };
+export type FilterOptions = { categories: EventCategory[]; countries: Option[]; chapters: ChapterChoice[] };
 
 const views: { value: EventFilters["view"]; label: string; icon: IconName }[] = [
   { value: "list", label: "List", icon: "menu" },
@@ -184,6 +185,7 @@ export function EventsBrowser({
   options: FilterOptions;
   rail: ReactNode;
 }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
@@ -291,14 +293,14 @@ export function EventsBrowser({
             value={shown.country ?? ""}
             onChange={(e) => go({ country: e.target.value || null })}
             options={[{ value: "", label: "Any country" }, ...options.countries]}
-            className="max-w-44"
+            className="max-w-44 [&>select]:max-w-full [&>select]:truncate"
           />
-          <FilterSelect
-            label="Chapter"
-            value={shown.chapter ?? ""}
-            onChange={(e) => go({ chapter: e.target.value || null })}
-            options={[{ value: "", label: "Any chapter" }, { value: "mine", label: "Chapters I follow" }, ...options.chapters]}
-            className="max-w-48"
+          <ChapterFilter
+            value={shown.chapter}
+            onChange={(chapter) => go({ chapter })}
+            options={options.chapters.length ? options.chapters : undefined}
+            extras={[{ value: "mine", label: t("Chapters I follow"), icon: "users" }]}
+            className="max-w-56"
           />
           <label className="flex h-[34px] min-w-48 flex-1 items-center gap-2 rounded-lg border border-line bg-card px-2.5 text-disabled focus-within:border-primary-light focus-within:ring-2 focus-within:ring-primary-light/20 hover:border-line-strong max-sm:min-w-full">
             <Icon name="search" size={16} className="shrink-0" />

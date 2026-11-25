@@ -5,7 +5,7 @@ type Translate = (key: string, vars?: Record<string, string | number | null | un
 /** Names for the audience filters' ids, loaded with the page (GET /taxonomies, GET /admin/exams). */
 export type AudienceOptions = {
   countries: { code: string; name: string }[];
-  chapters: { id: string; name: string }[];
+  chapters: { id: string; slug: string; name: string; countryCode: string }[];
   sectors: { id: string; name: string }[];
   /** Null when the exams list couldn't be loaded: the filter is hidden. */
   exams: { id: string; title: string }[] | null;

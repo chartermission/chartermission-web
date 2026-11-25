@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { AnnouncementAudience } from "@chartermission/contracts";
 import { Icon, cn } from "@chartermission/ui";
+import { ChapterPicker } from "@/components/chapter-picker";
 import { inputClasses } from "@/components/form-field";
 import { Select } from "@/components/exams/select";
 import { useIntlTag, useT } from "@/i18n/client";
@@ -174,7 +175,6 @@ export function AudienceFilters({
     () => options.countries.map((c) => ({ value: c.code, label: countryNameOf(c.code, tag) ?? c.name })).sort((a, b) => a.label.localeCompare(b.label, tag)),
     [options.countries, tag],
   );
-  const chapters = useMemo(() => options.chapters.map((c) => ({ value: c.id, label: c.name })), [options.chapters]);
   const sectors = useMemo(() => options.sectors.map((s) => ({ value: s.id, label: s.name })), [options.sectors]);
   const exams = useMemo(() => (options.exams ?? []).map((e) => ({ value: e.id, label: e.title })), [options.exams]);
   const locales = value.locales ?? [];
@@ -209,7 +209,15 @@ export function AudienceFilters({
 
       <div className="grid gap-4 md:grid-cols-2">
         <MultiPicker label={t("Countries")} placeholder={t("Search countries")} options={countries} value={value.countries ?? []} onChange={(v) => set("countries", v)} max={60} />
-        <MultiPicker label={t("Chapters")} placeholder={t("Search chapters")} options={chapters} value={value.chapterIds ?? []} onChange={(v) => set("chapterIds", v)} max={60} />
+        <ChapterPicker
+          multiple
+          label={t("Chapters")}
+          placeholder={t("Any chapter")}
+          options={options.chapters.length ? options.chapters : undefined}
+          value={value.chapterIds ?? []}
+          onChange={(v) => set("chapterIds", v)}
+          max={60}
+        />
         <MultiPicker label={t("Sectors")} placeholder={t("Search sectors")} options={sectors} value={value.sectorIds ?? []} onChange={(v) => set("sectorIds", v)} max={40} />
         {options.exams && (
           <MultiPicker label={t("Passed exams")} placeholder={t("Search exams")} options={exams} value={value.passedExamIds ?? []} onChange={(v) => set("passedExamIds", v)} max={20} />
