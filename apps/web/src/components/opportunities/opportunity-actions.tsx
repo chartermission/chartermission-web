@@ -16,11 +16,14 @@ import { relativeTime } from "@/components/social/format";
 import { toast } from "@/components/social/toast";
 import { api, isApiError } from "@/lib/api/client";
 import { SaveOpportunityButton, applicationTone } from "./opportunity-card";
+import { applyLinkLabel } from "./apply-link";
+import { ShareOpportunityDialog, canShareOpportunity } from "./share-opportunity-dialog";
 import { T, useT, useIntlTag } from "@/i18n/client";
 
 /**
- * The listing's action panel. Applicants: apply with a note, see their status, withdraw.
- * Poster: applicants link, edit, close or reopen, delete.
+ * The listing's action panel. Applicants: apply with a note, see their status, withdraw — or, for
+ * listings that take applications on the organisation's side (applyUrl), go to that link or email.
+ * Poster: applicants link, edit, close or reopen, delete. Everyone: share an open listing to the feed.
  */
 export function OpportunityActions({ opportunity: initial }: { opportunity: OpportunityDetail }) {
   const intl = useIntlTag();
@@ -32,9 +35,17 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
   const [busy, setBusy] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [modal, setModal] = useState<"withdraw" | "delete" | "report" | null>(null);
+  const [modal, setModal] = useState<"withdraw" | "delete" | "report" | "share" | null>(null);
   const app = o.viewer.application;
   const activeApp = app && app.status !== "withdrawn" ? app : null;
+  const shareable = canShareOpportunity(o);
+  const shareButton = shareable && (
+    <Button variant="secondary" size="small" block onClick={() => setModal("share")}>
+      <Icon name="share" size={16} />
+      Share to feed
+    </Button>
+  );
+  const shareDialog = modal === "share" && <ShareOpportunityDialog opportunity={o} onClose={() => setModal(null)} />;
 
   async function apply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,19 +87,34 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
     return (
       <Panel className="flex flex-col gap-4 p-5">
         <h2 className="text-h3 text-ink">Your listing</h2>
-        <p className="text-sm text-secondary">
-          {o.applicationCount} {o.applicationCount === 1 ? "applicant" : "applicants"} · posted {relativeTime(intl, t, o.createdAt)}
-        </p>
+        {o.applyUrl ? (
+          <p className="flex items-start gap-2 text-sm text-secondary">
+            <Icon name={o.applyUrl.startsWith("mailto:") ? "mail" : "external"} size={16} className="mt-px shrink-0" />
+            <span>
+              People apply on your site or by email, not in Charter Mission.{" "}
+              <a href={o.applyUrl} target="_blank" rel="noopener noreferrer nofollow" className="font-medium text-primary-light hover:underline">
+                {applyLinkLabel(t, o.applyUrl)}
+              </a>
+            </span>
+          </p>
+        ) : (
+          <p className="text-sm text-secondary">
+            {o.applicationCount} {o.applicationCount === 1 ? "applicant" : "applicants"} · posted {relativeTime(intl, t, o.createdAt)}
+          </p>
+        )}
         {o.moderationState !== "visible" && (
           <p className="flex items-start gap-2 rounded-lg bg-error-light p-3 text-sm text-body">
             <Icon name="alert" size={16} className="mt-px shrink-0 text-error" />
             A moderator {o.moderationState === "removed" ? "removed" : "hid"} this listing, so members can’t see it. Check your account’s moderation page to appeal.
           </p>
         )}
-        <Link href={`/opportunities/${o.slug}/applicants`} className={buttonClasses({ block: true })}>
-          <Icon name="users" size={18} />
-          Review applicants
-        </Link>
+        {!o.applyUrl && (
+          <Link href={`/opportunities/${o.slug}/applicants`} className={buttonClasses({ block: true })}>
+            <Icon name="users" size={18} />
+            Review applicants
+          </Link>
+        )}
+        {shareButton}
         <div className="grid grid-cols-2 gap-2">
           <Link href={`/opportunities/${o.slug}/edit`} className={buttonClasses({ variant: "secondary", size: "small" })}>
             Edit
@@ -115,6 +141,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
             Applicants will no longer see it. This can’t be undone.
           </ConfirmDialog>
         )}
+        {shareDialog}
       </Panel>
     );
   }
@@ -126,7 +153,30 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
         <SaveOpportunityButton id={o.id} title={o.title} saved={o.viewer.saved} />
       </div>
 
-      {activeApp ? (
+      {o.applyUrl && !activeApp ? (
+        shareable ? (
+          <>
+            <a
+              href={o.applyUrl}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className={buttonClasses({ block: true })}
+            >
+              <Icon name={o.applyUrl.startsWith("mailto:") ? "mail" : "external"} size={18} className="shrink-0" />
+              <span className="truncate">{applyLinkLabel(t, o.applyUrl)}</span>
+            </a>
+            <p className="flex items-start gap-2 text-xs text-secondary">
+              <Icon name="info" size={14} className="mt-px shrink-0" />
+              Applications for this opportunity happen on the organisation’s side, not in Charter Mission.
+            </p>
+          </>
+        ) : (
+          <p className="flex items-start gap-2 text-sm text-secondary">
+            <Icon name="alert" size={16} className="mt-px shrink-0" />
+            Applications are closed.
+          </p>
+        )
+      ) : activeApp ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone={applicationTone[activeApp.status]}>{APPLICATION_STATUS_LABELS[activeApp.status]}</Chip>
@@ -203,6 +253,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
           <Icon name="external" size={14} />
         </a>
       )}
+      {shareButton}
       {o.viewer.canReport && (
         <button type="button" onClick={() => setModal("report")} className="flex items-center gap-1.5 self-start text-xs text-secondary hover:text-ink hover:underline">
           <Icon name="flag" size={14} />
@@ -224,6 +275,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
           The poster will no longer see it. You can apply again while the listing is open.
         </ConfirmDialog>
       )}
+      {shareDialog}
       {modal === "report" && <ReportDialog targetType="opportunity" targetId={o.id} subject={`“${o.title}”`} onClose={() => setModal(null)} />}
     </Panel>
   );

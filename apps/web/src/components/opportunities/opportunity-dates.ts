@@ -14,3 +14,12 @@ export function deadlineChip(intl: string, t: Translate, o: Pick<OpportunitySumm
   if (o.deadline === today) return { label: t("Closes today"), tone: "warning" };
   return { label: t("Closes {date}", { date: formatDayMonth(intl, o.deadline) }), tone: o.deadline <= addDays(today, 7) ? "warning" : "neutral" };
 }
+
+/** "Apply by 31 Dec" on a shared card (warning within a week), "Closes today", "Closed" or "Rolling deadline". */
+export function applyByLabel(intl: string, t: Translate, o: Pick<OpportunitySummary, "deadline" | "status">): { label: string; tone: ChipTone } {
+  if (o.status === "closed") return { label: t("Closed"), tone: "neutral" };
+  if (!o.deadline) return { label: t("Rolling deadline"), tone: "neutral" };
+  const today = todayIso();
+  if (o.deadline === today) return { label: t("Closes today"), tone: "warning" };
+  return { label: t("Apply by {date}", { date: formatDayMonth(intl, o.deadline) }), tone: o.deadline <= addDays(today, 7) ? "warning" : "neutral" };
+}

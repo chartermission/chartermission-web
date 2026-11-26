@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ChapterRef, GroupRef, MemberRef, PageRef } from "./common.js";
 import { EventSummary } from "./events.js";
+import { OpportunityType, RemoteMode } from "./listings.js";
 
 /*
  * Feed, posts, comments, reactions, bookmarks, polls, hashtags, trending and uploads
@@ -38,7 +39,8 @@ export type MediaLayout = z.infer<typeof MediaLayout>;
 /**
  * What a post is. "kind" says who it comes from (an announcement is a platform-team
  * post); "type" says what shape it has:
- *  - standard: text, photos, a document, a poll, a link, or an event shared to the feed (eventId);
+ *  - standard: text, photos, a document, a poll, a link, an event shared to the feed (eventId) or an
+ *    opportunity shared to the feed (opportunityId);
  *  - question: Ask the community; comments are answers and the author can mark the best one;
  *  - celebration: a milestone (new role, launch, funding, award, graduation);
  *  - request: "Looking for…" a co-founder, mentor, volunteers, partners, a hire or advice;
@@ -308,6 +310,31 @@ export type PostGroupReview = z.infer<typeof PostGroupReview>;
 export const PostContentReview = z.object({ state: z.enum(["pending", "approved", "declined"]), note: z.string().nullable() });
 export type PostContentReview = z.infer<typeof PostContentReview>;
 
+/**
+ * The card of an opportunity shared to the feed (PostView.opportunity): enough to show what it is,
+ * where, until when, and how to apply. `status` is "closed" once the deadline has passed too.
+ */
+export const OpportunityCard = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  type: OpportunityType,
+  title: z.string(),
+  organisation: z.string(),
+  summary: z.string(),
+  remoteMode: RemoteMode,
+  country: z.object({ code: z.string(), name: z.string() }).nullable(),
+  city: z.string().nullable(),
+  /** Last day to apply (YYYY-MM-DD), or null. */
+  deadline: z.string().nullable(),
+  status: z.enum(["open", "closed"]),
+  /** Apply on the organisation's side (https link or mailto:) instead of in Charter Mission. */
+  applyUrl: z.string().nullable(),
+  /** Posted as this page: show the page as the poster. */
+  page: PageRef.nullable(),
+  poster: MemberRef,
+});
+export type OpportunityCard = z.infer<typeof OpportunityCard>;
+
 export type PostView = {
   id: string;
   /**
@@ -352,6 +379,13 @@ export type PostView = {
   event: EventSummary | null;
   /** The post was written to share an event (true even when the event has since been taken down). */
   isEventShare: boolean;
+  /**
+   * The opportunity this post shares. Null when the post shares none, or the listing was deleted,
+   * hidden or removed (or its poster can't be shown): see isOpportunityShare.
+   */
+  opportunity: OpportunityCard | null;
+  /** The post was written to share an opportunity (true even when the listing is no longer available). */
+  isOpportunityShare: boolean;
   /** An update an organiser posted on an initiative; null when the initiative is gone or not visible. */
   initiative: { id: string; slug: string; title: string } | null;
   status: PostStatus;
@@ -419,6 +453,8 @@ export const PostView: z.ZodType<PostView> = z.lazy(() =>
     isRepost: z.boolean(),
     event: EventSummary.nullable(),
     isEventShare: z.boolean(),
+    opportunity: OpportunityCard.nullable(),
+    isOpportunityShare: z.boolean(),
     initiative: z.object({ id: z.string().uuid(), slug: z.string(), title: z.string() }).nullable(),
     status: PostStatus,
     chapterReview: ChapterReviewInfo.optional(),
@@ -463,6 +499,8 @@ export const PostComposition = z.object({
   repostOfId: z.string().uuid().optional(),
   /** Share an event to the feed: the post shows the event's card. Standard posts only, without media, a poll or a repost. */
   eventId: z.string().uuid().optional(),
+  /** Share an open opportunity to the feed: the post shows its card. Same rules as eventId. */
+  opportunityId: z.string().uuid().optional(),
   /** Post it as an update on an initiative the member organises (shown on the initiative and to its followers). */
   initiativeId: z.string().uuid().optional(),
   chapterId: z.string().uuid().optional(),
@@ -491,18 +529,25 @@ export function compositionIssues(v: PostComposition): Issue[] {
   const add = (path: string, message: string) => issues.push({ path: [path], message });
   const max = v.type === "article" ? ARTICLE_MAX_CHARS : POST_MAX_CHARS;
   if (v.body.length > max) add("body", `Posts can be up to ${max.toLocaleString("en")} characters`);
-  if (!v.body.length && !v.repostOfId && !v.eventId && v.attachmentIds.length === 0 && v.type === "standard") {
+  if (!v.body.length && !v.repostOfId && !v.eventId && !v.opportunityId && v.attachmentIds.length === 0 && v.type === "standard") {
     add("body", "Write something or attach a file");
   }
   if (v.type !== "standard") {
     if (v.poll) add("poll", "Polls can only be added to standard posts");
     if (v.repostOfId) add("repostOfId", "Only standard posts can quote another post");
     if (v.eventId) add("eventId", "Only standard posts can share an event");
+    if (v.opportunityId) add("opportunityId", "Only standard posts can share an opportunity");
   }
   if (v.eventId) {
     if (v.repostOfId) add("eventId", "A post can share an event or another post, not both");
     if (v.poll) add("eventId", "A post can share an event or have a poll, not both");
     if (v.attachmentIds.length) add("eventId", "A post that shares an event can’t have attachments");
+    if (v.opportunityId) add("opportunityId", "A post can share an event or an opportunity, not both");
+  }
+  if (v.opportunityId) {
+    if (v.repostOfId) add("opportunityId", "A post can share an opportunity or another post, not both");
+    if (v.poll) add("opportunityId", "A post can share an opportunity or have a poll, not both");
+    if (v.attachmentIds.length) add("opportunityId", "A post that shares an opportunity can’t have attachments");
   }
   if (v.groupId) {
     if (v.chapterId) add("groupId", "A post goes to a group or a chapter, not both");
@@ -540,7 +585,7 @@ export type CreatePostInput = z.infer<typeof CreatePostInput>;
 
 /** PATCH /posts/{id} — author edit, marked "edited" (CM-FED-06). Type-specific details can be edited too. */
 export const UpdatePostInput = z.object({
-  /** May be empty only when the post has media, a repost or a shared event to stand on. */
+  /** May be empty only when the post has media, a repost, a shared event or a shared opportunity to stand on. */
   body: z.string().trim().max(ARTICLE_MAX_CHARS),
   altTexts: z.record(z.string().uuid(), z.string().trim().max(ALT_TEXT_MAX_CHARS)).optional(),
   /** Change how the post's images are laid out. */

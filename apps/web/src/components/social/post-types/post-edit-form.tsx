@@ -66,7 +66,7 @@ export function PostEditForm({ post, onSaved, onCancel }: { post: PostView; onSa
     };
     const text = body.trim();
     // A post can stand on its media, a repost or a shared event alone; anything else needs words.
-    if (!text && post.attachments.length === 0 && !post.isRepost && !post.isEventShare) set("text", "Write something before saving");
+    if (!text && post.attachments.length === 0 && !post.isRepost && !post.isEventShare && !post.isOpportunityShare) set("text", "Write something before saving");
     else if (text.length > max) set("text", t("Posts can be up to {count} characters", { count: max.toLocaleString("en") }));
     if (post.type === "question" && text && text.length < 10) set("text", "Write your question (at least 10 characters)");
     if (post.type === "article" && text && text.length < ARTICLE_MIN_CHARS) set("text", t("Articles need at least {ARTICLEMINCHARS} characters", { ARTICLEMINCHARS: ARTICLE_MIN_CHARS }));

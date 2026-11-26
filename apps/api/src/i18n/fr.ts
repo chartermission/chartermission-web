@@ -1279,4 +1279,13 @@ export const fr: Record<string, string> = {
   "That email and password don’t match an account": "Cet e-mail et ce mot de passe ne correspondent à aucun compte",
   "This account’s email is already confirmed. Sign in and change it in Settings.": "L’e-mail de ce compte est déjà confirmé. Connectez-vous et modifiez-le dans les Paramètres.",
   "That’s the email you signed up with": "C’est l’e-mail avec lequel vous vous êtes inscrit",
+  "That opportunity was not found": "Opportunité introuvable",
+  "This opportunity is closed": "Cette opportunité est close",
+  "Apply using the link on this listing": "Postulez avec le lien indiqué sur cette annonce",
+  "Enter a link starting with https:// or an email address": "Saisissez un lien commençant par https:// ou une adresse e-mail",
+  "Only standard posts can share an opportunity": "Seules les publications standard peuvent partager une opportunité",
+  "A post can share an event or an opportunity, not both": "Une publication peut partager un événement ou une opportunité, pas les deux",
+  "A post can share an opportunity or another post, not both": "Une publication peut partager une opportunité ou une autre publication, pas les deux",
+  "A post can share an opportunity or have a poll, not both": "Une publication peut partager une opportunité ou contenir un sondage, pas les deux",
+  "A post that shares an opportunity can’t have attachments": "Une publication qui partage une opportunité ne peut pas avoir de pièces jointes",
 };

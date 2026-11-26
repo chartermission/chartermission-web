@@ -19,6 +19,7 @@ import {
   files,
   groups,
   mentions,
+  opportunities,
   pollOptions,
   pollVotes,
   polls,
@@ -26,6 +27,7 @@ import {
   postHashtags,
   postHelpOffers,
   posts,
+  users,
 } from '../db/schema.js';
 import { Errors } from '../common/errors.js';
 import type { AuthUser, AuthVia } from '../core/auth-context.js';
@@ -85,7 +87,16 @@ export type PostOrigin = {
   via?: AuthVia;
   source?: 'web' | 'claude';
   approved?: { by: string | null; at: Date | null; note: string | null };
+  /**
+   * A trusted share made by the platform itself (a new opportunity shared to the feed by
+   * OpportunityFeedService): it doesn't count towards the member's daily posts, and it may be posted
+   * as the listing's page by staff who don't manage that page (the page must still be live).
+   */
+  internal?: boolean;
 };
+
+/** Posters whose listings can't be shown (as in OpportunitiesService). */
+const HIDDEN_LISTING_POSTER = ['deleted', 'deletion_pending', 'deactivated', 'suspended'];
 
 /** Posting, commenting and reacting are blocked while a time-boxed restriction runs (CM-ADM-04). */
 export function assertNotRestricted(user: AuthUser) {
@@ -191,9 +202,9 @@ export class PostsService implements OnModuleInit {
     if (input.kind === 'announcement' && !can(user, 'post.announce')) {
       throw Errors.forbidden('Only the platform team can publish announcements');
     }
-    if (input.pageId) await this.assertCanPostAs(user, input);
+    if (input.pageId) await this.assertCanPostAs(user, input, !!origin.internal);
     const inGroup = input.groupId ? await this.groupForPost(user, input) : null;
-    await this.limits.consume(`posts:${user.id}`, POSTS_PER_DAY, 24 * 3600);
+    if (!origin.internal) await this.limits.consume(`posts:${user.id}`, POSTS_PER_DAY, 24 * 3600);
 
     const attachments = await this.validateAttachments(user.id, input.attachmentIds);
     if (input.type === 'article' && attachments.some((f) => f.purpose !== 'post_image')) {
@@ -204,6 +215,7 @@ export class PostsService implements OnModuleInit {
     }
     const original = input.repostOfId ? await this.repostTarget(user, input.repostOfId) : null;
     const sharedEvent = input.eventId ? await this.shareableEvent(user, input.eventId) : null;
+    const sharedOpportunity = input.opportunityId ? await this.shareableOpportunity(user, input.opportunityId) : null;
     // An update on an initiative: only its organisers can post one.
     const initiative = input.initiativeId ? await this.initiativeAccess.forUpdate(user, input.initiativeId) : null;
     if (typeof initiative === 'string') throw Errors.validation({ initiativeId: initiative });
@@ -215,8 +227,8 @@ export class PostsService implements OnModuleInit {
     const review = input.chapterId && input.kind !== 'announcement' ? (await this.chapterRules.posting(user, input.chapterId)).review : false;
     const tags = parseHashtags(input.body);
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
-    // A shared event's card takes the place of a link preview.
-    const linkUrl = sharedEvent ? null : (input.linkUrl ?? firstHttpsUrl(input.body));
+    // A shared event's or opportunity's card takes the place of a link preview.
+    const linkUrl = sharedEvent || sharedOpportunity ? null : (input.linkUrl ?? firstHttpsUrl(input.body));
     const source = origin.source ?? (origin.via?.kind === 'oauth' ? 'claude' : 'web');
     // Content calendar: in "approve before publishing" mode a post written with Claude waits for the team.
     const awaitingApproval = source === 'claude' && !origin.approved && (await this.claudeApprovalRequired());
@@ -242,7 +254,8 @@ export class PostsService implements OnModuleInit {
         if (locked.status !== 'active') throw Errors.forbidden('This group is closed for now. Nothing can be posted in it.');
         groupVisibility = locked.visibility;
       }
-      const visibility = groupVisibility === 'private' ? 'group' : input.visibility;
+      // Opportunities are for members: a post sharing one is never public, whatever the composer said.
+      const visibility = groupVisibility === 'private' ? 'group' : sharedOpportunity ? 'members' : input.visibility;
       const [p] = await tx
         .insert(posts)
         .values({
@@ -259,6 +272,7 @@ export class PostsService implements OnModuleInit {
           countryCode: user.countryCode,
           repostOfId: original?.id ?? null,
           eventId: sharedEvent?.id ?? null,
+          opportunityId: sharedOpportunity?.id ?? null,
           initiativeId: initiative?.id ?? null,
           pageId: input.pageId ?? null,
           linkUrl,
@@ -345,15 +359,15 @@ export class PostsService implements OnModuleInit {
       .select({ fileId: postAttachments.fileId, kind: postAttachments.kind })
       .from(postAttachments)
       .where(eq(postAttachments.postId, id));
-    // A post can stand on its media, a repost or a shared event alone; anything else needs words.
-    if (!input.body.length && !attached.length && !post.repostOfId && !post.eventId) {
+    // A post can stand on its media, a repost, a shared event or opportunity alone; anything else needs words.
+    if (!input.body.length && !attached.length && !post.repostOfId && !post.eventId && !post.opportunityId) {
       throw Errors.validation({ body: 'Write something before saving' });
     }
     const imageOrder = input.imageOrder ? this.checkedImageOrder(input.imageOrder, attached) : null;
     const details = this.editedDetails(post, input);
     const tags = parseHashtags(input.body);
     const mentionIds = await resolveMentions(this.members, this.relations, user.id, input.body);
-    const newLink = !post.linkUrl && !post.eventId ? firstHttpsUrl(input.body) : null;
+    const newLink = !post.linkUrl && !post.eventId && !post.opportunityId ? firstHttpsUrl(input.body) : null;
     const added = await this.db.transaction(async (tx) => {
       await tx
         .update(posts)
@@ -464,10 +478,13 @@ export class PostsService implements OnModuleInit {
     return post.authorId === user.id;
   }
 
-  /** Publishing as a page: the member must manage it, and it must be live. */
-  private async assertCanPostAs(user: AuthUser, input: CreatePostInput) {
+  /**
+   * Publishing as a page: the member must manage it, and it must be live. `internal`: a platform share
+   * (an opportunity staff posted as the page), which needs no role on the page.
+   */
+  private async assertCanPostAs(user: AuthUser, input: CreatePostInput, internal = false) {
     const pageId = input.pageId!;
-    const [page, role] = await Promise.all([this.pageRefs.refs([pageId]).then((m) => m.get(pageId)), this.pageRefs.role(user.id, pageId)]);
+    const [page, role] = await Promise.all([this.pageRefs.refs([pageId]).then((m) => m.get(pageId)), internal ? 'internal' : this.pageRefs.role(user.id, pageId)]);
     if (!page || !role) throw Errors.forbidden('You can only post as a page you manage');
     if (page.status !== 'active') {
       throw Errors.forbidden(page.status === 'pending' ? 'This page is still being reviewed. You can post once it’s live.' : 'This page isn’t live, so it can’t post.');
@@ -635,7 +652,32 @@ export class PostsService implements OnModuleInit {
     return files_;
   }
 
-  /** A repost of a repost points at the original. One repost per member per original. */
+  /**
+   * An opportunity members can share: one they can see (not deleted, hidden or removed, its poster
+   * shown and not blocked either way), still open and not past its deadline. Others are NOT_FOUND.
+   */
+  private async shareableOpportunity(user: AuthUser, id: string): Promise<typeof opportunities.$inferSelect> {
+    const [found] = await this.db
+      .select({ o: opportunities, posterStatus: users.status })
+      .from(opportunities)
+      .innerJoin(users, eq(users.id, opportunities.posterId))
+      .where(eq(opportunities.id, id))
+      .limit(1);
+    const row = found?.o;
+    const hidden =
+      !row ||
+      !!row.deletedAt ||
+      (row.posterId !== user.id && (row.moderationState !== 'visible' || HIDDEN_LISTING_POSTER.includes(found.posterStatus))) ||
+      (row.posterId !== user.id && (await this.relations.isBlockedEitherWay(user.id, row.posterId)));
+    if (hidden) throw Errors.notFound('That opportunity');
+    if (row.moderationState !== 'visible') throw Errors.validation({ opportunityId: 'This listing is not available' });
+    if (row.status !== 'open') throw Errors.validation({ opportunityId: 'This opportunity is closed' });
+    if (row.deadline && row.deadline < new Date().toISOString().slice(0, 10)) {
+      throw Errors.validation({ opportunityId: 'The deadline for this opportunity has passed' });
+    }
+    return row;
+  }
+
   /** An event members can share: public, not called off and not over. Events the member can't see are NOT_FOUND. */
   private async shareableEvent(user: AuthUser, id: string): Promise<EventRow> {
     const event = await this.eventAccess.visible(id, await this.eventAccess.viewer(user));
@@ -645,6 +687,7 @@ export class PostsService implements OnModuleInit {
     return event;
   }
 
+  /** A repost of a repost points at the original. One repost per member per original. */
   private async repostTarget(user: AuthUser, id: string): Promise<PostRow> {
     let target = await this.findVisible(user, id, { interactive: true });
     if (target.repostOfId) target = await this.findVisible(user, target.repostOfId, { interactive: true });

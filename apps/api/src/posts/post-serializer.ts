@@ -10,6 +10,7 @@ import {
   type EventSummary,
   type GroupRef,
   type MemberRef,
+  type OpportunityCard,
   type PollView,
   type PostKind,
   type PostType,
@@ -22,12 +23,14 @@ import {
   bookmarks,
   chapters,
   comments,
+  countries,
   events,
   files,
   groups,
   initiatives,
   hashtags,
   mentions,
+  opportunities,
   pollOptions,
   pollVotes,
   polls,
@@ -49,6 +52,9 @@ import { EventAccess } from '../events/event-access.js';
 import { EventSerializer } from '../events/event-serializer.js';
 import { isPublicStatus } from '../events/event-util.js';
 import { accessFrom, groupVisiblePostIds, membershipsFor, roleAtLeast } from '../groups/group-access.js';
+
+/** Posters whose listings can't be shown (as in OpportunitiesService). */
+const HIDDEN_LISTING_POSTER = ['deleted', 'deletion_pending', 'deactivated', 'suspended'];
 
 const FALLBACK_AUTHOR: MemberRef = {
   id: '00000000-0000-0000-0000-000000000000',
@@ -139,7 +145,7 @@ export class PostSerializer {
     }
 
     const postIds = rows.map((r) => r.id);
-    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap, initiativeMap, groupInfo, impressionMap] = await Promise.all([
+    const [authorRefs, pageMap, managed, chapterMap, tagMap, mentionMap, attachmentMap, pollMap, viewerState, answers, offers, eventMap, initiativeMap, groupInfo, impressionMap, opportunityMap] = await Promise.all([
       this.members.refs(rows.map((r) => r.authorId)),
       this.pageRefs.refs(rows.flatMap((r) => [r.pageId, r.aboutPageId]).filter((x): x is string => !!x)),
       rows.some((r) => r.pageId) ? this.pageRefs.managedIds(viewer?.id) : Promise.resolve(new Set<string>()),
@@ -155,6 +161,7 @@ export class PostSerializer {
       this.initiatives(rows),
       this.groups(rows, viewer),
       this.impressions(rows, viewer),
+      this.sharedOpportunities(rows, viewer, blockedSet),
     ]);
 
     const out: PostView[] = [];
@@ -192,6 +199,8 @@ export class PostSerializer {
         isRepost: !!r.repostOfId,
         event: (r.eventId && eventMap.get(r.eventId)) || null,
         isEventShare: !!r.eventId,
+        opportunity: (r.opportunityId && opportunityMap.get(r.opportunityId)) || null,
+        isOpportunityShare: !!r.opportunityId,
         initiative: (r.initiativeId && initiativeMap.get(r.initiativeId)) || null,
         status: r.status as PostView['status'],
         createdAt: r.createdAt.toISOString(),
@@ -416,6 +425,50 @@ export class PostSerializer {
     if (!eventRows.length) return new Map();
     const summaries = await this.eventSerializer.summaries(eventRows, await this.eventAccess.optionalViewer(viewer));
     return new Map(summaries.map((e) => [e.id, e]));
+  }
+
+  /**
+   * Shared opportunities as cards, for members only (listings are members-only). Deleted, hidden and
+   * removed listings, and those whose poster can't be shown or is blocked either way, are left out
+   * (the card says the listing is no longer available).
+   */
+  private async sharedOpportunities(rows: PostRow[], viewer: AuthUser | undefined, blocked: Set<string>): Promise<Map<string, OpportunityCard>> {
+    const ids = [...new Set(rows.map((r) => r.opportunityId).filter((x): x is string => !!x))];
+    if (!ids.length || !viewer) return new Map();
+    const found = await this.db
+      .select({ o: opportunities, posterStatus: users.status, countryName: countries.name })
+      .from(opportunities)
+      .innerJoin(users, eq(users.id, opportunities.posterId))
+      .leftJoin(countries, eq(countries.code, opportunities.countryCode))
+      .where(and(inArray(opportunities.id, ids), isNull(opportunities.deletedAt), eq(opportunities.moderationState, 'visible')));
+    const live = found.filter((f) => !HIDDEN_LISTING_POSTER.includes(f.posterStatus) && !blocked.has(f.o.posterId));
+    if (!live.length) return new Map();
+    const pageIds = [...new Set(live.map((f) => f.o.pageId).filter((x): x is string => !!x))];
+    const [posters, pageMap] = await Promise.all([this.members.refs(live.map((f) => f.o.posterId)), this.pageRefs.refs(pageIds)]);
+    const today = todayUtc();
+    const out = new Map<string, OpportunityCard>();
+    for (const { o, countryName } of live) {
+      const poster = posters.get(o.posterId);
+      if (!poster) continue;
+      const page = o.pageId ? pageMap.get(o.pageId) : undefined;
+      out.set(o.id, {
+        id: o.id,
+        slug: o.slug,
+        type: o.type as OpportunityCard['type'],
+        title: o.title,
+        organisation: o.organisation,
+        summary: o.summary,
+        remoteMode: o.remoteMode as OpportunityCard['remoteMode'],
+        country: o.countryCode ? { code: o.countryCode, name: countryName ?? o.countryCode } : null,
+        city: o.city,
+        deadline: o.deadline,
+        status: o.status === 'open' && !(o.deadline && o.deadline < today) ? 'open' : 'closed',
+        applyUrl: o.applyUrl,
+        page: page ? PageRefsService.toRef(page) : null,
+        poster,
+      });
+    }
+    return out;
   }
 
   /** Question posts whose accepted answer still shows (not deleted, hidden or removed). */

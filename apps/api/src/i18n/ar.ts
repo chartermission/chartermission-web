@@ -1279,4 +1279,13 @@ export const ar: Record<string, string> = {
   "That email and password don’t match an account": "لا يتطابق هذا البريد وكلمة المرور مع أي حساب",
   "This account’s email is already confirmed. Sign in and change it in Settings.": "تم تأكيد البريد الإلكتروني لهذا الحساب بالفعل. سجّل الدخول وغيّره من الإعدادات.",
   "That’s the email you signed up with": "هذا هو البريد الذي سجّلت به",
+  "That opportunity was not found": "لم يتم العثور على هذه الفرصة",
+  "This opportunity is closed": "هذه الفرصة مغلقة",
+  "Apply using the link on this listing": "قدّم طلبك عبر الرابط الموجود في هذا الإعلان",
+  "Enter a link starting with https:// or an email address": "أدخل رابطًا يبدأ بـ https:// أو عنوان بريد إلكتروني",
+  "Only standard posts can share an opportunity": "يمكن للمنشورات العادية فقط مشاركة فرصة",
+  "A post can share an event or an opportunity, not both": "يمكن للمنشور مشاركة فعالية أو فرصة، وليس كليهما",
+  "A post can share an opportunity or another post, not both": "يمكن للمنشور مشاركة فرصة أو منشور آخر، وليس كليهما",
+  "A post can share an opportunity or have a poll, not both": "يمكن للمنشور مشاركة فرصة أو تضمين استطلاع، وليس كليهما",
+  "A post that shares an opportunity can’t have attachments": "لا يمكن إرفاق ملفات بمنشور يشارك فرصة",
 };
