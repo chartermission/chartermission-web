@@ -221,10 +221,10 @@ describe('Events: hosting, review and visibility', () => {
       );
       made.push(ev.id);
     }
-    const page1 = await member.get('/events?category=workshop&country=NG&chapter=lagos&format=in_person&limit=2').expect(200);
+    const page1 = await member.get('/events?category=workshop&country=NG&chapter=nigeria&format=in_person&limit=2').expect(200);
     expect(page1.body.items.map((e: { id: string }) => e.id)).toEqual(made.slice(0, 2));
     expect(page1.body.items[0].location).toMatchObject({ label: 'Lagos, Nigeria', shortLabel: 'Lagos', countryCode: 'NG' });
-    const page2 = await member.get(`/events?category=workshop&country=NG&chapter=lagos&format=in_person&limit=2&cursor=${page1.body.nextCursor}`).expect(200);
+    const page2 = await member.get(`/events?category=workshop&country=NG&chapter=nigeria&format=in_person&limit=2&cursor=${page1.body.nextCursor}`).expect(200);
     expect(page2.body.items.map((e: { id: string }) => e.id)).toEqual([made[2]]);
     expect(page2.body.nextCursor).toBeNull();
     expect((await member.get('/events?category=nope').expect(200)).body.items).toEqual([]);

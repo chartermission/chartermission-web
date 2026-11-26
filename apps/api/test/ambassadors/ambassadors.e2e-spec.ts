@@ -78,7 +78,7 @@ describe('Ambassadors: admin', () => {
 
     const scored = (await manager.patch(base, { scores: { standing: 12, reach: 13, leadership: 18, motivation: 12, availability: 5, values: 9 } }).expect(200)).body as AdminLeadDetail;
     expect(scored.scoreTotal).toBe(69);
-    await manager.patch(base, { scores: { interview: 21 } }).expect(400);
+    await manager.patch(base, { scores: { interview: 21 } }).expect(422);
 
     // Required training: one Charter Center course.
     const [course] = await t.db
