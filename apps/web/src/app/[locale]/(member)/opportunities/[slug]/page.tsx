@@ -8,7 +8,10 @@ import { Chip, Icon, Panel } from "@chartermission/ui";
 import { formatDayMonth } from "@/components/discover/dates";
 import { OpportunityActions } from "@/components/opportunities/opportunity-actions";
 import { deadlineChip } from "@/components/opportunities/opportunity-dates";
+import { PageName } from "@/components/pages/page-card";
+import { PageLogo } from "@/components/pages/page-logo";
 import { requireClientViewer } from "@/components/social/data";
+import { pageHref } from "@/components/social/links";
 import { AuthorName, MemberAvatar, TimeAgo } from "@/components/social/post-parts";
 import { PanelSkeleton } from "@/components/social/skeletons";
 import { apiGetOrNull } from "@/lib/api/server";
@@ -71,19 +74,37 @@ async function Detail({ params }: Pick<PageProps<"/[locale]/opportunities/[slug]
         </Panel>
 
         <Panel className="flex items-center gap-3 p-5">
-          <MemberAvatar member={o.poster} link />
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-xs text-secondary">Posted by</span>
-            <AuthorName member={o.poster} />
-            {o.poster.headline && <span className="truncate text-xs text-secondary">{o.poster.headline}</span>}
-          </div>
+          {o.page ? (
+            <>
+              {/* Posted as a page (e.g. Charter Mission's official page): the page is the poster. */}
+              <Link href={pageHref(o.page.slug)} tabIndex={-1} aria-hidden="true">
+                <PageLogo name={o.page.name} src={o.page.logoUrl} size={40} />
+              </Link>
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-xs text-secondary">Posted by</span>
+                <Link href={pageHref(o.page.slug)} className="min-w-0 text-md font-medium text-ink hover:underline">
+                  <PageName page={o.page} />
+                </Link>
+                {o.page.tagline && <span className="truncate text-xs text-secondary">{o.page.tagline}</span>}
+              </div>
+            </>
+          ) : (
+            <>
+              <MemberAvatar member={o.poster} link />
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-xs text-secondary">Posted by</span>
+                <AuthorName member={o.poster} />
+                {o.poster.headline && <span className="truncate text-xs text-secondary">{o.poster.headline}</span>}
+              </div>
+            </>
+          )}
           <span className="text-xs text-secondary">
             <TimeAgo iso={o.createdAt} />
           </span>
         </Panel>
       </article>
 
-      <aside aria-label="Apply" className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-24 lg:w-[360px]">
+      <aside id="apply" aria-label="Apply" className="flex scroll-mt-24 w-full shrink-0 flex-col gap-4 lg:sticky lg:top-24 lg:w-[360px]">
         <OpportunityActions opportunity={o} />
         <ShareOutButton
           variant="secondary"

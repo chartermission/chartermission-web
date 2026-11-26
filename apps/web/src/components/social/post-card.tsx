@@ -29,6 +29,7 @@ import {
 import { VideoEmbedPlayer } from "@/components/video/video-player";
 import { PostPoll } from "./post-poll";
 import { SharedEventCard } from "@/components/events/shared-event-card";
+import { OpportunityShareCard } from "@/components/opportunities/opportunity-share-card";
 import { ArticleCover, ArticlePreview } from "./post-types/article";
 import { CelebrationBand } from "./post-types/celebration";
 import { onQuestionChange } from "./post-types/events";
@@ -47,6 +48,16 @@ import { usePostView } from "./view-tracker";
 import type { Viewer } from "./viewer";
 
 const CLAMP_AT = 420;
+
+/**
+ * The post shares a listing its author put up themselves (or that was posted as the same page):
+ * "Posted an opportunity", rather than "Shared an opportunity" for someone else's listing.
+ */
+function postedOwnOpportunity(post: PostView): boolean {
+  const o = post.opportunity;
+  if (!o) return false;
+  return post.page ? o.page?.id === post.page.id : !o.page && o.poster.id === post.author.id;
+}
 
 type Modal = "report" | "delete" | "block" | "mute" | "repost" | null;
 
@@ -621,6 +632,12 @@ export function PostCard({
               </span>
             </p>
           )}
+          {post.isOpportunityShare && (
+            <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
+              <Icon name="briefcase" size={14} />
+              {postedOwnOpportunity(post) ? "Posted an opportunity" : "Shared an opportunity"}
+            </p>
+          )}
           {post.isRepost && !post.body && (
             <p className="-mt-1 flex items-center gap-1.5 text-xs text-secondary">
               <Icon name="repeat" size={14} />
@@ -710,6 +727,7 @@ export function PostCard({
             !post.article && <LinkPreviewCard preview={post.linkPreview} />
           )}
           {post.isEventShare && <SharedEventCard event={post.event} />}
+          {post.isOpportunityShare && <OpportunityShareCard opportunity={post.opportunity} />}
           {post.isRepost && <RepostEmbed original={post.repostOf} />}
           {post.question && !editing && (
             <QuestionFooterNote post={post} detail={detail} />
