@@ -303,4 +303,22 @@ describe('Admin console: opportunities and the import from pasted text', () => {
     await admin.post('/admin/opportunities/00000000-0000-4000-8000-000000000099', { action: 'close' }).expect(404);
     await admin.post('/admin/opportunities/not-a-uuid', { action: 'close' }).expect(404);
   });
+
+  it('with "share each to the feed", every imported listing reaches every member’s feed as a post from the page', async () => {
+    const stranger = await createMember(t, { name: 'Unconnected Member' });
+    const res = (
+      await admin
+        .post('/admin/opportunities/import', { rows: rows(csvRow({ title: 'Feed Bound Analyst Role' })), pageId: official.id, shareToFeed: true })
+        .expect(200)
+    ).body as OpportunityImportResult;
+    const id = res.created[0]!.id;
+    const shared = await t.db.select().from(s.posts).where(eq(s.posts.opportunityId, id));
+    expect(shared).toHaveLength(1);
+    expect(shared[0]).toMatchObject({ pageId: official.id, authorId: admin.id });
+    const feed = await stranger.get('/feed?tab=latest&limit=50').expect(200);
+    const item = feed.body.items.find((p: { id: string }) => p.id === shared[0]!.id);
+    expect(item).toBeDefined();
+    expect(item.isOpportunityShare).toBe(true);
+    expect(item.opportunity).toMatchObject({ id, title: 'Feed Bound Analyst Role', applyUrl: 'mailto:careers@savannapay.example' });
+  });
 });

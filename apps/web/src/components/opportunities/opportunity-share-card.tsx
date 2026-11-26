@@ -4,6 +4,7 @@ import Link from "next/link";
 import { OPPORTUNITY_TYPE_LABELS, REMOTE_MODE_LABELS, type OpportunityCard, type OpportunitySummary } from "@chartermission/contracts";
 import { Chip, Icon, buttonClasses, cn } from "@chartermission/ui";
 import { useIntlTag, useT } from "@/i18n/client";
+import { countryNameOf } from "@/i18n/places";
 import { OPPORTUNITY_TYPE_ICONS, applyLinkLabel } from "./apply-link";
 import { applyByLabel, todayIso } from "./opportunity-dates";
 
@@ -83,9 +84,9 @@ export function OpportunityShareCard({ opportunity: o, preview = false }: { oppo
           <span className="truncate">
             {o.city && <span>{o.city}</span>}
             {o.city && o.country && ", "}
-            {o.country && <span>{o.country.name}</span>}
+            {o.country && <span>{countryNameOf(o.country.code, intl) ?? o.country.name}</span>}
             {(o.city || o.country) && " · "}
-            <span>{REMOTE_MODE_LABELS[o.remoteMode]}</span>
+            <span>{t(REMOTE_MODE_LABELS[o.remoteMode])}</span>
           </span>
         </span>
         <span className={cn("flex items-center gap-1.5", when.tone === "warning" && !closed && "font-medium text-warning")}>
