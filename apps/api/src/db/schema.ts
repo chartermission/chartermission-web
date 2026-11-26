@@ -116,6 +116,9 @@ export const users = pgTable(
     email: text('email').notNull(),
     passwordHash: text('password_hash').notNull(),
     emailVerifiedAt: ts('email_verified_at'),
+    /** A new address waiting for its confirmation link (POST /me/email); `email` stays in use until then. */
+    pendingEmail: text('pending_email'),
+    pendingEmailAt: ts('pending_email_at'),
     status: text('status').notNull().default('unverified'),
     /**
      * Legacy: the account's one TOTP secret from before mfa_devices. Migration 0032 copied it into a
@@ -221,7 +224,7 @@ export const authTokens = pgTable(
   },
   (t) => [
     index('auth_tokens_user_idx').on(t.userId, t.purpose),
-    check('auth_tokens_purpose_ck', sql`${t.purpose} in ('verify','reset')`),
+    check('auth_tokens_purpose_ck', sql`${t.purpose} in ('verify','reset','email_change')`),
   ],
 );
 

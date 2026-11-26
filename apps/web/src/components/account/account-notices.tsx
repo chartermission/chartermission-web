@@ -8,6 +8,7 @@ import type { SessionUser } from "@chartermission/contracts";
 import { Button, Icon, cn, type IconName } from "@chartermission/ui";
 import { api } from "@/lib/api/client";
 import { ResendVerification } from "@/components/auth/resend-verification";
+import { CHANGE_EMAIL_ANCHOR, CHANGE_EMAIL_EVENT } from "@/components/settings/email-editor";
 import { formatDateTime } from "./format";
 import { PasswordConfirmDialog } from "./password-confirm-dialog";
 
@@ -116,7 +117,10 @@ export function AccountBanners({ viewer }: { viewer: AccountNoticeViewer }) {
         actions={<ResendVerification size="small" label="Resend email" className="items-end max-sm:items-start" />}
       >
         <strong className="font-medium text-ink">Verify your email to post, comment and connect.</strong> We sent a link to{" "}
-        <span className="break-all">{viewer.email}</span>.
+        <span className="break-all" dir="ltr">{viewer.email}</span>.{" "}
+        <Link href={`/settings#${CHANGE_EMAIL_ANCHOR}`} onClick={() => window.dispatchEvent(new Event(CHANGE_EMAIL_EVENT))} className={linkClasses}>
+          Wrong email? Change it
+        </Link>
       </Banner>,
     );
   }

@@ -77,6 +77,39 @@ export type ResetPasswordInput = z.infer<typeof ResetPasswordInput>;
 export const ChangePasswordInput = z.object({ currentPassword: z.string().min(1).max(128), newPassword: Password });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordInput>;
 
+/*
+ * Changing the account's email address.
+ *
+ *   POST   /me/email           { email, password } → EmailChangeResult
+ *       Confirmed accounts: the new address gets a link (24 hours) and the current one a heads-up; the
+ *       current address keeps working until the link is opened. Accounts that never confirmed their
+ *       address (usually a typo at sign-up) switch straight away and the verification link goes to the
+ *       new address.
+ *   POST   /me/email/resend    sends the pending link again
+ *   DELETE /me/email           cancels a pending change
+ *   POST   /auth/email/confirm { token } → Ok (opened from the email; no session needed)
+ *   POST   /auth/email/correct { email, password, newEmail } → Ok
+ *       From the "check your email" page after sign-up, before signing in: fixes a mistyped address
+ *       on an account that hasn't confirmed it yet.
+ */
+const NewEmail = z.string().trim().toLowerCase().email("Enter a valid email address").max(254);
+export const ChangeEmailInput = z.object({ email: NewEmail, password: z.string().min(1, "Enter your password").max(128) });
+export type ChangeEmailInput = z.infer<typeof ChangeEmailInput>;
+export const EmailChangeResult = z.object({
+  /** "pending": waiting for the link sent to `email`; "changed": the address was switched (unconfirmed accounts). */
+  status: z.enum(["pending", "changed"]),
+  email: z.string(),
+});
+export type EmailChangeResult = z.infer<typeof EmailChangeResult>;
+export const ConfirmEmailChangeInput = z.object({ token: z.string().min(16).max(200) });
+export type ConfirmEmailChangeInput = z.infer<typeof ConfirmEmailChangeInput>;
+export const CorrectEmailInput = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  password: z.string().min(1, "Enter your password").max(128),
+  newEmail: NewEmail,
+});
+export type CorrectEmailInput = z.infer<typeof CorrectEmailInput>;
+
 /** POST /auth/mfa/setup → secret to show once and an otpauth:// URL for QR codes. */
 export const MfaSetupResponse = z.object({ secret: z.string(), otpauthUrl: z.string(), qrSvg: z.string() });
 export type MfaSetupResponse = z.infer<typeof MfaSetupResponse>;
@@ -145,6 +178,8 @@ export const SessionUser = z.object({
   id: z.string().uuid(),
   email: z.string(),
   emailVerified: z.boolean(),
+  /** A new address waiting for its confirmation link (POST /me/email); the current `email` works until then. */
+  pendingEmail: z.string().nullable().optional(),
   status: AccountStatus,
   handle: z.string(),
   name: z.string(),

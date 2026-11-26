@@ -71,6 +71,7 @@ export class AccountService {
       id: user.id,
       email: user.email,
       emailVerified: !!user.emailVerifiedAt,
+      pendingEmail: user.pendingEmail,
       status: user.status as SessionUser['status'],
       handle: profile.handle,
       name: profile.displayName,

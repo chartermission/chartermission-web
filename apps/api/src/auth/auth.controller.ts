@@ -31,6 +31,10 @@ import {
   AdminSsoInput,
   type PolicyVersions,
   type Taxonomies,
+  ChangeEmailInput,
+  ConfirmEmailChangeInput,
+  CorrectEmailInput,
+  type EmailChangeResult,
 } from '@chartermission/contracts';
 import { SettingsService } from '../infra/settings.service.js';
 import { Access, AllowPendingMfa, Auth, OptionalAuth } from '../core/guards.js';
@@ -45,6 +49,7 @@ import { TaxonomyService, isUuid } from '../profiles/taxonomy.service.js';
 import { AuthService } from './auth.service.js';
 import { MfaService } from './mfa.service.js';
 import { AccountService } from './account.service.js';
+import { EmailChangeService } from './email-change.service.js';
 import { OnboardingService } from './onboarding.service.js';
 
 const OK: Ok = { ok: true };
@@ -55,7 +60,24 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly mfa: MfaService,
+    private readonly emailChange: EmailChangeService,
   ) {}
+
+  /** Opened from the link sent to a new address (POST /me/email). */
+  @Post('email/confirm')
+  @HttpCode(200)
+  async confirmEmailChange(@ZBody(ConfirmEmailChangeInput) input: ConfirmEmailChangeInput, @Req() req: AppRequest): Promise<Ok> {
+    await this.emailChange.confirm(input.token, clientIp(req));
+    return OK;
+  }
+
+  /** Fixes a mistyped address right after sign-up, before the account is confirmed. */
+  @Post('email/correct')
+  @HttpCode(200)
+  async correctEmail(@ZBody(CorrectEmailInput) input: CorrectEmailInput, @Req() req: AppRequest): Promise<Ok> {
+    await this.emailChange.correct(input, clientIp(req));
+    return OK;
+  }
 
   @Post('register')
   @HttpCode(202)
@@ -197,7 +219,30 @@ export class AccountController {
   constructor(
     private readonly account: AccountService,
     private readonly onboarding: OnboardingService,
+    private readonly emailChange: EmailChangeService,
   ) {}
+
+  @Post('email')
+  @HttpCode(200)
+  @Access('session')
+  changeEmail(@Auth() ctx: AuthContext, @ZBody(ChangeEmailInput) input: ChangeEmailInput, @Req() req: AppRequest): Promise<EmailChangeResult> {
+    return this.emailChange.request(ctx, input, clientIp(req));
+  }
+
+  @Post('email/resend')
+  @HttpCode(202)
+  @Access('session')
+  async resendEmailChange(@Auth() ctx: AuthContext): Promise<Ok> {
+    await this.emailChange.resend(ctx);
+    return OK;
+  }
+
+  @Delete('email')
+  @Access('session')
+  async cancelEmailChange(@Auth() ctx: AuthContext, @Req() req: AppRequest): Promise<Ok> {
+    await this.emailChange.cancel(ctx, clientIp(req));
+    return OK;
+  }
 
   @Get()
   @Access('session')

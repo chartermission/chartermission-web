@@ -6,7 +6,7 @@ import { buttonClasses } from "@chartermission/ui";
 import { AuthStatus } from "./auth-shell";
 import { DevMailbox } from "./dev-mailbox";
 import { ResendVerification } from "./resend-verification";
-import { textLinkClasses } from "./fields";
+import { CorrectEmail } from "./correct-email";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -49,16 +49,14 @@ export function CheckEmail({ email }: { email: string | null }) {
       <div className="flex flex-col gap-2">
         <p className="text-sm text-secondary">Nothing yet? Check your spam folder, then send it again.</p>
         <ResendVerification email={email ?? undefined} askEmail={!email} onSent={() => setMailboxKey((key) => key + 1)} />
+        <CorrectEmail key={email ?? ""} email={email} />
       </div>
 
-      {isDev && email && <DevMailbox key={mailboxKey} email={email} kind="verify" />}
+      {isDev && email && <DevMailbox key={`${email}-${mailboxKey}`} email={email} kind="verify" />}
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-[18px]">
         <Link href="/signin" className={buttonClasses({ variant: "primary" })}>
           Go to sign in
-        </Link>
-        <Link href="/signup" className={`px-1 py-2.5 text-sm ${textLinkClasses}`}>
-          Use a different email
         </Link>
       </div>
     </div>

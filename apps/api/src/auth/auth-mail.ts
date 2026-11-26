@@ -102,6 +102,34 @@ export class AuthMailer {
     ]);
   }
 
+  /** To the new address: the link that makes it the account's email (POST /me/email). */
+  emailChangeConfirm(to: To, token: string) {
+    return this.send(to, 'auth.email_change', 'Confirm your new email for Charter Mission', {
+      heading: 'Confirm your new email address',
+      paragraphs: [
+        `Confirm that ${to.email} is the email you want to use for your Charter Mission account.`,
+        'Until you do, you keep signing in with your current email. This link works once and expires in 24 hours.',
+        'If you didn’t ask for this, you can ignore this email.',
+      ],
+      button: { label: 'Confirm new email', url: webUrl(`/confirm-email?token=${token}`) },
+    });
+  }
+
+  /** To the current address when a change is requested. */
+  emailChangeRequested(to: To, newEmail: string) {
+    return this.security(to, 'email_change_requested', 'Your email is being changed', [
+      `Someone signed in to your Charter Mission account asked to change its email to ${newEmail}.`,
+      'Nothing changes until the link sent to that address is opened. You can cancel the change in Settings.',
+    ]);
+  }
+
+  /** To the previous address once the change is confirmed. */
+  emailChanged(to: To, newEmail: string) {
+    return this.security(to, 'email_changed', 'Your email was changed', [
+      `The email for your Charter Mission account is now ${newEmail}. Use it to sign in from now on.`,
+    ]);
+  }
+
   deletionRequested(to: To) {
     return this.send(
       to,

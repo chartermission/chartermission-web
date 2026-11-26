@@ -27,6 +27,7 @@ async function AccountSections() {
       <AccountOverview
         email={viewer.email}
         emailVerified={viewer.emailVerified}
+        pendingEmail={viewer.pendingEmail ?? null}
         status={viewer.status}
         handle={own?.handle ?? viewer.handle}
         handleChangeAvailableAt={own?.handleChangeAvailableAt ?? null}

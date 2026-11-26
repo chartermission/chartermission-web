@@ -6,12 +6,13 @@ import { authTokens } from '../db/schema.js';
 import { randomToken, sha256 } from '../common/crypto.js';
 import { Errors } from '../common/errors.js';
 
-export type TokenPurpose = 'verify' | 'reset';
+export type TokenPurpose = 'verify' | 'reset' | 'email_change';
 
 /** Lifetimes (spec 4.2, proposed): verification 24 hours, password reset 60 minutes. */
 export const TOKEN_TTL_MS: Record<TokenPurpose, number> = {
   verify: 24 * 3600_000,
   reset: 60 * 60_000,
+  email_change: 24 * 3600_000,
 };
 
 /** Single-use email tokens; only a SHA-256 of the token is stored (spec 5.1 AuthToken). */

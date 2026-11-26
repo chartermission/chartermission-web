@@ -281,6 +281,13 @@
       "when": 1795649152302,
       "tag": "0039_profile_views_milestones",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795731036119,
+      "tag": "0040_email_change",
+      "breakpoints": true
     }
   ]
 }
