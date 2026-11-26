@@ -40,6 +40,7 @@ export const PERMISSIONS = {
   'pages.manage': 'Create pages, review pages members create, verify, suspend and remove pages',
   'groups.manage': 'Suspend, restore, feature and delete groups, change their owner and export their members',
   'members.message': 'Send emails, messages and notifications to members as Charter Mission, and answer replies in the Charter Mission inbox',
+  'opportunity.manage': 'Bring in opportunities from outside (pasted text → CSV) and post them as Charter Mission pages; close, reopen and remove any opportunity',
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -87,6 +88,7 @@ const PLATFORM_ADMIN: Permission[] = [
   'audit.export',
   'members.manage',
   'members.message',
+  'opportunity.manage',
   'roles.manage',
   'settings.manage',
 ];

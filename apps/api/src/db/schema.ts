@@ -593,6 +593,8 @@ export const posts = pgTable(
     repostOfId: uuid('repost_of_id'),
     /** An event shared to the feed: the post shows the event's card (contracts PostComposition.eventId). */
     eventId: uuid('event_id').references((): AnyPgColumn => events.id, { onDelete: 'set null' }),
+    /** An opportunity shared to the feed: the post shows the opportunity's card. */
+    opportunityId: uuid('opportunity_id').references((): AnyPgColumn => opportunities.id, { onDelete: 'set null' }),
     /** An update an organiser posted on an initiative (shown on it and to its followers). */
     initiativeId: uuid('initiative_id').references((): AnyPgColumn => initiatives.id, { onDelete: 'set null' }),
     /** Published as a page by one of its admins (author_id stays the admin who wrote it). */
@@ -2338,6 +2340,15 @@ export const opportunities = pgTable(
     deadline: text('deadline'),
     compensation: text('compensation'),
     moreInfoUrl: text('more_info_url'),
+    /**
+     * Where to apply when it isn't in Charter Mission: an https link or a mailto: address. Set, it
+     * replaces in-app applications (listings brought in from outside, e.g. WhatsApp groups).
+     */
+    applyUrl: text('apply_url'),
+    /** Posted as this page (e.g. Charter Mission's official page); posterId is the staff member who posted it. */
+    pageId: uuid('page_id').references((): AnyPgColumn => pages.id, { onDelete: 'set null' }),
+    /** 'member' (the opportunity form) or 'import' (pasted text turned into a CSV in the admin console). */
+    source: text('source').notNull().default('member'),
     status: text('status').notNull().default('open'),
     moderationState: text('moderation_state').notNull().default('visible'),
     applicationCount: integer('application_count').notNull().default(0),
@@ -2357,6 +2368,8 @@ export const opportunities = pgTable(
     check('opportunities_remote_ck', sql`${t.remoteMode} in ('remote','in_person','hybrid')`),
     check('opportunities_status_ck', sql`${t.status} in ('open','closed')`),
     check('opportunities_mod_ck', sql`${t.moderationState} in ('visible','hidden','removed')`),
+    check('opportunities_source_ck', sql`${t.source} in ('member','import')`),
+    index('opportunities_page_idx').on(t.pageId),
   ],
 );
 

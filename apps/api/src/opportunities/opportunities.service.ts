@@ -30,6 +30,8 @@ import { decodeCursor, encodeCursor, paginate } from '../common/cursor.js';
 import { isUuid } from '../media/uuid-param.js';
 import { escapeLike, slugify } from '../events/event-util.js';
 import { assertNotRestricted } from '../posts/posts.service.js';
+import { PageRefsService } from '../core/page-refs.service.js';
+import { OpportunityFeedService } from './opportunity-feed.service.js';
 
 export type OpportunityRow = typeof opportunities.$inferSelect;
 type ApplicationRow = typeof opportunityApplications.$inferSelect;
@@ -70,6 +72,8 @@ export class OpportunitiesService {
     private readonly events: EventsService,
     private readonly limits: RateLimitService,
     private readonly audit: AuditService,
+    private readonly pageRefs: PageRefsService,
+    private readonly feed: OpportunityFeedService,
   ) {}
 
   /* ------------------------------ Browse ------------------------------ */
@@ -188,14 +192,43 @@ export class OpportunitiesService {
   async create(user: AuthUser, raw: OpportunityInput, ip?: string): Promise<OpportunityDetail> {
     assertNotRestricted(user);
     const input = OpportunityInput.parse(raw);
-    await this.checkInput(input);
     await this.limits.consume(`opportunities:${user.id}`, LISTINGS_PER_DAY, 24 * 3600);
+    const row = await this.createListing(user, input, { source: 'member' }, ip);
+    return this.toDetail(user, row);
+  }
+
+  /**
+   * Inserts a listing (already parsed) and, when asked, shares it to the feed. Used by the member
+   * form and by the admin import (`pageId`: post as that page; `source: 'import'`). Callers check
+   * permissions and rate limits; this checks the country, sector and deadline.
+   */
+  async createListing(
+    user: AuthUser,
+    input: OpportunityInputParsed,
+    opts: { source: 'member' | 'import'; pageId?: string | null },
+    ip?: string,
+  ): Promise<OpportunityRow> {
+    await this.checkInput(input);
     const [row] = await this.db
       .insert(opportunities)
-      .values({ ...this.columns(input), slug: `${slugify(input.title).slice(0, 60).replace(/-$/, '')}-${randomBytes(3).toString('hex')}`, posterId: user.id })
+      .values({
+        ...this.columns(input),
+        slug: `${slugify(input.title).slice(0, 60).replace(/-$/, '')}-${randomBytes(3).toString('hex')}`,
+        posterId: user.id,
+        pageId: opts.pageId ?? null,
+        source: opts.source,
+      })
       .returning();
-    await this.audit.record({ actorId: user.id, action: 'opportunity.create', targetType: 'opportunity', targetId: row!.id, ip });
-    return this.toDetail(user, row!);
+    await this.audit.record({
+      actorId: user.id,
+      action: opts.source === 'import' ? 'opportunity.import' : 'opportunity.create',
+      targetType: 'opportunity',
+      targetId: row!.id,
+      after: opts.pageId ? { pageId: opts.pageId } : undefined,
+      ip,
+    });
+    if (input.shareToFeed) await this.feed.share(row!);
+    return row!;
   }
 
   /** PATCH /opportunities/{id} — the poster edits the whole listing. */
@@ -379,6 +412,7 @@ export class OpportunitiesService {
   }
 
   private cannotApply(user: AuthUser, row: OpportunityRow): string | null {
+    if (row.applyUrl) return 'Apply using the link on this listing';
     if (row.posterId === user.id) return 'This is your listing';
     if (row.moderationState !== 'visible') return 'This listing is not available';
     if (row.status !== 'open') return 'Applications for this opportunity are closed';
@@ -417,6 +451,7 @@ export class OpportunitiesService {
       deadline: input.deadline,
       compensation: input.compensation || null,
       moreInfoUrl: input.moreInfoUrl || null,
+      applyUrl: input.applyUrl,
     };
   }
 
@@ -438,8 +473,10 @@ export class OpportunitiesService {
     const ids = rows.map((r) => r.id);
     const countryCodes = [...new Set(rows.map((r) => r.countryCode).filter((c): c is string => !!c))];
     const sectorIds = [...new Set(rows.map((r) => r.sectorId).filter((s): s is string => !!s))];
-    const [posters, countryRows, sectorRows, saved, applied] = await Promise.all([
+    const pageIds = [...new Set(rows.map((r) => r.pageId).filter((p): p is string => !!p))];
+    const [posters, pageMap, countryRows, sectorRows, saved, applied] = await Promise.all([
       this.members.refs(rows.map((r) => r.posterId)),
+      pageIds.length ? this.pageRefs.refs(pageIds) : new Map(),
       countryCodes.length ? this.db.select({ code: countries.code, name: countries.name }).from(countries).where(inArray(countries.code, countryCodes)) : [],
       sectorIds.length ? this.db.select({ id: sectors.id, slug: sectors.slug, name: sectors.name }).from(sectors).where(inArray(sectors.id, sectorIds)) : [],
       this.db
@@ -478,6 +515,8 @@ export class OpportunitiesService {
           moderationState: r.moderationState as OpportunitySummary['moderationState'],
           applicationCount: r.applicationCount,
           poster,
+          page: r.pageId && pageMap.get(r.pageId) ? PageRefsService.toRef(pageMap.get(r.pageId)!) : null,
+          applyUrl: r.applyUrl,
           createdAt: r.createdAt.toISOString(),
           viewer: { saved: savedSet.has(r.id), isOwner: r.posterId === user.id, applicationStatus: appliedMap.get(r.id) ?? null },
         },
@@ -505,7 +544,8 @@ export class OpportunitiesService {
       viewer: {
         ...summary.viewer,
         canApply: !reason,
-        cannotApplyReason: own ? null : reason,
+        // Listings with their own apply link show that link instead of a reason.
+        cannotApplyReason: own || row.applyUrl ? null : reason,
         canManage: own,
         canReport: !own && user.permissions.has('report.create'),
         application: app ? this.applicationView(app) : null,

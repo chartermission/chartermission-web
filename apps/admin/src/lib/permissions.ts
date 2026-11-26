@@ -41,6 +41,8 @@ export const PERM = {
   pagesManage: "pages.manage",
   /** Groups: suspend, restore, feature, delete, change the owner, export members. Platform Admin and above (moderators look through moderation.view). */
   groupsManage: "groups.manage",
+  /** Opportunities: import from pasted text (via a CSV), post as Charter Mission pages, close/reopen/remove any. Platform Admin and above. */
+  opportunityManage: "opportunity.manage",
 } as const;
 
 export type ConsoleViewer = Pick<SessionUser, "id" | "name" | "handle" | "avatarUrl" | "tone" | "roles" | "permissions">;

@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { EXTERNAL_URL_MAX_CHARS, MemberRef, QueryBoolean, type TaxonomyItem } from "./common.js";
+import { EXTERNAL_URL_MAX_CHARS, MemberRef, QueryBoolean, type PageRef, type TaxonomyItem } from "./common.js";
 import { OpportunityType, RemoteMode } from "./listings.js";
 
 /*
  * Opportunities: jobs, fellowships, grants and other openings posted by verified members.
  * Listings go live straight away; members report bad ones and moderators remove them.
  * Members apply inside Charter Mission with their profile and a note; the poster reviews
- * applicants in the app.
+ * applicants in the app — unless the listing has an `applyUrl` (a link or an email address on
+ * the organisation's side), as listings staff bring in from WhatsApp groups and forums do.
+ * Staff can post listings as one of Charter Mission's official pages (`page`).
+ * New listings are shared to the feed as a post carrying the listing's card (`shareToFeed`).
  */
 
 export const OPPORTUNITY_TYPE_LABELS: Record<OpportunityType, string> = {
@@ -56,6 +59,26 @@ export const OPPORTUNITY_LIMITS = {
 
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-12-31");
 
+const EMAIL = /^[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+$/;
+
+/**
+ * Where to apply outside Charter Mission, as stored: an https link, or mailto: for an email address
+ * ("jobs@acme.org" and "mailto:jobs@acme.org" both become "mailto:jobs@acme.org"). Null when it's
+ * neither.
+ */
+export function normalizeApplyUrl(raw: string | null | undefined): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const email = value.replace(/^mailto:/i, "");
+  if (EMAIL.test(email) && !/^https?:/i.test(value)) return `mailto:${email}`;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** POST /opportunities and PATCH /opportunities/{id} (the whole listing each time). */
 export const OpportunityInput = z
   .object({
@@ -73,6 +96,13 @@ export const OpportunityInput = z
     compensation: z.string().trim().max(OPPORTUNITY_LIMITS.compensation).nullable().default(null),
     /** Optional page with more detail. Applications still happen in Charter Mission. */
     moreInfoUrl: z.string().trim().url("Enter a full link starting with https://").max(EXTERNAL_URL_MAX_CHARS).nullable().default(null),
+    /**
+     * Apply on the organisation's side instead of in Charter Mission: a link or an email address
+     * (stored as mailto:). Null keeps applications in Charter Mission.
+     */
+    applyUrl: z.string().trim().max(EXTERNAL_URL_MAX_CHARS).nullable().default(null),
+    /** POST only: also share the new listing to the feed (on by default). Ignored by PATCH. */
+    shareToFeed: z.boolean().default(true),
   })
   .superRefine((v, ctx) => {
     if (v.remoteMode !== "remote" && !v.countryCode) {
@@ -81,7 +111,11 @@ export const OpportunityInput = z
     if (v.moreInfoUrl && !/^https?:\/\//i.test(v.moreInfoUrl)) {
       ctx.addIssue({ code: "custom", path: ["moreInfoUrl"], message: "Enter a full link starting with https://" });
     }
-  });
+    if (v.applyUrl && !normalizeApplyUrl(v.applyUrl)) {
+      ctx.addIssue({ code: "custom", path: ["applyUrl"], message: "Enter a link starting with https:// or an email address" });
+    }
+  })
+  .transform((v) => ({ ...v, applyUrl: normalizeApplyUrl(v.applyUrl) }));
 export type OpportunityInput = z.input<typeof OpportunityInput>;
 export type OpportunityInputParsed = z.output<typeof OpportunityInput>;
 
@@ -130,7 +164,12 @@ export type OpportunitySummary = {
   /** Hidden or removed by a moderator (only the poster and moderators see these). */
   moderationState: "visible" | "hidden" | "removed";
   applicationCount: number;
+  /** The member who posted it (for page listings, the staff member or page admin who did). */
   poster: MemberRef;
+  /** Posted as this page: show the page as the poster. */
+  page: PageRef | null;
+  /** Apply here instead of in Charter Mission (https link or mailto:). */
+  applyUrl: string | null;
   createdAt: string;
   viewer: {
     saved: boolean;
