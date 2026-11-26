@@ -15,6 +15,7 @@ import {
 } from "@chartermission/contracts";
 import { Button, Divider, Icon, cn } from "@chartermission/ui";
 import { CountrySelect } from "@/components/account/country-select";
+import { CHAPTER_INLINE_MAX, ChapterPicker } from "@/components/chapters/chapter-picker";
 import { Field, inputClasses } from "@/components/auth/fields";
 import { PagePictureField } from "@/components/pages/picture-field";
 import { PageLogo } from "@/components/pages/page-logo";
@@ -30,7 +31,7 @@ const TAGLINE_MAX = 120;
 const JOIN_QUESTION_MAX = 300;
 const MAX_HASHTAGS = 5;
 
-export type OwnerOption = { type: GroupOwnerType; id: string; slug?: string; name: string; logoUrl?: string | null; note: string };
+export type OwnerOption = { type: GroupOwnerType; id: string; slug?: string; name: string; logoUrl?: string | null; note: string; countryCode?: string };
 
 type Values = {
   name: string;
@@ -116,6 +117,8 @@ export function GroupForm({
   const [serverError, setServerError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState<Record<string, unknown> | null>(null);
+  /** The chapter last chosen in the "Run as" picker, kept while another choice is selected. */
+  const [lastChapter, setLastChapter] = useState(() => (values.owner.startsWith("chapter:") ? values.owner.slice("chapter:".length) : ""));
 
   const host = useHost();
   const slug = editing ? group.slug : slugEdited ? values.slug : slugFromName(values.name);
@@ -207,6 +210,7 @@ export function GroupForm({
       }
     }
     if (!editing && slugEdited && !values.slug) next.slug = t("Choose an address for the group");
+    if (!editing && values.owner === "chapter:") next.chapterId = t("Choose the chapter that runs it");
     if (Object.keys(next).length) {
       setErrors(next);
       focusFirst(next);
@@ -225,7 +229,14 @@ export function GroupForm({
     </span>
   );
 
-  const ownerChoices: OwnerOption[] = [{ type: "member", id: "", name: t("Me"), note: t("You run it, and can add admins and moderators.") }, ...owners];
+  // Many chapters (staff can run a group for any of them): one "A chapter" choice, and the chapter in a picker.
+  const chapterOwners = owners.filter((o) => o.type === "chapter");
+  const pickChapter = chapterOwners.length > CHAPTER_INLINE_MAX;
+  const ownerChoices: OwnerOption[] = [
+    { type: "member", id: "", name: t("Me"), note: t("You run it, and can add admins and moderators.") },
+    ...owners.filter((o) => !pickChapter || o.type !== "chapter"),
+  ];
+  const runByChapter = values.owner.startsWith("chapter:");
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
@@ -386,9 +397,32 @@ export function GroupForm({
                 note={owner.note}
               />
             ))}
+            {pickChapter && (
+              <Choice
+                name="group-owner"
+                checked={runByChapter}
+                onChange={() => set("owner", `chapter:${lastChapter}`)}
+                icon={<Icon name="globe" size={18} />}
+                title={t("A chapter")}
+                note={t("The chapter team runs it with you.")}
+              />
+            )}
           </div>
-          {(errors.ownerType || errors.pageId || errors.chapterId) && (
-            <p className="text-xs text-error">{errors.ownerType ?? errors.pageId ?? errors.chapterId}</p>
+          {pickChapter && runByChapter ? (
+            <ChapterPicker
+              id="group-chapterId"
+              label={t("Chapter")}
+              options={chapterOwners.map((o) => ({ id: o.id, slug: o.slug ?? o.id, name: o.name, countryCode: o.countryCode ?? "" }))}
+              value={values.owner.slice("chapter:".length) || null}
+              onChange={(id) => {
+                set("owner", `chapter:${id ?? ""}`);
+                if (id) setLastChapter(id);
+                clearError("chapterId");
+              }}
+              error={errors.chapterId ?? errors.ownerType}
+            />
+          ) : (
+            (errors.ownerType || errors.pageId || errors.chapterId) && <p className="text-xs text-error">{errors.ownerType ?? errors.pageId ?? errors.chapterId}</p>
           )}
         </fieldset>
       )}

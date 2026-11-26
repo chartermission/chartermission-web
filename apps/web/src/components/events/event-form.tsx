@@ -24,6 +24,7 @@ import {
 } from "@chartermission/contracts";
 import { Avatar, Button, Icon, Panel, buttonClasses, cn, type IconName } from "@chartermission/ui";
 import { CountrySelect } from "@/components/account/country-select";
+import { CHAPTER_INLINE_MAX, ChapterPicker } from "@/components/chapters/chapter-picker";
 import { inputClasses } from "@/components/auth/fields";
 import { Switch } from "@/components/settings/controls";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
@@ -214,6 +215,7 @@ function humanise(path: string, message: string): string {
   }
   if (/expected number, received nan/i.test(message)) return "Enter a capacity, or choose unlimited";
   if (path === "venue.countryCode") return "Choose the country";
+  if (path === "host.chapterId") return "Choose the chapter that hosts it";
   return message;
 }
 
@@ -484,6 +486,8 @@ export function EventForm({ mode, event, viewer, hostOptions, categories: offere
   const [previewDescription, setPreviewDescription] = useState(false);
   const [linking, setLinking] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
+  /** The chapter last chosen in the host picker, kept while "You" is selected. */
+  const [hostChapter, setHostChapter] = useState(event?.host.type === "chapter" ? event.host.chapter.id : "");
   const summaryRef = useRef<HTMLDivElement>(null);
   const done = useRef(false);
   const zones = useMemo(() => timeZoneOptions(), []);
@@ -655,6 +659,9 @@ export function EventForm({ mode, event, viewer, hostOptions, categories: offere
     ...(hostOptions.canHostAsMember ? [{ value: "member", title: t("You ({name})", { name: viewer.name }), description: "Hosted by you as a member", icon: "user" as const }] : []),
     ...hostOptions.chapters.map((c) => ({ value: c.id, title: c.name, description: "A chapter you lead", icon: "building" as const })),
   ];
+  // Many chapters (staff can host as any of them): "You" or "A chapter", and the chapter in a picker.
+  const pickHostChapter = hostOptions.chapters.length > CHAPTER_INLINE_MAX;
+  const hostingAsChapter = s.host !== "member" || !hostOptions.canHostAsMember;
 
   return (
     <form
@@ -797,12 +804,43 @@ export function EventForm({ mode, event, viewer, hostOptions, categories: offere
         ) : (
           <fieldset id="host" tabIndex={-1} className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
             <legend className="sr-only">Host</legend>
-            {hostChoices.map((choice) => (
-              <ChoiceCard key={choice.value} name="host" value={choice.value} checked={s.host === choice.value} onChange={() => set("host", choice.value)} title={choice.title} description={choice.description} icon={choice.icon} />
-            ))}
+            {pickHostChapter ? (
+              <>
+                {hostOptions.canHostAsMember && (
+                  <ChoiceCard name="host" value="member" checked={!hostingAsChapter} onChange={() => set("host", "member")} title={hostChoices[0]!.title} description={hostChoices[0]!.description} icon="user" />
+                )}
+                <ChoiceCard
+                  name="host"
+                  value="chapter"
+                  checked={hostingAsChapter}
+                  onChange={() => set("host", hostChapter)}
+                  title={t("A chapter")}
+                  description={t("Listed under the chapter you choose")}
+                  icon="building"
+                />
+              </>
+            ) : (
+              hostChoices.map((choice) => (
+                <ChoiceCard key={choice.value} name="host" value={choice.value} checked={s.host === choice.value} onChange={() => set("host", choice.value)} title={choice.title} description={choice.description} icon={choice.icon} />
+              ))
+            )}
           </fieldset>
         )}
-        {errorFor("host") && <p className="text-xs text-error">{errorFor("host")}</p>}
+        {!hostLocked && pickHostChapter && hostingAsChapter ? (
+          <ChapterPicker
+            id="host-chapter"
+            label={t("Hosting chapter")}
+            options={hostOptions.chapters}
+            value={s.host && s.host !== "member" ? s.host : null}
+            onChange={(id) => {
+              set("host", id ?? "");
+              if (id) setHostChapter(id);
+            }}
+            error={errorFor("host")}
+          />
+        ) : (
+          errorFor("host") && <p className="text-xs text-error">{errorFor("host")}</p>
+        )}
       </Section>
 
       {/* When */}

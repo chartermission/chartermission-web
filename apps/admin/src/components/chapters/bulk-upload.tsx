@@ -7,6 +7,7 @@ import { selectClasses } from "@/components/ambassadors/modal";
 import { api, errorMessage } from "@/lib/api/client";
 import { uploadFile } from "@/lib/upload";
 import { T, useT } from "@/i18n/client";
+import { ChapterPicker } from "@/components/chapter-picker";
 
 type Kind = "picture" | "cover";
 type Item = {
@@ -238,23 +239,15 @@ export function BulkPictureUpload({
                         </div>
                       </td>
                       <td className="py-2 pr-2">
-                        <span className="relative block">
-                          <select
-                            aria-label={t("Chapter for {name}", { name: item.file.name })}
-                            value={item.chapterId}
-                            disabled={locked}
-                            onChange={(e) => update(item.key, { chapterId: e.target.value })}
-                            className={selectClasses(!item.chapterId)}
-                          >
-                            <option value="">No match: choose a chapter</option>
-                            {sorted.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                          <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 right-3 my-auto h-fit text-secondary" />
-                        </span>
+                        <ChapterPicker
+                          label={t("Chapter for {name}", { name: item.file.name })}
+                          hideLabel
+                          options={sorted}
+                          value={item.chapterId || null}
+                          onChange={(chapterId) => update(item.key, { chapterId: chapterId ?? "" })}
+                          disabled={locked}
+                          placeholder={t("No match")}
+                        />
                         {dup && <span className="text-xs text-warning">Another file is set for this chapter; the last one uploaded wins.</span>}
                       </td>
                       <td className="py-2 pr-2">

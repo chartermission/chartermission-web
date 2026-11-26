@@ -6,7 +6,7 @@ import type { ChapterRef, SuggestedMember } from "@chartermission/contracts";
 import { Avatar, Button, Icon, cn, VerifiedBadge } from "@chartermission/ui";
 import { api, isApiError } from "@/lib/api/client";
 import { RestrictedPrompt, VerifyPrompt } from "@/components/account/verify-prompt";
-import { ChipPicker } from "./chip-picker";
+import { ChapterPicker } from "@/components/chapters/chapter-picker";
 import { T } from "@/i18n/client";
 
 type ConnectState = "idle" | "sending" | "sent";
@@ -51,12 +51,6 @@ export function CommunityStep({
         });
     }
   }
-
-  const sortedChapters = [...chapters].sort((a, b) => {
-    const aLocal = a.countryCode === countryCode ? 0 : 1;
-    const bLocal = b.countryCode === countryCode ? 0 : 1;
-    return aLocal - bLocal || a.name.localeCompare(b.name);
-  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -145,15 +139,29 @@ export function CommunityStep({
         )}
       </section>
 
-      <ChipPicker
-        label="Chapters to follow"
-        description="Chapters share events and news from a country, at home or in the diaspora."
-        options={sortedChapters.map((chapter) => ({ id: chapter.id, label: chapter.name }))}
-        selected={followedChapterIds}
-        onChange={(next) => onChange({ followedChapterIds: next })}
-        max={10}
-        emptyText="No chapters yet."
-      />
+      <section aria-labelledby="community-chapters" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h3 id="community-chapters" className="text-md font-medium text-ink">
+            Chapters to follow
+          </h3>
+          <p className="text-sm text-secondary">Chapters share events and news from a country, at home or in the diaspora.</p>
+        </div>
+        {chapters.length === 0 ? (
+          <p className="text-sm text-secondary">No chapters yet.</p>
+        ) : (
+          <ChapterPicker
+            multiple
+            label="Chapters to follow"
+            hideLabel
+            options={chapters}
+            homeCountry={countryCode}
+            value={followedChapterIds}
+            onChange={(next) => onChange({ followedChapterIds: next })}
+            max={10}
+            placeholder="No chapters chosen yet."
+          />
+        )}
+      </section>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { formatCount } from "@/lib/format";
 import { webHref } from "@/lib/navigation";
 import { useT } from "@/i18n/client";
 import { GROUP_ACTION_LABEL, GROUP_STATUS, groupActions, useGroupActions } from "./group-actions";
+import { ChapterFilter } from "@/components/chapter-picker";
 
 type Tab = AdminGroupsQuery["status"];
 type Sort = AdminGroupsQuery["sort"];
@@ -296,12 +297,7 @@ export function GroupsConsole({ initial, chapters, canManage }: { initial: Admin
           onChange={(e) => setFilters((f) => ({ ...f, ownerType: e.target.value as Filters["ownerType"], chapter: e.target.value === "chapter" ? f.chapter : "" }))}
         />
         {filters.ownerType === "chapter" && (
-          <FilterSelect
-            label={t("Chapter")}
-            options={[{ value: "", label: t("Any chapter") }, ...chapters.map((c) => ({ value: c.id, label: c.name }))]}
-            value={filters.chapter}
-            onChange={(e) => set("chapter", e.target.value)}
-          />
+          <ChapterFilter value={filters.chapter || null} onChange={(chapter) => set("chapter", chapter ?? "")} options={chapters.length ? chapters : undefined} className="max-w-56" />
         )}
         <FilterSelect label={t("Featured")} options={FEATURED_OPTIONS} value={filters.featured} onChange={(e) => set("featured", e.target.value as Filters["featured"])} />
         <FilterSelect label={t("Reports")} options={REPORTED_OPTIONS} value={filters.reported} onChange={(e) => set("reported", e.target.value as Filters["reported"])} />

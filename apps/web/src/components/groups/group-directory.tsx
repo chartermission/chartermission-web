@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { GroupOwnerType, GroupSummary, GroupVisibility, GroupsQuery, Page } from "@chartermission/contracts";
 import { Button } from "@chartermission/ui";
+import { ChapterFilter } from "@/components/chapters/chapter-picker";
 import { SearchField, SelectField } from "@/components/discover/filter-controls";
 import { ErrorNotice } from "@/components/social/errors";
 import { EmptyState } from "@/components/social/skeletons";
@@ -13,9 +14,9 @@ import { GroupCard, GroupGrid } from "./group-card";
 const LIMIT = 24;
 
 type Sort = GroupsQuery["sort"];
-type Filters = { q: string; visibility: GroupVisibility | ""; ownerType: GroupOwnerType | ""; country: string; sort: Sort };
+type Filters = { q: string; visibility: GroupVisibility | ""; ownerType: GroupOwnerType | ""; country: string; chapter: string; sort: Sort };
 
-const EMPTY: Filters = { q: "", visibility: "", ownerType: "", country: "", sort: "active" };
+const EMPTY: Filters = { q: "", visibility: "", ownerType: "", country: "", chapter: "", sort: "active" };
 
 function toQuery(f: Filters, after?: string | null) {
   return {
@@ -24,6 +25,7 @@ function toQuery(f: Filters, after?: string | null) {
     visibility: f.visibility || undefined,
     ownerType: f.ownerType || undefined,
     country: f.country || undefined,
+    chapter: f.chapter || undefined,
     sort: f.sort,
     limit: LIMIT,
     cursor: after ?? undefined,
@@ -81,7 +83,7 @@ export function GroupDirectory({ initial, countries }: { initial: Page<GroupSumm
   }
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) => setFilters((current) => ({ ...current, [key]: value }));
-  const filtered = !!(filters.q.trim() || filters.visibility || filters.ownerType || filters.country);
+  const filtered = !!(filters.q.trim() || filters.visibility || filters.ownerType || filters.country || filters.chapter);
 
   return (
     <div className="flex flex-col gap-4">
@@ -123,6 +125,7 @@ export function GroupDirectory({ initial, countries }: { initial: Page<GroupSumm
           options={[{ value: "", label: t("Any country") }, ...countries.map((c) => ({ value: c.code, label: c.name }))]}
           className="w-44 max-sm:w-[calc(50%-6px)]"
         />
+        <ChapterFilter value={filters.chapter || null} onChange={(chapter) => set("chapter", chapter ?? "")} size="medium" className="w-44 max-sm:w-[calc(50%-6px)]" />
         <SelectField
           label={t("Sort by")}
           value={filters.sort}

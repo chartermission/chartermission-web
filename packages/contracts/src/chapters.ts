@@ -35,7 +35,8 @@ export type ChapterSummary = ChapterRef & {
   /** A photograph of the chapter's country, shown on the cover when there is no uploaded cover. */
   photo: ChapterPhoto | null;
   followers: number;
-  viewer: { following: boolean };
+  /** leads: the viewer is an Ambassador or Chapter Lead of it (GET /chapters only). */
+  viewer: { following: boolean; leads?: boolean };
 };
 
 /** GET /chapters/{slug} */

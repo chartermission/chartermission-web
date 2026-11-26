@@ -15,6 +15,7 @@ import {
 } from "@chartermission/contracts";
 import { Button, Icon, cn } from "@chartermission/ui";
 import { Field, FormAlert, inputClasses } from "@/components/auth/fields";
+import { CHAPTER_INLINE_MAX, ChapterPicker } from "@/components/chapters/chapter-picker";
 import { PagePictureField } from "@/components/pages/picture-field";
 import { ErrorNotice } from "@/components/social/errors";
 import { toast } from "@/components/social/toast";
@@ -74,10 +75,15 @@ export function InitiativeForm({
   const [serverError, setServerError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
+  // Leading many chapters: one "A chapter" option, and the chapter in a picker beside it.
+  const hostChapters = hosts?.chapters ?? [];
+  const pickChapter = hostChapters.length > CHAPTER_INLINE_MAX;
   const hostChoices: Option[] = [
     { value: "member", label: t("Myself") },
     ...(hosts?.pages ?? []).map((p) => ({ value: `page:${p.id}`, label: t("Page: {name}", { name: p.name }) })),
-    ...(hosts?.chapters ?? []).map((c) => ({ value: `chapter:${c.id}`, label: t("Chapter: {name}", { name: c.name }) })),
+    ...(pickChapter
+      ? [{ value: host.startsWith("chapter:") ? host : "chapter:", label: t("A chapter") }]
+      : hostChapters.map((c) => ({ value: `chapter:${c.id}`, label: t("Chapter: {name}", { name: c.name }) }))),
   ];
 
   function payload() {
@@ -108,6 +114,11 @@ export function InitiativeForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setServerError(null);
+    if (!initiative && host === "chapter:") {
+      setErrors({ host: t("Choose the chapter that runs it") });
+      document.getElementById(fid("host-chapter"))?.focus();
+      return;
+    }
     const body = payload();
     const parsed = InitiativeInput.safeParse(initiative ? { ...body, host: { type: "member" } } : body);
     if (!parsed.success) {
@@ -153,7 +164,7 @@ export function InitiativeForm({
       )}
 
       {!initiative && hostChoices.length > 1 && (
-        <Field id={fid("host")} label="Who is running it?" error={err("host")} hint={<span className="text-xs text-secondary">A page’s admins or a chapter’s leads can organise it too.</span>}>
+        <Field id={fid("host")} label="Who is running it?" error={pickChapter && host.startsWith("chapter:") ? undefined : err("host")} hint={<span className="text-xs text-secondary">A page’s admins or a chapter’s leads can organise it too.</span>}>
           <select id={fid("host")} value={host} onChange={(e) => setHost(e.target.value)} className={selectClasses(!!err("host"))}>
             {hostChoices.map((c) => (
               <option key={c.value} value={c.value}>
@@ -162,6 +173,23 @@ export function InitiativeForm({
             ))}
           </select>
         </Field>
+      )}
+      {!initiative && pickChapter && host.startsWith("chapter:") && (
+        <ChapterPicker
+          id={fid("host-chapter")}
+          label={t("Chapter")}
+          options={hostChapters}
+          value={host.slice("chapter:".length) || null}
+          onChange={(id) => {
+            setHost(`chapter:${id ?? ""}`);
+            setErrors((current) => {
+              const next = { ...current };
+              delete next.host;
+              return next;
+            });
+          }}
+          error={err("host")}
+        />
       )}
 
       <Field id={fid("title")} label="Name" hint={counter(title.length, INITIATIVE_TITLE_MAX)} error={err("title")}>

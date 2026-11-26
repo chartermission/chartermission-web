@@ -8,6 +8,7 @@ import { useRelationship } from "@/components/network/relationship";
 import { api } from "@/lib/api/client";
 import { toast } from "@/components/social/toast";
 import { useT } from "@/i18n/client";
+import { forgetChapters } from "@/components/chapters/chapter-list";
 
 type Look = { size?: ButtonProps["size"]; block?: boolean; primary?: boolean; className?: string };
 
@@ -70,6 +71,7 @@ export function FollowChapterButton({ chapter, following: initial, ...look }: Lo
     setBusy(true);
     try {
       await api("/follows", { method: next ? "POST" : "DELETE", body: { targetType: "chapter", targetId: chapter.id } });
+      forgetChapters();
       setFollowing(next);
       toast.success(next ? t("You’re following {name}", { name: chapter.name }) : t("You unfollowed {name}", { name: chapter.name }));
       return true;

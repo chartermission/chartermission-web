@@ -15,7 +15,7 @@ export async function loadAudienceOptions(): Promise<AudienceOptions> {
   ]);
   return {
     countries: tax.countries.map((c) => ({ code: c.code, name: c.name })).sort((a, b) => a.name.localeCompare(b.name)),
-    chapters: tax.chapters.map((c) => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name)),
+    chapters: tax.chapters.map((c) => ({ id: c.id, slug: c.slug, name: c.name, countryCode: c.countryCode })).sort((a, b) => a.name.localeCompare(b.name)),
     sectors: tax.sectors.map((s) => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name)),
     exams: exams ? exams.filter((e) => e.status !== "draft").map((e) => ({ id: e.id, title: e.title })) : null,
   };

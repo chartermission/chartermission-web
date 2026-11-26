@@ -31,6 +31,7 @@ import type { Viewer } from "@/components/social/viewer";
 import { useT, T, useIntlTag } from "@/i18n/client";
 import { api } from "@/lib/api/client";
 import { ChapterBans, NoteDialog, announceChapterModeration, reviewPost } from "./chapter-moderation";
+import { forgetChapters } from "./chapter-list";
 
 /** "Join chapter" / "Member" on the chapter header (joining is following the chapter). */
 export function JoinChapterButton({ chapter, following: initial, banned = false }: { chapter: Pick<ChapterDetail, "id" | "name">; following: boolean; banned?: boolean }) {
@@ -46,6 +47,7 @@ export function JoinChapterButton({ chapter, following: initial, banned = false 
     setFollowing(next);
     try {
       await api("/follows", { method: next ? "POST" : "DELETE", body: { targetType: "chapter", targetId: chapter.id } });
+      forgetChapters();
       toast.success(next ? t("You joined {name}", { name: chapter.name }) : t("You left {name}", { name: chapter.name }));
       router.refresh();
     } catch (e) {

@@ -61,12 +61,15 @@ export class ChaptersService {
     private readonly rules: ChapterRules,
   ) {}
 
-  /** GET /chapters — active chapters, A to Z. */
+  /** GET /chapters — active chapters, A to Z, with whether the viewer joined or leads each one. */
   async list(user: AuthUser): Promise<ChapterSummary[]> {
     const rows = await this.rows(eq(chapters.status, 'active'));
-    const [counts, following] = await Promise.all([this.followerCounts(rows.map((r) => r.id)), this.followingSet(user.id)]);
+    const [counts, following, led] = await Promise.all([this.followerCounts(rows.map((r) => r.id)), this.followingSet(user.id), this.access.ledChapters(user.id)]);
     return rows
-      .map((r) => this.summary(r, counts.get(r.id) ?? 0, following.has(r.id)))
+      .map((r) => {
+        const summary = this.summary(r, counts.get(r.id) ?? 0, following.has(r.id));
+        return { ...summary, viewer: { ...summary.viewer, leads: led.has(r.id) } };
+      })
       .sort((a, b) => a.name.localeCompare(b.name, 'en'));
   }
 

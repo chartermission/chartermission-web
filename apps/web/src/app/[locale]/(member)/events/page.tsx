@@ -89,7 +89,7 @@ async function EventsMain({ searchParams }: { searchParams: PageProps<"/[locale]
   const options: FilterOptions = {
     categories,
     countries: (taxonomies?.countries ?? []).map((c) => ({ value: c.code, label: c.name })).sort((a, b) => collator.compare(a.label, b.label)),
-    chapters: (taxonomies?.chapters ?? []).map((c) => ({ value: c.slug, label: c.name })).sort((a, b) => collator.compare(a.label, b.label)),
+    chapters: taxonomies?.chapters ?? [],
   };
   return (
     <EventsBrowser
