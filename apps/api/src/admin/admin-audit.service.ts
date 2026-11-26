@@ -72,6 +72,7 @@ const AREA_LABELS: Record<string, string> = {
   audit: 'Audit log',
   role: 'Roles',
   group: 'Group',
+  opportunity: 'Opportunity',
 };
 
 /**
@@ -166,6 +167,12 @@ export function auditSummary(
     'group.owner_changed': `Changed the owner of ${target}`,
     'group.members_exported': `Exported the members of ${target}`,
     'settings.groups_updated': 'Changed who can create groups',
+    // Opportunities (staff actions and imports from the console)
+    'opportunity.import': `Imported ${target}`,
+    'opportunity.closed': `Closed ${target}`,
+    'opportunity.reopened': `Reopened ${target}`,
+    'opportunity.removed': `Removed ${target}`,
+    'opportunity.restored': `Restored ${target}`,
   };
   if (known[row.action]) return known[row.action]!;
   const words = verb.replace(/[._]/g, ' ').trim();
