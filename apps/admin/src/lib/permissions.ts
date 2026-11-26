@@ -89,6 +89,7 @@ export type NavKey =
   | "badges"
   | "pages"
   | "groups"
+  | "opportunities"
   | "chapters"
   | "ambassadors"
   | "ambassador-team"
@@ -126,6 +127,7 @@ export const CONSOLE_NAV: ConsoleNavItem[] = [
   { key: "badges", href: "/badges", label: "Badges", icon: "verified", permission: PERM.badgesManage },
   { key: "pages", href: "/pages", label: "Pages", icon: "building", permission: PERM.pagesManage },
   { key: "groups", href: "/groups", label: "Groups", icon: "users", permission: PERM.moderationView },
+  { key: "opportunities", href: "/opportunities", label: "Opportunities", icon: "briefcase", permission: PERM.opportunityManage },
   { key: "chapters", href: "/chapters", label: "Chapters", icon: "map-pin", permission: PERM.chaptersAdmin },
   { key: "ambassadors", href: "/ambassadors", label: "Ambassadors", icon: "verified", permission: PERM.ambassadorManage },
   { key: "ambassador-team", href: "/ambassadors/team", label: "Ambassador team", icon: "users", permission: PERM.ambassadorManagers },
