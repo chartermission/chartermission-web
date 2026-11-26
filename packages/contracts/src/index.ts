@@ -20,6 +20,7 @@ export * from "./ambassadors.js";
 export * from "./stories.js";
 export * from "./chapters.js";
 export * from "./opportunities.js";
+export * from "./opportunity-import.js";
 export * from "./catalogue.js";
 export * from "./pages.js";
 export * from "./messages.js";
