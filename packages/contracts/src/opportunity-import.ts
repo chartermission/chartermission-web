@@ -225,7 +225,8 @@ export const AdminApplicationsExportQuery = z.object({ status: ApplicationStatus
 export type AdminApplicationsExportQuery = z.infer<typeof AdminApplicationsExportQuery>;
 
 /** An application as staff see it: the poster's view plus the applicant's email address. */
-export type AdminApplicationView = ApplicationView & { email: string | null };
+/** ApplicationView (which now carries the applicant's email) as the admin console shows it. */
+export type AdminApplicationView = ApplicationView;
 
 export type AdminApplicationsPage = {
   items: AdminApplicationView[];

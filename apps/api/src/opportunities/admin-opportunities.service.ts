@@ -484,7 +484,7 @@ export class AdminOpportunitiesService {
         {
           id: r.a.id,
           applicant,
-          email: r.email,
+          email: r.email ?? '',
           location: [r.city, r.country].filter(Boolean).join(', ') || null,
           note: r.a.note,
           phone: r.a.phone,
