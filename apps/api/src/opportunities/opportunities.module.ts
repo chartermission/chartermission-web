@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PagesModule } from '../pages/pages.module.js';
 import { PostsModule } from '../posts/posts.module.js';
 import { OpportunitiesController } from './opportunities.controller.js';
 import { AdminOpportunitiesController } from './admin-opportunities.controller.js';
@@ -9,7 +10,7 @@ import { OpportunitiesEvents } from './opportunities.events.js';
 
 /** Opportunities: member listings (live on posting), in-app applications, and the admin console's list and import. */
 @Module({
-  imports: [PostsModule],
+  imports: [PostsModule, PagesModule],
   controllers: [OpportunitiesController, AdminOpportunitiesController],
   providers: [OpportunitiesService, OpportunitiesEvents, OpportunityFeedService, AdminOpportunitiesService],
   exports: [OpportunitiesService, OpportunityFeedService],

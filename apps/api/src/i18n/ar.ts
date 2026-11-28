@@ -1288,4 +1288,12 @@ export const ar: Record<string, string> = {
   "A post can share an opportunity or another post, not both": "يمكن للمنشور مشاركة فرصة أو منشور آخر، وليس كليهما",
   "A post can share an opportunity or have a poll, not both": "يمكن للمنشور مشاركة فرصة أو تضمين استطلاع، وليس كليهما",
   "A post that shares an opportunity can’t have attachments": "لا يمكن إرفاق ملفات بمنشور يشارك فرصة",
+  "Use a link starting with https:// or an email address, or leave it empty to take applications in Charter Mission": "استخدم رابطًا يبدأ بـ https:// أو عنوان بريد إلكتروني، أو اتركه فارغًا لاستقبال الطلبات داخل Charter Mission",
+  "Post this as Charter Mission’s official page or an organisation page the team runs": "انشرها باسم صفحة Charter Mission الرسمية أو صفحة منظمة يديرها الفريق",
+  "There’s already a page called {name}. Choose it under Post as.": "توجد صفحة باسم {name} بالفعل. اخترها من «النشر باسم».",
+  "There’s already a page called {name}": "توجد صفحة باسم {name} بالفعل",
+  "Applications to members’ listings are reviewed by their poster on the member site": "طلبات التقديم على إعلانات الأعضاء يراجعها ناشروها على موقع الأعضاء",
+  "Choose one of Charter Mission’s active official pages": "اختر إحدى صفحات Charter Mission الرسمية النشطة",
+  "Imported opportunities are posted as one of Charter Mission’s official pages": "تُنشر الفرص المستوردة باسم إحدى صفحات Charter Mission الرسمية",
+  "Choose the page to post as": "اختر الصفحة التي يُنشر باسمها",
 };

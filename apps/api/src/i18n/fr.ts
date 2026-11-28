@@ -1288,4 +1288,12 @@ export const fr: Record<string, string> = {
   "A post can share an opportunity or another post, not both": "Une publication peut partager une opportunité ou une autre publication, pas les deux",
   "A post can share an opportunity or have a poll, not both": "Une publication peut partager une opportunité ou contenir un sondage, pas les deux",
   "A post that shares an opportunity can’t have attachments": "Une publication qui partage une opportunité ne peut pas avoir de pièces jointes",
+  "Use a link starting with https:// or an email address, or leave it empty to take applications in Charter Mission": "Utilisez un lien commençant par https:// ou une adresse e-mail, ou laissez vide pour recevoir les candidatures dans Charter Mission",
+  "Post this as Charter Mission’s official page or an organisation page the team runs": "Publiez-la au nom de la page officielle de Charter Mission ou d’une page d’organisation gérée par l’équipe",
+  "There’s already a page called {name}. Choose it under Post as.": "Il existe déjà une page nommée {name}. Choisissez-la dans « Publier au nom de ».",
+  "There’s already a page called {name}": "Il existe déjà une page nommée {name}",
+  "Applications to members’ listings are reviewed by their poster on the member site": "Les candidatures aux annonces des membres sont examinées par leur auteur sur le site des membres",
+  "Choose one of Charter Mission’s active official pages": "Choisissez l’une des pages officielles actives de Charter Mission",
+  "Imported opportunities are posted as one of Charter Mission’s official pages": "Les opportunités importées sont publiées au nom de l’une des pages officielles de Charter Mission",
+  "Choose the page to post as": "Choisissez la page au nom de laquelle publier",
 };

@@ -58,14 +58,17 @@ export class OpportunitiesEvents implements OnModuleInit {
     this.events.on('opportunity.application_decided', async (e) => {
       const row = await this.load(e.applicationId);
       if (!row || row.a.status !== e.status) return;
-      const poster = await this.members.ref(row.o.posterId);
+      // Imported listings are reviewed by the Charter Mission team in the admin console (whoever
+      // decides, not the staff member who imported them), so the decision comes from Charter Mission.
+      const byTeam = row.o.source === 'import';
+      const poster = byTeam ? { name: 'Charter Mission' } : await this.members.ref(row.o.posterId);
       if (!poster) return;
       const copy = DECISION_COPY[e.status];
       const message = e.message?.trim();
       await this.notify.notify({
         userId: row.a.applicantId,
         type: 'opportunity_application_updated',
-        actorId: row.o.posterId,
+        actorId: byTeam ? null : row.o.posterId,
         objectType: 'opportunity',
         objectId: row.o.id,
         segments: [

@@ -144,4 +144,7 @@ export const en: Dict = {
   "{count} opportunities removed.": { one: "{count} opportunity removed.", other: "{count} opportunities removed." },
   "{count} opportunities restored.": { one: "{count} opportunity restored.", other: "{count} opportunities restored." },
   "Remove {count} opportunities?": { one: "Remove {count} opportunity?", other: "Remove {count} opportunities?" },
+  "{count} other rows are from {organisation}. They’re posted as the default page until you change them.": { one: "{count} other row is from {organisation}. It’s posted as the default page until you change it.", other: "{count} other rows are from {organisation}. They’re posted as the default page until you change them." },
+  "{count} applications, {fresh} new: review them": { one: "{count} application, {fresh} new: review it", other: "{count} applications, {fresh} new: review them" },
+  "{count} new": { one: "{count} new", other: "{count} new" },
 };

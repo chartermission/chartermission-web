@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   OPPORTUNITY_TYPE_LABELS,
   type AdminOpportunitiesPage,
@@ -331,7 +332,20 @@ export function OpportunitiesConsole({ initial }: { initial: AdminOpportunitiesP
                       {row.deadline ? <DayDate date={row.deadline} /> : <span className="text-disabled">None</span>}
                     </td>
                     <td className="py-3 pe-3 text-end tabular-nums">
-                      {row.applyUrl ? (
+                      {row.reviewedInConsole ? (
+                        <Link
+                          href={`/opportunities/${row.id}/applications`}
+                          className="inline-flex flex-col items-end rounded-md px-1.5 py-0.5 hover:bg-primary-tint-2"
+                          aria-label={t("{count} applications, {fresh} new: review them", { count: row.applicationCount, fresh: row.newApplicationCount })}
+                        >
+                          <span className="font-medium text-primary">{formatCount(row.applicationCount)}</span>
+                          {row.newApplicationCount > 0 ? (
+                            <span className="rounded-full bg-accent px-1.5 text-xs font-semibold whitespace-nowrap text-inverse">{t("{count} new", { count: row.newApplicationCount })}</span>
+                          ) : (
+                            <span className="text-xs whitespace-nowrap text-secondary">Review</span>
+                          )}
+                        </Link>
+                      ) : row.applyUrl ? (
                         <span className="flex flex-col items-end">
                           <span className="text-secondary">External</span>
                           <span className="max-w-[120px] truncate text-xs text-secondary" dir="ltr" title={row.applyUrl}>

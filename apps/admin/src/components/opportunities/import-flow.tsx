@@ -7,6 +7,7 @@ import {
   REMOTE_MODE_LABELS,
   type Country,
   type OpportunityCsvColumn,
+  type OpportunityImportErrorKey,
   type OpportunityImportResult,
   type OpportunityImportRowResult,
   type PageRef,
@@ -23,7 +24,9 @@ import { webHref } from "@/lib/navigation";
 import { applyHost, buildPrompt, readImportCsv, templateRows } from "@/lib/opportunity-import";
 import { useT } from "@/i18n/client";
 import { DayDate } from "./opportunities-console";
+import { CreateOrganisationDialog } from "./create-organisation-dialog";
 import { ImportRowEditor, type ReviewRow } from "./import-row-editor";
+import { PageMark, PostAsButton, PostAsDialog, nameKey } from "./post-as-picker";
 
 const STORAGE_KEY = "cm-admin:opportunity-import:v1";
 const CLAUDE_URL = "https://claude.ai/new";
@@ -85,8 +88,9 @@ function Fact({ icon, children }: { icon: Parameters<typeof Icon>[0]["name"]; ch
   );
 }
 
-const COLUMN_LABEL: Record<OpportunityCsvColumn | "row", string> = {
+const COLUMN_LABEL: Record<OpportunityImportErrorKey, string> = {
   row: "Row",
+  page: "Post as",
   type: "Type",
   title: "Title",
   organisation: "Organisation",
@@ -105,11 +109,15 @@ const COLUMN_LABEL: Record<OpportunityCsvColumn | "row", string> = {
 /**
  * Import opportunities from pasted text, in four steps on one page: paste the messages and copy a
  * prompt for Claude; bring back the CSV Claude writes; review every row (the API checks them with
- * dryRun; edit or drop rows); post the chosen rows as an official page. Work in progress is kept in
- * sessionStorage, so a reload doesn't lose it.
+ * dryRun; edit or drop rows, choose the page each is posted as); post the chosen rows. Rows are
+ * posted as the default official page (Charter Mission) unless a row has its own "Post as": an
+ * organisation page the team runs, which can be created on the spot. Rows without an apply link take
+ * applications in Charter Mission. Work in progress is kept in sessionStorage, so a reload doesn't
+ * lose it.
  */
-export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; sectors: TaxonomyItem[]; countries: Country[] }) {
+export function ImportFlow({ pages: initialPages, sectors, countries }: { pages: PageRef[]; sectors: TaxonomyItem[]; countries: Country[] }) {
   const t = useT();
+  const [pages, setPages] = useState(initialPages);
   const [state, setState] = useState<Saved>(EMPTY);
   const [loaded, setLoaded] = useState(false);
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -119,6 +127,9 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
   const [editing, setEditing] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<{ result: OpportunityImportResult; sent: ReviewRow[]; page: PageRef | null; shared: boolean } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [picking, setPicking] = useState<number | null>(null);
+  const [creating, setCreating] = useState<{ row: number; name: string } | null>(null);
+  const [sameOrg, setSameOrg] = useState<{ page: PageRef; organisation: string; rows: number[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const reviewRef = useRef<HTMLDivElement>(null);
 
@@ -148,8 +159,13 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
   const prompt = useMemo(() => buildPrompt(state.text, sectorNames), [state.text, sectorNames]);
   const countryName = useMemo(() => new Map(countries.map((c) => [c.code, c.name])), [countries]);
   const sectorName = useMemo(() => new Map(sectors.map((s) => [s.id, s.name])), [sectors]);
-  const pageId = pages.some((p) => p.id === state.pageId) ? state.pageId : (pages[0]?.id ?? "");
-  const page = pages.find((p) => p.id === pageId) ?? null;
+  const officialPages = useMemo(() => pages.filter((p) => p.official), [pages]);
+  const orgPages = useMemo(() => pages.filter((p) => !p.official), [pages]);
+  const pageId = officialPages.some((p) => p.id === state.pageId) ? state.pageId : (officialPages[0]?.id ?? "");
+  const page = officialPages.find((p) => p.id === pageId) ?? null;
+  const pageById = useMemo(() => new Map(pages.map((p) => [p.id, p])), [pages]);
+  /** The page a row will be posted as: its own, or the default. */
+  const pageOf = (r: ReviewRow) => (r.pageId ? (pageById.get(r.pageId) ?? null) : page);
 
   const rows = state.rows;
   const valid = rows.filter((r) => r.result?.input);
@@ -163,7 +179,7 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
     try {
       const res = await api<OpportunityImportResult>("/admin/opportunities/import", {
         method: "POST",
-        body: { dryRun: true, rows: next.map((r) => ({ row: r.row, values: r.values })) },
+        body: { dryRun: true, rows: next.map((r) => ({ row: r.row, values: r.values, pageId: r.pageId ?? null })) },
       });
       const byRow = new Map(res.rows.map((r) => [r.row, r]));
       const merged = next.map((r) => {
@@ -224,6 +240,25 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
     else patch({ rows: [] });
   }
 
+  /** Sets the page rows are posted as (null: the default); rows that had a page problem are checked again. */
+  async function setRowPages(rowNumbers: number[], pageIdForRows: string | null) {
+    const next = rows.map((r) => (rowNumbers.includes(r.row) ? { ...r, pageId: pageIdForRows && pageIdForRows !== pageId ? pageIdForRows : null } : r));
+    if (next.some((r) => rowNumbers.includes(r.row) && r.result?.errors.page)) await check(next);
+    else patch({ rows: next });
+  }
+
+  function organisationCreated(created: PageRef, rowNumber: number) {
+    setPages((list) => [...list, created].sort((a, b) => Number(b.official) - Number(a.official) || (a.official ? 0 : a.name.localeCompare(b.name))));
+    setCreating(null);
+    const row = rows.find((r) => r.row === rowNumber);
+    const organisation = row?.result?.input?.organisation || row?.values.organisation || "";
+    const key = nameKey(organisation);
+    const others = key ? rows.filter((r) => r.row !== rowNumber && !r.pageId && nameKey(r.result?.input?.organisation || r.values.organisation) === key).map((r) => r.row) : [];
+    void setRowPages([rowNumber], created.id);
+    toast(t("{page} created. Row {row} will be posted as it.", { page: created.name, row: rowNumber }));
+    if (others.length) setSameOrg({ page: created, organisation, rows: others });
+  }
+
   const setChecked = (rowNumber: number, on: boolean) => patch({ rows: rows.map((r) => (r.row === rowNumber ? { ...r, checked: on && !!r.result?.input } : r)) });
   const allValidChecked = valid.length > 0 && valid.every((r) => r.checked);
 
@@ -233,7 +268,7 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
     try {
       const result = await api<OpportunityImportResult>("/admin/opportunities/import", {
         method: "POST",
-        body: { dryRun: false, pageId: page.id, shareToFeed: state.shareToFeed, rows: chosen.map((r) => ({ row: r.row, values: r.values })) },
+        body: { dryRun: false, pageId: page.id, shareToFeed: state.shareToFeed, rows: chosen.map((r) => ({ row: r.row, values: r.values, pageId: r.pageId ?? null })) },
       });
       setOutcome({ result, sent: chosen, page, shared: state.shareToFeed });
       if (result.created.length) {
@@ -260,12 +295,22 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  /** An organisation page whose name is the row's organisation, when the row isn't posted as it yet. */
+  function suggestionFor(r: ReviewRow): PageRef | null {
+    const key = nameKey(r.result?.input?.organisation || r.values.organisation);
+    if (!key) return null;
+    const match = orgPages.find((p) => nameKey(p.name) === key);
+    return match && match.id !== r.pageId ? match : null;
+  }
+
   /* ------------------------------ Results ------------------------------ */
 
   if (outcome) {
     const { result, sent } = outcome;
     const failed = result.rows.filter((r) => !r.input);
     const titleOf = (row: number) => sent.find((r) => r.row === row)?.values.title || t("Row {row}", { row });
+    const usedPages = [...new Set(result.created.map((c) => c.pageId))].map((id) => pageById.get(id)).filter((p): p is PageRef => !!p);
+    const inApp = new Set(sent.filter((r) => r.result?.input && !r.result.input.applyUrl).map((r) => r.row));
     return (
       <div className="flex flex-col gap-4">
         <Panel className="flex flex-col gap-4 p-5">
@@ -276,7 +321,7 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
             <div className="flex flex-col gap-0.5">
               <h2 className="text-h3 text-ink">{t("{count} opportunities posted", { count: result.created.length })}</h2>
               <p className="text-sm text-secondary">
-                {outcome.page && t("Posted as {page}.", { page: outcome.page.name })}{" "}
+                {usedPages.length === 1 ? t("Posted as {page}.", { page: usedPages[0]!.name }) : usedPages.length > 1 ? t("Posted as {pages}.", { pages: usedPages.map((p) => p.name).join(", ") }) : null}{" "}
                 {outcome.shared ? t("Each one is also a post in every member’s feed.") : t("They weren’t shared to the feed.")}
               </p>
             </div>
@@ -290,11 +335,24 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
                     <span className="truncate font-medium text-ink" dir="auto">
                       {c.title}
                     </span>
+                    {usedPages.length > 1 && pageById.get(c.pageId) && (
+                      <span className="shrink-0 text-xs text-secondary" dir="auto">
+                        · {pageById.get(c.pageId)!.name}
+                      </span>
+                    )}
                   </span>
-                  <a href={webHref(`/opportunities/${c.slug}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
-                    View on site
-                    <Icon name="external" size={14} />
-                  </a>
+                  <span className="flex items-center gap-3">
+                    {inApp.has(c.row) && (
+                      <Link href={`/opportunities/${c.id}/applications`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                        <Icon name="users" size={14} />
+                        Applications
+                      </Link>
+                    )}
+                    <a href={webHref(`/opportunities/${c.slug}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                      View on site
+                      <Icon name="external" size={14} />
+                    </a>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -472,6 +530,11 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
                   row={r}
                   countryName={countryName}
                   sectorName={sectorName}
+                  postAs={pageOf(r)}
+                  isDefaultPage={!r.pageId}
+                  suggestion={suggestionFor(r)}
+                  onPostAs={() => setPicking(r.row)}
+                  onUseSuggestion={(p) => void setRowPages([r.row], p.id)}
                   busy={checking || posting}
                   onToggle={(on) => setChecked(r.row, on)}
                   onEdit={() => setEditing(r.row)}
@@ -485,7 +548,7 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
 
       {rows.length > 0 && (
         <Step n={4} title="Post">
-          {pages.length === 0 ? (
+          {officialPages.length === 0 ? (
             <FormNotice tone="warning">
               Imported opportunities are posted as one of Charter Mission’s official pages, and there isn’t one yet. Create an official page under Pages first.
             </FormNotice>
@@ -493,10 +556,10 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
             <div className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-label text-ink">Post as</span>
+                  <span className="text-label text-ink">Post as (default)</span>
                   <span className="relative">
                     <select value={pageId} onChange={(e) => patch({ pageId: e.target.value })} className={inputClasses(false, "appearance-none pe-9")}>
-                      {pages.map((p) => (
+                      {officialPages.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
                         </option>
@@ -504,7 +567,7 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
                     </select>
                     <Icon name="chevron-down" size={14} className="pointer-events-none absolute inset-y-0 end-3 my-auto h-fit text-secondary" />
                   </span>
-                  <span className="text-xs text-secondary">Charter Mission’s official pages.</span>
+                  <span className="text-xs text-secondary">Charter Mission’s official pages. To post a row as an organisation’s page instead, use Post as on the row.</span>
                 </label>
                 <div className="flex flex-col gap-1.5">
                   <span className="text-label text-ink">Feed</span>
@@ -512,7 +575,7 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
                     <input type="checkbox" role="switch" checked={state.shareToFeed} onChange={(e) => patch({ shareToFeed: e.target.checked })} className="mt-0.5 size-4 accent-primary" />
                     <span className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium text-ink">Share each to the feed</span>
-                      <span className="text-xs text-secondary">Each opportunity becomes a post from the page that every member sees.</span>
+                      <span className="text-xs text-secondary">Each opportunity becomes a post from the page that every member sees. Rows posted as an organisation page are shared from the default page.</span>
                     </span>
                   </label>
                 </div>
@@ -535,6 +598,41 @@ export function ImportFlow({ pages, sectors, countries }: { pages: PageRef[]; se
           sectors={sectors}
           onSave={(values) => saveRow(editing, values)}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {picking !== null && rows.some((r) => r.row === picking) && (
+        <PostAsDialog
+          pages={pages}
+          value={rows.find((r) => r.row === picking)!.pageId ?? null}
+          defaultId={pageId}
+          organisation={(() => {
+            const r = rows.find((x) => x.row === picking)!;
+            return r.result?.input?.organisation || r.values.organisation || "";
+          })()}
+          onChoose={(id) => void setRowPages([picking], id)}
+          onCreate={() => {
+            const r = rows.find((x) => x.row === picking)!;
+            setCreating({ row: picking, name: r.result?.input?.organisation || r.values.organisation || "" });
+          }}
+          onClose={() => setPicking(null)}
+        />
+      )}
+
+      {creating && <CreateOrganisationDialog name={creating.name} countries={countries} onCreated={(p) => organisationCreated(p, creating.row)} onClose={() => setCreating(null)} />}
+
+      {sameOrg && (
+        <ReasonDialog
+          title={t("Post the other {organisation} rows as {page}?", { organisation: sameOrg.organisation, page: sameOrg.page.name })}
+          description={t("{count} other rows are from {organisation}. They’re posted as the default page until you change them.", { count: sameOrg.rows.length, organisation: sameOrg.organisation })}
+          confirmLabel={t("Use {page} for them too", { page: sameOrg.page.name })}
+          reasonField="none"
+          onClose={() => setSameOrg(null)}
+          onConfirm={async () => {
+            const target = sameOrg;
+            setSameOrg(null);
+            await setRowPages(target.rows, target.page.id);
+          }}
         />
       )}
 
@@ -561,6 +659,11 @@ function ReviewCard({
   row,
   countryName,
   sectorName,
+  postAs,
+  isDefaultPage,
+  suggestion,
+  onPostAs,
+  onUseSuggestion,
   busy,
   onToggle,
   onEdit,
@@ -569,6 +672,13 @@ function ReviewCard({
   row: ReviewRow;
   countryName: Map<string, string>;
   sectorName: Map<string, string>;
+  /** The page the row will be posted as (null when its page is no longer offered). */
+  postAs: PageRef | null;
+  isDefaultPage: boolean;
+  /** An organisation page with the row's organisation name, to offer in one click. */
+  suggestion: PageRef | null;
+  onPostAs: () => void;
+  onUseSuggestion: (page: PageRef) => void;
   busy: boolean;
   onToggle: (on: boolean) => void;
   onEdit: () => void;
@@ -577,7 +687,7 @@ function ReviewCard({
   const t = useT();
   const result = row.result;
   const input = result?.input ?? null;
-  const errors = Object.entries(result?.errors ?? {}) as [OpportunityCsvColumn | "row", string][];
+  const errors = Object.entries(result?.errors ?? {}) as [OpportunityImportErrorKey, string][];
   const title = input?.title || row.values.title || t("Row {row}", { row: row.row });
   const organisation = input?.organisation || row.values.organisation || "";
   const place = input ? [input.city, input.countryCode ? countryName.get(input.countryCode) : null].filter(Boolean).join(", ") : "";
@@ -644,8 +754,28 @@ function ReviewCard({
             <p className="text-sm text-body" dir="auto">
               {input.summary}
             </p>
+            {!input.applyUrl && (
+              <p className="flex items-start gap-1.5 rounded-md bg-info-light px-2.5 py-1.5 text-sm text-body">
+                <Icon name="users" size={14} className="mt-0.5 shrink-0 text-info" />
+                <span>Applications in Charter Mission — they come to the admin console under this opportunity.</span>
+              </p>
+            )}
           </>
         )}
+        <div className="flex flex-wrap items-center gap-2">
+          <PostAsButton page={postAs} isDefault={isDefaultPage} disabled={busy} onClick={onPostAs} />
+          {suggestion && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onUseSuggestion(suggestion)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-primary-light px-2.5 py-1 text-sm font-medium text-primary hover:bg-primary-tint-2 disabled:opacity-60"
+            >
+              <PageMark page={suggestion} />
+              <span dir="auto">{t("Post as {page}", { page: suggestion.name })}</span>
+            </button>
+          )}
+        </div>
         {errors.length > 0 && (
           <ul className="flex flex-col gap-1 text-sm text-error" role="list">
             {errors.map(([column, message]) => (

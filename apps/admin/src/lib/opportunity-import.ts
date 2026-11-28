@@ -14,7 +14,8 @@ import { csvRecords } from "./csv";
  * (Claude's instructions, not console text). The API normalises and validates every row again.
  */
 
-export type ImportRecord = { row: number; values: Partial<Record<OpportunityCsvColumn, string>> };
+/** A CSV row, and the page to post it as when it isn't the batch's default (null: the default). */
+export type ImportRecord = { row: number; values: Partial<Record<OpportunityCsvColumn, string>>; pageId?: string | null };
 
 /** Today in the admin's own time zone, YYYY-MM-DD, with the weekday (for resolving "next Friday"). */
 export function localToday(now = new Date()): { iso: string; weekday: string } {
@@ -61,7 +62,7 @@ export function buildPrompt(pasted: string, sectors: readonly string[], today = 
     `9. sector: exactly one of these names, or blank if none fits: ${sectorList}.`,
     `10. deadline: the last day to apply, as YYYY-MM-DD. Today is ${today.weekday}, ${today.iso}: resolve relative dates such as "next Friday" or "end of this month" against today, and give a date written without a year ("15th December") its next occurrence from today. Leave it blank if there is no deadline.`,
     '11. compensation: the salary, stipend or award as written (e.g. "USD 2,000 a month", "Fully funded"), or blank.',
-    "12. apply_link (required): the web link or email address where people apply, exactly as written. If the messages only give a phone or WhatsApp number, put that number in the description and leave apply_link blank.",
+    "12. apply_link (optional): the web link or email address where people apply, exactly as written. Leave it blank when the messages give no web link or email address: people then apply on Charter Mission. Phone and WhatsApp numbers never go in apply_link; put them in the description.",
     "13. more_info_url: a web page with more details, if there is one besides apply_link; otherwise blank.",
     "",
     "RULES",
@@ -98,7 +99,24 @@ export function templateRows(today = localToday()): string[][] {
     apply_link: "careers@savannapay.example",
     more_info_url: "https://savannapay.example/careers/data-analyst",
   };
-  return [[...OPPORTUNITY_CSV_COLUMNS], OPPORTUNITY_CSV_COLUMNS.map((c) => example[c])];
+  // A second row without an apply link: members apply on Charter Mission and staff review them in the console.
+  const inApp: Record<OpportunityCsvColumn, string> = {
+    type: "fellowship",
+    title: "Young Leaders Policy Fellowship 2027",
+    organisation: "Baobab Institute",
+    summary: "A year of mentoring and research support for early-career policy researchers.",
+    description:
+      "The Baobab Institute is taking applications for a one-year fellowship for researchers under 30 working on trade and regional integration.\nFellows get a monthly stipend, a mentor and two policy workshops.\nQuestions: WhatsApp +233 20 000 0000.",
+    remote_mode: "remote",
+    country: "",
+    city: "",
+    sector: "",
+    deadline: deadline.toISOString().slice(0, 10),
+    compensation: "Monthly stipend",
+    apply_link: "",
+    more_info_url: "",
+  };
+  return [[...OPPORTUNITY_CSV_COLUMNS], OPPORTUNITY_CSV_COLUMNS.map((c) => example[c]), OPPORTUNITY_CSV_COLUMNS.map((c) => inApp[c])];
 }
 
 /** The CSV inside Claude's reply: the ```csv fence's contents, or the text from the header line on. */

@@ -15,7 +15,8 @@ import {
  * Turns one CSV row (as Claude writes it from pasted WhatsApp or forum messages) into an opportunity
  * listing: types by key or label, work modes in everyday words, countries by code or name, sectors by
  * name or slug, dates as YYYY-MM-DD (an ISO date-time is cut to its date), apply links as an https link
- * or an email address. Errors are keyed by CSV column; warnings never stop a row.
+ * or an email address (or none: applications then happen in Charter Mission). Errors are keyed by CSV
+ * column; warnings never stop a row.
  */
 
 export type ImportReference = {
@@ -305,12 +306,12 @@ export function normaliseRow(rawValues: Record<string, string>, ref: ImportRefer
     else if (deadline > ref.latestDeadline) errors.deadline = 'Choose a deadline within the next year';
   } else warnings.push('No deadline: the listing stays open until someone closes it.');
 
-  // Apply link: required for imported listings (they're applied for on the organisation's side).
+  // Apply link: where people apply on the organisation's side. Blank: the listing takes applications
+  // in Charter Mission (the application form), reviewed in the admin console under the listing.
   let applyUrl: string | null = null;
-  if (!cell('apply_link')) errors.apply_link = 'Add the link or email address where people apply';
-  else {
+  if (cell('apply_link')) {
     applyUrl = parseApplyLink(cell('apply_link'));
-    if (!applyUrl) errors.apply_link = 'Use a link starting with https:// or an email address';
+    if (!applyUrl) errors.apply_link = 'Use a link starting with https:// or an email address, or leave it empty to take applications in Charter Mission';
   }
 
   let moreInfoUrl: string | null = null;
