@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from "react";
-import type { AdminEventRow, AdminQueueCounts, Page, QueueStats } from "@chartermission/contracts";
+import type { AdminEventRow, AdminNewApplicationsCount, AdminQueueCounts, Page, QueueStats } from "@chartermission/contracts";
 import { AdminBar } from "@/components/shell/admin-bar";
 import { AdminSidebar } from "@/components/shell/admin-sidebar";
 import { Toaster } from "@/components/toast";
@@ -20,11 +20,11 @@ async function ViewerAdminBar() {
   );
 }
 
-/** Sections the admin’s permissions allow, with open-work counts (reports, appeals, events awaiting review). */
+/** Sections the admin’s permissions allow, with open-work counts (reports, appeals, events awaiting review, new applications…). */
 async function ViewerSidebar() {
   const viewer = await getViewer().catch(() => null);
   if (!viewer?.mfa.verifiedThisSession) return <AdminSidebar items={[]} />;
-  const [stats, eventQueue, queues, inbox, calendar] = await Promise.all([
+  const [stats, eventQueue, queues, inbox, calendar, applications] = await Promise.all([
     can(viewer, PERM.moderationView) ? apiGet<QueueStats>("/admin/queue/stats").catch(() => null) : null,
     // The review queue's length (one page of 100 is plenty for a badge).
     can(viewer, PERM.eventReview)
@@ -36,6 +36,8 @@ async function ViewerSidebar() {
     can(viewer, PERM.membersMessage) ? apiGet<{ unread: number }>("/admin/inbox/unread-count").catch(() => null) : null,
     // Posts written with Claude waiting for the team's approval.
     can(viewer, PERM.moderationView) ? apiGet<{ count: number }>("/admin/content-calendar/awaiting-count").catch(() => null) : null,
+    // New applications to imported opportunities (reviewed in the console).
+    can(viewer, PERM.opportunityManage) ? apiGet<AdminNewApplicationsCount>("/admin/opportunities/applications/new-count").catch(() => null) : null,
   ]);
   const inboxUnread = inbox?.unread;
   const counts: Partial<Record<string, number>> = {
@@ -44,6 +46,7 @@ async function ViewerSidebar() {
     ...(queues ? { pages: queues.pages, verification: queues.verification } : {}),
     ...(typeof inboxUnread === "number" ? { messages: inboxUnread } : {}),
     ...(calendar ? { "content-calendar": calendar.count } : {}),
+    ...(applications ? { opportunities: applications.count } : {}),
   };
   const items = CONSOLE_NAV.filter((item) => can(viewer, item.permission)).map((item) => ({
     ...item,

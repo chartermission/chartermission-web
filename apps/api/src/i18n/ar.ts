@@ -1295,4 +1295,12 @@ export const ar: Record<string, string> = {
   "You’ve used the résumé on your profile many times in the last hour. Upload a PDF instead, or try again later.": "استخدمت السيرة الذاتية في ملفك الشخصي مرات كثيرة خلال الساعة الماضية. ارفع ملف PDF بدلًا من ذلك، أو حاول لاحقًا.",
   "The résumé on your profile": "السيرة الذاتية في ملفك الشخصي",
   "The résumé on your profile was not found": "لا توجد سيرة ذاتية في ملفك الشخصي",
+  "Use a link starting with https:// or an email address, or leave it empty to take applications in Charter Mission": "استخدم رابطًا يبدأ بـ https:// أو عنوان بريد إلكتروني، أو اتركه فارغًا لاستقبال الطلبات داخل Charter Mission",
+  "Post this as Charter Mission’s official page or an organisation page the team runs": "انشرها باسم صفحة Charter Mission الرسمية أو صفحة منظمة يديرها الفريق",
+  "There’s already a page called {name}. Choose it under Post as.": "توجد صفحة باسم {name} بالفعل. اخترها من «النشر باسم».",
+  "There’s already a page called {name}": "توجد صفحة باسم {name} بالفعل",
+  "Applications to members’ listings are reviewed by their poster on the member site": "طلبات التقديم على إعلانات الأعضاء يراجعها ناشروها على موقع الأعضاء",
+  "Choose one of Charter Mission’s active official pages": "اختر إحدى صفحات Charter Mission الرسمية النشطة",
+  "Imported opportunities are posted as one of Charter Mission’s official pages": "تُنشر الفرص المستوردة باسم إحدى صفحات Charter Mission الرسمية",
+  "Choose the page to post as": "اختر الصفحة التي يُنشر باسمها",
 };

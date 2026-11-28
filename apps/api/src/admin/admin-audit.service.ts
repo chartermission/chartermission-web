@@ -173,6 +173,8 @@ export function auditSummary(
     'opportunity.reopened': `Reopened ${target}`,
     'opportunity.removed': `Removed ${target}`,
     'opportunity.restored': `Restored ${target}`,
+    'opportunity.application_decided': `Decided an application to ${target}`,
+    'opportunity.applications_exported': `Exported the applications to ${target}`,
   };
   if (known[row.action]) return known[row.action]!;
   const words = verb.replace(/[._]/g, ' ').trim();

@@ -8,13 +8,16 @@ import type {
   BulkResult,
   OpportunityDetail,
   OpportunityImportResult,
+  PageRef,
 } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
 
 /*
  * Admin console → Opportunities: the import of opportunities pasted from WhatsApp groups and forums
- * (Claude turns the text into a CSV, staff review the rows and post them as an official page), the
- * list of every listing with its filters, and close / reopen / remove / restore.
+ * (Claude turns the text into a CSV, staff review the rows and post them as Charter Mission's official
+ * page, or row by row as an organisation page the team runs, which they can create on the spot), the
+ * list of every listing with its filters, and close / reopen / remove / restore. Rows without an apply
+ * link take applications in Charter Mission (see admin-applications.e2e-spec.ts for their review).
  */
 
 type Member = Awaited<ReturnType<typeof createMember>>;
@@ -57,6 +60,7 @@ describe('Admin console: opportunities and the import from pasted text', () => {
   let member: Member;
   let official: AdminPageRow;
   let ordinary: AdminPageRow;
+  let memberPage: { id: string };
   let fintech: { id: string; name: string };
 
   beforeAll(async () => {
@@ -65,7 +69,9 @@ describe('Admin console: opportunities and the import from pasted text', () => {
     mod = await createMember(t, { name: 'Moderator', roles: ['moderator'], admin: true });
     member = await createMember(t, { name: 'Amara Member' });
     official = (await admin.post('/admin/pages', { name: 'Charter Mission Jobs', category: 'organisation', official: true }).expect(201)).body as AdminPageRow;
+    // Created in the admin console: run by staff (staff_managed) but not official.
     ordinary = (await admin.post('/admin/pages', { name: 'Baobab Ventures', category: 'company' }).expect(201)).body as AdminPageRow;
+    memberPage = (await member.post('/pages', { name: 'Amara Studio', category: 'company' }).expect(201)).body as { id: string };
     const [sector] = await t.db.select({ id: s.sectors.id, name: s.sectors.name }).from(s.sectors).where(eq(s.sectors.slug, 'finance-and-fintech'));
     if (sector) fintech = sector;
     else {
@@ -88,11 +94,12 @@ describe('Admin console: opportunities and the import from pasted text', () => {
     await admin.post('/admin/opportunities/import', body).expect(200);
   });
 
-  it('lists the active official pages to post as', async () => {
+  it('lists the pages to post as: official pages first, then active pages the team runs, never members’ own pages', async () => {
     const res = (await admin.get('/admin/opportunities/pages').expect(200)).body as AdminOpportunityPages;
-    expect(res.items.map((p) => p.id)).toContain(official.id);
-    expect(res.items.map((p) => p.id)).not.toContain(ordinary.id);
-    expect(res.items.every((p) => p.official)).toBe(true);
+    expect(res.items.map((p) => p.id)).toEqual([official.id, ordinary.id]);
+    expect(res.items[0]).toMatchObject({ official: true, slug: official.slug, name: 'Charter Mission Jobs' });
+    expect(res.items[1]).toMatchObject({ official: false, name: 'Baobab Ventures' });
+    expect(res.items.map((p) => p.id)).not.toContain(memberPage.id);
   });
 
   it('normalises labels, country names, sectors, dates and apply links on a dry run', async () => {
@@ -150,7 +157,7 @@ describe('Admin console: opportunities and the import from pasted text', () => {
         .post('/admin/opportunities/import', {
           dryRun: true,
           rows: rows(
-            csvRow({ apply_link: '' }),
+            csvRow({ apply_link: 'not a link' }),
             csvRow({ apply_link: '+254 700 000000' }),
             csvRow({ deadline: '2020-01-01' }),
             csvRow({ deadline: '31/12/2026' }),
@@ -176,6 +183,14 @@ describe('Admin console: opportunities and the import from pasted text', () => {
     expect(Object.keys(errs[8]!).sort()).toEqual(['description', 'title']);
     expect(res.rows.slice(0, 9).every((r) => r.input === null)).toBe(true);
     expect(res.rows[9]!.input).not.toBeNull();
+    // No apply link: the listing takes applications in Charter Mission (not an error, not a warning).
+    const inApp = (await admin.post('/admin/opportunities/import', { dryRun: true, rows: rows(csvRow({ apply_link: '' }), csvRow({ apply_link: undefined as unknown as string })) }).expect(200))
+      .body as OpportunityImportResult;
+    for (const r of inApp.rows) {
+      expect(r.errors).toEqual({});
+      expect(r.input!.applyUrl).toBeNull();
+      expect(r.warnings.join(' ')).not.toMatch(/apply/i);
+    }
     // An unknown country on a remote listing is only a warning.
     const remote = (await admin.post('/admin/opportunities/import', { dryRun: true, rows: rows(csvRow({ country: 'Atlantis', remote_mode: 'remote' })) }).expect(200)).body as OpportunityImportResult;
     expect(remote.rows[0]!.errors).toEqual({});
@@ -185,7 +200,7 @@ describe('Admin console: opportunities and the import from pasted text', () => {
   });
 
   it('posts valid rows as an official page with the apply link, and refuses other pages', async () => {
-    const body = { rows: rows(csvRow(), csvRow({ title: 'Broken row', apply_link: '' })), shareToFeed: false };
+    const body = { rows: rows(csvRow(), csvRow({ title: 'Broken row', apply_link: 'call +254 700 000000' })), shareToFeed: false };
     const noPage = await admin.post('/admin/opportunities/import', body).expect(422);
     expect(noPage.body.error.fields).toHaveProperty('pageId');
     const notOfficial = await admin.post('/admin/opportunities/import', { ...body, pageId: ordinary.id }).expect(422);
@@ -195,7 +210,7 @@ describe('Admin console: opportunities and the import from pasted text', () => {
     const res = (await admin.post('/admin/opportunities/import', { ...body, pageId: official.id }).expect(200)).body as OpportunityImportResult;
     expect(res.dryRun).toBe(false);
     expect(res.created).toHaveLength(1);
-    expect(res.created[0]).toMatchObject({ row: 2, title: 'Data Analyst, Mobile Money' });
+    expect(res.created[0]).toMatchObject({ row: 2, title: 'Data Analyst, Mobile Money', pageId: official.id });
     expect(res.rows[1]!.errors).toHaveProperty('apply_link');
 
     const [row] = await t.db.select().from(s.opportunities).where(eq(s.opportunities.id, res.created[0]!.id));
@@ -320,5 +335,116 @@ describe('Admin console: opportunities and the import from pasted text', () => {
     expect(item).toBeDefined();
     expect(item.isOpportunityShare).toBe(true);
     expect(item.opportunity).toMatchObject({ id, title: 'Feed Bound Analyst Role', applyUrl: 'mailto:careers@savannapay.example' });
+  });
+
+  it('a row without an apply link becomes a listing members apply to in Charter Mission', async () => {
+    const res = (
+      await admin.post('/admin/opportunities/import', { rows: rows(csvRow({ title: 'In-App Applications Officer', apply_link: '' })), pageId: official.id, shareToFeed: false }).expect(200)
+    ).body as OpportunityImportResult;
+    const [row] = await t.db.select().from(s.opportunities).where(eq(s.opportunities.id, res.created[0]!.id));
+    expect(row).toMatchObject({ source: 'import', applyUrl: null, pageId: official.id });
+    const applicant = await createMember(t, { name: 'In-App Applicant' });
+    const detail = (await applicant.get(`/opportunities/${row!.slug}`).expect(200)).body as OpportunityDetail;
+    expect(detail.applyUrl).toBeNull();
+    expect(detail.viewer.canApply).toBe(true);
+    await applicant.post(`/opportunities/${row!.id}/applications`, { note: 'I have five years of programme operations experience.' }).expect(201);
+    const listed = ((await admin.get('/admin/opportunities?source=import').expect(200)).body as AdminOpportunitiesPage).items.find((o) => o.id === row!.id)!;
+    expect(listed).toMatchObject({ reviewedInConsole: true, applicationCount: 1, newApplicationCount: 1 });
+  });
+
+  it('creates organisation pages the team runs, with the admin page form’s rules', async () => {
+    const body = { name: 'Flutterwave', category: 'company', website: 'https://flutterwave.example', countryCode: 'NG', city: 'Lagos', tagline: 'Payments for Africa' };
+    await member.post('/admin/opportunities/organisations', body).expect(403);
+    await mod.post('/admin/opportunities/organisations', body).expect(403);
+    const bad = await admin.post('/admin/opportunities/organisations', { ...body, website: 'flutterwave', countryCode: 'ZZ', category: 'shop' }).expect(422);
+    expect(Object.keys(bad.body.error.fields).sort()).toEqual(expect.arrayContaining(['category', 'website']));
+    await admin.post('/admin/opportunities/organisations', { ...body, countryCode: 'QQ' }).expect(422);
+    // Someone else's logo upload is refused.
+    const [othersLogo] = await t.db
+      .insert(s.files)
+      .values({ ownerId: member.id, purpose: 'page_logo', mime: 'image/png', declaredMime: 'image/png', originalName: 'logo.png', sizeBytes: 10, storageKey: `uploads/page_logo/${member.id}`, scanStatus: 'clean' })
+      .returning();
+    await admin.post('/admin/opportunities/organisations', { ...body, logoFileId: othersLogo!.id }).expect(422);
+    const [logo] = await t.db
+      .insert(s.files)
+      .values({ ownerId: admin.id, purpose: 'page_logo', mime: 'image/png', declaredMime: 'image/png', originalName: 'logo.png', sizeBytes: 10, storageKey: `uploads/page_logo/${admin.id}`, scanStatus: 'clean' })
+      .returning();
+
+    const page = (await admin.post('/admin/opportunities/organisations', { ...body, logoFileId: logo!.id }).expect(201)).body as PageRef;
+    expect(page).toMatchObject({ name: 'Flutterwave', official: false, verified: false, logoUrl: expect.stringContaining(logo!.id) });
+    const [row] = await t.db.select().from(s.pages).where(eq(s.pages.id, page.id));
+    expect(row).toMatchObject({ status: 'active', staffManaged: true, official: false, createdBy: admin.id, countryCode: 'NG', city: 'Lagos', website: 'https://flutterwave.example', category: 'company' });
+    const [owner] = await t.db.select().from(s.pageAdmins).where(eq(s.pageAdmins.pageId, page.id));
+    expect(owner).toMatchObject({ userId: admin.id, role: 'owner' });
+    expect(await auditRows(t, 'page.created', page.id)).toHaveLength(1);
+    // Live on the member site, and offered under Post as.
+    await member.get(`/pages/${page.slug}`).expect(200);
+    const offered = (await admin.get('/admin/opportunities/pages').expect(200)).body as AdminOpportunityPages;
+    expect(offered.items.map((p) => p.id)).toContain(page.id);
+    // The same name again (any case) is refused: choose the existing page.
+    const again = await admin.post('/admin/opportunities/organisations', { name: 'FLUTTERWAVE', category: 'company' }).expect(422);
+    expect(again.body.error.fields.name).toMatch(/already a page called Flutterwave/);
+  });
+
+  it('posts rows as an organisation page the team runs, shared to the feed from the official page; members’ pages are refused', async () => {
+    const stranger = await createMember(t, { name: 'Feed Reader Far Away' });
+    const dry = (
+      await admin
+        .post('/admin/opportunities/import', {
+          dryRun: true,
+          rows: [
+            { row: 2, values: csvRow({ title: 'Baobab Growth Lead' }), pageId: ordinary.id },
+            { row: 3, values: csvRow({ title: 'Studio Assistant' }), pageId: memberPage.id },
+            { row: 4, values: csvRow({ title: 'Unknown Page Role' }), pageId: '00000000-0000-4000-8000-000000000123' },
+          ],
+        })
+        .expect(200)
+    ).body as OpportunityImportResult;
+    expect(dry.rows[0]!.errors).toEqual({});
+    expect(dry.rows[1]!.errors.page).toMatch(/official page or an organisation page/);
+    expect(dry.rows[1]!.input).toBeNull();
+    expect(dry.rows[2]!.errors).toHaveProperty('page');
+
+    // The batch page must still be official: a staff-run page can't be the default.
+    await admin.post('/admin/opportunities/import', { rows: rows(csvRow({ title: 'Default As Org' })), pageId: ordinary.id }).expect(422);
+
+    const res = (
+      await admin
+        .post('/admin/opportunities/import', {
+          pageId: official.id,
+          shareToFeed: true,
+          rows: [
+            { row: 2, values: csvRow({ title: 'Baobab Growth Lead', apply_link: '' }), pageId: ordinary.id },
+            { row: 3, values: csvRow({ title: 'Studio Assistant' }), pageId: memberPage.id },
+            { row: 4, values: csvRow({ title: 'Official Page Role' }), pageId: official.id },
+            { row: 5, values: csvRow({ title: 'Default Page Role' }) },
+          ],
+        })
+        .expect(200)
+    ).body as OpportunityImportResult;
+    expect(res.created.map((c) => [c.title, c.pageId])).toEqual([
+      ['Baobab Growth Lead', ordinary.id],
+      ['Official Page Role', official.id],
+      ['Default Page Role', official.id],
+    ]);
+    expect(res.rows[1]!.errors).toHaveProperty('page');
+
+    const orgListing = res.created[0]!;
+    const [row] = await t.db.select().from(s.opportunities).where(eq(s.opportunities.id, orgListing.id));
+    expect(row).toMatchObject({ pageId: ordinary.id, posterId: admin.id, source: 'import' });
+    // The listing shows the organisation page as the poster…
+    const detail = (await stranger.get(`/opportunities/${row!.slug}`).expect(200)).body as OpportunityDetail;
+    expect(detail.page).toMatchObject({ id: ordinary.id, name: 'Baobab Ventures', official: false });
+    // …and its feed post comes from the official page, so a member who follows nobody sees it.
+    const shared = await t.db.select().from(s.posts).where(eq(s.posts.opportunityId, orgListing.id));
+    expect(shared).toHaveLength(1);
+    expect(shared[0]).toMatchObject({ pageId: official.id, authorId: admin.id });
+    const feed = await stranger.get('/feed?tab=latest&limit=50').expect(200);
+    const item = feed.body.items.find((p: { id: string }) => p.id === shared[0]!.id);
+    expect(item).toBeDefined();
+    expect(item.opportunity).toMatchObject({ id: orgListing.id, title: 'Baobab Growth Lead' });
+    // Listings posted as an official page are shared as that page.
+    const officialShare = await t.db.select().from(s.posts).where(eq(s.posts.opportunityId, res.created[1]!.id));
+    expect(officialShare[0]).toMatchObject({ pageId: official.id });
   });
 });

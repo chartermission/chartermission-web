@@ -64,8 +64,15 @@ export class OpportunitiesEvents implements OnModuleInit {
     this.events.on('opportunity.application_decided', async (e) => {
       const row = await this.load(e.applicationId);
       if (!row || row.a.status !== e.status) return;
-      // Posted as a page: the page decided (it may be Charter Mission's own page, run by staff).
-      const decider = row.pageName ? { name: row.pageName, actorId: null } : { name: (await this.members.ref(row.o.posterId))?.name, actorId: row.o.posterId };
+      // Imported listings are reviewed by the Charter Mission team in the admin console (whoever
+      // decides, not the staff member who imported them, and even when posted as an organisation's
+      // page), so the decision comes from Charter Mission. Other page listings: the page decided.
+      const decider =
+        row.o.source === 'import'
+          ? { name: 'Charter Mission', actorId: null }
+          : row.pageName
+            ? { name: row.pageName, actorId: null }
+            : { name: (await this.members.ref(row.o.posterId))?.name, actorId: row.o.posterId };
       if (!decider.name) return;
       const copy = DECISION_COPY[e.status];
       const message = e.message?.trim();

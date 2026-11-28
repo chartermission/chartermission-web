@@ -134,7 +134,7 @@ export function ImportRowEditor({
         </Field>
         <TextField label="Title" name="title" defaultValue={start.title} maxLength={OPPORTUNITY_LIMITS.title} error={err("title")} className="sm:col-span-2" dir="auto" />
         <TextField label="Organisation" name="organisation" defaultValue={start.organisation} maxLength={OPPORTUNITY_LIMITS.organisation} error={err("organisation")} dir="auto" />
-        <TextField label="Apply link or email" name="apply_link" defaultValue={start.apply_link} error={err("apply_link")} hint="Where people apply: a link starting with https:// or an email address." dir="ltr" />
+        <TextField label="Apply link or email" name="apply_link" defaultValue={start.apply_link} error={err("apply_link")} hint="Optional. A link starting with https:// or an email address. Leave it empty to take applications in Charter Mission." dir="ltr" />
         <Field label="Summary" hint={t("One line, up to {max} characters.", { max: OPPORTUNITY_LIMITS.summary })} error={err("summary")}>
           {(id, describedBy) => (
             <textarea id={id} name="summary" rows={2} defaultValue={start.summary} maxLength={OPPORTUNITY_LIMITS.summary + 40} aria-describedby={describedBy} aria-invalid={!!err("summary") || undefined} className={inputClasses(!!err("summary"))} dir="auto" />
