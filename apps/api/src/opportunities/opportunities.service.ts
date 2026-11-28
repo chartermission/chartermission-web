@@ -33,6 +33,7 @@ import { isUuid } from '../media/uuid-param.js';
 import { escapeLike, slugify } from '../events/event-util.js';
 import { assertNotRestricted } from '../posts/posts.service.js';
 import { PageRefsService } from '../core/page-refs.service.js';
+import { MediaService } from '../media/media.service.js';
 import { OpportunityFeedService } from './opportunity-feed.service.js';
 
 export type OpportunityRow = typeof opportunities.$inferSelect;
@@ -42,6 +43,8 @@ type ApplicationRow = typeof opportunityApplications.$inferSelect;
 const HIDDEN_POSTER = ['deleted', 'deletion_pending', 'deactivated', 'suspended'];
 const LISTINGS_PER_DAY = 10;
 const APPLICATIONS_PER_DAY = 30;
+/** "Use the résumé on my profile" copies a file each time: a generous hourly cap. */
+const RESUME_COPIES_PER_HOUR = 20;
 const STATUS_ORDER: ApplicationStatus[] = ['submitted', 'shortlisted', 'accepted', 'declined', 'withdrawn'];
 
 /** Today's date in UTC as YYYY-MM-DD (deadlines are whole days). */
@@ -76,6 +79,7 @@ export class OpportunitiesService {
     private readonly audit: AuditService,
     private readonly pageRefs: PageRefsService,
     private readonly feed: OpportunityFeedService,
+    private readonly media: MediaService,
   ) {}
 
   /* ------------------------------ Browse ------------------------------ */
@@ -264,13 +268,31 @@ export class OpportunitiesService {
 
   /* ---------------------------- Applications ---------------------------- */
 
+  /**
+   * POST /me/application-cv/from-resume — "Use the résumé on my profile": a copy of the member's
+   * profile résumé as an application_cv file of theirs, so the CV sent with an application opens
+   * for the poster (and reviewing staff) whatever the profile's privacy settings say.
+   */
+  async cvFromResume(user: AuthUser): Promise<ApplicationCv> {
+    const [profile] = await this.db
+      .select({ resumeFileId: memberProfiles.resumeFileId })
+      .from(memberProfiles)
+      .where(eq(memberProfiles.userId, user.id))
+      .limit(1);
+    if (!profile?.resumeFileId) throw Errors.notFound('The résumé on your profile');
+    await this.limits.consume(`application-cv-copies:${user.id}`, RESUME_COPIES_PER_HOUR, 3600, 'You’ve used the résumé on your profile many times in the last hour. Upload a PDF instead, or try again later.');
+    const copy = await this.media.copyOwnFile(user.id, profile.resumeFileId, 'profile_resume', 'application_cv');
+    if (!copy) throw Errors.notFound('The résumé on your profile');
+    return { id: copy.id, name: copy.originalName ?? 'CV.pdf', sizeBytes: copy.sizeBytes };
+  }
+
   /** POST /opportunities/{id}/applications — apply with your profile and a note. */
   async apply(user: AuthUser, id: string, input: ApplyInput): Promise<OpportunityDetail> {
     const row = await this.visibleRow(user, id);
     const reason = this.cannotApply(user, row);
     if (reason) throw Errors.conflict(reason);
     const cvFileId = input.cvFileId ? await this.assertOwnCv(user.id, input.cvFileId) : null;
-    await this.limits.consume(`applications:${user.id}`, APPLICATIONS_PER_DAY, 24 * 3600);
+    await this.limits.consume(`applications:${user.id}`, APPLICATIONS_PER_DAY, 24 * 3600, `You can send up to ${APPLICATIONS_PER_DAY} applications a day.`);
     const fields = { note: input.note, phone: input.phone ?? null, link: input.link ?? null, cvFileId };
     const [existing] = await this.db
       .select()
@@ -323,8 +345,9 @@ export class OpportunitiesService {
     const ts = sql<string>`to_char(${opportunityApplications.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
     const [rows, counted] = await Promise.all([
       this.db
-        .select({ a: opportunityApplications, t: ts, countryName: countries.name })
+        .select({ a: opportunityApplications, t: ts, countryName: countries.name, email: users.email })
         .from(opportunityApplications)
+        .innerJoin(users, eq(users.id, opportunityApplications.applicantId))
         .leftJoin(memberProfiles, eq(memberProfiles.userId, opportunityApplications.applicantId))
         .leftJoin(countries, eq(countries.code, memberProfiles.countryCode))
         .where(
@@ -355,6 +378,7 @@ export class OpportunitiesService {
             id: r.a.id,
             applicant,
             location: r.countryName ?? null,
+            email: r.email,
             note: r.a.note,
             phone: r.a.phone,
             link: r.a.link,
@@ -577,6 +601,7 @@ export class OpportunitiesService {
     if (!reason && app && app.status !== 'withdrawn') reason = 'You’ve already applied';
     return {
       ...summary,
+      source: row.source as OpportunityDetail['source'],
       description: row.description,
       moreInfoUrl: row.moreInfoUrl,
       sectorId: row.sectorId,

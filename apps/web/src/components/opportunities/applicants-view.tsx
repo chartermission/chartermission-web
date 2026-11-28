@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/social/skeletons";
 import { toast } from "@/components/social/toast";
 import { api } from "@/lib/api/client";
 import { applicationTone } from "./opportunity-card";
+import { CvTile } from "./apply-form";
 import { useT } from "@/i18n/client";
 
 type Filter = "all" | Exclude<ApplicationStatus, "withdrawn">;
@@ -30,7 +31,10 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 type Decision = { app: ApplicationView; status: "accepted" | "declined" };
 
-/** The poster's applicant list: filter by status; shortlist, accept or decline with an optional message. */
+/**
+ * The poster's applicant list: each application's note, email, phone, link and CV; filter by
+ * status; shortlist, accept or decline with an optional message.
+ */
 export function ApplicantsView({ opportunityId, title, initial }: { opportunityId: string; title: string; initial: ApplicationsPage }) {
   const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
@@ -134,7 +138,10 @@ export function ApplicantsView({ opportunityId, title, initial }: { opportunityI
                   </div>
                   <Chip tone={applicationTone[app.status]}>{APPLICATION_STATUS_LABELS[app.status]}</Chip>
                 </div>
-                <p className="whitespace-pre-line text-sm text-body">{app.note}</p>
+                <p dir="auto" className="whitespace-pre-line break-words text-sm text-body">
+                  {app.note}
+                </p>
+                <ApplicantContact app={app} />
                 <div className="flex flex-wrap gap-2">
                   <Link href={`/${app.applicant.handle}`} className="text-sm font-medium text-primary-light hover:underline">
                     View profile
@@ -202,6 +209,43 @@ export function ApplicantsView({ opportunityId, title, initial }: { opportunityI
           </div>
         </ConfirmDialog>
       )}
+    </div>
+  );
+}
+
+/** How to reach the applicant, and the CV they attached (opens in a new tab). */
+function ApplicantContact({ app }: { app: ApplicationView }) {
+  return (
+    <div className="flex flex-col gap-3 border-t border-line pt-3">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5 text-sm">
+        <dt className="text-xs text-secondary">Email</dt>
+        <dd className="min-w-0 truncate">
+          <a href={`mailto:${app.email}`} dir="ltr" className="text-primary-light hover:underline">
+            {app.email}
+          </a>
+        </dd>
+        {app.phone && (
+          <>
+            <dt className="text-xs text-secondary">Phone</dt>
+            <dd className="min-w-0 truncate">
+              <a href={`tel:${app.phone.replace(/[^0-9+]/g, "")}`} dir="ltr" className="text-primary-light hover:underline">
+                {app.phone}
+              </a>
+            </dd>
+          </>
+        )}
+        {app.link && (
+          <>
+            <dt className="text-xs text-secondary">Link</dt>
+            <dd className="min-w-0 truncate">
+              <a href={app.link} target="_blank" rel="noopener noreferrer nofollow" dir="ltr" className="text-primary-light hover:underline">
+                {app.link.replace(/^https?:\/\//i, "")}
+              </a>
+            </dd>
+          </>
+        )}
+      </dl>
+      {app.cv && <CvTile cv={app.cv} className="w-full sm:max-w-sm" />}
     </div>
   );
 }

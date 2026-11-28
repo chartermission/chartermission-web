@@ -1288,4 +1288,11 @@ export const ar: Record<string, string> = {
   "A post can share an opportunity or another post, not both": "يمكن للمنشور مشاركة فرصة أو منشور آخر، وليس كليهما",
   "A post can share an opportunity or have a poll, not both": "يمكن للمنشور مشاركة فرصة أو تضمين استطلاع، وليس كليهما",
   "A post that shares an opportunity can’t have attachments": "لا يمكن إرفاق ملفات بمنشور يشارك فرصة",
+  "Enter a phone number with digits, like +234 803 555 0199": "أدخل رقم هاتف بالأرقام، مثل ‎+234 803 555 0199",
+  "Enter a full link starting with https://": "أدخل رابطًا كاملًا يبدأ بـ https://",
+  "Upload your CV as a PDF first": "ارفع سيرتك الذاتية بصيغة PDF أولًا",
+  "You can send up to {count} applications a day.": "يمكنك إرسال {count} طلبًا كحد أقصى في اليوم.",
+  "You’ve used the résumé on your profile many times in the last hour. Upload a PDF instead, or try again later.": "استخدمت السيرة الذاتية في ملفك الشخصي مرات كثيرة خلال الساعة الماضية. ارفع ملف PDF بدلًا من ذلك، أو حاول لاحقًا.",
+  "The résumé on your profile": "السيرة الذاتية في ملفك الشخصي",
+  "The résumé on your profile was not found": "لا توجد سيرة ذاتية في ملفك الشخصي",
 };

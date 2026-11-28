@@ -6,6 +6,7 @@ import {
   MyOpportunitiesQuery,
   OpportunitiesQuery,
   OpportunityInput,
+  type ApplicationCvFromResume,
   type ApplicationsPage,
   type OpportunityDetail,
   type OpportunitySummary,
@@ -77,6 +78,13 @@ export class OpportunitiesController {
   @Access('verified')
   apply(@Auth() ctx: AuthContext, @UuidParam('id') id: string, @ZBody(ApplyInput) input: ApplyInput): Promise<OpportunityDetail> {
     return this.opportunities.apply(ctx.user, id, input);
+  }
+
+  @Post('me/application-cv/from-resume')
+  @HttpCode(201)
+  @Access('verified')
+  cvFromResume(@Auth() ctx: AuthContext): Promise<ApplicationCvFromResume> {
+    return this.opportunities.cvFromResume(ctx.user);
   }
 
   @Delete('opportunities/:id/applications/mine')

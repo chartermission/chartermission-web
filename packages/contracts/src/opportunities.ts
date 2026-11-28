@@ -190,6 +190,11 @@ export type MyApplication = {
 };
 
 export type OpportunityDetail = OpportunitySummary & {
+  /**
+   * "import": brought in by Charter Mission staff from the admin console. Applications made in
+   * Charter Mission go to the Charter Mission team (reviewed in the admin console), not to a member.
+   */
+  source: "member" | "import";
   description: string;
   moreInfoUrl: string | null;
   sectorId: string | null;
@@ -247,11 +252,21 @@ export type ApplicationsQuery = z.infer<typeof ApplicationsQuery>;
 /** A CV attached to an application: open it at /media/{id} (applicant, poster and reviewing staff only). */
 export type ApplicationCv = { id: string; name: string; sizeBytes: number };
 
+/**
+ * POST /me/application-cv/from-resume — "Use the résumé on my profile": copies the member's profile
+ * résumé into a new application_cv file of theirs (so who can open it follows the application, not
+ * the profile's privacy settings) and returns it, ready to send as ApplyInput.cvFileId.
+ * 404 when the profile has no résumé.
+ */
+export type ApplicationCvFromResume = ApplicationCv;
+
 export type ApplicationView = {
   id: string;
   applicant: MemberRef;
   /** Applicant's country name, when their profile shows it. */
   location: string | null;
+  /** The applicant's account email: it goes to the poster with the application (the form says so). */
+  email: string;
   note: string;
   phone: string | null;
   link: string | null;

@@ -40,7 +40,7 @@ async function Detail({ params }: Pick<PageProps<"/[locale]/opportunities/[slug]
 
   return (
     <div className="flex items-start gap-6 max-lg:flex-col">
-      <article className="flex min-w-0 flex-1 flex-col gap-5">
+      <article className="flex w-full min-w-0 flex-1 flex-col gap-5">
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
             <Chip tone="info">{OPPORTUNITY_TYPE_LABELS[o.type]}</Chip>
