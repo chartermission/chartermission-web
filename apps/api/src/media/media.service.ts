@@ -22,6 +22,7 @@ import {
   type UploadPurpose,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
+import { fieldVisibleToMemberSql } from '../profiles/visibility.js';
 import { files, groups, memberProfiles, opportunities, opportunityApplications, pages, postAttachments, posts, users } from '../db/schema.js';
 import { authorActiveSql, pageLiveSql } from '../posts/visibility.js';
 import { groupVisiblePostIds, openPublicGroupSql } from '../groups/group-access.js';
@@ -513,6 +514,7 @@ export class MediaService implements OnModuleInit {
     if (!file.isPublic && !viewer && !(await this.guestMayLoad(file))) throw Errors.unauthenticated();
     if (viewer) await this.assertGroupMediaVisible(viewer, file);
     if (file.purpose === 'application_cv') await this.assertCvVisible(viewer, file);
+    if (file.purpose === 'profile_resume' || file.purpose === 'profile_video') await this.assertProfileMediaVisible(viewer, file);
     const inline = file.mime.startsWith('image/') || file.mime.startsWith('video/') || file.mime.startsWith('audio/');
     const name = safeFileName(file.originalName ?? 'file', file.mime);
     const disposition = `${inline ? 'inline' : 'attachment'}; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
@@ -534,6 +536,28 @@ export class MediaService implements OnModuleInit {
       .where(and(eq(opportunityApplications.cvFileId, file.id), eq(opportunities.posterId, viewer.id)))
       .limit(1);
     if (!sent) throw Errors.notFound('File');
+  }
+
+  /**
+   * A member's résumé and intro video follow their profile's privacy for those fields (and only
+   * while they're on the profile): the owner, members the field is visible to, and staff with
+   * moderation access. Knowing the file's address isn't enough.
+   */
+  private async assertProfileMediaVisible(viewer: AuthUser | undefined, file: FileRow) {
+    if (!viewer) throw Errors.notFound('File');
+    if (file.ownerId === viewer.id || viewer.permissions.has('moderation.view')) return;
+    const resume = file.purpose === 'profile_resume';
+    const [profile] = await this.db
+      .select({ id: memberProfiles.userId })
+      .from(memberProfiles)
+      .where(
+        and(
+          eq(resume ? memberProfiles.resumeFileId : memberProfiles.introVideoFileId, file.id),
+          fieldVisibleToMemberSql(resume ? 'resume' : 'introVideo', viewer.id),
+        ),
+      )
+      .limit(1);
+    if (!profile) throw Errors.notFound('File');
   }
 
   /** Pictures visitors without an account may load (see resolveForServing). */

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { ConversationView, MemberProfile, MessagesPage, OwnProfile } from '@chartermission/contracts';
 import { createMember, createTestApp, s, type TestApp } from '../helpers.js';
 import { resetLimits } from '../auth/support.js';
+import { MediaService } from '../../src/media/media.service.js';
 import { REASON } from '../moderation/fixtures.js';
 
 type Member = Awaited<ReturnType<typeof createMember>>;
@@ -22,6 +23,8 @@ describe('Private messages, and the profile’s intro video, résumé and links'
       .insert(s.files)
       .values({ ownerId, purpose, mime, declaredMime: mime, originalName: name, sizeBytes: 12_345, storageKey: `uploads/${purpose}/${name}-${ownerId}`, scanStatus: 'clean', durationMs: purpose === 'profile_video' ? 42_000 : null })
       .returning();
+    // The bytes too, so /media/{id} can serve it.
+    await t.app.get(MediaService).storage.write(row!.storageKey, Buffer.alloc(12_345), mime);
     return row!.id;
   };
 
@@ -115,10 +118,17 @@ describe('Private messages, and the profile’s intro video, résumé and links'
     expect(asMember.introVideo).toMatchObject({ url: expect.stringContaining(video) });
     expect(asMember.links).toEqual(links);
     expect(asMember.resume).toBeUndefined();
+    // The file itself follows the same rule: knowing its address isn't enough.
+    await amara.get(`/media/${resume}`).expect(404);
+    expect((await amara.get(`/media/${video}`)).status).not.toBe(404);
+    expect((await leila.get(`/media/${resume}`)).status).not.toBe(404);
     await connect(amara, leila);
     expect(((await amara.get(`/members/${leila.handle}`).expect(200)).body as MemberProfile).resume).toMatchObject({ name: 'Leila Benali CV.pdf' });
+    expect((await amara.get(`/media/${resume}`)).status).not.toBe(404);
 
     await leila.patch('/me/profile', { introVideoFileId: null, resumeFileId: null }).expect(200);
+    // Taken off the profile: only Leila can still open it.
+    await amara.get(`/media/${resume}`).expect(404);
     const after = (await amara.get(`/members/${leila.handle}`).expect(200)).body as MemberProfile;
     expect(after.introVideo).toBeUndefined();
     expect(after.resume).toBeUndefined();
