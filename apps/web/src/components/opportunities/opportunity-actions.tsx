@@ -2,26 +2,23 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
-import {
-  APPLICATION_STATUS_LABELS,
-  OPPORTUNITY_LIMITS,
-  type OpportunityDetail,
-} from "@chartermission/contracts";
-import { Button, Chip, Icon, Panel, buttonClasses, cn } from "@chartermission/ui";
+import { useState } from "react";
+import { APPLICATION_STATUS_LABELS, type MyApplication, type OpportunityDetail } from "@chartermission/contracts";
+import { Button, Chip, Icon, Panel, buttonClasses } from "@chartermission/ui";
 import { ReportDialog } from "@/components/moderation/report-dialog";
 import { ConfirmDialog } from "@/components/social/confirm-dialog";
-import { ErrorNotice } from "@/components/social/errors";
 import { relativeTime } from "@/components/social/format";
 import { toast } from "@/components/social/toast";
-import { api, isApiError } from "@/lib/api/client";
+import { api } from "@/lib/api/client";
 import { SaveOpportunityButton, applicationTone } from "./opportunity-card";
 import { applyLinkLabel } from "./apply-link";
+import { ApplyForm, CvTile, applicationRecipient, onlyRecipientSees } from "./apply-form";
 import { ShareOpportunityDialog, canShareOpportunity } from "./share-opportunity-dialog";
 import { T, useT, useIntlTag } from "@/i18n/client";
 
 /**
- * The listing's action panel. Applicants: apply with a note, see their status, withdraw — or, for
+ * The listing's action panel. Applicants: apply with the form (note, phone, CV, link), see what they
+ * sent and its status, withdraw and apply again (pre-filled) — or, for
  * listings that take applications on the organisation's side (applyUrl), go to that link or email.
  * Poster: applicants link, edit, close or reopen, delete. Everyone: share an open listing to the feed.
  */
@@ -30,11 +27,9 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
   const t = useT();
   const router = useRouter();
   const [o, setO] = useState(initial);
-  const [note, setNote] = useState("");
   const [applying, setApplying] = useState(false);
+  const [justApplied, setJustApplied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [noteError, setNoteError] = useState<string | null>(null);
-  const [error, setError] = useState<unknown>(null);
   const [modal, setModal] = useState<"withdraw" | "delete" | "report" | "share" | null>(null);
   const app = o.viewer.application;
   const activeApp = app && app.status !== "withdrawn" ? app : null;
@@ -47,27 +42,11 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
   );
   const shareDialog = modal === "share" && <ShareOpportunityDialog opportunity={o} onClose={() => setModal(null)} />;
 
-  async function apply(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = note.trim();
-    if (trimmed.length < OPPORTUNITY_LIMITS.noteMin) {
-      setNoteError(t("Tell the poster why you’re a fit in at least {noteMin} characters", { noteMin: OPPORTUNITY_LIMITS.noteMin }));
-      document.getElementById("apply-note")?.focus();
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      setO(await api<OpportunityDetail>(`/opportunities/${o.id}/applications`, { method: "POST", body: { note: trimmed } }));
-      setApplying(false);
-      setNote("");
-      toast.success("Application sent. The poster will see your profile and note.");
-    } catch (e) {
-      if (isApiError(e, "VALIDATION_FAILED") && e.fields?.note) setNoteError(e.fields.note);
-      else setError(e);
-    } finally {
-      setBusy(false);
-    }
+  function applied(next: OpportunityDetail) {
+    setO(next);
+    setApplying(false);
+    setJustApplied(true);
+    toast.success("Application sent");
   }
 
   async function setOpen(open: boolean) {
@@ -106,6 +85,12 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
           <p className="flex items-start gap-2 rounded-lg bg-error-light p-3 text-sm text-body">
             <Icon name="alert" size={16} className="mt-px shrink-0 text-error" />
             A moderator {o.moderationState === "removed" ? "removed" : "hid"} this listing, so members can’t see it. Check your account’s moderation page to appeal.
+          </p>
+        )}
+        {!o.applyUrl && o.source === "import" && (
+          <p className="flex items-start gap-2 text-xs text-secondary">
+            <Icon name="info" size={14} className="mt-px shrink-0" />
+            Charter Mission staff review applications to imported listings in the admin console.
           </p>
         )}
         {!o.applyUrl && (
@@ -178,17 +163,23 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
         )
       ) : activeApp ? (
         <>
+          {justApplied && (
+            <p role="status" className="flex items-start gap-2 rounded-lg bg-success-light p-3 text-sm text-ink">
+              <Icon name="check" size={16} className="mt-px shrink-0 text-success" />
+              Application sent. We’ll notify you when there’s a decision.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone={applicationTone[activeApp.status]}>{APPLICATION_STATUS_LABELS[activeApp.status]}</Chip>
             <span className="text-xs text-secondary"><T vars={{ time: relativeTime(intl, t, activeApp.createdAt) }}>{"Sent {time}"}</T></span>
           </div>
-          <blockquote className="whitespace-pre-line rounded-lg bg-muted p-3 text-sm text-body">{activeApp.note}</blockquote>
+          <SentApplication app={activeApp} />
           <p className="text-xs text-secondary">
             {activeApp.status === "accepted"
               ? "The poster accepted your application. Look out for a message from them about next steps."
               : activeApp.status === "declined"
                 ? "The poster went with other applicants this time."
-                : "The poster can see your profile and note. We’ll notify you when they make a decision."}
+                : "The poster can see your profile and what you sent. We’ll notify you when they make a decision."}
           </p>
           {(activeApp.status === "submitted" || activeApp.status === "shortlisted") && (
             <button type="button" onClick={() => setModal("withdraw")} className="self-start text-sm font-medium text-secondary hover:text-error hover:underline">
@@ -198,43 +189,15 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
         </>
       ) : o.viewer.canApply ? (
         applying ? (
-          <form onSubmit={apply} noValidate className="flex flex-col gap-3">
-            <label htmlFor="apply-note" className="text-sm font-medium text-ink">
-              <T vars={{ name: o.poster.name }}>{"Note to {name}"}</T>
-            </label>
-            <textarea
-              id="apply-note"
-              value={note}
-              onChange={(e) => {
-                setNote(e.target.value);
-                setNoteError(null);
-              }}
-              maxLength={OPPORTUNITY_LIMITS.note}
-              rows={6}
-              aria-invalid={!!noteError}
-              aria-describedby="apply-note-help"
-              placeholder="Why you’re a good fit, and anything they should know."
-              className={cn(
-                "w-full rounded-lg border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-light",
-                noteError ? "border-error" : "border-line",
-              )}
-            />
-            <p id="apply-note-help" className={cn("text-xs", noteError ? "text-error" : "text-secondary")}>
-              {noteError ?? t("Your profile goes with your note. {count} / {note}", { count: note.length, note: OPPORTUNITY_LIMITS.note })}
-            </p>
-            {error ? <ErrorNotice error={error} /> : null}
-            <div className="flex gap-2">
-              <Button type="submit" aria-disabled={busy}>
-                {busy ? "Sending…" : "Send application"}
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setApplying(false)}>
-                Cancel
-              </Button>
-            </div>
-          </form>
+          <ApplyForm
+            opportunity={o}
+            previous={app?.status === "withdrawn" ? app : null}
+            onApplied={applied}
+            onCancel={() => setApplying(false)}
+          />
         ) : (
           <>
-            <p className="text-sm text-secondary"><T vars={{ name: o.poster.name }}>{"Apply with your Charter Mission profile and a short note. Only {name} sees your application."}</T></p>
+            <p className="text-sm text-secondary">{onlyRecipientSees(t, applicationRecipient(o))}</p>
             <Button block onClick={() => setApplying(true)}>
               {app?.status === "withdrawn" ? "Apply again" : "Apply now"}
             </Button>
@@ -269,6 +232,7 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
           onClose={() => setModal(null)}
           onConfirm={async () => {
             setO(await api<OpportunityDetail>(`/opportunities/${o.id}/applications/mine`, { method: "DELETE" }));
+            setJustApplied(false);
             toast.success("Application withdrawn");
           }}
         >
@@ -278,5 +242,39 @@ export function OpportunityActions({ opportunity: initial }: { opportunity: Oppo
       {shareDialog}
       {modal === "report" && <ReportDialog targetType="opportunity" targetId={o.id} subject={`“${o.title}”`} onClose={() => setModal(null)} />}
     </Panel>
+  );
+}
+
+/** What the applicant sent: their note, and the phone number, link and CV when they gave them. */
+function SentApplication({ app }: { app: MyApplication }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <blockquote dir="auto" className="whitespace-pre-line break-words rounded-lg bg-muted p-3 text-sm text-body">
+        {app.note}
+      </blockquote>
+      {(app.phone || app.link) && (
+        <dl className="flex flex-col gap-1.5 text-sm">
+          {app.phone && (
+            <div className="flex items-center gap-2">
+              <dt className="w-14 shrink-0 text-xs text-secondary">Phone</dt>
+              <dd dir="ltr" className="min-w-0 truncate text-body">
+                {app.phone}
+              </dd>
+            </div>
+          )}
+          {app.link && (
+            <div className="flex items-center gap-2">
+              <dt className="w-14 shrink-0 text-xs text-secondary">Link</dt>
+              <dd className="min-w-0 truncate">
+                <a href={app.link} target="_blank" rel="noopener noreferrer nofollow" dir="ltr" className="text-primary-light hover:underline">
+                  {app.link.replace(/^https?:\/\//i, "")}
+                </a>
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+      {app.cv && <CvTile cv={app.cv} />}
+    </div>
   );
 }

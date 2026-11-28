@@ -1288,4 +1288,11 @@ export const fr: Record<string, string> = {
   "A post can share an opportunity or another post, not both": "Une publication peut partager une opportunité ou une autre publication, pas les deux",
   "A post can share an opportunity or have a poll, not both": "Une publication peut partager une opportunité ou contenir un sondage, pas les deux",
   "A post that shares an opportunity can’t have attachments": "Une publication qui partage une opportunité ne peut pas avoir de pièces jointes",
+  "Enter a phone number with digits, like +234 803 555 0199": "Saisissez un numéro de téléphone en chiffres, comme +234 803 555 0199",
+  "Enter a full link starting with https://": "Saisissez un lien complet commençant par https://",
+  "Upload your CV as a PDF first": "Importez d’abord votre CV au format PDF",
+  "You can send up to {count} applications a day.": "Vous pouvez envoyer jusqu’à {count} candidatures par jour.",
+  "You’ve used the résumé on your profile many times in the last hour. Upload a PDF instead, or try again later.": "Vous avez utilisé le CV de votre profil de nombreuses fois au cours de la dernière heure. Importez plutôt un PDF, ou réessayez plus tard.",
+  "The résumé on your profile": "Le CV de votre profil",
+  "The résumé on your profile was not found": "Votre profil n’a pas de CV",
 };

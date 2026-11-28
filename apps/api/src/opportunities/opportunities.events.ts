@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { opportunities, opportunityApplications } from '../db/schema.js';
+import { opportunities, opportunityApplications, pages } from '../db/schema.js';
 import { MembersService } from '../core/members.service.js';
 import { NotifyService } from '../core/notify.service.js';
 import { EventsService } from '../infra/events.service.js';
@@ -15,6 +15,11 @@ const DECISION_COPY = {
 /**
  * Notifications for applications (created from domain events, never inline). Handlers re-read
  * the application so a retry after a later change sends nothing stale.
+ *
+ * Listings imported by staff (source 'import') are reviewed by the Charter Mission team in the
+ * admin console, so their poster (the staff member who imported them) isn't told about each
+ * application. Decisions on a listing posted as a page come from the page, not from the member or
+ * staff member who made them.
  */
 @Injectable()
 export class OpportunitiesEvents implements OnModuleInit {
@@ -29,6 +34,7 @@ export class OpportunitiesEvents implements OnModuleInit {
     this.events.on('opportunity.applied', async (e) => {
       const row = await this.load(e.applicationId);
       if (!row || row.a.status !== 'submitted') return;
+      if (row.o.source === 'import') return;
       const actor = await this.members.ref(row.a.applicantId);
       if (!actor) return;
       await this.notify.notify({
@@ -58,18 +64,19 @@ export class OpportunitiesEvents implements OnModuleInit {
     this.events.on('opportunity.application_decided', async (e) => {
       const row = await this.load(e.applicationId);
       if (!row || row.a.status !== e.status) return;
-      const poster = await this.members.ref(row.o.posterId);
-      if (!poster) return;
+      // Posted as a page: the page decided (it may be Charter Mission's own page, run by staff).
+      const decider = row.pageName ? { name: row.pageName, actorId: null } : { name: (await this.members.ref(row.o.posterId))?.name, actorId: row.o.posterId };
+      if (!decider.name) return;
       const copy = DECISION_COPY[e.status];
       const message = e.message?.trim();
       await this.notify.notify({
         userId: row.a.applicantId,
         type: 'opportunity_application_updated',
-        actorId: row.o.posterId,
+        actorId: decider.actorId,
         objectType: 'opportunity',
         objectId: row.o.id,
         segments: [
-          { text: poster.name, strong: true },
+          { text: decider.name, strong: true },
           { text: copy.verb, strong: false },
           { text: row.o.title, strong: true },
           ...(message ? [{ text: `: “${message.length > 140 ? `${message.slice(0, 139)}…` : message}”`, strong: false }] : []),
@@ -81,7 +88,7 @@ export class OpportunitiesEvents implements OnModuleInit {
           subject: `${copy.subject}: ${row.o.title}`,
           heading: copy.subject,
           paragraphs: [
-            `${copy.lead} ${poster.name} updated your application for ${row.o.title} at ${row.o.organisation}.`,
+            `${copy.lead} ${decider.name} updated your application for ${row.o.title} at ${row.o.organisation}.`,
             ...(message ? [`Their message: “${message}”`] : []),
           ],
           buttonLabel: 'View the opportunity',
@@ -92,9 +99,10 @@ export class OpportunitiesEvents implements OnModuleInit {
 
   private async load(applicationId: string) {
     const [row] = await this.db
-      .select({ a: opportunityApplications, o: opportunities })
+      .select({ a: opportunityApplications, o: opportunities, pageName: pages.name })
       .from(opportunityApplications)
       .innerJoin(opportunities, eq(opportunities.id, opportunityApplications.opportunityId))
+      .leftJoin(pages, eq(pages.id, opportunities.pageId))
       .where(eq(opportunityApplications.id, applicationId))
       .limit(1);
     return row;

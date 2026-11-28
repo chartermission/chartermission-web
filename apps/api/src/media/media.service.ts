@@ -319,6 +319,19 @@ export class MediaService implements OnModuleInit {
     return file;
   }
 
+  /**
+   * A copy of one of the member's own clean files under another purpose (their profile résumé sent
+   * with an application as an application_cv): a new file with its own access rules, checked like
+   * an upload. Undefined when the source isn't the member's clean file of that purpose.
+   */
+  async copyOwnFile(ownerId: string, fileId: string, from: UploadPurpose, to: UploadPurpose): Promise<FileRow | undefined> {
+    const source = await this.find(fileId);
+    if (!source || source.ownerId !== ownerId || source.purpose !== from || source.scanStatus !== 'clean') return undefined;
+    const data = await this.storage.read(source.storageKey);
+    if (!data) return undefined;
+    return this.ingest(ownerId, to, data, source.originalName ?? 'CV.pdf');
+  }
+
   /** GET /uploads/limits: the video length limits members upload against. */
   mediaLimits(): Promise<MediaSettings> {
     return this.settings.get('media_limits');

@@ -15,7 +15,7 @@ export function assertUploadable(file: File, purpose: UploadPurpose): void {
   const limit = UPLOAD_LIMITS[purpose];
   if (!(limit.mimes as readonly string[]).includes(mimeOf(file))) {
     const kinds =
-      purpose === "post_document" || purpose === "profile_resume"
+      purpose === "post_document" || purpose === "profile_resume" || purpose === "application_cv"
         ? "a PDF"
         : purpose === "message_file"
           ? "a PDF, Word, Excel or PowerPoint file"
