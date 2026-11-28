@@ -31,17 +31,22 @@ export class OpportunityFeedService {
    * throws: the listing stands even when its post can't be made (the page was taken down, the
    * poster can't post right now); returns the post's id, or null.
    */
-  async share(row: OpportunityRow): Promise<string | null> {
+  /**
+   * `asPageId`: post as this page instead of the listing's own (the admin import shares listings
+   * posted as an organisation page from Charter Mission's official page, so every member sees them).
+   */
+  async share(row: OpportunityRow, opts: { asPageId?: string | null } = {}): Promise<string | null> {
+    const pageId = opts.asPageId ?? row.pageId;
     const [existing] = await this.db
       .select({ id: posts.id })
       .from(posts)
-      .where(and(eq(posts.opportunityId, row.id), eq(posts.authorId, row.posterId), row.pageId ? eq(posts.pageId, row.pageId) : isNull(posts.pageId)))
+      .where(and(eq(posts.opportunityId, row.id), eq(posts.authorId, row.posterId), pageId ? eq(posts.pageId, pageId) : isNull(posts.pageId)))
       .limit(1);
     if (existing) return existing.id;
     try {
       const author = await this.sessions.userById(row.posterId);
       if (!author || author.status !== 'active') return null;
-      const input = CreatePostInput.parse({ body: '', opportunityId: row.id, ...(row.pageId ? { pageId: row.pageId } : {}) });
+      const input = CreatePostInput.parse({ body: '', opportunityId: row.id, ...(pageId ? { pageId } : {}) });
       const post = await this.posts.create(author, input, { internal: true });
       return post.id;
     } catch (err) {

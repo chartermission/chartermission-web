@@ -4,11 +4,13 @@ import { and, count, desc, eq, ilike, inArray, isNull, lte, ne, notInArray, or, 
 import {
   OpportunityInput,
   OpportunityType,
+  type ApplicationCv,
   type ApplicationStatus,
   type ApplicationsPage,
   type ApplicationsQuery,
   type ApplyInput,
   type DecideApplicationInput,
+  type MyApplication,
   type MyOpportunitiesQuery,
   type OpportunitiesQuery,
   type OpportunityDetail,
@@ -18,7 +20,7 @@ import {
 } from '@chartermission/contracts';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { bookmarks, countries, memberProfiles, opportunities, opportunityApplications, sectors, users } from '../db/schema.js';
+import { bookmarks, countries, files, memberProfiles, opportunities, opportunityApplications, sectors, users } from '../db/schema.js';
 import type { AuthUser } from '../core/auth-context.js';
 import { MembersService } from '../core/members.service.js';
 import { RelationsService } from '../core/relations.service.js';
@@ -205,7 +207,7 @@ export class OpportunitiesService {
   async createListing(
     user: AuthUser,
     input: OpportunityInputParsed,
-    opts: { source: 'member' | 'import'; pageId?: string | null },
+    opts: { source: 'member' | 'import'; pageId?: string | null; feedPageId?: string | null },
     ip?: string,
   ): Promise<OpportunityRow> {
     await this.checkInput(input);
@@ -227,7 +229,7 @@ export class OpportunitiesService {
       after: opts.pageId ? { pageId: opts.pageId } : undefined,
       ip,
     });
-    if (input.shareToFeed) await this.feed.share(row!);
+    if (input.shareToFeed) await this.feed.share(row!, { asPageId: opts.feedPageId });
     return row!;
   }
 
@@ -267,7 +269,9 @@ export class OpportunitiesService {
     const row = await this.visibleRow(user, id);
     const reason = this.cannotApply(user, row);
     if (reason) throw Errors.conflict(reason);
+    const cvFileId = input.cvFileId ? await this.assertOwnCv(user.id, input.cvFileId) : null;
     await this.limits.consume(`applications:${user.id}`, APPLICATIONS_PER_DAY, 24 * 3600);
+    const fields = { note: input.note, phone: input.phone ?? null, link: input.link ?? null, cvFileId };
     const [existing] = await this.db
       .select()
       .from(opportunityApplications)
@@ -278,18 +282,19 @@ export class OpportunitiesService {
       if (existing.status !== 'withdrawn') throw Errors.conflict('You’ve already applied to this opportunity');
       await this.db
         .update(opportunityApplications)
-        .set({ note: input.note, status: 'submitted', decidedAt: null, createdAt: new Date() })
+        .set({ ...fields, status: 'submitted', decidedAt: null, createdAt: new Date() })
         .where(eq(opportunityApplications.id, existing.id));
       applicationId = existing.id;
     } else {
       const [created] = await this.db
         .insert(opportunityApplications)
-        .values({ opportunityId: row.id, applicantId: user.id, note: input.note })
+        .values({ opportunityId: row.id, applicantId: user.id, ...fields })
         .onConflictDoNothing()
         .returning({ id: opportunityApplications.id });
       if (!created) throw Errors.conflict('You’ve already applied to this opportunity');
       applicationId = created.id;
     }
+    if (cvFileId) await this.db.update(files).set({ attachedAt: new Date() }).where(and(eq(files.id, cvFileId), isNull(files.attachedAt)));
     await this.recount(row.id);
     await this.events.emit({ type: 'opportunity.applied', applicationId });
     return this.detail(user, row.id);
@@ -338,7 +343,7 @@ export class OpportunitiesService {
         .groupBy(opportunityApplications.status),
     ]);
     const page = paginate(rows, q.limit, (last) => ({ t: last.t, id: last.a.id }));
-    const refs = await this.members.refs(page.items.map((r) => r.a.applicantId));
+    const [refs, cvs] = await Promise.all([this.members.refs(page.items.map((r) => r.a.applicantId)), this.cvRefs(page.items.map((r) => r.a.cvFileId))]);
     const counts = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<ApplicationStatus, number>;
     for (const r of counted) counts[r.status as ApplicationStatus] = r.n;
     return {
@@ -351,6 +356,9 @@ export class OpportunitiesService {
             applicant,
             location: r.countryName ?? null,
             note: r.a.note,
+            phone: r.a.phone,
+            link: r.a.link,
+            cv: (r.a.cvFileId && cvs.get(r.a.cvFileId)) || null,
             status: r.a.status as ApplicationStatus,
             createdAt: r.a.createdAt.toISOString(),
             updatedAt: r.a.updatedAt.toISOString(),
@@ -371,7 +379,7 @@ export class OpportunitiesService {
       .where(and(eq(opportunityApplications.id, applicationId), eq(opportunityApplications.opportunityId, row.id)))
       .limit(1);
     if (!app || app.status === 'withdrawn') throw Errors.notFound('That application');
-    if (app.status === input.status) return this.applicationView(app);
+    if (app.status === input.status) return await this.applicationView(app);
     const [next] = await this.db
       .update(opportunityApplications)
       .set({ status: input.status, decidedAt: input.status === 'submitted' ? null : new Date() })
@@ -380,7 +388,7 @@ export class OpportunitiesService {
     if (input.status !== 'submitted') {
       await this.events.emit({ type: 'opportunity.application_decided', applicationId: app.id, status: input.status, message: input.message ?? null });
     }
-    return this.applicationView(next!);
+    return await this.applicationView(next!);
   }
 
   /* ------------------------------ Helpers ------------------------------ */
@@ -464,8 +472,40 @@ export class OpportunitiesService {
       .where(eq(opportunities.id, opportunityId));
   }
 
-  private applicationView(a: ApplicationRow) {
-    return { id: a.id, status: a.status as ApplicationStatus, note: a.note, createdAt: a.createdAt.toISOString(), updatedAt: a.updatedAt.toISOString() };
+  private async applicationView(a: ApplicationRow): Promise<MyApplication> {
+    const cvs = await this.cvRefs([a.cvFileId]);
+    return {
+      id: a.id,
+      status: a.status as ApplicationStatus,
+      note: a.note,
+      phone: a.phone,
+      link: a.link,
+      cv: (a.cvFileId && cvs.get(a.cvFileId)) || null,
+      createdAt: a.createdAt.toISOString(),
+      updatedAt: a.updatedAt.toISOString(),
+    };
+  }
+
+  /** The CVs attached to applications (application_cv uploads), by file id. */
+  async cvRefs(ids: (string | null)[]): Promise<Map<string, ApplicationCv>> {
+    const wanted = [...new Set(ids.filter((id): id is string => !!id))];
+    if (!wanted.length) return new Map();
+    const rows = await this.db
+      .select({ id: files.id, name: files.originalName, sizeBytes: files.sizeBytes })
+      .from(files)
+      .where(and(inArray(files.id, wanted), eq(files.scanStatus, 'clean')));
+    return new Map(rows.map((f) => [f.id, { id: f.id, name: f.name ?? 'CV.pdf', sizeBytes: f.sizeBytes }]));
+  }
+
+  /** A clean application_cv upload of the applicant's own. */
+  private async assertOwnCv(userId: string, fileId: string): Promise<string> {
+    const [f] = await this.db
+      .select({ id: files.id })
+      .from(files)
+      .where(and(eq(files.id, fileId), eq(files.ownerId, userId), eq(files.purpose, 'application_cv'), eq(files.scanStatus, 'clean')))
+      .limit(1);
+    if (!f) throw Errors.validation({ cvFileId: 'Upload your CV as a PDF first' });
+    return f.id;
   }
 
   async summaries(user: AuthUser, rows: OpportunityRow[]): Promise<OpportunitySummary[]> {
@@ -548,7 +588,7 @@ export class OpportunitiesService {
         cannotApplyReason: own || row.applyUrl ? null : reason,
         canManage: own,
         canReport: !own && user.permissions.has('report.create'),
-        application: app ? this.applicationView(app) : null,
+        application: app ? await this.applicationView(app) : null,
       },
     };
   }

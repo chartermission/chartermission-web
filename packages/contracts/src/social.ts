@@ -953,6 +953,7 @@ export const UploadPurpose = z.enum([
   "product_image",
   "profile_video",
   "profile_resume",
+  "application_cv",
   "message_image",
   "message_file",
   "voice_note",
@@ -1003,6 +1004,8 @@ export const UPLOAD_LIMITS = {
   profile_video: { maxBytes: 800 * 1024 * 1024, mimes: VIDEO_MIMES },
   /** A member's résumé or CV, shown on their profile to the people they choose. PDF only. */
   profile_resume: { maxBytes: 5 * 1024 * 1024, mimes: ["application/pdf"] },
+  /** A CV attached to an opportunity application (PDF). Only the applicant, the listing's poster and staff who review applications can open it. */
+  application_cv: { maxBytes: 5 * 1024 * 1024, mimes: ["application/pdf"] },
   /** Photos sent in messages. */
   message_image: { maxBytes: 10 * 1024 * 1024, mimes: ["image/jpeg", "image/png", "image/webp"] },
   /** Documents sent in messages: PDF, Word, Excel, PowerPoint. */

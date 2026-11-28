@@ -22,7 +22,7 @@ import {
   type UploadPurpose,
 } from '@chartermission/contracts';
 import { InjectDb, type Db } from '../db/db.module.js';
-import { files, groups, memberProfiles, pages, postAttachments, posts, users } from '../db/schema.js';
+import { files, groups, memberProfiles, opportunities, opportunityApplications, pages, postAttachments, posts, users } from '../db/schema.js';
 import { authorActiveSql, pageLiveSql } from '../posts/visibility.js';
 import { groupVisiblePostIds, openPublicGroupSql } from '../groups/group-access.js';
 import { Errors } from '../common/errors.js';
@@ -499,11 +499,28 @@ export class MediaService implements OnModuleInit {
     if (!file || file.scanStatus !== 'clean') throw Errors.notFound('File');
     if (!file.isPublic && !viewer && !(await this.guestMayLoad(file))) throw Errors.unauthenticated();
     if (viewer) await this.assertGroupMediaVisible(viewer, file);
+    if (file.purpose === 'application_cv') await this.assertCvVisible(viewer, file);
     const inline = file.mime.startsWith('image/') || file.mime.startsWith('video/') || file.mime.startsWith('audio/');
     const name = safeFileName(file.originalName ?? 'file', file.mime);
     const disposition = `${inline ? 'inline' : 'attachment'}; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
     const redirect = await this.storage.presignDownload(file.storageKey, { mime: file.mime, disposition });
     return { file, disposition, redirect };
+  }
+
+  /**
+   * CVs attached to opportunity applications: only the applicant, the poster of a listing the CV
+   * was sent to, and staff who review applications (opportunity.manage) can open them.
+   */
+  private async assertCvVisible(viewer: AuthUser | undefined, file: FileRow) {
+    if (!viewer) throw Errors.notFound('File');
+    if (file.ownerId === viewer.id || viewer.permissions.has('opportunity.manage')) return;
+    const [sent] = await this.db
+      .select({ id: opportunityApplications.id })
+      .from(opportunityApplications)
+      .innerJoin(opportunities, eq(opportunities.id, opportunityApplications.opportunityId))
+      .where(and(eq(opportunityApplications.cvFileId, file.id), eq(opportunities.posterId, viewer.id)))
+      .limit(1);
+    if (!sent) throw Errors.notFound('File');
   }
 
   /** Pictures visitors without an account may load (see resolveForServing). */
@@ -620,7 +637,7 @@ export async function reencodeImage(data: Buffer, mime: string) {
 
 function describeMimes(purpose: UploadPurpose): string {
   if (purpose === 'post_document') return 'a PDF up to 10 MB';
-  if (purpose === 'profile_resume') return 'a PDF up to 5 MB';
+  if (purpose === 'profile_resume' || purpose === 'application_cv') return 'a PDF up to 5 MB';
   if (purpose === 'message_file') return 'a PDF, Word, Excel or PowerPoint file up to 20 MB';
   if (purpose === 'voice_note') return 'a voice recording up to 25 MB';
   if (isVideoPurpose(purpose)) return `an MP4, MOV or WebM video up to ${Math.round(UPLOAD_LIMITS[purpose].maxBytes / 1024 / 1024)} MB`;

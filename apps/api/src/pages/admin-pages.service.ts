@@ -179,7 +179,7 @@ export class AdminPagesService {
   async create(ctx: AuthContext, input: AdminPageCreateInput, ip?: string): Promise<AdminPageRow> {
     const { owner, official, verified, ...page } = input;
     const ownerId = owner ? await this.ownerId(owner) : ctx.user.id;
-    const row = await this.pages.insert(page, { status: 'active', createdBy: ctx.user.id, ownerId, official, verified });
+    const row = await this.pages.insert(page, { status: 'active', createdBy: ctx.user.id, ownerId, official, verified, staffManaged: true });
     await this.audit.record({
       actorId: ctx.user.id,
       action: 'page.created',

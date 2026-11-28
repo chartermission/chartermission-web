@@ -332,7 +332,7 @@ export class PagesService {
   /** Inserts the page and its owner. Shared with the admin console. */
   async insert(
     input: PageInput,
-    opts: { status: PageStatus; createdBy: string; ownerId: string; official?: boolean; verified?: boolean },
+    opts: { status: PageStatus; createdBy: string; ownerId: string; official?: boolean; verified?: boolean; staffManaged?: boolean },
   ): Promise<PageRow> {
     await this.assertFiles(opts.createdBy, input);
     await this.assertCountry(input.countryCode);
@@ -362,6 +362,7 @@ export class PagesService {
               ...this.detailChanges(input),
               status: opts.status,
               official: opts.official ?? false,
+              staffManaged: opts.staffManaged ?? false,
               verifiedAt: opts.verified ? new Date() : null,
               createdBy: opts.createdBy,
             })

@@ -178,7 +178,16 @@ export type OpportunitySummary = {
   };
 };
 
-export type MyApplication = { id: string; status: ApplicationStatus; note: string; createdAt: string; updatedAt: string };
+export type MyApplication = {
+  id: string;
+  status: ApplicationStatus;
+  note: string;
+  phone: string | null;
+  link: string | null;
+  cv: ApplicationCv | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type OpportunityDetail = OpportunitySummary & {
   description: string;
@@ -195,13 +204,35 @@ export type OpportunityDetail = OpportunitySummary & {
   };
 };
 
-/** POST /opportunities/{id}/applications */
+/**
+ * POST /opportunities/{id}/applications — the application form: a note, plus an optional phone
+ * number, CV (a clean application_cv upload of the applicant's own) and link (portfolio, LinkedIn).
+ * The applicant's name, profile and email go with it.
+ */
 export const ApplyInput = z.object({
   note: z
     .string()
     .trim()
     .min(OPPORTUNITY_LIMITS.noteMin, `Tell the poster why you’re a fit in at least ${OPPORTUNITY_LIMITS.noteMin} characters`)
     .max(OPPORTUNITY_LIMITS.note),
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .regex(/^\+?[0-9 ()\-.]{6,30}$/, "Enter a phone number with digits, like +234 803 555 0199")
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
+  cvFileId: z.string().uuid().nullable().optional(),
+  link: z
+    .string()
+    .trim()
+    .url("Enter a full link starting with https://")
+    .max(EXTERNAL_URL_MAX_CHARS)
+    .refine((v) => /^https?:\/\//i.test(v), "Enter a full link starting with https://")
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
 });
 export type ApplyInput = z.infer<typeof ApplyInput>;
 
@@ -213,12 +244,18 @@ export const ApplicationsQuery = z.object({
 });
 export type ApplicationsQuery = z.infer<typeof ApplicationsQuery>;
 
+/** A CV attached to an application: open it at /media/{id} (applicant, poster and reviewing staff only). */
+export type ApplicationCv = { id: string; name: string; sizeBytes: number };
+
 export type ApplicationView = {
   id: string;
   applicant: MemberRef;
   /** Applicant's country name, when their profile shows it. */
   location: string | null;
   note: string;
+  phone: string | null;
+  link: string | null;
+  cv: ApplicationCv | null;
   status: ApplicationStatus;
   createdAt: string;
   updatedAt: string;

@@ -547,7 +547,7 @@ export const files = pgTable(
   },
   (t) => [
     index('files_owner_idx').on(t.ownerId),
-    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','group_logo','group_cover','product_image','profile_video','profile_resume','message_image','message_file','voice_note','certificate_signature')`),
+    check('files_purpose_ck', sql`${t.purpose} in ('avatar','profile_cover','post_image','post_document','post_video','event_cover','initiative_cover','story_image','story_video','chapter_image','chapter_cover','page_logo','page_cover','group_logo','group_cover','product_image','profile_video','profile_resume','application_cv','message_image','message_file','voice_note','certificate_signature')`),
     check('files_scan_ck', sql`${t.scanStatus} in ('awaiting_upload','pending','clean','infected','rejected')`),
   ],
 );
@@ -2385,6 +2385,10 @@ export const opportunityApplications = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     note: text('note').notNull(),
+    phone: text('phone'),
+    link: text('link'),
+    /** An application_cv upload (PDF) of the applicant's. */
+    cvFileId: uuid('cv_file_id').references(() => files.id, { onDelete: 'set null' }),
     status: text('status').notNull().default('submitted'),
     decidedAt: ts('decided_at'),
     createdAt: createdAt(),
@@ -2492,6 +2496,12 @@ export const pages = pgTable(
     verifiedAt: ts('verified_at'),
     /** One of Charter Mission's own pages (created from the admin console). */
     official: boolean('official').notNull().default(false),
+    /**
+     * Created and run by Charter Mission staff (admin console, or "Create organisation" in the
+     * opportunity import) rather than by the organisation itself. Staff can post opportunities as
+     * these pages and as official ones.
+     */
+    staffManaged: boolean('staff_managed').notNull().default(false),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
